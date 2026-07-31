@@ -26,6 +26,9 @@ func (app *S3RP) getObject(w http.ResponseWriter, r *http.Request, rt *bucketRT,
 		in.Range = aws.String(v)
 	}
 	query := r.URL.Query()
+	if v := query.Get("versionId"); v != "" {
+		in.VersionId = aws.String(v)
+	}
 	if v := query.Get("response-content-type"); v != "" {
 		in.ResponseContentType = aws.String(v)
 	}
@@ -94,6 +97,9 @@ func (app *S3RP) headObject(w http.ResponseWriter, r *http.Request, rt *bucketRT
 	applyConditionalHeaders(r, &in.IfMatch, &in.IfNoneMatch, &in.IfModifiedSince, &in.IfUnmodifiedSince)
 	if v := r.Header.Get("Range"); v != "" {
 		in.Range = aws.String(v)
+	}
+	if v := r.URL.Query().Get("versionId"); v != "" {
+		in.VersionId = aws.String(v)
 	}
 	out, err := rt.client.HeadObject(r.Context(), in)
 	if err != nil {
@@ -183,6 +189,9 @@ func (app *S3RP) deleteObject(w http.ResponseWriter, r *http.Request, rt *bucket
 	in := &s3.DeleteObjectInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
+	}
+	if v := r.URL.Query().Get("versionId"); v != "" {
+		in.VersionId = aws.String(v)
 	}
 	out, err := rt.client.DeleteObject(r.Context(), in)
 	if err != nil {

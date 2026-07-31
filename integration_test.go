@@ -433,6 +433,94 @@ func TestIntegration(t *testing.T) {
 			t.Errorf("expect empty tag set after delete, got %v", got.TagSet)
 		}
 	})
+	t.Run("Versioning", func(t *testing.T) {
+		// requires versitygw started with --versioning-dir
+		if _, err := client.PutBucketVersioning(t.Context(), &s3.PutBucketVersioningInput{
+			Bucket: aws.String("it-bucket"),
+			VersioningConfiguration: &types.VersioningConfiguration{
+				Status: types.BucketVersioningStatusEnabled,
+			},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		ver, err := client.GetBucketVersioning(t.Context(), &s3.GetBucketVersioningInput{
+			Bucket: aws.String("it-bucket"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ver.Status != types.BucketVersioningStatusEnabled {
+			t.Fatalf("expect Enabled, got %v", ver.Status)
+		}
+		// two versions of the same key
+		for _, content := range []string{"version one", "version two"} {
+			if _, err := client.PutObject(t.Context(), &s3.PutObjectInput{
+				Bucket: aws.String("it-bucket"),
+				Key:    aws.String("ver/key.txt"),
+				Body:   strings.NewReader(content),
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		versions, err := client.ListObjectVersions(t.Context(), &s3.ListObjectVersionsInput{
+			Bucket: aws.String("it-bucket"),
+			Prefix: aws.String("ver/"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(versions.Versions) != 2 {
+			t.Fatalf("expect 2 versions, got %d", len(versions.Versions))
+		}
+		var oldVersionID string
+		for _, v := range versions.Versions {
+			if !aws.ToBool(v.IsLatest) {
+				oldVersionID = aws.ToString(v.VersionId)
+			}
+		}
+		if oldVersionID == "" {
+			t.Fatal("old version id not found")
+		}
+		got, err := client.GetObject(t.Context(), &s3.GetObjectInput{
+			Bucket:    aws.String("it-bucket"),
+			Key:       aws.String("ver/key.txt"),
+			VersionId: aws.String(oldVersionID),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer got.Body.Close()
+		body, _ := io.ReadAll(got.Body)
+		if string(body) != "version one" {
+			t.Errorf("expect old version content, got %q", body)
+		}
+		// clean up all versions
+		versions, err = client.ListObjectVersions(t.Context(), &s3.ListObjectVersionsInput{
+			Bucket: aws.String("it-bucket"),
+			Prefix: aws.String("ver/"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, v := range versions.Versions {
+			if _, err := client.DeleteObject(t.Context(), &s3.DeleteObjectInput{
+				Bucket:    aws.String("it-bucket"),
+				Key:       v.Key,
+				VersionId: v.VersionId,
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		// suspend versioning to avoid affecting other subtests
+		if _, err := client.PutBucketVersioning(t.Context(), &s3.PutBucketVersioningInput{
+			Bucket: aws.String("it-bucket"),
+			VersioningConfiguration: &types.VersioningConfiguration{
+				Status: types.BucketVersioningStatusSuspended,
+			},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	})
 	t.Run("PresignedURL", func(t *testing.T) {
 		presigner := s3.NewPresignClient(client)
 		content := "presigned integration content"

@@ -59,6 +59,11 @@ type stubBackend struct {
 	getTagOut  *s3.GetObjectTaggingOutput
 	putTagIn   *s3.PutObjectTaggingInput
 	delTagIn   *s3.DeleteObjectTaggingInput
+	getVerIn   *s3.GetBucketVersioningInput
+	getVerOut  *s3.GetBucketVersioningOutput
+	putVerIn   *s3.PutBucketVersioningInput
+	listVerIn  *s3.ListObjectVersionsInput
+	listVerOut *s3.ListObjectVersionsOutput
 	delObjsIn  *s3.DeleteObjectsInput
 	delObjsOut *s3.DeleteObjectsOutput
 	copyIn     *s3.CopyObjectInput
@@ -158,6 +163,21 @@ func (b *stubBackend) CopyObject(ctx context.Context, in *s3.CopyObjectInput, _ 
 func (b *stubBackend) UploadPartCopy(ctx context.Context, in *s3.UploadPartCopyInput, _ ...func(*s3.Options)) (*s3.UploadPartCopyOutput, error) {
 	b.upcIn = in
 	return b.upcOut, nil
+}
+
+func (b *stubBackend) GetBucketVersioning(ctx context.Context, in *s3.GetBucketVersioningInput, _ ...func(*s3.Options)) (*s3.GetBucketVersioningOutput, error) {
+	b.getVerIn = in
+	return b.getVerOut, nil
+}
+
+func (b *stubBackend) PutBucketVersioning(ctx context.Context, in *s3.PutBucketVersioningInput, _ ...func(*s3.Options)) (*s3.PutBucketVersioningOutput, error) {
+	b.putVerIn = in
+	return &s3.PutBucketVersioningOutput{}, nil
+}
+
+func (b *stubBackend) ListObjectVersions(ctx context.Context, in *s3.ListObjectVersionsInput, _ ...func(*s3.Options)) (*s3.ListObjectVersionsOutput, error) {
+	b.listVerIn = in
+	return b.listVerOut, nil
 }
 
 func (b *stubBackend) GetObjectTagging(ctx context.Context, in *s3.GetObjectTaggingInput, _ ...func(*s3.Options)) (*s3.GetObjectTaggingOutput, error) {

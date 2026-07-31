@@ -15,6 +15,9 @@ func (app *S3RP) getObjectTagging(w http.ResponseWriter, r *http.Request, rt *bu
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
 	}
+	if v := r.URL.Query().Get("versionId"); v != "" {
+		in.VersionId = aws.String(v)
+	}
 	out, err := rt.client.GetObjectTagging(r.Context(), in)
 	if err != nil {
 		return fromSDKError(err, r.URL.Path)
@@ -58,6 +61,9 @@ func (app *S3RP) putObjectTagging(w http.ResponseWriter, r *http.Request, rt *bu
 		Key:     aws.String(key),
 		Tagging: &types.Tagging{TagSet: tags},
 	}
+	if v := r.URL.Query().Get("versionId"); v != "" {
+		in.VersionId = aws.String(v)
+	}
 	out, err := rt.client.PutObjectTagging(r.Context(), in)
 	if err != nil {
 		return fromSDKError(err, r.URL.Path)
@@ -73,6 +79,9 @@ func (app *S3RP) deleteObjectTagging(w http.ResponseWriter, r *http.Request, rt 
 	in := &s3.DeleteObjectTaggingInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
+	}
+	if v := r.URL.Query().Get("versionId"); v != "" {
+		in.VersionId = aws.String(v)
 	}
 	out, err := rt.client.DeleteObjectTagging(r.Context(), in)
 	if err != nil {

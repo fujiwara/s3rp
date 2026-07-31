@@ -2,6 +2,7 @@ package s3rp_test
 
 import (
 	"errors"
+	"io"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -175,6 +176,133 @@ func TestProxyPutObjectWithTaggingHeader(t *testing.T) {
 	}
 	if got := aws.ToString(stub.putIn.Tagging); got != "env=test&team=sre" {
 		t.Errorf("unexpected tagging %q", got)
+	}
+}
+
+func TestProxyBucketVersioning(t *testing.T) {
+	stub := &stubBackend{
+		getVerOut: &s3.GetBucketVersioningOutput{
+			Status: types.BucketVersioningStatusEnabled,
+		},
+	}
+	client, _ := newTestProxy(t, stub)
+
+	if _, err := client.PutBucketVersioning(t.Context(), &s3.PutBucketVersioningInput{
+		Bucket: aws.String("testbucket"),
+		VersioningConfiguration: &types.VersioningConfiguration{
+			Status: types.BucketVersioningStatusEnabled,
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if aws.ToString(stub.putVerIn.Bucket) != "backend-testbucket" {
+		t.Errorf("expect backend-testbucket, got %s", aws.ToString(stub.putVerIn.Bucket))
+	}
+	if stub.putVerIn.VersioningConfiguration.Status != types.BucketVersioningStatusEnabled {
+		t.Errorf("unexpected status %v", stub.putVerIn.VersioningConfiguration.Status)
+	}
+
+	out, err := client.GetBucketVersioning(t.Context(), &s3.GetBucketVersioningInput{
+		Bucket: aws.String("testbucket"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Status != types.BucketVersioningStatusEnabled {
+		t.Errorf("expect Enabled, got %v", out.Status)
+	}
+}
+
+func TestProxyListObjectVersions(t *testing.T) {
+	stub := &stubBackend{
+		listVerOut: &s3.ListObjectVersionsOutput{
+			IsTruncated: aws.Bool(false),
+			MaxKeys:     aws.Int32(1000),
+			Versions: []types.ObjectVersion{
+				{
+					Key:          aws.String("v.txt"),
+					VersionId:    aws.String("ver2"),
+					IsLatest:     aws.Bool(true),
+					ETag:         aws.String(`"etag-2"`),
+					Size:         aws.Int64(10),
+					LastModified: aws.Time(time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)),
+				},
+				{
+					Key:          aws.String("v.txt"),
+					VersionId:    aws.String("ver1"),
+					IsLatest:     aws.Bool(false),
+					ETag:         aws.String(`"etag-1"`),
+					Size:         aws.Int64(5),
+					LastModified: aws.Time(time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)),
+				},
+			},
+			DeleteMarkers: []types.DeleteMarkerEntry{
+				{
+					Key:       aws.String("gone.txt"),
+					VersionId: aws.String("dm1"),
+					IsLatest:  aws.Bool(true),
+				},
+			},
+		},
+	}
+	client, _ := newTestProxy(t, stub)
+	out, err := client.ListObjectVersions(t.Context(), &s3.ListObjectVersionsInput{
+		Bucket: aws.String("testbucket"),
+		Prefix: aws.String("v"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if aws.ToString(out.Name) != "testbucket" {
+		t.Errorf("expect testbucket, got %s", aws.ToString(out.Name))
+	}
+	if len(out.Versions) != 2 || aws.ToString(out.Versions[1].VersionId) != "ver1" {
+		t.Errorf("unexpected versions %v", out.Versions)
+	}
+	if !aws.ToBool(out.Versions[0].IsLatest) {
+		t.Error("expect first version to be latest")
+	}
+	if len(out.DeleteMarkers) != 1 || aws.ToString(out.DeleteMarkers[0].VersionId) != "dm1" {
+		t.Errorf("unexpected delete markers %v", out.DeleteMarkers)
+	}
+	if aws.ToString(stub.listVerIn.Prefix) != "v" {
+		t.Errorf("unexpected prefix %v", stub.listVerIn.Prefix)
+	}
+}
+
+func TestProxyVersionID(t *testing.T) {
+	stub := &stubBackend{
+		getOut: &s3.GetObjectOutput{
+			Body:      io.NopCloser(strings.NewReader("old version")),
+			VersionId: aws.String("ver1"),
+		},
+		delOut: &s3.DeleteObjectOutput{},
+	}
+	client, _ := newTestProxy(t, stub)
+	out, err := client.GetObject(t.Context(), &s3.GetObjectInput{
+		Bucket:    aws.String("testbucket"),
+		Key:       aws.String("v.txt"),
+		VersionId: aws.String("ver1"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out.Body.Close()
+	if aws.ToString(stub.getIn.VersionId) != "ver1" {
+		t.Errorf("expect versionId ver1, got %v", stub.getIn.VersionId)
+	}
+	if aws.ToString(out.VersionId) != "ver1" {
+		t.Errorf("expect x-amz-version-id ver1, got %v", out.VersionId)
+	}
+	if _, err := client.DeleteObject(t.Context(), &s3.DeleteObjectInput{
+		Bucket:    aws.String("testbucket"),
+		Key:       aws.String("v.txt"),
+		VersionId: aws.String("ver1"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if aws.ToString(stub.delIn.VersionId) != "ver1" {
+		t.Errorf("expect versionId ver1, got %v", stub.delIn.VersionId)
 	}
 }
 

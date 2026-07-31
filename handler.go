@@ -127,6 +127,16 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 					return errNotImplemented(sub)
 				}
 				return app.getBucketLocation(w, rt)
+			case query.Has("versioning"):
+				if sub := unsupportedQuery(query, versioningOnlyParams); sub != "" {
+					return errNotImplemented(sub)
+				}
+				return app.getBucketVersioning(w, r, rt)
+			case query.Has("versions"):
+				if sub := unsupportedQuery(query, listObjectVersionsParams); sub != "" {
+					return errNotImplemented(sub)
+				}
+				return app.listObjectVersions(w, r, rt)
 			case query.Get("list-type") == "2":
 				if sub := unsupportedQuery(query, listObjectsV2Params); sub != "" {
 					return errNotImplemented(sub)
@@ -140,6 +150,14 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 			}
 		case http.MethodHead:
 			return app.headBucket(w, r, rt)
+		case http.MethodPut:
+			if query.Has("versioning") {
+				if sub := unsupportedQuery(query, versioningOnlyParams); sub != "" {
+					return errNotImplemented(sub)
+				}
+				return app.putBucketVersioning(w, r, rt, vr)
+			}
+			return errNotImplemented("this bucket operation")
 		case http.MethodPost:
 			if query.Has("delete") {
 				if sub := unsupportedQuery(query, deleteOnlyParams); sub != "" {
@@ -171,7 +189,7 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 			}
 			return app.getObject(w, r, rt, key)
 		case http.MethodHead:
-			if sub := unsupportedQuery(query, nil); sub != "" {
+			if sub := unsupportedQuery(query, versionIDOnlyParams); sub != "" {
 				return errNotImplemented(sub)
 			}
 			return app.headObject(w, r, rt, key)
@@ -212,7 +230,7 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 				}
 				return app.deleteObjectTagging(w, r, rt, key)
 			}
-			if sub := unsupportedQuery(query, nil); sub != "" {
+			if sub := unsupportedQuery(query, versionIDOnlyParams); sub != "" {
 				return errNotImplemented(sub)
 			}
 			return app.deleteObject(w, r, rt, key)
@@ -295,10 +313,30 @@ var uploadIDOnlyParams = map[string]bool{
 }
 
 var taggingOnlyParams = map[string]bool{
-	"tagging": true,
+	"tagging":   true,
+	"versionId": true,
+}
+
+var versioningOnlyParams = map[string]bool{
+	"versioning": true,
+}
+
+var listObjectVersionsParams = map[string]bool{
+	"versions":          true,
+	"prefix":            true,
+	"delimiter":         true,
+	"key-marker":        true,
+	"version-id-marker": true,
+	"max-keys":          true,
+	"encoding-type":     true,
+}
+
+var versionIDOnlyParams = map[string]bool{
+	"versionId": true,
 }
 
 var getObjectParams = map[string]bool{
+	"versionId":                    true,
 	"response-content-type":        true,
 	"response-content-disposition": true,
 	"response-cache-control":       true,
