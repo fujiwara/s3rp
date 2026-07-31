@@ -1,11 +1,17 @@
 listen: ":8080"
 tenants:
   - name: acme
-    keys:
-      - access_key_id: S3RPKEY001
-        secret_access_key: frontsecret001
-      - access_key_id: S3RPKEY002
-        secret_access_key: frontsecret002
+    users:
+      - name: app1
+        keys:
+          - access_key_id: S3RPKEY001
+            secret_access_key: frontsecret001
+          - access_key_id: S3RPKEY002
+            secret_access_key: frontsecret002
+      - name: batch
+        keys:
+          - access_key_id: S3RPKEY003
+            secret_access_key: frontsecret003
     buckets:
       - name: photos
         backend:
@@ -20,9 +26,11 @@ tenants:
           access_key_id: logskey
           secret_access_key: logssecret
   - name: umbrella
-    keys:
-      - access_key_id: S3RPKEY101
-        secret_access_key: frontsecret101
+    users:
+      - name: research1
+        keys:
+          - access_key_id: S3RPKEY101
+            secret_access_key: frontsecret101
     buckets:
       - name: research
         backend:

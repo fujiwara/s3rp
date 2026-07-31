@@ -51,17 +51,23 @@ Flags:
 
 The config file is YAML. Environment variables in the file are expanded (`${VAR}` or `$VAR`).
 
-Access keys are issued per tenant; a tenant owns one or more buckets, and every key of a tenant can access all of its buckets.
+A tenant owns one or more buckets and users. A user is the stable identity within a tenant (name: `[a-z][a-z0-9_-]+`); access keys are issued per user and rotate under it — add a new key, switch clients, then remove the old one. Every key of a tenant can access all of the tenant's buckets.
 
 ```yaml
 listen: ":8080"
 tenants:
   - name: acme                       # tenant identifier
-    keys:                            # tenant access keys (multiple allowed)
-      - access_key_id: S3RPKEY001
-        secret_access_key: ${ACME_SECRET_001}
-      - access_key_id: S3RPKEY002
-        secret_access_key: ${ACME_SECRET_002}
+    users:
+      - name: app1                   # stable user identity
+        keys:                        # access keys of the user (multiple for rotation)
+          - access_key_id: S3RPKEY001
+            secret_access_key: ${ACME_APP1_SECRET_001}
+          - access_key_id: S3RPKEY002
+            secret_access_key: ${ACME_APP1_SECRET_002}
+      - name: batch
+        keys:
+          - access_key_id: S3RPKEY003
+            secret_access_key: ${ACME_BATCH_SECRET_001}
     buckets:                         # buckets owned by this tenant
       - name: photos                 # bucket name on the front side
         backend:
@@ -81,7 +87,7 @@ tenants:
 
 Notes:
 
-- Bucket names and access key ids must be unique across all tenants (path-style URLs carry no tenant discriminator).
+- Bucket names and access key ids must be unique across all tenants (path-style URLs carry no tenant discriminator). User names must be unique within a tenant.
 - When `backend.endpoint` is omitted, the backend is Amazon S3: the SDK resolves the endpoint from `region`, and `use_path_style` defaults to `false` (it defaults to `true` when an endpoint is set).
 - When `backend.access_key_id` and `backend.secret_access_key` are omitted, the SDK default credential chain is used (environment variables, shared config, IAM roles, etc.).
 - `GET /` (ListBuckets) returns the buckets of the key's tenant, with the tenant name as the owner.
@@ -118,6 +124,8 @@ $ aws --endpoint-url http://localhost:8080 s3api list-objects-v2 --bucket photos
 - GetBucketVersioning
 - PutBucketVersioning
 - ListObjectVersions
+- GetBucketAcl
+- GetObjectAcl
 - CreateMultipartUpload
 - UploadPart
 - UploadPartCopy
@@ -131,6 +139,10 @@ Other operations return a `NotImplemented` error.
 CopyObject and UploadPartCopy work between buckets served by the same backend (same endpoint, region and credentials); copying across different backends returns `NotImplemented`. The copy source bucket must be accessible by the requesting access key.
 
 The `versionId` query parameter is passed through on GetObject, HeadObject, DeleteObject and the object tagging operations. Versioning requires a backend that supports it.
+
+### ACLs
+
+s3rp behaves like a bucket with ACLs disabled (Object Ownership = bucket owner enforced, the AWS default since 2023). GetBucketAcl / GetObjectAcl return a fixed policy granting FULL_CONTROL to the tenant; PutBucketAcl / PutObjectAcl return `AccessControlListNotSupported`, and canned ACLs other than `private` / `bucket-owner-full-control` are rejected on uploads. Use tenant keys for access control instead.
 
 `aws-chunked` request bodies (`STREAMING-AWS4-HMAC-SHA256-PAYLOAD` and the trailer variants), which the AWS CLI and SDKs use for uploads over plain http endpoints, are decoded and their chunk signatures are verified.
 

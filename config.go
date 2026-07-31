@@ -15,7 +15,10 @@ const (
 	DefaultRegion = "us-east-1"
 )
 
-var bucketNameRegexp = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`)
+var (
+	bucketNameRegexp = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`)
+	userNameRegexp   = regexp.MustCompile(`^[a-z][a-z0-9_-]+$`)
+)
 
 // Password and BackendConfig are defined in the store package; the aliases
 // keep the config schema in one place with the rest of the config types.
@@ -29,11 +32,18 @@ type Config struct {
 	Tenants []*TenantConfig `yaml:"tenants" json:"tenants"`
 }
 
-// TenantConfig defines a tenant: its access keys and the buckets it owns.
+// TenantConfig defines a tenant: its users and the buckets it owns.
 type TenantConfig struct {
 	Name    string          `yaml:"name" json:"name"`
-	Keys    []*KeyConfig    `yaml:"keys" json:"keys"`
+	Users   []*UserConfig   `yaml:"users" json:"users"`
 	Buckets []*BucketConfig `yaml:"buckets" json:"buckets"`
+}
+
+// UserConfig defines a user of a tenant. The user name is the stable
+// identity (e.g. for policy principals); access keys rotate under it.
+type UserConfig struct {
+	Name string       `yaml:"name" json:"name"`
+	Keys []*KeyConfig `yaml:"keys" json:"keys"`
 }
 
 type BucketConfig struct {
@@ -107,17 +117,30 @@ func (c *Config) Validate() error {
 		}
 		tenantNames[t.Name] = true
 
-		if len(t.Keys) == 0 {
-			return fmt.Errorf("tenant %s: at least one key is required", t.Name)
+		if len(t.Users) == 0 {
+			return fmt.Errorf("tenant %s: at least one user is required", t.Name)
 		}
-		for _, k := range t.Keys {
-			if k.AccessKeyID == "" || k.SecretAccessKey == "" {
-				return fmt.Errorf("tenant %s: key access_key_id and secret_access_key are required", t.Name)
+		userNames := make(map[string]bool, len(t.Users))
+		for _, u := range t.Users {
+			if !userNameRegexp.MatchString(u.Name) {
+				return fmt.Errorf("tenant %s: invalid user name %q", t.Name, u.Name)
 			}
-			if keyIDs[k.AccessKeyID] {
-				return fmt.Errorf("duplicate access_key_id %q", k.AccessKeyID)
+			if userNames[u.Name] {
+				return fmt.Errorf("tenant %s: duplicate user name %q", t.Name, u.Name)
 			}
-			keyIDs[k.AccessKeyID] = true
+			userNames[u.Name] = true
+			if len(u.Keys) == 0 {
+				return fmt.Errorf("tenant %s: user %s: at least one key is required", t.Name, u.Name)
+			}
+			for _, k := range u.Keys {
+				if k.AccessKeyID == "" || k.SecretAccessKey == "" {
+					return fmt.Errorf("tenant %s: user %s: key access_key_id and secret_access_key are required", t.Name, u.Name)
+				}
+				if keyIDs[k.AccessKeyID] {
+					return fmt.Errorf("duplicate access_key_id %q", k.AccessKeyID)
+				}
+				keyIDs[k.AccessKeyID] = true
+			}
 		}
 
 		if len(t.Buckets) == 0 {

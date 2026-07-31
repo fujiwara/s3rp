@@ -34,6 +34,7 @@ type stubBackend struct {
 	putOut  *s3.PutObjectOutput
 	headIn  *s3.HeadObjectInput
 	headOut *s3.HeadObjectOutput
+	headErr error
 	delIn   *s3.DeleteObjectInput
 	delOut  *s3.DeleteObjectOutput
 	listIn  *s3.ListObjectsV2Input
@@ -92,6 +93,9 @@ func (b *stubBackend) PutObject(ctx context.Context, in *s3.PutObjectInput, _ ..
 
 func (b *stubBackend) HeadObject(ctx context.Context, in *s3.HeadObjectInput, _ ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
 	b.headIn = in
+	if b.headErr != nil {
+		return nil, b.headErr
+	}
 	return b.headOut, nil
 }
 
@@ -512,10 +516,10 @@ func TestProxyNotImplemented(t *testing.T) {
 		call func(ctx context.Context, client *s3.Client) error
 	}{
 		{
-			name: "GetObjectAcl",
+			name: "GetBucketPolicy",
 			call: func(ctx context.Context, client *s3.Client) error {
-				_, err := client.GetObjectAcl(ctx, &s3.GetObjectAclInput{
-					Bucket: aws.String("testbucket"), Key: aws.String("key.txt"),
+				_, err := client.GetBucketPolicy(ctx, &s3.GetBucketPolicyInput{
+					Bucket: aws.String("testbucket"),
 				})
 				return err
 			},
@@ -530,9 +534,9 @@ func TestProxyNotImplemented(t *testing.T) {
 			},
 		},
 		{
-			name: "GetBucketAcl",
+			name: "GetBucketCors",
 			call: func(ctx context.Context, client *s3.Client) error {
-				_, err := client.GetBucketAcl(ctx, &s3.GetBucketAclInput{
+				_, err := client.GetBucketCors(ctx, &s3.GetBucketCorsInput{
 					Bucket: aws.String("testbucket"),
 				})
 				return err

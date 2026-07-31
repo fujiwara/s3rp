@@ -26,8 +26,13 @@ func newTestApp(t *testing.T) *s3rp.S3RP {
 		Tenants: []*s3rp.TenantConfig{
 			{
 				Name: "testtenant",
-				Keys: []*s3rp.KeyConfig{
-					{AccessKeyID: testAccessKeyID, SecretAccessKey: testSecretAccessKey},
+				Users: []*s3rp.UserConfig{
+					{
+						Name: "testuser",
+						Keys: []*s3rp.KeyConfig{
+							{AccessKeyID: testAccessKeyID, SecretAccessKey: testSecretAccessKey},
+						},
+					},
 				},
 				Buckets: []*s3rp.BucketConfig{
 					{

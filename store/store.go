@@ -27,11 +27,13 @@ type Store interface {
 	ListBucketNames(ctx context.Context, tenant string) ([]string, error)
 }
 
-// Key is a front-side access key. It belongs to exactly one tenant.
+// Key is a front-side access key. It belongs to exactly one user of a
+// tenant. The user name is the stable identity; keys rotate under it.
 type Key struct {
 	AccessKeyID     string
 	SecretAccessKey Password
 	Tenant          string
+	User            string
 }
 
 // Bucket is a front-side bucket and its backend definition.

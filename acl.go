@@ -1,0 +1,67 @@
+package s3rp
+
+import (
+	"net/http"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+)
+
+// s3rp mimics buckets with ACLs disabled (Object Ownership = bucket owner
+// enforced), which is the AWS default since 2023 and the recommended mode.
+// GetBucketAcl / GetObjectAcl return a fixed full-control-by-owner policy,
+// modifying ACLs is rejected, and only canned ACLs that are no-ops on an
+// ACL-disabled bucket are accepted on uploads.
+
+func errACLNotSupported() *S3Error {
+	return newS3Error(http.StatusBadRequest, "AccessControlListNotSupported",
+		"The bucket does not allow ACLs")
+}
+
+// checkACLHeader rejects canned ACLs other than the ones an ACL-disabled
+// bucket accepts.
+func checkACLHeader(r *http.Request) *S3Error {
+	switch r.Header.Get("x-amz-acl") {
+	case "", "private", "bucket-owner-full-control":
+		return nil
+	}
+	return errACLNotSupported()
+}
+
+func ownerFullControlPolicy(owner string) *AccessControlPolicy {
+	policy := &AccessControlPolicy{
+		XMLNS: s3XMLNS,
+		Owner: Owner{ID: owner, DisplayName: owner},
+	}
+	policy.AccessControlList.Grants = []Grant{
+		{
+			Grantee: Grantee{
+				XMLNSXSI:    "http://www.w3.org/2001/XMLSchema-instance",
+				Type:        "CanonicalUser",
+				ID:          owner,
+				DisplayName: owner,
+			},
+			Permission: "FULL_CONTROL",
+		},
+	}
+	return policy
+}
+
+func (app *S3RP) getBucketACL(w http.ResponseWriter, vr *verifiedRequest) error {
+	return writeXML(w, ownerFullControlPolicy(vr.Tenant))
+}
+
+func (app *S3RP) getObjectACL(w http.ResponseWriter, r *http.Request, rt *bucketRT, key string, vr *verifiedRequest) error {
+	// verify the object exists so that a missing key still errors
+	in := &s3.HeadObjectInput{
+		Bucket: aws.String(rt.cfg.Backend.Bucket),
+		Key:    aws.String(key),
+	}
+	if v := r.URL.Query().Get("versionId"); v != "" {
+		in.VersionId = aws.String(v)
+	}
+	if _, err := rt.client.HeadObject(r.Context(), in); err != nil {
+		return fromSDKError(err, r.URL.Path)
+	}
+	return writeXML(w, ownerFullControlPolicy(vr.Tenant))
+}
