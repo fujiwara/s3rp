@@ -118,6 +118,8 @@ $ aws --endpoint-url http://localhost:8080 s3api list-objects-v2 --bucket photos
 - GetBucketVersioning
 - PutBucketVersioning
 - ListObjectVersions
+- GetBucketAcl
+- GetObjectAcl
 - CreateMultipartUpload
 - UploadPart
 - UploadPartCopy
@@ -131,6 +133,10 @@ Other operations return a `NotImplemented` error.
 CopyObject and UploadPartCopy work between buckets served by the same backend (same endpoint, region and credentials); copying across different backends returns `NotImplemented`. The copy source bucket must be accessible by the requesting access key.
 
 The `versionId` query parameter is passed through on GetObject, HeadObject, DeleteObject and the object tagging operations. Versioning requires a backend that supports it.
+
+### ACLs
+
+s3rp behaves like a bucket with ACLs disabled (Object Ownership = bucket owner enforced, the AWS default since 2023). GetBucketAcl / GetObjectAcl return a fixed policy granting FULL_CONTROL to the tenant; PutBucketAcl / PutObjectAcl return `AccessControlListNotSupported`, and canned ACLs other than `private` / `bucket-owner-full-control` are rejected on uploads. Use tenant keys for access control instead.
 
 `aws-chunked` request bodies (`STREAMING-AWS4-HMAC-SHA256-PAYLOAD` and the trailer variants), which the AWS CLI and SDKs use for uploads over plain http endpoints, are decoded and their chunk signatures are verified.
 

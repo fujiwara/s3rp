@@ -264,6 +264,28 @@ type Tag struct {
 	Value string `xml:"Value"`
 }
 
+// AccessControlPolicy is the response of GetBucketAcl / GetObjectAcl.
+type AccessControlPolicy struct {
+	XMLName           xml.Name `xml:"AccessControlPolicy"`
+	XMLNS             string   `xml:"xmlns,attr"`
+	Owner             Owner    `xml:"Owner"`
+	AccessControlList struct {
+		Grants []Grant `xml:"Grant"`
+	} `xml:"AccessControlList"`
+}
+
+type Grant struct {
+	Grantee    Grantee `xml:"Grantee"`
+	Permission string  `xml:"Permission"`
+}
+
+type Grantee struct {
+	XMLNSXSI    string `xml:"xmlns:xsi,attr"`
+	Type        string `xml:"xsi:type,attr"`
+	ID          string `xml:"ID"`
+	DisplayName string `xml:"DisplayName,omitempty"`
+}
+
 // ListAllMyBucketsResult is the response of ListBuckets.
 type ListAllMyBucketsResult struct {
 	XMLName xml.Name `xml:"ListAllMyBucketsResult"`

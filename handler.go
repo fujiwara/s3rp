@@ -143,6 +143,11 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 				return err
 			}
 			return app.getBucketLocation(w, rt)
+		case query.Has("acl"):
+			if err := aclOnlyParams.check(query); err != nil {
+				return err
+			}
+			return app.getBucketACL(w, vr)
 		case query.Has("versioning"):
 			if err := versioningOnlyParams.check(query); err != nil {
 				return err
@@ -173,6 +178,9 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 			}
 			return app.putBucketVersioning(w, r, rt, vr)
 		}
+		if query.Has("acl") {
+			return errACLNotSupported()
+		}
 		return errNotImplemented("this bucket operation")
 	case http.MethodPost:
 		if query.Has("delete") {
@@ -202,6 +210,12 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 			}
 			return app.getObjectTagging(w, r, rt, key)
 		}
+		if query.Has("acl") {
+			if err := aclParams.check(query); err != nil {
+				return err
+			}
+			return app.getObjectACL(w, r, rt, key, vr)
+		}
 		if err := getObjectParams.check(query); err != nil {
 			return err
 		}
@@ -218,6 +232,9 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 			}
 			return app.putObjectTagging(w, r, rt, key, vr)
 		}
+		if query.Has("acl") {
+			return errACLNotSupported()
+		}
 		hasCopySource := r.Header.Get("x-amz-copy-source") != ""
 		if query.Has("uploadId") || query.Has("partNumber") {
 			if err := uploadPartParams.check(query); err != nil {
@@ -229,6 +246,9 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 			return app.uploadPart(w, r, rt, key, vr)
 		}
 		if err := noParams.check(query); err != nil {
+			return err
+		}
+		if err := checkACLHeader(r); err != nil {
 			return err
 		}
 		if hasCopySource {
@@ -256,6 +276,9 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 		switch {
 		case query.Has("uploads"):
 			if err := uploadsOnlyParams.check(query); err != nil {
+				return err
+			}
+			if err := checkACLHeader(r); err != nil {
 				return err
 			}
 			return app.createMultipartUpload(w, r, rt, key)
@@ -308,6 +331,8 @@ func (p paramSet) check(query url.Values) *S3Error {
 
 var (
 	noParams             = newParamSet()
+	aclOnlyParams        = newParamSet("acl")
+	aclParams            = newParamSet("acl", "versionId")
 	locationOnlyParams   = newParamSet("location")
 	deleteOnlyParams     = newParamSet("delete")
 	uploadsOnlyParams    = newParamSet("uploads")
