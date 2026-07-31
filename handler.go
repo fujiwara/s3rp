@@ -90,6 +90,10 @@ func unescapeKey(rawKey string) (string, error) {
 }
 
 func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
+	// browsers send CORS preflights without authentication
+	if r.Method == http.MethodOptions {
+		return app.handlePreflight(w, r)
+	}
 	vr, s3err := app.verifyRequest(r)
 	if s3err != nil {
 		return s3err
@@ -121,6 +125,7 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 		return newS3Error(http.StatusInternalServerError, "InternalError", "backend client failed")
 	}
 	rt := &bucketRT{cfg: b, client: client}
+	setCORSHeaders(w, r, b)
 
 	query := r.URL.Query()
 	if key == "" {
@@ -169,6 +174,14 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 				return err
 			}
 			return app.getBucketPolicy(w, rt)
+		case query.Has("cors"):
+			if err := corsOnlyParams.check(query); err != nil {
+				return err
+			}
+			if err := authorize("s3:GetBucketCORS"); err != nil {
+				return err
+			}
+			return app.getBucketCors(w, rt)
 		case query.Has("versioning"):
 			if err := versioningOnlyParams.check(query); err != nil {
 				return err
@@ -225,10 +238,16 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 			// control plane), not via the S3 API
 			return errNotImplemented("PutBucketPolicy")
 		}
+		if query.Has("cors") {
+			return errNotImplemented("PutBucketCors")
+		}
 		return errNotImplemented("this bucket operation")
 	case http.MethodDelete:
 		if query.Has("policy") {
 			return errNotImplemented("DeleteBucketPolicy")
+		}
+		if query.Has("cors") {
+			return errNotImplemented("DeleteBucketCors")
 		}
 		return errNotImplemented("this bucket operation")
 	case http.MethodPost:
@@ -425,6 +444,7 @@ var (
 	noParams             = newParamSet()
 	aclOnlyParams        = newParamSet("acl")
 	policyOnlyParams     = newParamSet("policy")
+	corsOnlyParams       = newParamSet("cors")
 	aclParams            = newParamSet("acl", "versionId")
 	locationOnlyParams   = newParamSet("location")
 	deleteOnlyParams     = newParamSet("delete")

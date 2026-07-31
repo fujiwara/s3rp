@@ -49,9 +49,10 @@ type UserConfig struct {
 }
 
 type BucketConfig struct {
-	Name    string         `yaml:"name" json:"name"`
-	Backend *BackendConfig `yaml:"backend" json:"backend"`
-	Policy  string         `yaml:"policy,omitempty" json:"policy,omitempty"` // bucket policy JSON text
+	Name    string            `yaml:"name" json:"name"`
+	Backend *BackendConfig    `yaml:"backend" json:"backend"`
+	Policy  string            `yaml:"policy,omitempty" json:"policy,omitempty"` // bucket policy JSON text
+	CORS    []*store.CORSRule `yaml:"cors,omitempty" json:"cors,omitempty"`
 }
 
 type KeyConfig struct {
@@ -188,6 +189,25 @@ func (c *Config) Validate() error {
 							return fmt.Errorf("bucket %s: policy resource %q does not refer to this bucket", b.Name, res)
 						}
 					}
+				}
+			}
+
+			for _, rule := range b.CORS {
+				if len(rule.AllowedOrigins) == 0 {
+					return fmt.Errorf("bucket %s: cors rule requires at least one allowed origin", b.Name)
+				}
+				if len(rule.AllowedMethods) == 0 {
+					return fmt.Errorf("bucket %s: cors rule requires at least one allowed method", b.Name)
+				}
+				for _, m := range rule.AllowedMethods {
+					switch m {
+					case "GET", "PUT", "POST", "DELETE", "HEAD":
+					default:
+						return fmt.Errorf("bucket %s: unsupported cors method %q", b.Name, m)
+					}
+				}
+				if rule.MaxAgeSeconds < 0 {
+					return fmt.Errorf("bucket %s: cors max_age_seconds must not be negative", b.Name)
 				}
 			}
 		}

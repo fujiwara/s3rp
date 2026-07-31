@@ -12,6 +12,7 @@ import (
 type configStore struct {
 	keys    map[string]*store.Key
 	tenants map[string]map[string]*store.Bucket // tenant name -> bucket name -> bucket
+	byName  map[string]*store.Bucket            // bucket name -> bucket (globally unique)
 }
 
 // NewConfigStore builds a store.Store from a validated config.
@@ -19,6 +20,7 @@ func NewConfigStore(cfg *Config) store.Store {
 	s := &configStore{
 		keys:    make(map[string]*store.Key),
 		tenants: make(map[string]map[string]*store.Bucket, len(cfg.Tenants)),
+		byName:  make(map[string]*store.Bucket),
 	}
 	for _, t := range cfg.Tenants {
 		buckets := make(map[string]*store.Bucket, len(t.Buckets))
@@ -28,6 +30,7 @@ func NewConfigStore(cfg *Config) store.Store {
 				Name:       b.Name,
 				Backend:    b.Backend,
 				PolicyText: b.Policy,
+				CORS:       b.CORS,
 			}
 			if b.Policy != "" {
 				// the config is validated, so this cannot fail
@@ -38,6 +41,7 @@ func NewConfigStore(cfg *Config) store.Store {
 				bucket.Policy = p
 			}
 			buckets[b.Name] = bucket
+			s.byName[b.Name] = bucket
 		}
 		s.tenants[t.Name] = buckets
 		for _, u := range t.Users {
@@ -63,6 +67,13 @@ func (s *configStore) GetKey(ctx context.Context, accessKeyID string) (*store.Ke
 
 func (s *configStore) GetBucket(ctx context.Context, tenant, bucket string) (*store.Bucket, error) {
 	if b, ok := s.tenants[tenant][bucket]; ok {
+		return b, nil
+	}
+	return nil, store.ErrNotFound
+}
+
+func (s *configStore) GetBucketByName(ctx context.Context, bucket string) (*store.Bucket, error) {
+	if b, ok := s.byName[bucket]; ok {
 		return b, nil
 	}
 	return nil, store.ErrNotFound

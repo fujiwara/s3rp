@@ -127,6 +127,7 @@ $ aws --endpoint-url http://localhost:8080 s3api list-objects-v2 --bucket photos
 - GetBucketAcl
 - GetObjectAcl
 - GetBucketPolicy
+- GetBucketCors
 - CreateMultipartUpload
 - UploadPart
 - UploadPartCopy
@@ -175,6 +176,26 @@ Principal forms:
 - `NotPrincipal` (exclusive with `Principal`) — everyone except the listed users. `Deny` + `NotPrincipal` expresses "only these users may ..." so that newly added users are denied by default.
 
 Limitations: policies only cover users of the owning tenant; versioned operations use the same action names as unversioned ones (no `s3:GetObjectVersion` distinction). DeleteObjects is evaluated per object: denied keys are reported in the `Error` entries of the response. Copying evaluates `s3:GetObject` on the source and `s3:PutObject` on the destination.
+
+### CORS
+
+CORS is handled by the proxy itself (it is a contract between the browser and the server the browser talks to, so backend CORS settings are not passed through). Rules are defined per bucket in the config:
+
+```yaml
+buckets:
+  - name: photos
+    backend: { ... }
+    cors:
+      - allowed_origins: ["https://app.example.com", "https://*.preview.example.com"]
+        allowed_methods: [GET, PUT]   # GET, PUT, POST, DELETE, HEAD
+        allowed_headers: ["*"]
+        expose_headers: [ETag]
+        max_age_seconds: 3600
+```
+
+Preflight `OPTIONS` requests are answered without authentication based on these rules, which makes browser-direct uploads via presigned URLs work. Actual responses carry `Access-Control-Allow-Origin` / `Access-Control-Expose-Headers` when the request's `Origin` matches a rule. `*` in `allowed_origins` matches any characters (e.g. `https://*.example.com`).
+
+GetBucketCors returns the configuration (`NoSuchCORSConfiguration` when absent); PutBucketCors / DeleteBucketCors are not supported (rules are defined in the config).
 
 ### ACLs
 
