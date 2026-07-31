@@ -122,28 +122,12 @@ func (app *S3RP) putObject(w http.ResponseWriter, r *http.Request, rt *bucketRT,
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
 	}
-	switch vr.PayloadHash {
-	case streamingSHA256, streamingSHA256T, streamingUnsignedT:
-		decodedLength := r.Header.Get("x-amz-decoded-content-length")
-		if decodedLength == "" {
-			return newS3Error(http.StatusLengthRequired, "MissingContentLength",
-				"You must provide the x-amz-decoded-content-length HTTP header.")
-		}
-		length, err := strconv.ParseInt(decodedLength, 10, 64)
-		if err != nil || length < 0 {
-			return newS3Error(http.StatusBadRequest, "InvalidRequest",
-				"Invalid x-amz-decoded-content-length header")
-		}
-		in.Body = newChunkedReader(r.Body, vr)
-		in.ContentLength = aws.Int64(length)
-	default:
-		in.Body = r.Body
-		if r.ContentLength < 0 {
-			return newS3Error(http.StatusLengthRequired, "MissingContentLength",
-				"You must provide the Content-Length HTTP header.")
-		}
-		in.ContentLength = aws.Int64(r.ContentLength)
+	body, length, s3err := requestBody(r, vr)
+	if s3err != nil {
+		return s3err
 	}
+	in.Body = body
+	in.ContentLength = aws.Int64(length)
 
 	if v := r.Header.Get("Content-Type"); v != "" {
 		in.ContentType = aws.String(v)
@@ -338,6 +322,31 @@ func (app *S3RP) listBuckets(w http.ResponseWriter, vr *verifiedRequest) error {
 		})
 	}
 	return writeXML(w, result)
+}
+
+// requestBody returns the payload reader and its decoded length,
+// decoding aws-chunked framing when the request declares it.
+func requestBody(r *http.Request, vr *verifiedRequest) (io.Reader, int64, *S3Error) {
+	switch vr.PayloadHash {
+	case streamingSHA256, streamingSHA256T, streamingUnsignedT:
+		decodedLength := r.Header.Get("x-amz-decoded-content-length")
+		if decodedLength == "" {
+			return nil, 0, newS3Error(http.StatusLengthRequired, "MissingContentLength",
+				"You must provide the x-amz-decoded-content-length HTTP header.")
+		}
+		length, err := strconv.ParseInt(decodedLength, 10, 64)
+		if err != nil || length < 0 {
+			return nil, 0, newS3Error(http.StatusBadRequest, "InvalidRequest",
+				"Invalid x-amz-decoded-content-length header")
+		}
+		return newChunkedReader(r.Body, vr), length, nil
+	default:
+		if r.ContentLength < 0 {
+			return nil, 0, newS3Error(http.StatusLengthRequired, "MissingContentLength",
+				"You must provide the Content-Length HTTP header.")
+		}
+		return r.Body, r.ContentLength, nil
+	}
 }
 
 func writeXML(w http.ResponseWriter, v any) error {

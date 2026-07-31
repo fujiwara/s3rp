@@ -116,6 +116,12 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	case key == "":
 		switch r.Method {
 		case http.MethodGet:
+			if query.Has("uploads") {
+				if sub := unsupportedQuery(query, listMultipartUploadsParams); sub != "" {
+					return errNotImplemented(sub)
+				}
+				return app.listMultipartUploads(w, r, rt)
+			}
 			if query.Get("list-type") != "2" {
 				return errNotImplemented("this bucket operation")
 			}
@@ -131,6 +137,12 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	default:
 		switch r.Method {
 		case http.MethodGet:
+			if query.Has("uploadId") {
+				if sub := unsupportedQuery(query, listPartsParams); sub != "" {
+					return errNotImplemented(sub)
+				}
+				return app.listParts(w, r, rt, key)
+			}
 			if sub := unsupportedQuery(query, getObjectParams); sub != "" {
 				return errNotImplemented(sub)
 			}
@@ -141,21 +153,48 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 			}
 			return app.headObject(w, r, rt, key)
 		case http.MethodPut:
+			if r.Header.Get("x-amz-copy-source") != "" {
+				if query.Has("uploadId") {
+					return errNotImplemented("UploadPartCopy")
+				}
+				return errNotImplemented("CopyObject")
+			}
+			if query.Has("uploadId") || query.Has("partNumber") {
+				if sub := unsupportedQuery(query, uploadPartParams); sub != "" {
+					return errNotImplemented(sub)
+				}
+				return app.uploadPart(w, r, rt, key, vr)
+			}
 			if sub := unsupportedQuery(query, nil); sub != "" {
 				return errNotImplemented(sub)
 			}
-			if r.Header.Get("x-amz-copy-source") != "" {
-				return errNotImplemented("CopyObject")
-			}
 			return app.putObject(w, r, rt, key, vr)
 		case http.MethodDelete:
+			if query.Has("uploadId") {
+				if sub := unsupportedQuery(query, uploadIDOnlyParams); sub != "" {
+					return errNotImplemented(sub)
+				}
+				return app.abortMultipartUpload(w, r, rt, key)
+			}
 			if sub := unsupportedQuery(query, nil); sub != "" {
 				return errNotImplemented(sub)
 			}
 			return app.deleteObject(w, r, rt, key)
 		case http.MethodPost:
-			// multipart upload and friends
-			return errNotImplemented("this operation")
+			switch {
+			case query.Has("uploads"):
+				if sub := unsupportedQuery(query, uploadsOnlyParams); sub != "" {
+					return errNotImplemented(sub)
+				}
+				return app.createMultipartUpload(w, r, rt, key)
+			case query.Has("uploadId"):
+				if sub := unsupportedQuery(query, uploadIDOnlyParams); sub != "" {
+					return errNotImplemented(sub)
+				}
+				return app.completeMultipartUpload(w, r, rt, key, vr)
+			default:
+				return errNotImplemented("this operation")
+			}
 		default:
 			return newS3Error(http.StatusMethodNotAllowed, "MethodNotAllowed",
 				"The specified method is not allowed against this resource.")
@@ -172,6 +211,35 @@ var listObjectsV2Params = map[string]bool{
 	"start-after":        true,
 	"fetch-owner":        true,
 	"encoding-type":      true,
+}
+
+var listMultipartUploadsParams = map[string]bool{
+	"uploads":          true,
+	"prefix":           true,
+	"delimiter":        true,
+	"key-marker":       true,
+	"upload-id-marker": true,
+	"max-uploads":      true,
+	"encoding-type":    true,
+}
+
+var listPartsParams = map[string]bool{
+	"uploadId":           true,
+	"max-parts":          true,
+	"part-number-marker": true,
+}
+
+var uploadPartParams = map[string]bool{
+	"uploadId":   true,
+	"partNumber": true,
+}
+
+var uploadsOnlyParams = map[string]bool{
+	"uploads": true,
+}
+
+var uploadIDOnlyParams = map[string]bool{
+	"uploadId": true,
 }
 
 var getObjectParams = map[string]bool{

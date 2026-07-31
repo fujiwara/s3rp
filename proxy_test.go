@@ -40,6 +40,18 @@ type stubBackend struct {
 	listOut *s3.ListObjectsV2Output
 	hbIn    *s3.HeadBucketInput
 	hbOut   *s3.HeadBucketOutput
+
+	createMPUIn    *s3.CreateMultipartUploadInput
+	createMPUOut   *s3.CreateMultipartUploadOutput
+	uploadPartIns  []*s3.UploadPartInput
+	uploadPartData [][]byte
+	completeMPUIn  *s3.CompleteMultipartUploadInput
+	completeMPUOut *s3.CompleteMultipartUploadOutput
+	abortMPUIn     *s3.AbortMultipartUploadInput
+	listPartsIn    *s3.ListPartsInput
+	listPartsOut   *s3.ListPartsOutput
+	listMPUIn      *s3.ListMultipartUploadsInput
+	listMPUOut     *s3.ListMultipartUploadsOutput
 }
 
 func (b *stubBackend) GetObject(ctx context.Context, in *s3.GetObjectInput, _ ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
@@ -78,6 +90,41 @@ func (b *stubBackend) ListObjectsV2(ctx context.Context, in *s3.ListObjectsV2Inp
 func (b *stubBackend) HeadBucket(ctx context.Context, in *s3.HeadBucketInput, _ ...func(*s3.Options)) (*s3.HeadBucketOutput, error) {
 	b.hbIn = in
 	return b.hbOut, nil
+}
+
+func (b *stubBackend) CreateMultipartUpload(ctx context.Context, in *s3.CreateMultipartUploadInput, _ ...func(*s3.Options)) (*s3.CreateMultipartUploadOutput, error) {
+	b.createMPUIn = in
+	return b.createMPUOut, nil
+}
+
+func (b *stubBackend) UploadPart(ctx context.Context, in *s3.UploadPartInput, _ ...func(*s3.Options)) (*s3.UploadPartOutput, error) {
+	b.uploadPartIns = append(b.uploadPartIns, in)
+	data, err := io.ReadAll(in.Body)
+	if err != nil {
+		return nil, err
+	}
+	b.uploadPartData = append(b.uploadPartData, data)
+	return &s3.UploadPartOutput{ETag: aws.String(fmt.Sprintf(`"part-etag-%d"`, len(b.uploadPartIns)))}, nil
+}
+
+func (b *stubBackend) CompleteMultipartUpload(ctx context.Context, in *s3.CompleteMultipartUploadInput, _ ...func(*s3.Options)) (*s3.CompleteMultipartUploadOutput, error) {
+	b.completeMPUIn = in
+	return b.completeMPUOut, nil
+}
+
+func (b *stubBackend) AbortMultipartUpload(ctx context.Context, in *s3.AbortMultipartUploadInput, _ ...func(*s3.Options)) (*s3.AbortMultipartUploadOutput, error) {
+	b.abortMPUIn = in
+	return &s3.AbortMultipartUploadOutput{}, nil
+}
+
+func (b *stubBackend) ListParts(ctx context.Context, in *s3.ListPartsInput, _ ...func(*s3.Options)) (*s3.ListPartsOutput, error) {
+	b.listPartsIn = in
+	return b.listPartsOut, nil
+}
+
+func (b *stubBackend) ListMultipartUploads(ctx context.Context, in *s3.ListMultipartUploadsInput, _ ...func(*s3.Options)) (*s3.ListMultipartUploadsOutput, error) {
+	b.listMPUIn = in
+	return b.listMPUOut, nil
 }
 
 // newTestProxy boots the proxy on an httptest server with a stub backend and
@@ -402,10 +449,12 @@ func TestProxyNotImplemented(t *testing.T) {
 			},
 		},
 		{
-			name: "CreateMultipartUpload",
+			name: "UploadPartCopy",
 			call: func(ctx context.Context, client *s3.Client) error {
-				_, err := client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+				_, err := client.UploadPartCopy(ctx, &s3.UploadPartCopyInput{
 					Bucket: aws.String("testbucket"), Key: aws.String("key.txt"),
+					CopySource: aws.String("testbucket/src.txt"),
+					UploadId:   aws.String("upload-id"), PartNumber: aws.Int32(1),
 				})
 				return err
 			},
@@ -444,6 +493,165 @@ func TestProxyNotImplemented(t *testing.T) {
 				t.Errorf("expect NotImplemented, got %v", err)
 			}
 		})
+	}
+}
+
+// TestProxyMultipartUpload runs the full multipart flow through a real SDK
+// client against a stub backend.
+func TestProxyMultipartUpload(t *testing.T) {
+	stub := &stubBackend{
+		createMPUOut: &s3.CreateMultipartUploadOutput{
+			UploadId: aws.String("test-upload-id"),
+		},
+		completeMPUOut: &s3.CompleteMultipartUploadOutput{
+			ETag: aws.String(`"complete-etag"`),
+		},
+		listPartsOut: &s3.ListPartsOutput{
+			IsTruncated: aws.Bool(false),
+			MaxParts:    aws.Int32(1000),
+			Parts: []types.Part{
+				{PartNumber: aws.Int32(1), ETag: aws.String(`"part-etag-1"`), Size: aws.Int64(5)},
+				{PartNumber: aws.Int32(2), ETag: aws.String(`"part-etag-2"`), Size: aws.Int64(5)},
+			},
+		},
+	}
+	client, _ := newTestProxy(t, stub)
+	ctx := t.Context()
+
+	create, err := client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+		Bucket:      aws.String("testbucket"),
+		Key:         aws.String("multi/part.bin"),
+		ContentType: aws.String("application/octet-stream"),
+		Metadata:    map[string]string{"origin": "mpu-test"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	uploadID := aws.ToString(create.UploadId)
+	if uploadID != "test-upload-id" {
+		t.Fatalf("unexpected upload id %s", uploadID)
+	}
+	if aws.ToString(stub.createMPUIn.Bucket) != "backend-testbucket" {
+		t.Errorf("expect backend-testbucket, got %s", aws.ToString(stub.createMPUIn.Bucket))
+	}
+	if aws.ToString(stub.createMPUIn.ContentType) != "application/octet-stream" {
+		t.Errorf("unexpected content type %v", stub.createMPUIn.ContentType)
+	}
+	if diff := cmp.Diff(map[string]string{"origin": "mpu-test"}, stub.createMPUIn.Metadata); diff != "" {
+		t.Errorf("metadata mismatch (-want +got):\n%s", diff)
+	}
+
+	var completed []types.CompletedPart
+	for i, content := range []string{"part1 data", "part2 data"} {
+		part, err := client.UploadPart(ctx, &s3.UploadPartInput{
+			Bucket:     aws.String("testbucket"),
+			Key:        aws.String("multi/part.bin"),
+			UploadId:   aws.String(uploadID),
+			PartNumber: aws.Int32(int32(i + 1)),
+			Body:       strings.NewReader(content),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		completed = append(completed, types.CompletedPart{
+			ETag:       part.ETag,
+			PartNumber: aws.Int32(int32(i + 1)),
+		})
+	}
+	if len(stub.uploadPartIns) != 2 {
+		t.Fatalf("expect 2 upload parts, got %d", len(stub.uploadPartIns))
+	}
+	if string(stub.uploadPartData[0]) != "part1 data" || string(stub.uploadPartData[1]) != "part2 data" {
+		t.Errorf("part body mismatch: %q %q", stub.uploadPartData[0], stub.uploadPartData[1])
+	}
+	if aws.ToString(stub.uploadPartIns[0].UploadId) != "test-upload-id" {
+		t.Errorf("unexpected upload id %v", stub.uploadPartIns[0].UploadId)
+	}
+	if aws.ToInt32(stub.uploadPartIns[1].PartNumber) != 2 {
+		t.Errorf("unexpected part number %v", stub.uploadPartIns[1].PartNumber)
+	}
+
+	parts, err := client.ListParts(ctx, &s3.ListPartsInput{
+		Bucket:   aws.String("testbucket"),
+		Key:      aws.String("multi/part.bin"),
+		UploadId: aws.String(uploadID),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(parts.Parts) != 2 {
+		t.Fatalf("expect 2 parts, got %d", len(parts.Parts))
+	}
+	// the Bucket must be the front bucket name
+	if aws.ToString(parts.Bucket) != "testbucket" {
+		t.Errorf("expect testbucket, got %s", aws.ToString(parts.Bucket))
+	}
+
+	complete, err := client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
+		Bucket:          aws.String("testbucket"),
+		Key:             aws.String("multi/part.bin"),
+		UploadId:        aws.String(uploadID),
+		MultipartUpload: &types.CompletedMultipartUpload{Parts: completed},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if aws.ToString(complete.ETag) != `"complete-etag"` {
+		t.Errorf("unexpected etag %v", complete.ETag)
+	}
+	if aws.ToString(complete.Bucket) != "testbucket" {
+		t.Errorf("expect testbucket, got %s", aws.ToString(complete.Bucket))
+	}
+	got := stub.completeMPUIn.MultipartUpload.Parts
+	if len(got) != 2 || aws.ToString(got[1].ETag) != `"part-etag-2"` || aws.ToInt32(got[1].PartNumber) != 2 {
+		t.Errorf("unexpected completed parts %v", got)
+	}
+}
+
+func TestProxyAbortMultipartUpload(t *testing.T) {
+	stub := &stubBackend{}
+	client, _ := newTestProxy(t, stub)
+	if _, err := client.AbortMultipartUpload(t.Context(), &s3.AbortMultipartUploadInput{
+		Bucket:   aws.String("testbucket"),
+		Key:      aws.String("multi/part.bin"),
+		UploadId: aws.String("abort-upload-id"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if aws.ToString(stub.abortMPUIn.UploadId) != "abort-upload-id" {
+		t.Errorf("unexpected upload id %v", stub.abortMPUIn.UploadId)
+	}
+	if aws.ToString(stub.abortMPUIn.Bucket) != "backend-testbucket" {
+		t.Errorf("expect backend-testbucket, got %s", aws.ToString(stub.abortMPUIn.Bucket))
+	}
+}
+
+func TestProxyListMultipartUploads(t *testing.T) {
+	stub := &stubBackend{
+		listMPUOut: &s3.ListMultipartUploadsOutput{
+			IsTruncated: aws.Bool(false),
+			MaxUploads:  aws.Int32(1000),
+			Uploads: []types.MultipartUpload{
+				{Key: aws.String("a.bin"), UploadId: aws.String("upload-a"), Initiated: aws.Time(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC))},
+			},
+		},
+	}
+	client, _ := newTestProxy(t, stub)
+	out, err := client.ListMultipartUploads(t.Context(), &s3.ListMultipartUploadsInput{
+		Bucket: aws.String("testbucket"),
+		Prefix: aws.String("a"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if aws.ToString(out.Bucket) != "testbucket" {
+		t.Errorf("expect testbucket, got %s", aws.ToString(out.Bucket))
+	}
+	if len(out.Uploads) != 1 || aws.ToString(out.Uploads[0].UploadId) != "upload-a" {
+		t.Errorf("unexpected uploads %v", out.Uploads)
+	}
+	if aws.ToString(stub.listMPUIn.Prefix) != "a" {
+		t.Errorf("unexpected prefix %v", stub.listMPUIn.Prefix)
 	}
 }
 
