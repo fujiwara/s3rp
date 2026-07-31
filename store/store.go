@@ -25,6 +25,10 @@ type Store interface {
 	// Returns an error wrapping ErrNotFound when the tenant does not own
 	// such a bucket.
 	GetBucket(ctx context.Context, tenant, bucket string) (*Bucket, error)
+	// GetBucketByName returns the bucket by its (globally unique) name,
+	// regardless of the tenant. Used for unauthenticated CORS preflight
+	// requests, which carry no tenant identity.
+	GetBucketByName(ctx context.Context, bucket string) (*Bucket, error)
 	// ListBucketNames returns the bucket names owned by the tenant.
 	ListBucketNames(ctx context.Context, tenant string) ([]string, error)
 }
@@ -49,6 +53,18 @@ type Bucket struct {
 	// policy.Parse.
 	PolicyText string
 	Policy     *policy.Policy
+
+	// CORS is the CORS configuration of the bucket (nil if none).
+	CORS []*CORSRule
+}
+
+// CORSRule is a single CORS rule of a bucket.
+type CORSRule struct {
+	AllowedOrigins []string `yaml:"allowed_origins" json:"allowed_origins"`
+	AllowedMethods []string `yaml:"allowed_methods" json:"allowed_methods"`
+	AllowedHeaders []string `yaml:"allowed_headers,omitempty" json:"allowed_headers,omitempty"`
+	ExposeHeaders  []string `yaml:"expose_headers,omitempty" json:"expose_headers,omitempty"`
+	MaxAgeSeconds  int      `yaml:"max_age_seconds,omitempty" json:"max_age_seconds,omitempty"`
 }
 
 // Backend is the definition of an S3-compatible backend for a bucket.

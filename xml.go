@@ -264,6 +264,21 @@ type Tag struct {
 	Value string `xml:"Value"`
 }
 
+// CORSConfiguration is the response of GetBucketCors.
+type CORSConfiguration struct {
+	XMLName xml.Name      `xml:"CORSConfiguration"`
+	XMLNS   string        `xml:"xmlns,attr"`
+	Rules   []CORSRuleXML `xml:"CORSRule"`
+}
+
+type CORSRuleXML struct {
+	AllowedOrigin []string `xml:"AllowedOrigin"`
+	AllowedMethod []string `xml:"AllowedMethod"`
+	AllowedHeader []string `xml:"AllowedHeader,omitempty"`
+	ExposeHeader  []string `xml:"ExposeHeader,omitempty"`
+	MaxAgeSeconds int      `xml:"MaxAgeSeconds,omitempty"`
+}
+
 // AccessControlPolicy is the response of GetBucketAcl / GetObjectAcl.
 type AccessControlPolicy struct {
 	XMLName           xml.Name `xml:"AccessControlPolicy"`

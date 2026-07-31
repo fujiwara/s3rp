@@ -178,16 +178,16 @@ func (st *Statement) matchPrincipal(principal string) bool {
 
 func matchAny(patterns []string, value string) bool {
 	for _, p := range patterns {
-		if matchWildcard(p, value) {
+		if Match(p, value) {
 			return true
 		}
 	}
 	return false
 }
 
-// matchWildcard matches value against a pattern where "*" matches any
-// sequence of characters, including "/" (as in AWS policies).
-func matchWildcard(pattern, value string) bool {
+// Match matches value against a pattern where "*" matches any sequence of
+// characters, including "/" (as in AWS policies).
+func Match(pattern, value string) bool {
 	segments := strings.Split(pattern, "*")
 	if len(segments) == 1 {
 		return pattern == value

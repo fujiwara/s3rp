@@ -534,9 +534,9 @@ func TestProxyNotImplemented(t *testing.T) {
 			},
 		},
 		{
-			name: "GetBucketCors",
+			name: "GetBucketLifecycleConfiguration",
 			call: func(ctx context.Context, client *s3.Client) error {
-				_, err := client.GetBucketCors(ctx, &s3.GetBucketCorsInput{
+				_, err := client.GetBucketLifecycleConfiguration(ctx, &s3.GetBucketLifecycleConfigurationInput{
 					Bucket: aws.String("testbucket"),
 				})
 				return err
