@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -42,7 +43,7 @@ func awsDocsChunkedBody() []byte {
 }
 
 func TestChunkedReaderAWSDocsVector(t *testing.T) {
-	r := s3rp.NewChunkedReader(bytes.NewReader(awsDocsChunkedBody()), awsDocsVerifiedRequest())
+	r := s3rp.NewChunkedReader(bytes.NewReader(awsDocsChunkedBody()), awsDocsVerifiedRequest(), "")
 	decoded, err := io.ReadAll(r)
 	if err != nil {
 		t.Fatal(err)
@@ -59,12 +60,12 @@ func TestChunkedReaderBadSignature(t *testing.T) {
 	body := awsDocsChunkedBody()
 	// corrupt the first chunk signature
 	corrupted := bytes.Replace(body, []byte("ad80c730"), []byte("deadbeef"), 1)
-	r := s3rp.NewChunkedReader(bytes.NewReader(corrupted), awsDocsVerifiedRequest())
+	r := s3rp.NewChunkedReader(bytes.NewReader(corrupted), awsDocsVerifiedRequest(), "")
 	_, err := io.ReadAll(r)
 	if err == nil {
 		t.Fatal("expect error for bad chunk signature")
 	}
-	if !strings.Contains(err.Error(), "chunk signature mismatch") {
+	if !strings.Contains(err.Error(), "SignatureDoesNotMatch") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -74,7 +75,7 @@ func TestChunkedReaderTamperedData(t *testing.T) {
 	// flip a payload byte without touching the signatures
 	i := bytes.IndexByte(body, 'a')
 	body[i] = 'b'
-	r := s3rp.NewChunkedReader(bytes.NewReader(body), awsDocsVerifiedRequest())
+	r := s3rp.NewChunkedReader(bytes.NewReader(body), awsDocsVerifiedRequest(), "")
 	_, err := io.ReadAll(r)
 	if err == nil {
 		t.Fatal("expect error for tampered chunk data")
@@ -128,7 +129,7 @@ func TestChunkedReaderRoundTrip(t *testing.T) {
 		t.Run(fmt.Sprintf("chunk size %d", size), func(t *testing.T) {
 			data := []byte(strings.Repeat("0123456789abcdef", 100)) // 1600 bytes
 			encoded := encodeSignedChunks(t, vr, data, size)
-			r := s3rp.NewChunkedReader(bytes.NewReader(encoded), vr)
+			r := s3rp.NewChunkedReader(bytes.NewReader(encoded), vr, "")
 			decoded, err := io.ReadAll(r)
 			if err != nil {
 				t.Fatal(err)
@@ -151,7 +152,8 @@ func TestChunkedReaderUnsignedTrailer(t *testing.T) {
 	buf.WriteString("0\r\n")
 	buf.WriteString("x-amz-checksum-crc32:AAAAAA==\r\n")
 	buf.WriteString("\r\n")
-	r := s3rp.NewChunkedReader(buf, vr)
+	// no trailer algorithm declared: the (bogus) checksum is not verified
+	r := s3rp.NewChunkedReader(buf, vr, "")
 	decoded, err := io.ReadAll(r)
 	if err != nil {
 		t.Fatal(err)
@@ -159,4 +161,54 @@ func TestChunkedReaderUnsignedTrailer(t *testing.T) {
 	if !bytes.Equal(decoded, data) {
 		t.Errorf("expect %q, got %q", data, decoded)
 	}
+}
+
+// encodeUnsignedTrailer encodes data as unsigned aws-chunked with a
+// checksum trailer.
+func encodeUnsignedTrailer(data []byte, trailerName, trailerValue string) *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	fmt.Fprintf(buf, "%x\r\n", len(data))
+	buf.Write(data)
+	buf.WriteString("\r\n0\r\n")
+	fmt.Fprintf(buf, "%s:%s\r\n\r\n", trailerName, trailerValue)
+	return buf
+}
+
+func TestChunkedReaderTrailerChecksum(t *testing.T) {
+	vr := awsDocsVerifiedRequest()
+	vr.PayloadHash = "STREAMING-UNSIGNED-PAYLOAD-TRAILER"
+	// crc32("123456789") = 0xCBF43926 -> base64 of big-endian bytes
+	data := []byte("123456789")
+	const goodCRC32 = "y/Q5Jg=="
+
+	t.Run("valid checksum", func(t *testing.T) {
+		buf := encodeUnsignedTrailer(data, "x-amz-checksum-crc32", goodCRC32)
+		r := s3rp.NewChunkedReader(buf, vr, "crc32")
+		decoded, err := io.ReadAll(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(decoded, data) {
+			t.Errorf("expect %q, got %q", data, decoded)
+		}
+	})
+	t.Run("checksum mismatch", func(t *testing.T) {
+		buf := encodeUnsignedTrailer(data, "x-amz-checksum-crc32", "AAAAAA==")
+		r := s3rp.NewChunkedReader(buf, vr, "crc32")
+		_, err := io.ReadAll(r)
+		if err == nil {
+			t.Fatal("expect error for checksum mismatch")
+		}
+		if !strings.Contains(err.Error(), "BadDigest") {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	t.Run("sha256 roundtrip", func(t *testing.T) {
+		sum := sha256.Sum256(data)
+		buf := encodeUnsignedTrailer(data, "x-amz-checksum-sha256", base64.StdEncoding.EncodeToString(sum[:]))
+		r := s3rp.NewChunkedReader(buf, vr, "sha256")
+		if _, err := io.ReadAll(r); err != nil {
+			t.Fatal(err)
+		}
+	})
 }

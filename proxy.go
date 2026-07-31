@@ -25,6 +25,9 @@ func (app *S3RP) getObject(w http.ResponseWriter, r *http.Request, rt *bucketRT,
 	if v := r.Header.Get("Range"); v != "" {
 		in.Range = aws.String(v)
 	}
+	if strings.EqualFold(r.Header.Get("x-amz-checksum-mode"), "enabled") {
+		in.ChecksumMode = types.ChecksumModeEnabled
+	}
 	query := r.URL.Query()
 	if v := query.Get("versionId"); v != "" {
 		in.VersionId = aws.String(v)
@@ -76,6 +79,13 @@ func (app *S3RP) getObject(w http.ResponseWriter, r *http.Request, rt *bucketRT,
 	if out.TagCount != nil {
 		h.Set("x-amz-tagging-count", strconv.FormatInt(int64(*out.TagCount), 10))
 	}
+	setChecksumHeaders(h, checksums{
+		CRC32:     out.ChecksumCRC32,
+		CRC32C:    out.ChecksumCRC32C,
+		CRC64NVME: out.ChecksumCRC64NVME,
+		SHA1:      out.ChecksumSHA1,
+		SHA256:    out.ChecksumSHA256,
+	}, out.ChecksumType)
 	status := http.StatusOK
 	if out.ContentRange != nil {
 		h.Set("Content-Range", *out.ContentRange)
@@ -101,6 +111,9 @@ func (app *S3RP) headObject(w http.ResponseWriter, r *http.Request, rt *bucketRT
 	if v := r.URL.Query().Get("versionId"); v != "" {
 		in.VersionId = aws.String(v)
 	}
+	if strings.EqualFold(r.Header.Get("x-amz-checksum-mode"), "enabled") {
+		in.ChecksumMode = types.ChecksumModeEnabled
+	}
 	out, err := rt.client.HeadObject(r.Context(), in)
 	if err != nil {
 		return fromSDKError(err, r.URL.Path)
@@ -122,6 +135,13 @@ func (app *S3RP) headObject(w http.ResponseWriter, r *http.Request, rt *bucketRT
 	if out.AcceptRanges != nil {
 		w.Header().Set("Accept-Ranges", *out.AcceptRanges)
 	}
+	setChecksumHeaders(w.Header(), checksums{
+		CRC32:     out.ChecksumCRC32,
+		CRC32C:    out.ChecksumCRC32C,
+		CRC64NVME: out.ChecksumCRC64NVME,
+		SHA1:      out.ChecksumSHA1,
+		SHA256:    out.ChecksumSHA256,
+	}, out.ChecksumType)
 	w.WriteHeader(http.StatusOK)
 	return nil
 }
@@ -170,6 +190,19 @@ func (app *S3RP) putObject(w http.ResponseWriter, r *http.Request, rt *bucketRT,
 	if md := metadataFromHeaders(r.Header); len(md) > 0 {
 		in.Metadata = md
 	}
+	cs := checksumsFromHeaders(r.Header)
+	in.ChecksumCRC32 = cs.CRC32
+	in.ChecksumCRC32C = cs.CRC32C
+	in.ChecksumCRC64NVME = cs.CRC64NVME
+	in.ChecksumSHA1 = cs.SHA1
+	in.ChecksumSHA256 = cs.SHA256
+	if alg := trailerChecksumAlgorithm(r.Header); alg != "" {
+		// the client sends the checksum as an aws-chunked trailer, which
+		// is verified by the chunked reader; the backend SDK recomputes
+		// and stores it (an explicit ChecksumAlgorithm forces calculation
+		// even with RequestChecksumCalculationWhenRequired)
+		in.ChecksumAlgorithm = types.ChecksumAlgorithm(strings.ToUpper(alg))
+	}
 
 	out, err := rt.client.PutObject(r.Context(), in)
 	if err != nil {
@@ -181,6 +214,13 @@ func (app *S3RP) putObject(w http.ResponseWriter, r *http.Request, rt *bucketRT,
 	if out.VersionId != nil {
 		w.Header().Set("x-amz-version-id", *out.VersionId)
 	}
+	setChecksumHeaders(w.Header(), checksums{
+		CRC32:     out.ChecksumCRC32,
+		CRC32C:    out.ChecksumCRC32C,
+		CRC64NVME: out.ChecksumCRC64NVME,
+		SHA1:      out.ChecksumSHA1,
+		SHA256:    out.ChecksumSHA256,
+	}, out.ChecksumType)
 	w.WriteHeader(http.StatusOK)
 	return nil
 }
@@ -521,7 +561,7 @@ func requestBody(r *http.Request, vr *verifiedRequest) (io.Reader, int64, *S3Err
 			return nil, 0, newS3Error(http.StatusBadRequest, "InvalidRequest",
 				"Invalid x-amz-decoded-content-length header")
 		}
-		return newChunkedReader(r.Body, vr), length, nil
+		return newChunkedReader(r.Body, vr, trailerChecksumAlgorithm(r.Header)), length, nil
 	default:
 		if r.ContentLength < 0 {
 			return nil, 0, newS3Error(http.StatusLengthRequired, "MissingContentLength",

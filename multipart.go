@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -50,9 +51,21 @@ func (app *S3RP) createMultipartUpload(w http.ResponseWriter, r *http.Request, r
 	if md := metadataFromHeaders(r.Header); len(md) > 0 {
 		in.Metadata = md
 	}
+	if v := r.Header.Get("x-amz-checksum-algorithm"); v != "" {
+		in.ChecksumAlgorithm = types.ChecksumAlgorithm(strings.ToUpper(v))
+	}
+	if v := r.Header.Get("x-amz-checksum-type"); v != "" {
+		in.ChecksumType = types.ChecksumType(strings.ToUpper(v))
+	}
 	out, err := rt.client.CreateMultipartUpload(r.Context(), in)
 	if err != nil {
 		return fromSDKError(err, r.URL.Path)
+	}
+	if out.ChecksumAlgorithm != "" {
+		w.Header().Set("x-amz-checksum-algorithm", string(out.ChecksumAlgorithm))
+	}
+	if out.ChecksumType != "" {
+		w.Header().Set("x-amz-checksum-type", string(out.ChecksumType))
 	}
 	return writeXML(w, &InitiateMultipartUploadResult{
 		XMLNS:    s3XMLNS,
@@ -84,6 +97,15 @@ func (app *S3RP) uploadPart(w http.ResponseWriter, r *http.Request, rt *bucketRT
 	if v := r.Header.Get("Content-MD5"); v != "" {
 		in.ContentMD5 = aws.String(v)
 	}
+	cs := checksumsFromHeaders(r.Header)
+	in.ChecksumCRC32 = cs.CRC32
+	in.ChecksumCRC32C = cs.CRC32C
+	in.ChecksumCRC64NVME = cs.CRC64NVME
+	in.ChecksumSHA1 = cs.SHA1
+	in.ChecksumSHA256 = cs.SHA256
+	if alg := trailerChecksumAlgorithm(r.Header); alg != "" {
+		in.ChecksumAlgorithm = types.ChecksumAlgorithm(strings.ToUpper(alg))
+	}
 	out, err := rt.client.UploadPart(r.Context(), in)
 	if err != nil {
 		return fromSDKError(err, r.URL.Path)
@@ -91,6 +113,13 @@ func (app *S3RP) uploadPart(w http.ResponseWriter, r *http.Request, rt *bucketRT
 	if out.ETag != nil {
 		w.Header().Set("ETag", *out.ETag)
 	}
+	setChecksumHeaders(w.Header(), checksums{
+		CRC32:     out.ChecksumCRC32,
+		CRC32C:    out.ChecksumCRC32C,
+		CRC64NVME: out.ChecksumCRC64NVME,
+		SHA1:      out.ChecksumSHA1,
+		SHA256:    out.ChecksumSHA256,
+	}, "")
 	w.WriteHeader(http.StatusOK)
 	return nil
 }
@@ -115,16 +144,41 @@ func (app *S3RP) completeMultipartUpload(w http.ResponseWriter, r *http.Request,
 	}
 	parts := make([]types.CompletedPart, 0, len(req.Parts))
 	for _, p := range req.Parts {
-		parts = append(parts, types.CompletedPart{
+		cp := types.CompletedPart{
 			PartNumber: aws.Int32(p.PartNumber),
 			ETag:       aws.String(p.ETag),
-		})
+		}
+		setIfNotEmpty := func(dst **string, v string) {
+			if v != "" {
+				*dst = aws.String(v)
+			}
+		}
+		setIfNotEmpty(&cp.ChecksumCRC32, p.ChecksumCRC32)
+		setIfNotEmpty(&cp.ChecksumCRC32C, p.ChecksumCRC32C)
+		setIfNotEmpty(&cp.ChecksumCRC64NVME, p.ChecksumCRC64NVME)
+		setIfNotEmpty(&cp.ChecksumSHA1, p.ChecksumSHA1)
+		setIfNotEmpty(&cp.ChecksumSHA256, p.ChecksumSHA256)
+		parts = append(parts, cp)
 	}
 	in := &s3.CompleteMultipartUploadInput{
 		Bucket:          aws.String(rt.cfg.Backend.Bucket),
 		Key:             aws.String(key),
 		UploadId:        aws.String(r.URL.Query().Get("uploadId")),
 		MultipartUpload: &types.CompletedMultipartUpload{Parts: parts},
+	}
+	if v := r.Header.Get("x-amz-checksum-type"); v != "" {
+		in.ChecksumType = types.ChecksumType(strings.ToUpper(v))
+	}
+	cs := checksumsFromHeaders(r.Header)
+	in.ChecksumCRC32 = cs.CRC32
+	in.ChecksumCRC32C = cs.CRC32C
+	in.ChecksumCRC64NVME = cs.CRC64NVME
+	in.ChecksumSHA1 = cs.SHA1
+	in.ChecksumSHA256 = cs.SHA256
+	if v := r.Header.Get("x-amz-mp-object-size"); v != "" {
+		if size, err := strconv.ParseInt(v, 10, 64); err == nil {
+			in.MpuObjectSize = aws.Int64(size)
+		}
 	}
 	out, err := rt.client.CompleteMultipartUpload(r.Context(), in)
 	if err != nil {
@@ -143,11 +197,17 @@ func (app *S3RP) completeMultipartUpload(w http.ResponseWriter, r *http.Request,
 		w.Header().Set("x-amz-version-id", *out.VersionId)
 	}
 	return writeXML(w, &CompleteMultipartUploadResult{
-		XMLNS:    s3XMLNS,
-		Location: location,
-		Bucket:   rt.cfg.Name,
-		Key:      key,
-		ETag:     aws.ToString(out.ETag),
+		XMLNS:             s3XMLNS,
+		Location:          location,
+		Bucket:            rt.cfg.Name,
+		Key:               key,
+		ETag:              aws.ToString(out.ETag),
+		ChecksumCRC32:     aws.ToString(out.ChecksumCRC32),
+		ChecksumCRC32C:    aws.ToString(out.ChecksumCRC32C),
+		ChecksumCRC64NVME: aws.ToString(out.ChecksumCRC64NVME),
+		ChecksumSHA1:      aws.ToString(out.ChecksumSHA1),
+		ChecksumSHA256:    aws.ToString(out.ChecksumSHA256),
+		ChecksumType:      string(out.ChecksumType),
 	})
 }
 
