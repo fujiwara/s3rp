@@ -1,3 +1,3 @@
 package s3rp
 
-var Version = "current"
+var Version = "v0.0.1"
