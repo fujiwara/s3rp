@@ -258,7 +258,18 @@ func (app *S3RP) listObjectsV2(w http.ResponseWriter, r *http.Request, rt *bucke
 	if out.IsTruncated != nil {
 		result.IsTruncated = *out.IsTruncated
 	}
-	for _, obj := range out.Contents {
+	result.Contents = objectsFromSDK(out.Contents)
+	for _, cp := range out.CommonPrefixes {
+		if cp.Prefix != nil {
+			result.CommonPrefixes = append(result.CommonPrefixes, CommonPrefix{Prefix: *cp.Prefix})
+		}
+	}
+	return writeXML(w, result)
+}
+
+func objectsFromSDK(objects []types.Object) []Object {
+	result := make([]Object, 0, len(objects))
+	for _, obj := range objects {
 		o := Object{
 			StorageClass: string(obj.StorageClass),
 		}
@@ -283,12 +294,153 @@ func (app *S3RP) listObjectsV2(w http.ResponseWriter, r *http.Request, rt *bucke
 				o.Owner.DisplayName = *obj.Owner.DisplayName
 			}
 		}
-		result.Contents = append(result.Contents, o)
+		result = append(result, o)
 	}
+	return result
+}
+
+func (app *S3RP) listObjectsV1(w http.ResponseWriter, r *http.Request, rt *bucketRT) error {
+	query := r.URL.Query()
+	in := &s3.ListObjectsInput{
+		Bucket: aws.String(rt.cfg.Backend.Bucket),
+	}
+	if v := query.Get("prefix"); v != "" {
+		in.Prefix = aws.String(v)
+	}
+	if v := query.Get("delimiter"); v != "" {
+		in.Delimiter = aws.String(v)
+	}
+	if v := query.Get("marker"); v != "" {
+		in.Marker = aws.String(v)
+	}
+	if v := query.Get("max-keys"); v != "" {
+		maxKeys, err := strconv.ParseInt(v, 10, 32)
+		if err != nil {
+			return newS3Error(http.StatusBadRequest, "InvalidArgument",
+				"Argument max-keys must be an integer.")
+		}
+		in.MaxKeys = aws.Int32(int32(maxKeys))
+	}
+	if v := query.Get("encoding-type"); v != "" {
+		in.EncodingType = types.EncodingType(v)
+	}
+	out, err := rt.client.ListObjects(r.Context(), in)
+	if err != nil {
+		return fromSDKError(err, r.URL.Path)
+	}
+	result := &ListBucketResultV1{
+		XMLNS: s3XMLNS,
+		Name:  rt.cfg.Name, // the front bucket name, not the backend one
+	}
+	if out.Prefix != nil {
+		result.Prefix = *out.Prefix
+	}
+	if out.Delimiter != nil {
+		result.Delimiter = *out.Delimiter
+	}
+	if out.Marker != nil {
+		result.Marker = *out.Marker
+	}
+	if out.NextMarker != nil {
+		result.NextMarker = *out.NextMarker
+	}
+	if out.MaxKeys != nil {
+		result.MaxKeys = *out.MaxKeys
+	}
+	if out.EncodingType != "" {
+		result.EncodingType = string(out.EncodingType)
+	}
+	if out.IsTruncated != nil {
+		result.IsTruncated = *out.IsTruncated
+	}
+	result.Contents = objectsFromSDK(out.Contents)
 	for _, cp := range out.CommonPrefixes {
 		if cp.Prefix != nil {
 			result.CommonPrefixes = append(result.CommonPrefixes, CommonPrefix{Prefix: *cp.Prefix})
 		}
+	}
+	return writeXML(w, result)
+}
+
+// getBucketLocation answers from the config without calling the backend.
+func (app *S3RP) getBucketLocation(w http.ResponseWriter, rt *bucketRT) error {
+	region := rt.cfg.Backend.Region
+	if region == "us-east-1" {
+		// S3 convention: us-east-1 is represented as an empty value
+		region = ""
+	}
+	return writeXML(w, &LocationConstraint{XMLNS: s3XMLNS, Value: region})
+}
+
+func (app *S3RP) deleteObjects(w http.ResponseWriter, r *http.Request, rt *bucketRT, vr *verifiedRequest) error {
+	body, _, s3err := requestBody(r, vr)
+	if s3err != nil {
+		return s3err
+	}
+	data, err := io.ReadAll(io.LimitReader(body, maxXMLBodySize))
+	if err != nil {
+		return newS3Error(http.StatusBadRequest, "InvalidRequest", "failed to read request body")
+	}
+	var req deleteRequest
+	if err := xml.Unmarshal(data, &req); err != nil {
+		return newS3Error(http.StatusBadRequest, "MalformedXML",
+			"The XML you provided was not well-formed or did not validate against our published schema.")
+	}
+	if len(req.Objects) == 0 || len(req.Objects) > 1000 {
+		return newS3Error(http.StatusBadRequest, "MalformedXML",
+			"The XML you provided was not well-formed or did not validate against our published schema.")
+	}
+	objects := make([]types.ObjectIdentifier, 0, len(req.Objects))
+	for _, o := range req.Objects {
+		oi := types.ObjectIdentifier{Key: aws.String(o.Key)}
+		if o.VersionID != "" {
+			oi.VersionId = aws.String(o.VersionID)
+		}
+		objects = append(objects, oi)
+	}
+	in := &s3.DeleteObjectsInput{
+		Bucket: aws.String(rt.cfg.Backend.Bucket),
+		Delete: &types.Delete{
+			Objects: objects,
+			Quiet:   aws.Bool(req.Quiet),
+		},
+	}
+	out, err := rt.client.DeleteObjects(r.Context(), in)
+	if err != nil {
+		return fromSDKError(err, r.URL.Path)
+	}
+	result := &DeleteResult{XMLNS: s3XMLNS}
+	for _, d := range out.Deleted {
+		deleted := DeletedObject{}
+		if d.Key != nil {
+			deleted.Key = *d.Key
+		}
+		if d.VersionId != nil {
+			deleted.VersionID = *d.VersionId
+		}
+		if d.DeleteMarker != nil {
+			deleted.DeleteMarker = *d.DeleteMarker
+		}
+		if d.DeleteMarkerVersionId != nil {
+			deleted.DeleteMarkerVersionID = *d.DeleteMarkerVersionId
+		}
+		result.Deleted = append(result.Deleted, deleted)
+	}
+	for _, e := range out.Errors {
+		derr := DeleteError{}
+		if e.Key != nil {
+			derr.Key = *e.Key
+		}
+		if e.VersionId != nil {
+			derr.VersionID = *e.VersionId
+		}
+		if e.Code != nil {
+			derr.Code = *e.Code
+		}
+		if e.Message != nil {
+			derr.Message = *e.Message
+		}
+		result.Errors = append(result.Errors, derr)
 	}
 	return writeXML(w, result)
 }

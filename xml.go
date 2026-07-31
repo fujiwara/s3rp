@@ -48,6 +48,79 @@ type Owner struct {
 	DisplayName string `xml:"DisplayName"`
 }
 
+// ListBucketResultV1 is the response of ListObjects (version 1).
+type ListBucketResultV1 struct {
+	XMLName        xml.Name       `xml:"ListBucketResult"`
+	XMLNS          string         `xml:"xmlns,attr"`
+	Name           string         `xml:"Name"`
+	Prefix         string         `xml:"Prefix"`
+	Marker         string         `xml:"Marker"`
+	NextMarker     string         `xml:"NextMarker,omitempty"`
+	MaxKeys        int32          `xml:"MaxKeys"`
+	Delimiter      string         `xml:"Delimiter,omitempty"`
+	EncodingType   string         `xml:"EncodingType,omitempty"`
+	IsTruncated    bool           `xml:"IsTruncated"`
+	Contents       []Object       `xml:"Contents"`
+	CommonPrefixes []CommonPrefix `xml:"CommonPrefixes"`
+}
+
+// LocationConstraint is the response of GetBucketLocation.
+type LocationConstraint struct {
+	XMLName xml.Name `xml:"LocationConstraint"`
+	XMLNS   string   `xml:"xmlns,attr"`
+	Value   string   `xml:",chardata"`
+}
+
+// deleteRequest is the request body of DeleteObjects (Multi-Object Delete).
+type deleteRequest struct {
+	XMLName xml.Name       `xml:"Delete"`
+	Quiet   bool           `xml:"Quiet"`
+	Objects []deleteObject `xml:"Object"`
+}
+
+type deleteObject struct {
+	Key       string `xml:"Key"`
+	VersionID string `xml:"VersionId"`
+}
+
+// DeleteResult is the response of DeleteObjects.
+type DeleteResult struct {
+	XMLName xml.Name        `xml:"DeleteResult"`
+	XMLNS   string          `xml:"xmlns,attr"`
+	Deleted []DeletedObject `xml:"Deleted"`
+	Errors  []DeleteError   `xml:"Error"`
+}
+
+type DeletedObject struct {
+	Key                   string `xml:"Key"`
+	VersionID             string `xml:"VersionId,omitempty"`
+	DeleteMarker          bool   `xml:"DeleteMarker,omitempty"`
+	DeleteMarkerVersionID string `xml:"DeleteMarkerVersionId,omitempty"`
+}
+
+type DeleteError struct {
+	Key       string `xml:"Key"`
+	VersionID string `xml:"VersionId,omitempty"`
+	Code      string `xml:"Code"`
+	Message   string `xml:"Message"`
+}
+
+// CopyObjectResult is the response of CopyObject.
+type CopyObjectResult struct {
+	XMLName      xml.Name `xml:"CopyObjectResult"`
+	XMLNS        string   `xml:"xmlns,attr"`
+	ETag         string   `xml:"ETag"`
+	LastModified string   `xml:"LastModified,omitempty"`
+}
+
+// CopyPartResult is the response of UploadPartCopy.
+type CopyPartResult struct {
+	XMLName      xml.Name `xml:"CopyPartResult"`
+	XMLNS        string   `xml:"xmlns,attr"`
+	ETag         string   `xml:"ETag"`
+	LastModified string   `xml:"LastModified,omitempty"`
+}
+
 // InitiateMultipartUploadResult is the response of CreateMultipartUpload.
 type InitiateMultipartUploadResult struct {
 	XMLName  xml.Name `xml:"InitiateMultipartUploadResult"`

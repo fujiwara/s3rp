@@ -52,6 +52,15 @@ type stubBackend struct {
 	listPartsOut   *s3.ListPartsOutput
 	listMPUIn      *s3.ListMultipartUploadsInput
 	listMPUOut     *s3.ListMultipartUploadsOutput
+
+	listV1In   *s3.ListObjectsInput
+	listV1Out  *s3.ListObjectsOutput
+	delObjsIn  *s3.DeleteObjectsInput
+	delObjsOut *s3.DeleteObjectsOutput
+	copyIn     *s3.CopyObjectInput
+	copyOut    *s3.CopyObjectOutput
+	upcIn      *s3.UploadPartCopyInput
+	upcOut     *s3.UploadPartCopyOutput
 }
 
 func (b *stubBackend) GetObject(ctx context.Context, in *s3.GetObjectInput, _ ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
@@ -125,6 +134,26 @@ func (b *stubBackend) ListParts(ctx context.Context, in *s3.ListPartsInput, _ ..
 func (b *stubBackend) ListMultipartUploads(ctx context.Context, in *s3.ListMultipartUploadsInput, _ ...func(*s3.Options)) (*s3.ListMultipartUploadsOutput, error) {
 	b.listMPUIn = in
 	return b.listMPUOut, nil
+}
+
+func (b *stubBackend) ListObjects(ctx context.Context, in *s3.ListObjectsInput, _ ...func(*s3.Options)) (*s3.ListObjectsOutput, error) {
+	b.listV1In = in
+	return b.listV1Out, nil
+}
+
+func (b *stubBackend) DeleteObjects(ctx context.Context, in *s3.DeleteObjectsInput, _ ...func(*s3.Options)) (*s3.DeleteObjectsOutput, error) {
+	b.delObjsIn = in
+	return b.delObjsOut, nil
+}
+
+func (b *stubBackend) CopyObject(ctx context.Context, in *s3.CopyObjectInput, _ ...func(*s3.Options)) (*s3.CopyObjectOutput, error) {
+	b.copyIn = in
+	return b.copyOut, nil
+}
+
+func (b *stubBackend) UploadPartCopy(ctx context.Context, in *s3.UploadPartCopyInput, _ ...func(*s3.Options)) (*s3.UploadPartCopyOutput, error) {
+	b.upcIn = in
+	return b.upcOut, nil
 }
 
 // newTestProxy boots the proxy on an httptest server with a stub backend and
@@ -449,33 +478,19 @@ func TestProxyNotImplemented(t *testing.T) {
 			},
 		},
 		{
-			name: "UploadPartCopy",
+			name: "GetObjectTagging",
 			call: func(ctx context.Context, client *s3.Client) error {
-				_, err := client.UploadPartCopy(ctx, &s3.UploadPartCopyInput{
+				_, err := client.GetObjectTagging(ctx, &s3.GetObjectTaggingInput{
 					Bucket: aws.String("testbucket"), Key: aws.String("key.txt"),
-					CopySource: aws.String("testbucket/src.txt"),
-					UploadId:   aws.String("upload-id"), PartNumber: aws.Int32(1),
 				})
 				return err
 			},
 		},
 		{
-			name: "DeleteObjects",
+			name: "GetBucketAcl",
 			call: func(ctx context.Context, client *s3.Client) error {
-				_, err := client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+				_, err := client.GetBucketAcl(ctx, &s3.GetBucketAclInput{
 					Bucket: aws.String("testbucket"),
-					Delete: &types.Delete{Objects: []types.ObjectIdentifier{{Key: aws.String("k")}}},
-				})
-				return err
-			},
-		},
-		{
-			name: "CopyObject",
-			call: func(ctx context.Context, client *s3.Client) error {
-				_, err := client.CopyObject(ctx, &s3.CopyObjectInput{
-					Bucket:     aws.String("testbucket"),
-					Key:        aws.String("dst.txt"),
-					CopySource: aws.String("testbucket/src.txt"),
 				})
 				return err
 			},

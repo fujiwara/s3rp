@@ -103,17 +103,24 @@ $ aws --endpoint-url http://localhost:8080 s3api list-objects-v2 --bucket photos
 - PutObject
 - HeadObject
 - DeleteObject
+- DeleteObjects
+- CopyObject
+- ListObjects
 - ListObjectsV2
 - HeadBucket
+- GetBucketLocation
 - ListBuckets
 - CreateMultipartUpload
 - UploadPart
+- UploadPartCopy
 - CompleteMultipartUpload
 - AbortMultipartUpload
 - ListParts
 - ListMultipartUploads
 
 Other operations return a `NotImplemented` error.
+
+CopyObject and UploadPartCopy work between buckets served by the same backend (same endpoint, region and credentials); copying across different backends returns `NotImplemented`. The copy source bucket must be accessible by the requesting access key.
 
 `aws-chunked` request bodies (`STREAMING-AWS4-HMAC-SHA256-PAYLOAD` and the trailer variants), which the AWS CLI and SDKs use for uploads over plain http endpoints, are decoded and their chunk signatures are verified.
 
@@ -128,7 +135,6 @@ http://localhost:8080/photos/foo.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&...
 
 ## Limitations
 
-- UploadPartCopy and CopyObject are not supported.
 - The payload SHA-256 declared in `x-amz-content-sha256` is not independently verified against the request body (the signature covers the declared hash; verifying the body would require buffering it). Chunk signatures of `aws-chunked` bodies are verified.
 - Requests that sign the `user-agent` or other headers the AWS SDK signer ignores will fail verification. Real AWS SDK/CLI clients do not do this.
 

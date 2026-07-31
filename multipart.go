@@ -12,9 +12,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
-// maxCompleteBodySize limits the request body of CompleteMultipartUpload
-// (10,000 parts fit well within this).
-const maxCompleteBodySize = 16 << 20
+// maxXMLBodySize limits XML request bodies (CompleteMultipartUpload,
+// DeleteObjects); the maximum entries of both fit well within this.
+const maxXMLBodySize = 16 << 20
 
 func (app *S3RP) createMultipartUpload(w http.ResponseWriter, r *http.Request, rt *bucketRT, key string) error {
 	in := &s3.CreateMultipartUploadInput{
@@ -97,7 +97,7 @@ func (app *S3RP) completeMultipartUpload(w http.ResponseWriter, r *http.Request,
 	if s3err != nil {
 		return s3err
 	}
-	data, err := io.ReadAll(io.LimitReader(body, maxCompleteBodySize))
+	data, err := io.ReadAll(io.LimitReader(body, maxXMLBodySize))
 	if err != nil {
 		return newS3Error(http.StatusBadRequest, "InvalidRequest", "failed to read request body")
 	}
