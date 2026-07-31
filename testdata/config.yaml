@@ -1,0 +1,22 @@
+listen: ":8080"
+buckets:
+  - name: photos
+    backend:
+      endpoint: http://backend.example.com:7480
+      region: us-east-1
+      bucket: photos-prod
+      access_key_id: ${TEST_BACKEND_ACCESS_KEY_ID}
+      secret_access_key: ${TEST_BACKEND_SECRET_ACCESS_KEY}
+    keys:
+      - access_key_id: S3RPKEY001
+        secret_access_key: frontsecret001
+      - access_key_id: S3RPKEY002
+        secret_access_key: frontsecret002
+  - name: logs
+    backend:
+      endpoint: http://backend2.example.com:9000
+      access_key_id: logskey
+      secret_access_key: logssecret
+    keys:
+      - access_key_id: S3RPKEY001
+        secret_access_key: frontsecret001

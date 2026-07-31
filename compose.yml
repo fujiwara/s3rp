@@ -1,0 +1,8 @@
+services:
+  versitygw:
+    image: versity/versitygw:latest
+    command: ["--access", "backendkey", "--secret", "backendsecret", "posix", "/data"]
+    ports:
+      - "127.0.0.1:7070:7070"
+    tmpfs:
+      - /data
