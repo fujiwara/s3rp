@@ -69,11 +69,10 @@ buckets:
         secret_access_key: ${FRONT_SECRET_002}
   - name: logs
     backend:
-      endpoint: https://s3.ap-northeast-1.amazonaws.com
+      # no endpoint: Amazon S3, resolved by the SDK from the region
       region: ap-northeast-1
       access_key_id: ${AWS_ACCESS_KEY_ID_FOR_LOGS}
       secret_access_key: ${AWS_SECRET_ACCESS_KEY_FOR_LOGS}
-      use_path_style: false
     keys:
       - access_key_id: S3RPKEY001    # the same key id may be used for multiple buckets
         secret_access_key: ${FRONT_SECRET_001}
@@ -81,6 +80,8 @@ buckets:
 
 Notes:
 
+- When `backend.endpoint` is omitted, the backend is Amazon S3: the SDK resolves the endpoint from `region`, and `use_path_style` defaults to `false` (it defaults to `true` when an endpoint is set).
+- When `backend.access_key_id` and `backend.secret_access_key` are omitted, the SDK default credential chain is used (environment variables, shared config, IAM roles, etc.).
 - The same front access key id may appear under multiple buckets, but its secret must be identical everywhere.
 - `GET /` (ListBuckets) returns the buckets accessible by the authenticated key.
 

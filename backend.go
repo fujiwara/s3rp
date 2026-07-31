@@ -23,17 +23,22 @@ type BackendClient interface {
 }
 
 func newBackendClient(ctx context.Context, b *BackendConfig) (BackendClient, error) {
-	cfg, err := awsconfig.LoadDefaultConfig(ctx,
+	optFns := []func(*awsconfig.LoadOptions) error{
 		awsconfig.WithRegion(b.Region),
-		awsconfig.WithCredentialsProvider(
+	}
+	if b.AccessKeyID != "" {
+		optFns = append(optFns, awsconfig.WithCredentialsProvider(
 			credentials.NewStaticCredentialsProvider(b.AccessKeyID, b.SecretAccessKey.String(), ""),
-		),
-	)
+		))
+	} // otherwise the SDK default credential chain is used
+	cfg, err := awsconfig.LoadDefaultConfig(ctx, optFns...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load aws config: %w", err)
 	}
 	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
-		o.BaseEndpoint = aws.String(b.Endpoint)
+		if b.Endpoint != "" {
+			o.BaseEndpoint = aws.String(b.Endpoint)
+		} // otherwise the SDK resolves the AWS S3 endpoint from the region
 		o.UsePathStyle = *b.UsePathStyle
 		// the request body from the client is not seekable, so the SDK
 		// cannot compute a payload hash over plain http endpoints
