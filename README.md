@@ -217,6 +217,28 @@ http://localhost:8080/photos/foo.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&...
 - The payload SHA-256 declared in `x-amz-content-sha256` is not independently verified against the request body (the signature covers the declared hash; verifying the body would require buffering it). Chunk signatures of `aws-chunked` bodies are verified.
 - Requests that sign the `user-agent` or other headers the AWS SDK signer ignores will fail verification. Real AWS SDK/CLI clients do not do this.
 
+## Development
+
+Unit tests run without any backend:
+
+```console
+$ go test -race ./...
+```
+
+The integration test suite runs against a real S3-compatible backend, selected by environment variables. Two backends are provided in `compose.yml`:
+
+```console
+# versitygw (lightweight, default)
+$ docker compose up -d --wait versitygw
+$ S3RP_TEST_BACKEND_ENDPOINT=http://localhost:7070 go test -race -run TestIntegration ./...
+
+# Ceph RGW (heavyweight, compatibility check)
+$ docker compose up -d --wait ceph
+$ S3RP_TEST_BACKEND_ENDPOINT=http://127.0.0.1:7480 go test -race -run TestIntegration ./...
+```
+
+Note: access Ceph RGW via `127.0.0.1`, not `localhost` — RGW resolves Host names that do not match its `rgw dns name` as virtual-hosted bucket names. CI runs the integration suite against both backends as a matrix.
+
 ## LICENSE
 
 MIT

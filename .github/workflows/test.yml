@@ -25,8 +25,16 @@ jobs:
           go test -race ./...
 
   integration:
-    name: Integration
+    name: Integration (${{ matrix.backend }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - backend: versitygw
+            endpoint: "http://localhost:7070"
+          - backend: ceph
+            endpoint: "http://127.0.0.1:7480"
     steps:
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
@@ -36,12 +44,14 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - name: Start versitygw
+      - name: Start backend
         run: |
-          docker compose up -d --wait
+          docker compose up -d --wait "$BACKEND"
+        env:
+          BACKEND: ${{ matrix.backend }}
 
       - name: Integration Test
         run: |
           go test -race -run TestIntegration -v ./...
         env:
-          S3RP_TEST_BACKEND_ENDPOINT: http://localhost:7070
+          S3RP_TEST_BACKEND_ENDPOINT: ${{ matrix.endpoint }}
