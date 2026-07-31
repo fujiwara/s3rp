@@ -16,11 +16,16 @@ import (
 // front-side access keys and forwards operations to per-bucket backends.
 type S3RP struct {
 	cfg     *Config
-	keys    map[string]Password             // front access key id -> secret
-	byKey   map[string]map[string]*bucketRT // front access key id -> bucket name -> runtime
-	buckets map[string]*bucketRT            // bucket name -> runtime
+	keys    map[string]*frontKey // front access key id -> key
+	buckets map[string]*bucketRT // bucket name -> runtime
 	signer  *v4.Signer
 	now     func() time.Time
+}
+
+// frontKey is a front-side access key and the buckets it may access.
+type frontKey struct {
+	secret  Password
+	buckets map[string]*bucketRT // front bucket name -> runtime
 }
 
 type bucketRT struct {
@@ -32,8 +37,7 @@ type bucketRT struct {
 func New(ctx context.Context, cfg *Config) (*S3RP, error) {
 	app := &S3RP{
 		cfg:     cfg,
-		keys:    make(map[string]Password),
-		byKey:   make(map[string]map[string]*bucketRT),
+		keys:    make(map[string]*frontKey),
 		buckets: make(map[string]*bucketRT),
 		signer: v4.NewSigner(func(o *v4.SignerOptions) {
 			o.DisableURIPathEscaping = true // S3 mode
@@ -48,11 +52,15 @@ func New(ctx context.Context, cfg *Config) (*S3RP, error) {
 		rt := &bucketRT{cfg: b, client: client}
 		app.buckets[b.Name] = rt
 		for _, k := range b.Keys {
-			app.keys[k.AccessKeyID] = k.SecretAccessKey
-			if app.byKey[k.AccessKeyID] == nil {
-				app.byKey[k.AccessKeyID] = make(map[string]*bucketRT)
+			fk := app.keys[k.AccessKeyID]
+			if fk == nil {
+				fk = &frontKey{
+					secret:  k.SecretAccessKey,
+					buckets: make(map[string]*bucketRT),
+				}
+				app.keys[k.AccessKeyID] = fk
 			}
-			app.byKey[k.AccessKeyID][b.Name] = rt
+			fk.buckets[b.Name] = rt
 		}
 	}
 	return app, nil

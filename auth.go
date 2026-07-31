@@ -122,10 +122,11 @@ func (app *S3RP) verifyHeaderRequest(r *http.Request) (*verifiedRequest, *S3Erro
 		return nil, newS3Error(http.StatusBadRequest, "AuthorizationHeaderMalformed",
 			"The authorization header is malformed; incorrect service.")
 	}
-	secret, ok := app.keys[auth.AccessKeyID]
+	fk, ok := app.keys[auth.AccessKeyID]
 	if !ok {
 		return nil, errInvalidAccessKeyID()
 	}
+	secret := fk.secret
 
 	amzDate := r.Header.Get(amzDateHeader)
 	if amzDate == "" {
@@ -249,10 +250,11 @@ func (app *S3RP) verifyPresignedRequest(r *http.Request) (*verifiedRequest, *S3E
 	if t.After(now.Add(maxClockSkew)) {
 		return nil, newS3Error(http.StatusForbidden, "AccessDenied", "Request is not valid yet")
 	}
-	secret, ok := app.keys[akid]
+	fk, ok := app.keys[akid]
 	if !ok {
 		return nil, errInvalidAccessKeyID()
 	}
+	secret := fk.secret
 
 	clone, err := cloneForSigning(r, signedHeaders)
 	if err != nil {
