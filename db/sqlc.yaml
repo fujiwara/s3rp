@@ -1,0 +1,18 @@
+version: "2"
+sql:
+  # read-only queries for the proxy
+  - engine: sqlite
+    schema: schema.sql
+    queries: queries/read.sql
+    gen:
+      go:
+        package: readdb
+        out: ../store/rdb/readdb
+  # write queries for the admin tooling / control plane
+  - engine: sqlite
+    schema: schema.sql
+    queries: queries/write.sql
+    gen:
+      go:
+        package: writedb
+        out: writedb
