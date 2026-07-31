@@ -7,3 +7,25 @@ services:
     tmpfs:
       - /data
       - /versions
+
+  # heavyweight Ceph RGW backend for compatibility tests.
+  # start explicitly: docker compose up -d --wait ceph
+  # NOTE: access RGW via http://127.0.0.1:7480 (not localhost) — RGW
+  # resolves non-matching Host names as virtual-hosted bucket names.
+  ceph:
+    image: quay.io/ceph/demo:latest-squid
+    profiles: [ceph]
+    network_mode: host
+    environment:
+      MON_IP: 127.0.0.1
+      CEPH_PUBLIC_NETWORK: 127.0.0.1/32
+      CEPH_DEMO_UID: demo
+      CEPH_DEMO_ACCESS_KEY: backendkey
+      CEPH_DEMO_SECRET_KEY: backendsecret
+      RGW_FRONTEND_PORT: 7480
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:7480/"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+      start_period: 20s
