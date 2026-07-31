@@ -163,11 +163,22 @@ func TestVerifyRequest(t *testing.T) {
 			wantCode: "RequestTimeTooSkewed",
 		},
 		{
-			name: "presigned URL not implemented",
+			name: "presigned with malformed credential",
 			request: func(t *testing.T) *http.Request {
 				return httptest.NewRequest(http.MethodGet, "http://proxy.example.com/testbucket/key.txt?X-Amz-Signature=deadbeef&X-Amz-Algorithm=AWS4-HMAC-SHA256", nil)
 			},
-			wantCode: "NotImplemented",
+			wantCode: "AuthorizationQueryParametersError",
+		},
+		{
+			name: "both header and query auth",
+			request: func(t *testing.T) *http.Request {
+				r := signedRequest(t, http.MethodGet, "http://proxy.example.com/testbucket/key.txt", nil, emptyPayloadHash, now, testCreds(), nil)
+				q := r.URL.Query()
+				q.Set("X-Amz-Signature", "deadbeef")
+				r.URL.RawQuery = q.Encode()
+				return r
+			},
+			wantCode: "InvalidArgument",
 		},
 		{
 			name: "no authorization header",
