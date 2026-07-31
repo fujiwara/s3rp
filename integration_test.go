@@ -3,6 +3,7 @@ package s3rp_test
 import (
 	"errors"
 	"io"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
@@ -235,6 +236,54 @@ func TestIntegration(t *testing.T) {
 		if _, err := client.DeleteObject(t.Context(), &s3.DeleteObjectInput{
 			Bucket: aws.String("it-bucket"),
 			Key:    aws.String("dir/multipart.bin"),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("PresignedURL", func(t *testing.T) {
+		presigner := s3.NewPresignClient(client)
+		content := "presigned integration content"
+		put, err := presigner.PresignPutObject(t.Context(), &s3.PutObjectInput{
+			Bucket: aws.String("it-bucket"),
+			Key:    aws.String("dir/presigned.txt"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		req, err := http.NewRequestWithContext(t.Context(), put.Method, put.URL, strings.NewReader(content))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("presigned PUT: expect 200, got %d", resp.StatusCode)
+		}
+		get, err := presigner.PresignGetObject(t.Context(), &s3.GetObjectInput{
+			Bucket: aws.String("it-bucket"),
+			Key:    aws.String("dir/presigned.txt"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err = http.Get(get.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("presigned GET: expect 200, got %d: %s", resp.StatusCode, body)
+		}
+		if string(body) != content {
+			t.Errorf("content mismatch: %q", body)
+		}
+		if _, err := client.DeleteObject(t.Context(), &s3.DeleteObjectInput{
+			Bucket: aws.String("it-bucket"),
+			Key:    aws.String("dir/presigned.txt"),
 		}); err != nil {
 			t.Fatal(err)
 		}

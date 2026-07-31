@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -89,17 +90,29 @@ type verifiedRequest struct {
 	PayloadHash     string
 }
 
-// verifyRequest authenticates an incoming request by re-signing a clone of it
-// with the secret of the access key in the Authorization header and comparing
-// the signatures.
+// verifyRequest authenticates an incoming request, either by the
+// Authorization header or by presigned URL query parameters.
 func (app *S3RP) verifyRequest(r *http.Request) (*verifiedRequest, *S3Error) {
-	if r.URL.Query().Get("X-Amz-Signature") != "" {
-		return nil, errNotImplemented("presigned URL")
-	}
-	authValue := r.Header.Get("Authorization")
-	if authValue == "" {
+	hasQueryAuth := r.URL.Query().Get("X-Amz-Signature") != ""
+	hasHeaderAuth := r.Header.Get("Authorization") != ""
+	switch {
+	case hasQueryAuth && hasHeaderAuth:
+		return nil, newS3Error(http.StatusBadRequest, "InvalidArgument",
+			"Only one auth mechanism allowed; only the X-Amz-Algorithm query parameter, Signature query string parameter or the Authorization header should be specified")
+	case hasQueryAuth:
+		return app.verifyPresignedRequest(r)
+	case hasHeaderAuth:
+		return app.verifyHeaderRequest(r)
+	default:
 		return nil, errAccessDenied()
 	}
+}
+
+// verifyHeaderRequest authenticates a request signed via the Authorization
+// header by re-signing a clone of it with the secret of the access key and
+// comparing the signatures.
+func (app *S3RP) verifyHeaderRequest(r *http.Request) (*verifiedRequest, *S3Error) {
+	authValue := r.Header.Get("Authorization")
 	auth, err := parseAuthorizationHeader(authValue)
 	if err != nil {
 		return nil, newS3Error(http.StatusBadRequest, "AuthorizationHeaderMalformed",
@@ -175,6 +188,141 @@ func (app *S3RP) verifyRequest(r *http.Request) (*verifiedRequest, *S3Error) {
 		Region:          auth.Region,
 		PayloadHash:     payloadHash,
 	}, nil
+}
+
+const maxPresignExpires = 7 * 24 * time.Hour
+
+// presignAuthParams are the query parameters that carry the SigV4
+// authentication of a presigned URL. They are removed before re-signing
+// (the signer adds them back itself).
+var presignAuthParams = []string{
+	"X-Amz-Algorithm",
+	"X-Amz-Credential",
+	"X-Amz-Date",
+	"X-Amz-SignedHeaders",
+	"X-Amz-Signature",
+	"X-Amz-Security-Token",
+}
+
+// verifyPresignedRequest authenticates a request signed via query string
+// parameters (a presigned URL) by re-presigning a clone of it and comparing
+// the signatures.
+// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
+func (app *S3RP) verifyPresignedRequest(r *http.Request) (*verifiedRequest, *S3Error) {
+	query := r.URL.Query()
+	queryParamsError := func(msg string) *S3Error {
+		return newS3Error(http.StatusBadRequest, "AuthorizationQueryParametersError", msg)
+	}
+	if algo := query.Get("X-Amz-Algorithm"); algo != sigV4Algorithm {
+		return nil, queryParamsError("X-Amz-Algorithm only supports \"AWS4-HMAC-SHA256\"")
+	}
+	credElems := strings.Split(query.Get("X-Amz-Credential"), "/")
+	if len(credElems) != 5 || credElems[4] != "aws4_request" {
+		return nil, queryParamsError("Error parsing the X-Amz-Credential parameter; the Credential is mal-formed")
+	}
+	akid, scopeDate, region, service := credElems[0], credElems[1], credElems[2], credElems[3]
+	if service != "s3" {
+		return nil, queryParamsError("Error parsing the X-Amz-Credential parameter; incorrect service")
+	}
+	signedHeaders := strings.Split(query.Get("X-Amz-SignedHeaders"), ";")
+	if len(signedHeaders) == 0 || signedHeaders[0] == "" {
+		return nil, queryParamsError("X-Amz-SignedHeaders is required")
+	}
+	t, err := time.Parse(amzDateFormat, query.Get("X-Amz-Date"))
+	if err != nil {
+		return nil, queryParamsError("X-Amz-Date must be in the ISO8601 Long Format")
+	}
+	if t.Format("20060102") != scopeDate {
+		return nil, queryParamsError("Invalid credential date. Date is not the same as X-Amz-Date.")
+	}
+	expires, err := strconv.ParseInt(query.Get("X-Amz-Expires"), 10, 64)
+	if err != nil || expires < 1 {
+		return nil, queryParamsError("X-Amz-Expires must be a positive integer")
+	}
+	if time.Duration(expires)*time.Second > maxPresignExpires {
+		return nil, queryParamsError("X-Amz-Expires must be less than a week (in seconds); that is, the given X-Amz-Expires must be less than 604800 seconds")
+	}
+	now := app.now()
+	if now.After(t.Add(time.Duration(expires) * time.Second)) {
+		return nil, newS3Error(http.StatusForbidden, "AccessDenied", "Request has expired")
+	}
+	if t.After(now.Add(maxClockSkew)) {
+		return nil, newS3Error(http.StatusForbidden, "AccessDenied", "Request is not valid yet")
+	}
+	secret, ok := app.keys[akid]
+	if !ok {
+		return nil, errInvalidAccessKeyID()
+	}
+
+	clone, err := cloneForSigning(r, signedHeaders)
+	if err != nil {
+		return nil, newS3Error(http.StatusBadRequest, "InvalidRequest", err.Error())
+	}
+	// drop the auth params; the signer adds them back when presigning
+	cloneQuery := clone.URL.Query()
+	for _, p := range presignAuthParams {
+		cloneQuery.Del(p)
+	}
+	clone.URL.RawQuery = cloneQuery.Encode()
+
+	// presigned S3 requests conventionally use UNSIGNED-PAYLOAD
+	payloadHash := r.Header.Get(amzContentSha256)
+	if payloadHash == "" {
+		payloadHash = "UNSIGNED-PAYLOAD"
+	}
+	creds := aws.Credentials{AccessKeyID: akid, SecretAccessKey: secret.String()}
+	signedURI, _, err := app.signer.PresignHTTP(r.Context(), creds, clone, payloadHash, service, region, t)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "failed to presign request for verification", "error", err)
+		return nil, newS3Error(http.StatusInternalServerError, "InternalError", "signing failed")
+	}
+	signedURL, err := url.Parse(signedURI)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "failed to parse re-presigned URL", "error", err)
+		return nil, newS3Error(http.StatusInternalServerError, "InternalError", "signing failed")
+	}
+	signedQuery := signedURL.Query()
+	sigOK := subtle.ConstantTimeCompare(
+		[]byte(signedQuery.Get("X-Amz-Signature")), []byte(query.Get("X-Amz-Signature"))) == 1
+	headersOK := signedQuery.Get("X-Amz-SignedHeaders") == query.Get("X-Amz-SignedHeaders")
+	if !sigOK || !headersOK {
+		slog.DebugContext(r.Context(), "presigned signature mismatch",
+			"client_signed_headers", query.Get("X-Amz-SignedHeaders"),
+			"resigned_headers", signedQuery.Get("X-Amz-SignedHeaders"),
+		)
+		return nil, errSignatureDoesNotMatch()
+	}
+	promoteHoistedQueryParams(r)
+	return &verifiedRequest{
+		AccessKeyID:     akid,
+		SecretAccessKey: secret,
+		Signature:       query.Get("X-Amz-Signature"),
+		SigningTime:     t,
+		Scope:           strings.Join([]string{scopeDate, region, service, "aws4_request"}, "/"),
+		Region:          region,
+		PayloadHash:     payloadHash,
+	}, nil
+}
+
+// promoteHoistedQueryParams copies x-amz-* query parameters (except the auth
+// parameters) into the request headers. SDK presigners hoist headers such as
+// x-amz-meta-* and x-amz-storage-class into the query string, and the
+// operation handlers read them from headers.
+func promoteHoistedQueryParams(r *http.Request) {
+	authParams := make(map[string]bool, len(presignAuthParams)+1)
+	for _, p := range presignAuthParams {
+		authParams[strings.ToLower(p)] = true
+	}
+	authParams["x-amz-expires"] = true
+	for k, vs := range r.URL.Query() {
+		lk := strings.ToLower(k)
+		if !strings.HasPrefix(lk, "x-amz-") || authParams[lk] || len(vs) == 0 {
+			continue
+		}
+		if r.Header.Get(k) == "" {
+			r.Header.Set(k, vs[0])
+		}
+	}
 }
 
 // cloneForSigning builds a request containing only the headers the client

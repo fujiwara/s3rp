@@ -260,6 +260,10 @@ func unsupportedQuery(query url.Values, allowed map[string]bool) string {
 			// an aws-sdk internal operation hint, not a subresource
 			continue
 		}
+		if strings.HasPrefix(strings.ToLower(k), "x-amz-") {
+			// presigned auth params and hoisted headers, not subresources
+			continue
+		}
 		if !allowed[k] {
 			return "query parameter " + k
 		}

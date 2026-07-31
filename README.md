@@ -117,9 +117,17 @@ Other operations return a `NotImplemented` error.
 
 `aws-chunked` request bodies (`STREAMING-AWS4-HMAC-SHA256-PAYLOAD` and the trailer variants), which the AWS CLI and SDKs use for uploads over plain http endpoints, are decoded and their chunk signatures are verified.
 
+## Presigned URLs
+
+Presigned URLs (SigV4 query string authentication) generated with front-side keys against the s3rp endpoint are supported for the operations above. Expiry (`X-Amz-Expires`, up to 7 days) is enforced.
+
+```console
+$ aws --endpoint-url http://localhost:8080 s3 presign s3://photos/foo.jpg
+http://localhost:8080/photos/foo.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&...
+```
+
 ## Limitations
 
-- Presigned URLs are not supported.
 - UploadPartCopy and CopyObject are not supported.
 - The payload SHA-256 declared in `x-amz-content-sha256` is not independently verified against the request body (the signature covers the declared hash; verifying the body would require buffering it). Chunk signatures of `aws-chunked` bodies are verified.
 - Requests that sign the `user-agent` or other headers the AWS SDK signer ignores will fail verification. Real AWS SDK/CLI clients do not do this.
