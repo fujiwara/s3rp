@@ -472,8 +472,9 @@ func (app *S3RP) headBucket(w http.ResponseWriter, r *http.Request, rt *bucketRT
 }
 
 func (app *S3RP) listBuckets(w http.ResponseWriter, vr *verifiedRequest) error {
-	names := make([]string, 0, len(app.byKey[vr.AccessKeyID]))
-	for name := range app.byKey[vr.AccessKeyID] {
+	buckets := app.keys[vr.AccessKeyID].buckets
+	names := make([]string, 0, len(buckets))
+	for name := range buckets {
 		names = append(names, name)
 	}
 	sort.Strings(names)

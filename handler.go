@@ -106,249 +106,179 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 		return app.listBuckets(w, vr)
 	}
 
-	rt := app.byKey[vr.AccessKeyID][bucket]
+	rt := app.keys[vr.AccessKeyID].buckets[bucket]
 	if rt == nil {
 		return errAccessDenied()
 	}
 
 	query := r.URL.Query()
-	switch {
-	case key == "":
-		switch r.Method {
-		case http.MethodGet:
-			switch {
-			case query.Has("uploads"):
-				if sub := unsupportedQuery(query, listMultipartUploadsParams); sub != "" {
-					return errNotImplemented(sub)
-				}
-				return app.listMultipartUploads(w, r, rt)
-			case query.Has("location"):
-				if sub := unsupportedQuery(query, locationOnlyParams); sub != "" {
-					return errNotImplemented(sub)
-				}
-				return app.getBucketLocation(w, rt)
-			case query.Has("versioning"):
-				if sub := unsupportedQuery(query, versioningOnlyParams); sub != "" {
-					return errNotImplemented(sub)
-				}
-				return app.getBucketVersioning(w, r, rt)
-			case query.Has("versions"):
-				if sub := unsupportedQuery(query, listObjectVersionsParams); sub != "" {
-					return errNotImplemented(sub)
-				}
-				return app.listObjectVersions(w, r, rt)
-			case query.Get("list-type") == "2":
-				if sub := unsupportedQuery(query, listObjectsV2Params); sub != "" {
-					return errNotImplemented(sub)
-				}
-				return app.listObjectsV2(w, r, rt)
-			default:
-				if sub := unsupportedQuery(query, listObjectsV1Params); sub != "" {
-					return errNotImplemented(sub)
-				}
-				return app.listObjectsV1(w, r, rt)
+	if key == "" {
+		return app.handleBucketRequest(w, r, rt, vr, query)
+	}
+	return app.handleObjectRequest(w, r, rt, vr, query, key)
+}
+
+func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt *bucketRT, vr *verifiedRequest, query url.Values) error {
+	switch r.Method {
+	case http.MethodGet:
+		switch {
+		case query.Has("uploads"):
+			if err := listMultipartUploadsParams.check(query); err != nil {
+				return err
 			}
-		case http.MethodHead:
-			return app.headBucket(w, r, rt)
-		case http.MethodPut:
-			if query.Has("versioning") {
-				if sub := unsupportedQuery(query, versioningOnlyParams); sub != "" {
-					return errNotImplemented(sub)
-				}
-				return app.putBucketVersioning(w, r, rt, vr)
+			return app.listMultipartUploads(w, r, rt)
+		case query.Has("location"):
+			if err := locationOnlyParams.check(query); err != nil {
+				return err
 			}
-			return errNotImplemented("this bucket operation")
-		case http.MethodPost:
-			if query.Has("delete") {
-				if sub := unsupportedQuery(query, deleteOnlyParams); sub != "" {
-					return errNotImplemented(sub)
-				}
-				return app.deleteObjects(w, r, rt, vr)
+			return app.getBucketLocation(w, rt)
+		case query.Has("versioning"):
+			if err := versioningOnlyParams.check(query); err != nil {
+				return err
 			}
-			return errNotImplemented("this bucket operation")
+			return app.getBucketVersioning(w, r, rt)
+		case query.Has("versions"):
+			if err := listObjectVersionsParams.check(query); err != nil {
+				return err
+			}
+			return app.listObjectVersions(w, r, rt)
+		case query.Get("list-type") == "2":
+			if err := listObjectsV2Params.check(query); err != nil {
+				return err
+			}
+			return app.listObjectsV2(w, r, rt)
 		default:
-			return errNotImplemented("this bucket operation")
+			if err := listObjectsV1Params.check(query); err != nil {
+				return err
+			}
+			return app.listObjectsV1(w, r, rt)
 		}
+	case http.MethodHead:
+		return app.headBucket(w, r, rt)
+	case http.MethodPut:
+		if query.Has("versioning") {
+			if err := versioningOnlyParams.check(query); err != nil {
+				return err
+			}
+			return app.putBucketVersioning(w, r, rt, vr)
+		}
+		return errNotImplemented("this bucket operation")
+	case http.MethodPost:
+		if query.Has("delete") {
+			if err := deleteOnlyParams.check(query); err != nil {
+				return err
+			}
+			return app.deleteObjects(w, r, rt, vr)
+		}
+		return errNotImplemented("this bucket operation")
 	default:
-		switch r.Method {
-		case http.MethodGet:
-			if query.Has("uploadId") {
-				if sub := unsupportedQuery(query, listPartsParams); sub != "" {
-					return errNotImplemented(sub)
-				}
-				return app.listParts(w, r, rt, key)
-			}
-			if query.Has("tagging") {
-				if sub := unsupportedQuery(query, taggingOnlyParams); sub != "" {
-					return errNotImplemented(sub)
-				}
-				return app.getObjectTagging(w, r, rt, key)
-			}
-			if sub := unsupportedQuery(query, getObjectParams); sub != "" {
-				return errNotImplemented(sub)
-			}
-			return app.getObject(w, r, rt, key)
-		case http.MethodHead:
-			if sub := unsupportedQuery(query, versionIDOnlyParams); sub != "" {
-				return errNotImplemented(sub)
-			}
-			return app.headObject(w, r, rt, key)
-		case http.MethodPut:
-			if query.Has("tagging") {
-				if sub := unsupportedQuery(query, taggingOnlyParams); sub != "" {
-					return errNotImplemented(sub)
-				}
-				return app.putObjectTagging(w, r, rt, key, vr)
-			}
-			hasCopySource := r.Header.Get("x-amz-copy-source") != ""
-			if query.Has("uploadId") || query.Has("partNumber") {
-				if sub := unsupportedQuery(query, uploadPartParams); sub != "" {
-					return errNotImplemented(sub)
-				}
-				if hasCopySource {
-					return app.uploadPartCopy(w, r, rt, key, vr)
-				}
-				return app.uploadPart(w, r, rt, key, vr)
-			}
-			if sub := unsupportedQuery(query, nil); sub != "" {
-				return errNotImplemented(sub)
-			}
-			if hasCopySource {
-				return app.copyObject(w, r, rt, key, vr)
-			}
-			return app.putObject(w, r, rt, key, vr)
-		case http.MethodDelete:
-			if query.Has("uploadId") {
-				if sub := unsupportedQuery(query, uploadIDOnlyParams); sub != "" {
-					return errNotImplemented(sub)
-				}
-				return app.abortMultipartUpload(w, r, rt, key)
-			}
-			if query.Has("tagging") {
-				if sub := unsupportedQuery(query, taggingOnlyParams); sub != "" {
-					return errNotImplemented(sub)
-				}
-				return app.deleteObjectTagging(w, r, rt, key)
-			}
-			if sub := unsupportedQuery(query, versionIDOnlyParams); sub != "" {
-				return errNotImplemented(sub)
-			}
-			return app.deleteObject(w, r, rt, key)
-		case http.MethodPost:
-			switch {
-			case query.Has("uploads"):
-				if sub := unsupportedQuery(query, uploadsOnlyParams); sub != "" {
-					return errNotImplemented(sub)
-				}
-				return app.createMultipartUpload(w, r, rt, key)
-			case query.Has("uploadId"):
-				if sub := unsupportedQuery(query, uploadIDOnlyParams); sub != "" {
-					return errNotImplemented(sub)
-				}
-				return app.completeMultipartUpload(w, r, rt, key, vr)
-			default:
-				return errNotImplemented("this operation")
-			}
-		default:
-			return newS3Error(http.StatusMethodNotAllowed, "MethodNotAllowed",
-				"The specified method is not allowed against this resource.")
-		}
+		return errNotImplemented("this bucket operation")
 	}
 }
 
-var listObjectsV1Params = map[string]bool{
-	"prefix":        true,
-	"delimiter":     true,
-	"marker":        true,
-	"max-keys":      true,
-	"encoding-type": true,
+func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt *bucketRT, vr *verifiedRequest, query url.Values, key string) error {
+	switch r.Method {
+	case http.MethodGet:
+		if query.Has("uploadId") {
+			if err := listPartsParams.check(query); err != nil {
+				return err
+			}
+			return app.listParts(w, r, rt, key)
+		}
+		if query.Has("tagging") {
+			if err := taggingParams.check(query); err != nil {
+				return err
+			}
+			return app.getObjectTagging(w, r, rt, key)
+		}
+		if err := getObjectParams.check(query); err != nil {
+			return err
+		}
+		return app.getObject(w, r, rt, key)
+	case http.MethodHead:
+		if err := versionIDOnlyParams.check(query); err != nil {
+			return err
+		}
+		return app.headObject(w, r, rt, key)
+	case http.MethodPut:
+		if query.Has("tagging") {
+			if err := taggingParams.check(query); err != nil {
+				return err
+			}
+			return app.putObjectTagging(w, r, rt, key, vr)
+		}
+		hasCopySource := r.Header.Get("x-amz-copy-source") != ""
+		if query.Has("uploadId") || query.Has("partNumber") {
+			if err := uploadPartParams.check(query); err != nil {
+				return err
+			}
+			if hasCopySource {
+				return app.uploadPartCopy(w, r, rt, key, vr)
+			}
+			return app.uploadPart(w, r, rt, key, vr)
+		}
+		if err := noParams.check(query); err != nil {
+			return err
+		}
+		if hasCopySource {
+			return app.copyObject(w, r, rt, key, vr)
+		}
+		return app.putObject(w, r, rt, key, vr)
+	case http.MethodDelete:
+		if query.Has("uploadId") {
+			if err := uploadIDOnlyParams.check(query); err != nil {
+				return err
+			}
+			return app.abortMultipartUpload(w, r, rt, key)
+		}
+		if query.Has("tagging") {
+			if err := taggingParams.check(query); err != nil {
+				return err
+			}
+			return app.deleteObjectTagging(w, r, rt, key)
+		}
+		if err := versionIDOnlyParams.check(query); err != nil {
+			return err
+		}
+		return app.deleteObject(w, r, rt, key)
+	case http.MethodPost:
+		switch {
+		case query.Has("uploads"):
+			if err := uploadsOnlyParams.check(query); err != nil {
+				return err
+			}
+			return app.createMultipartUpload(w, r, rt, key)
+		case query.Has("uploadId"):
+			if err := uploadIDOnlyParams.check(query); err != nil {
+				return err
+			}
+			return app.completeMultipartUpload(w, r, rt, key, vr)
+		default:
+			return errNotImplemented("this operation")
+		}
+	default:
+		return newS3Error(http.StatusMethodNotAllowed, "MethodNotAllowed",
+			"The specified method is not allowed against this resource.")
+	}
 }
 
-var locationOnlyParams = map[string]bool{
-	"location": true,
+// paramSet is the set of query parameters an operation accepts.
+type paramSet map[string]bool
+
+// newParamSet builds a paramSet from parameter names.
+func newParamSet(names ...string) paramSet {
+	p := make(paramSet, len(names))
+	for _, n := range names {
+		p[n] = true
+	}
+	return p
 }
 
-var deleteOnlyParams = map[string]bool{
-	"delete": true,
-}
-
-var listObjectsV2Params = map[string]bool{
-	"list-type":          true,
-	"prefix":             true,
-	"delimiter":          true,
-	"max-keys":           true,
-	"continuation-token": true,
-	"start-after":        true,
-	"fetch-owner":        true,
-	"encoding-type":      true,
-}
-
-var listMultipartUploadsParams = map[string]bool{
-	"uploads":          true,
-	"prefix":           true,
-	"delimiter":        true,
-	"key-marker":       true,
-	"upload-id-marker": true,
-	"max-uploads":      true,
-	"encoding-type":    true,
-}
-
-var listPartsParams = map[string]bool{
-	"uploadId":           true,
-	"max-parts":          true,
-	"part-number-marker": true,
-}
-
-var uploadPartParams = map[string]bool{
-	"uploadId":   true,
-	"partNumber": true,
-}
-
-var uploadsOnlyParams = map[string]bool{
-	"uploads": true,
-}
-
-var uploadIDOnlyParams = map[string]bool{
-	"uploadId": true,
-}
-
-var taggingOnlyParams = map[string]bool{
-	"tagging":   true,
-	"versionId": true,
-}
-
-var versioningOnlyParams = map[string]bool{
-	"versioning": true,
-}
-
-var listObjectVersionsParams = map[string]bool{
-	"versions":          true,
-	"prefix":            true,
-	"delimiter":         true,
-	"key-marker":        true,
-	"version-id-marker": true,
-	"max-keys":          true,
-	"encoding-type":     true,
-}
-
-var versionIDOnlyParams = map[string]bool{
-	"versionId": true,
-}
-
-var getObjectParams = map[string]bool{
-	"versionId":                    true,
-	"response-content-type":        true,
-	"response-content-disposition": true,
-	"response-cache-control":       true,
-	"response-content-encoding":    true,
-	"response-content-language":    true,
-	"response-expires":             true,
-}
-
-// unsupportedQuery returns the first query parameter not in allowed.
-// Unknown subresources are rejected loudly (501) rather than silently
-// ignored, so that clients using unsupported operations fail clearly.
-func unsupportedQuery(query url.Values, allowed map[string]bool) string {
+// check returns a NotImplemented error for the first query parameter not in
+// the set. Unknown subresources are rejected loudly (501) rather than
+// silently ignored, so that clients using unsupported operations fail
+// clearly.
+func (p paramSet) check(query url.Values) *S3Error {
 	for k := range query {
 		if k == "x-id" {
 			// an aws-sdk internal operation hint, not a subresource
@@ -358,9 +288,37 @@ func unsupportedQuery(query url.Values, allowed map[string]bool) string {
 			// presigned auth params and hoisted headers, not subresources
 			continue
 		}
-		if !allowed[k] {
-			return "query parameter " + k
+		if !p[k] {
+			return errNotImplemented("query parameter " + k)
 		}
 	}
-	return ""
+	return nil
 }
+
+var (
+	noParams             = newParamSet()
+	locationOnlyParams   = newParamSet("location")
+	deleteOnlyParams     = newParamSet("delete")
+	uploadsOnlyParams    = newParamSet("uploads")
+	uploadIDOnlyParams   = newParamSet("uploadId")
+	versionIDOnlyParams  = newParamSet("versionId")
+	versioningOnlyParams = newParamSet("versioning")
+	taggingParams        = newParamSet("tagging", "versionId")
+	uploadPartParams     = newParamSet("uploadId", "partNumber")
+	listPartsParams      = newParamSet("uploadId", "max-parts", "part-number-marker")
+	listObjectsV1Params  = newParamSet(
+		"prefix", "delimiter", "marker", "max-keys", "encoding-type")
+	listObjectsV2Params = newParamSet(
+		"list-type", "prefix", "delimiter", "max-keys", "continuation-token",
+		"start-after", "fetch-owner", "encoding-type")
+	listObjectVersionsParams = newParamSet(
+		"versions", "prefix", "delimiter", "key-marker", "version-id-marker",
+		"max-keys", "encoding-type")
+	listMultipartUploadsParams = newParamSet(
+		"uploads", "prefix", "delimiter", "key-marker", "upload-id-marker",
+		"max-uploads", "encoding-type")
+	getObjectParams = newParamSet(
+		"versionId", "response-content-type", "response-content-disposition",
+		"response-cache-control", "response-content-encoding",
+		"response-content-language", "response-expires")
+)

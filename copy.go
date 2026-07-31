@@ -30,7 +30,7 @@ func (app *S3RP) resolveCopySource(r *http.Request, vr *verifiedRequest, dst *bu
 	if err != nil {
 		return "", newS3Error(http.StatusBadRequest, "InvalidArgument", "Invalid copy source")
 	}
-	src := app.byKey[vr.AccessKeyID][srcBucket]
+	src := app.keys[vr.AccessKeyID].buckets[srcBucket]
 	if src == nil {
 		return "", errAccessDenied()
 	}

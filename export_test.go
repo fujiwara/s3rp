@@ -25,8 +25,8 @@ func (app *S3RP) SetNow(f func() time.Time) {
 // SetBackend replaces the backend client of a bucket for tests.
 func (app *S3RP) SetBackend(bucket string, client BackendClient) {
 	app.buckets[bucket].client = client
-	for _, buckets := range app.byKey {
-		if rt, ok := buckets[bucket]; ok {
+	for _, fk := range app.keys {
+		if rt, ok := fk.buckets[bucket]; ok {
 			rt.client = client
 		}
 	}
