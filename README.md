@@ -2,7 +2,10 @@
 
 s3rp is an S3 API reverse proxy with SigV4 re-signing.
 
-Clients access s3rp using the S3 API (path-style) with front-side access keys issued per bucket. s3rp verifies the SigV4 signature of incoming requests, then executes the operations against per-bucket backends (any S3-compatible server: Ceph, versitygw, Amazon S3, etc.) using the backend's own credentials.
+> [!WARNING]
+> This is a proof of concept toward a multi-tenant S3-compatible object storage service, built to validate the architecture (SigV4 verification, operation reconstruction via aws-sdk-go-v2, tenant/user model, bucket policies). **Do not use it for any other purpose.** It is not production-ready: tenants and backends are defined in a static YAML file (a database-backed control plane is planned), the config format may change without notice, and no security review has been done.
+
+Clients access s3rp using the S3 API (path-style) with access keys issued per tenant user. s3rp verifies the SigV4 signature of incoming requests, then executes the operations against per-bucket backends (any S3-compatible server: Ceph, versitygw, Amazon S3, etc.) using the backend's own credentials.
 
 ```
 S3 client --(SigV4, front keys)--> s3rp --(SigV4, backend keys)--> S3-compatible backend
@@ -40,18 +43,18 @@ Usage: s3rp [flags]
 S3 API reverse proxy with SigV4 re-signing
 
 Flags:
-  -h, --help                Show context-sensitive help.
-      --config="s3rp.yaml"  config file path ($S3RP_CONFIG)
-      --listen=STRING       listen address (overrides config) ($S3RP_LISTEN)
-      --log-level="info"    log level ($S3RP_LOG_LEVEL)
-      --version             show version
+  -h, --help                  Show context-sensitive help.
+      --config="s3rp.yaml"    config file path ($S3RP_CONFIG)
+      --listen=STRING         listen address (overrides config) ($S3RP_LISTEN)
+      --log-level="info"      log level ($S3RP_LOG_LEVEL)
+      --version               show version
 ```
 
 ## Configuration
 
 The config file is YAML. Environment variables in the file are expanded (`${VAR}` or `$VAR`).
 
-A tenant owns one or more buckets and users. A user is the stable identity within a tenant (name: `[a-z][a-z0-9_-]+`); access keys are issued per user and rotate under it — add a new key, switch clients, then remove the old one. Every key of a tenant can access all of the tenant's buckets.
+A tenant owns one or more buckets and users. A user is the stable identity within a tenant (name: `[a-z][a-z0-9_-]+`); access keys are issued per user and rotate under it — add a new key, switch clients, then remove the old one. Every key of a tenant can access all of the tenant's buckets, unless restricted by a [bucket policy](#bucket-policies).
 
 ```yaml
 listen: ":8080"
@@ -138,9 +141,11 @@ $ aws --endpoint-url http://localhost:8080 s3api list-objects-v2 --bucket photos
 
 Other operations return a `NotImplemented` error.
 
-CopyObject and UploadPartCopy work between buckets served by the same backend (same endpoint, region and credentials); copying across different backends returns `NotImplemented`. The copy source bucket must be accessible by the requesting access key.
+CopyObject and UploadPartCopy work between buckets served by the same backend (same endpoint, region and credentials); copying across different backends returns `NotImplemented`. The copy source bucket must belong to the requester's tenant.
 
-The `versionId` query parameter is passed through on GetObject, HeadObject, DeleteObject and the object tagging operations. Versioning requires a backend that supports it.
+The `versionId` query parameter is passed through on GetObject, HeadObject, DeleteObject, GetObjectAcl and the object tagging operations. Versioning requires a backend that supports it.
+
+`aws-chunked` request bodies (`STREAMING-AWS4-HMAC-SHA256-PAYLOAD` and the trailer variants), which the AWS CLI and SDKs use for uploads over plain http endpoints, are decoded and their chunk signatures are verified.
 
 ### Bucket policies
 
@@ -193,15 +198,13 @@ buckets:
         max_age_seconds: 3600
 ```
 
-Preflight `OPTIONS` requests are answered without authentication based on these rules, which makes browser-direct uploads via presigned URLs work. Actual responses carry `Access-Control-Allow-Origin` / `Access-Control-Expose-Headers` when the request's `Origin` matches a rule. `*` in `allowed_origins` matches any characters (e.g. `https://*.example.com`).
+Preflight `OPTIONS` requests are answered without authentication based on these rules, which makes browser-direct uploads via presigned URLs work. Actual responses carry `Access-Control-Allow-Origin` / `Access-Control-Allow-Credentials` / `Access-Control-Expose-Headers` when the request's `Origin` matches a rule. `*` in `allowed_origins` matches any characters (e.g. `https://*.example.com`).
 
 GetBucketCors returns the configuration (`NoSuchCORSConfiguration` when absent); PutBucketCors / DeleteBucketCors are not supported (rules are defined in the config).
 
 ### ACLs
 
-s3rp behaves like a bucket with ACLs disabled (Object Ownership = bucket owner enforced, the AWS default since 2023). GetBucketAcl / GetObjectAcl return a fixed policy granting FULL_CONTROL to the tenant; PutBucketAcl / PutObjectAcl return `AccessControlListNotSupported`, and canned ACLs other than `private` / `bucket-owner-full-control` are rejected on uploads. Use tenant keys for access control instead.
-
-`aws-chunked` request bodies (`STREAMING-AWS4-HMAC-SHA256-PAYLOAD` and the trailer variants), which the AWS CLI and SDKs use for uploads over plain http endpoints, are decoded and their chunk signatures are verified.
+s3rp behaves like a bucket with ACLs disabled (Object Ownership = bucket owner enforced, the AWS default since 2023). GetBucketAcl / GetObjectAcl return a fixed policy granting FULL_CONTROL to the tenant; PutBucketAcl / PutObjectAcl return `AccessControlListNotSupported`, and canned ACLs other than `private` / `bucket-owner-full-control` are rejected on uploads. Use bucket policies for access control instead.
 
 ## Presigned URLs
 
