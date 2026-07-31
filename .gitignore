@@ -13,4 +13,5 @@
 
 .envrc
 /s3rp
+/s3rp-admin
 dist/
