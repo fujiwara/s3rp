@@ -116,21 +116,38 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	case key == "":
 		switch r.Method {
 		case http.MethodGet:
-			if query.Has("uploads") {
+			switch {
+			case query.Has("uploads"):
 				if sub := unsupportedQuery(query, listMultipartUploadsParams); sub != "" {
 					return errNotImplemented(sub)
 				}
 				return app.listMultipartUploads(w, r, rt)
+			case query.Has("location"):
+				if sub := unsupportedQuery(query, locationOnlyParams); sub != "" {
+					return errNotImplemented(sub)
+				}
+				return app.getBucketLocation(w, rt)
+			case query.Get("list-type") == "2":
+				if sub := unsupportedQuery(query, listObjectsV2Params); sub != "" {
+					return errNotImplemented(sub)
+				}
+				return app.listObjectsV2(w, r, rt)
+			default:
+				if sub := unsupportedQuery(query, listObjectsV1Params); sub != "" {
+					return errNotImplemented(sub)
+				}
+				return app.listObjectsV1(w, r, rt)
 			}
-			if query.Get("list-type") != "2" {
-				return errNotImplemented("this bucket operation")
-			}
-			if sub := unsupportedQuery(query, listObjectsV2Params); sub != "" {
-				return errNotImplemented(sub)
-			}
-			return app.listObjectsV2(w, r, rt)
 		case http.MethodHead:
 			return app.headBucket(w, r, rt)
+		case http.MethodPost:
+			if query.Has("delete") {
+				if sub := unsupportedQuery(query, deleteOnlyParams); sub != "" {
+					return errNotImplemented(sub)
+				}
+				return app.deleteObjects(w, r, rt, vr)
+			}
+			return errNotImplemented("this bucket operation")
 		default:
 			return errNotImplemented("this bucket operation")
 		}
@@ -153,20 +170,21 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 			}
 			return app.headObject(w, r, rt, key)
 		case http.MethodPut:
-			if r.Header.Get("x-amz-copy-source") != "" {
-				if query.Has("uploadId") {
-					return errNotImplemented("UploadPartCopy")
-				}
-				return errNotImplemented("CopyObject")
-			}
+			hasCopySource := r.Header.Get("x-amz-copy-source") != ""
 			if query.Has("uploadId") || query.Has("partNumber") {
 				if sub := unsupportedQuery(query, uploadPartParams); sub != "" {
 					return errNotImplemented(sub)
+				}
+				if hasCopySource {
+					return app.uploadPartCopy(w, r, rt, key, vr)
 				}
 				return app.uploadPart(w, r, rt, key, vr)
 			}
 			if sub := unsupportedQuery(query, nil); sub != "" {
 				return errNotImplemented(sub)
+			}
+			if hasCopySource {
+				return app.copyObject(w, r, rt, key, vr)
 			}
 			return app.putObject(w, r, rt, key, vr)
 		case http.MethodDelete:
@@ -200,6 +218,22 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 				"The specified method is not allowed against this resource.")
 		}
 	}
+}
+
+var listObjectsV1Params = map[string]bool{
+	"prefix":        true,
+	"delimiter":     true,
+	"marker":        true,
+	"max-keys":      true,
+	"encoding-type": true,
+}
+
+var locationOnlyParams = map[string]bool{
+	"location": true,
+}
+
+var deleteOnlyParams = map[string]bool{
+	"delete": true,
 }
 
 var listObjectsV2Params = map[string]bool{

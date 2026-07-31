@@ -169,6 +169,74 @@ func TestIntegration(t *testing.T) {
 			t.Errorf("unexpected buckets %v", out.Buckets)
 		}
 	})
+	t.Run("UploadPartCopy", func(t *testing.T) {
+		// source object of at least 5MiB for a non-last copied part
+		src := strings.Repeat("s", 5*1024*1024)
+		if _, err := client.PutObject(t.Context(), &s3.PutObjectInput{
+			Bucket: aws.String("it-bucket"),
+			Key:    aws.String("dir/upc-src.bin"),
+			Body:   strings.NewReader(src),
+		}); err != nil {
+			t.Fatal(err)
+		}
+		create, err := client.CreateMultipartUpload(t.Context(), &s3.CreateMultipartUploadInput{
+			Bucket: aws.String("it-bucket"),
+			Key:    aws.String("dir/upc-dst.bin"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		part1, err := client.UploadPartCopy(t.Context(), &s3.UploadPartCopyInput{
+			Bucket:     aws.String("it-bucket"),
+			Key:        aws.String("dir/upc-dst.bin"),
+			UploadId:   create.UploadId,
+			PartNumber: aws.Int32(1),
+			CopySource: aws.String("it-bucket/dir/upc-src.bin"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		part2, err := client.UploadPart(t.Context(), &s3.UploadPartInput{
+			Bucket:     aws.String("it-bucket"),
+			Key:        aws.String("dir/upc-dst.bin"),
+			UploadId:   create.UploadId,
+			PartNumber: aws.Int32(2),
+			Body:       strings.NewReader("tail"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := client.CompleteMultipartUpload(t.Context(), &s3.CompleteMultipartUploadInput{
+			Bucket:   aws.String("it-bucket"),
+			Key:      aws.String("dir/upc-dst.bin"),
+			UploadId: create.UploadId,
+			MultipartUpload: &types.CompletedMultipartUpload{Parts: []types.CompletedPart{
+				{ETag: part1.CopyPartResult.ETag, PartNumber: aws.Int32(1)},
+				{ETag: part2.ETag, PartNumber: aws.Int32(2)},
+			}},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		head, err := client.HeadObject(t.Context(), &s3.HeadObjectInput{
+			Bucket: aws.String("it-bucket"),
+			Key:    aws.String("dir/upc-dst.bin"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if aws.ToInt64(head.ContentLength) != int64(len(src)+4) {
+			t.Errorf("unexpected size %v", head.ContentLength)
+		}
+		if _, err := client.DeleteObjects(t.Context(), &s3.DeleteObjectsInput{
+			Bucket: aws.String("it-bucket"),
+			Delete: &types.Delete{Objects: []types.ObjectIdentifier{
+				{Key: aws.String("dir/upc-src.bin")},
+				{Key: aws.String("dir/upc-dst.bin")},
+			}},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	})
 	t.Run("MultipartUpload", func(t *testing.T) {
 		// non-last parts must be at least 5MiB
 		part1 := strings.Repeat("p", 5*1024*1024)
@@ -238,6 +306,94 @@ func TestIntegration(t *testing.T) {
 			Key:    aws.String("dir/multipart.bin"),
 		}); err != nil {
 			t.Fatal(err)
+		}
+	})
+	t.Run("ListObjectsV1", func(t *testing.T) {
+		out, err := client.ListObjects(t.Context(), &s3.ListObjectsInput{
+			Bucket: aws.String("it-bucket"),
+			Prefix: aws.String("dir/"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if aws.ToString(out.Name) != "it-bucket" {
+			t.Errorf("expect it-bucket, got %s", aws.ToString(out.Name))
+		}
+		if len(out.Contents) == 0 {
+			t.Error("expect some contents")
+		}
+	})
+	t.Run("GetBucketLocation", func(t *testing.T) {
+		out, err := client.GetBucketLocation(t.Context(), &s3.GetBucketLocationInput{
+			Bucket: aws.String("it-bucket"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if out.LocationConstraint != "" { // us-east-1 is empty
+			t.Errorf("unexpected location %v", out.LocationConstraint)
+		}
+	})
+	t.Run("CopyObject", func(t *testing.T) {
+		out, err := client.CopyObject(t.Context(), &s3.CopyObjectInput{
+			Bucket:     aws.String("it-bucket"),
+			Key:        aws.String("dir/copied.txt"),
+			CopySource: aws.String("it-bucket/dir/test.txt"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if aws.ToString(out.CopyObjectResult.ETag) == "" {
+			t.Error("expect ETag in CopyObjectResult")
+		}
+		got, err := client.GetObject(t.Context(), &s3.GetObjectInput{
+			Bucket: aws.String("it-bucket"),
+			Key:    aws.String("dir/copied.txt"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer got.Body.Close()
+		body, _ := io.ReadAll(got.Body)
+		if string(body) != content {
+			t.Errorf("copied content mismatch: %d bytes", len(body))
+		}
+	})
+	t.Run("DeleteObjects", func(t *testing.T) {
+		for _, key := range []string{"del/1.txt", "del/2.txt"} {
+			if _, err := client.PutObject(t.Context(), &s3.PutObjectInput{
+				Bucket: aws.String("it-bucket"),
+				Key:    aws.String(key),
+				Body:   strings.NewReader("to be deleted"),
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		out, err := client.DeleteObjects(t.Context(), &s3.DeleteObjectsInput{
+			Bucket: aws.String("it-bucket"),
+			Delete: &types.Delete{
+				Objects: []types.ObjectIdentifier{
+					{Key: aws.String("del/1.txt")},
+					{Key: aws.String("del/2.txt")},
+					{Key: aws.String("dir/copied.txt")},
+				},
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(out.Deleted) != 3 {
+			t.Errorf("expect 3 deleted, got %v", out.Deleted)
+		}
+		list, err := client.ListObjectsV2(t.Context(), &s3.ListObjectsV2Input{
+			Bucket: aws.String("it-bucket"),
+			Prefix: aws.String("del/"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(list.Contents) != 0 {
+			t.Errorf("expect no del/ objects, got %v", list.Contents)
 		}
 	})
 	t.Run("PresignedURL", func(t *testing.T) {
