@@ -160,6 +160,12 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 				}
 				return app.listParts(w, r, rt, key)
 			}
+			if query.Has("tagging") {
+				if sub := unsupportedQuery(query, taggingOnlyParams); sub != "" {
+					return errNotImplemented(sub)
+				}
+				return app.getObjectTagging(w, r, rt, key)
+			}
 			if sub := unsupportedQuery(query, getObjectParams); sub != "" {
 				return errNotImplemented(sub)
 			}
@@ -170,6 +176,12 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 			}
 			return app.headObject(w, r, rt, key)
 		case http.MethodPut:
+			if query.Has("tagging") {
+				if sub := unsupportedQuery(query, taggingOnlyParams); sub != "" {
+					return errNotImplemented(sub)
+				}
+				return app.putObjectTagging(w, r, rt, key, vr)
+			}
 			hasCopySource := r.Header.Get("x-amz-copy-source") != ""
 			if query.Has("uploadId") || query.Has("partNumber") {
 				if sub := unsupportedQuery(query, uploadPartParams); sub != "" {
@@ -193,6 +205,12 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 					return errNotImplemented(sub)
 				}
 				return app.abortMultipartUpload(w, r, rt, key)
+			}
+			if query.Has("tagging") {
+				if sub := unsupportedQuery(query, taggingOnlyParams); sub != "" {
+					return errNotImplemented(sub)
+				}
+				return app.deleteObjectTagging(w, r, rt, key)
 			}
 			if sub := unsupportedQuery(query, nil); sub != "" {
 				return errNotImplemented(sub)
@@ -274,6 +292,10 @@ var uploadsOnlyParams = map[string]bool{
 
 var uploadIDOnlyParams = map[string]bool{
 	"uploadId": true,
+}
+
+var taggingOnlyParams = map[string]bool{
+	"tagging": true,
 }
 
 var getObjectParams = map[string]bool{

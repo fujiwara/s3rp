@@ -201,6 +201,23 @@ type Upload struct {
 	Initiated    string `xml:"Initiated,omitempty"`
 }
 
+// Tagging is the request and response body of PutObjectTagging /
+// GetObjectTagging.
+type Tagging struct {
+	XMLName xml.Name `xml:"Tagging"`
+	XMLNS   string   `xml:"xmlns,attr,omitempty"`
+	TagSet  TagSet   `xml:"TagSet"`
+}
+
+type TagSet struct {
+	Tags []Tag `xml:"Tag"`
+}
+
+type Tag struct {
+	Key   string `xml:"Key"`
+	Value string `xml:"Value"`
+}
+
 // ListAllMyBucketsResult is the response of ListBuckets.
 type ListAllMyBucketsResult struct {
 	XMLName xml.Name `xml:"ListAllMyBucketsResult"`

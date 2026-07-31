@@ -64,6 +64,12 @@ func (app *S3RP) copyObject(w http.ResponseWriter, r *http.Request, rt *bucketRT
 	if v := r.Header.Get("x-amz-storage-class"); v != "" {
 		in.StorageClass = types.StorageClass(v)
 	}
+	if v := r.Header.Get("x-amz-tagging-directive"); v != "" {
+		in.TaggingDirective = types.TaggingDirective(v)
+	}
+	if v := r.Header.Get("x-amz-tagging"); v != "" {
+		in.Tagging = aws.String(v)
+	}
 	if md := metadataFromHeaders(r.Header); len(md) > 0 {
 		in.Metadata = md
 	}

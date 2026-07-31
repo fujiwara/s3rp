@@ -55,6 +55,10 @@ type stubBackend struct {
 
 	listV1In   *s3.ListObjectsInput
 	listV1Out  *s3.ListObjectsOutput
+	getTagIn   *s3.GetObjectTaggingInput
+	getTagOut  *s3.GetObjectTaggingOutput
+	putTagIn   *s3.PutObjectTaggingInput
+	delTagIn   *s3.DeleteObjectTaggingInput
 	delObjsIn  *s3.DeleteObjectsInput
 	delObjsOut *s3.DeleteObjectsOutput
 	copyIn     *s3.CopyObjectInput
@@ -154,6 +158,21 @@ func (b *stubBackend) CopyObject(ctx context.Context, in *s3.CopyObjectInput, _ 
 func (b *stubBackend) UploadPartCopy(ctx context.Context, in *s3.UploadPartCopyInput, _ ...func(*s3.Options)) (*s3.UploadPartCopyOutput, error) {
 	b.upcIn = in
 	return b.upcOut, nil
+}
+
+func (b *stubBackend) GetObjectTagging(ctx context.Context, in *s3.GetObjectTaggingInput, _ ...func(*s3.Options)) (*s3.GetObjectTaggingOutput, error) {
+	b.getTagIn = in
+	return b.getTagOut, nil
+}
+
+func (b *stubBackend) PutObjectTagging(ctx context.Context, in *s3.PutObjectTaggingInput, _ ...func(*s3.Options)) (*s3.PutObjectTaggingOutput, error) {
+	b.putTagIn = in
+	return &s3.PutObjectTaggingOutput{}, nil
+}
+
+func (b *stubBackend) DeleteObjectTagging(ctx context.Context, in *s3.DeleteObjectTaggingInput, _ ...func(*s3.Options)) (*s3.DeleteObjectTaggingOutput, error) {
+	b.delTagIn = in
+	return &s3.DeleteObjectTaggingOutput{}, nil
 }
 
 // newTestProxy boots the proxy on an httptest server with a stub backend and
@@ -478,10 +497,10 @@ func TestProxyNotImplemented(t *testing.T) {
 			},
 		},
 		{
-			name: "GetObjectTagging",
+			name: "GetBucketTagging",
 			call: func(ctx context.Context, client *s3.Client) error {
-				_, err := client.GetObjectTagging(ctx, &s3.GetObjectTaggingInput{
-					Bucket: aws.String("testbucket"), Key: aws.String("key.txt"),
+				_, err := client.GetBucketTagging(ctx, &s3.GetBucketTaggingInput{
+					Bucket: aws.String("testbucket"),
 				})
 				return err
 			},
