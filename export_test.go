@@ -35,6 +35,6 @@ func (app *S3RP) SetBackend(bucket string, client BackendClient) {
 	}
 }
 
-func NewChunkedReader(body io.Reader, vr *VerifiedRequest) io.Reader {
-	return newChunkedReader(body, vr)
+func NewChunkedReader(body io.Reader, vr *VerifiedRequest, trailerAlg string) io.Reader {
+	return newChunkedReader(body, vr, trailerAlg)
 }

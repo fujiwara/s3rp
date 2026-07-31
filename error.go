@@ -69,6 +69,15 @@ var wellKnownErrorStatus = map[string]int{
 // into an S3Error, preserving the backend's error code and HTTP status
 // where possible.
 func fromSDKError(err error, resource string) *S3Error {
+	// an S3Error raised by the proxy itself (e.g. the chunked reader
+	// aborting on a signature or checksum mismatch) passes through
+	var own *S3Error
+	if errors.As(err, &own) {
+		if own.Resource == "" {
+			own.Resource = resource
+		}
+		return own
+	}
 	s3err := &S3Error{
 		status:   http.StatusBadGateway,
 		Code:     "InternalError",

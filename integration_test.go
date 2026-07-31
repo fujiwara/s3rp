@@ -531,6 +531,53 @@ func TestIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+	t.Run("Checksum", func(t *testing.T) {
+		// the client sends a trailer checksum by default; the proxy
+		// verifies it and forwards the algorithm so the backend stores it
+		content := "checksum end-to-end content"
+		put, err := client.PutObject(t.Context(), &s3.PutObjectInput{
+			Bucket: aws.String("it-bucket"),
+			Key:    aws.String("dir/checksummed.txt"),
+			Body:   strings.NewReader(content),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer client.DeleteObject(t.Context(), &s3.DeleteObjectInput{
+			Bucket: aws.String("it-bucket"),
+			Key:    aws.String("dir/checksummed.txt"),
+		})
+		out, err := client.GetObject(t.Context(), &s3.GetObjectInput{
+			Bucket: aws.String("it-bucket"),
+			Key:    aws.String("dir/checksummed.txt"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer out.Body.Close()
+		// reading triggers the client SDK's response checksum validation
+		body, err := io.ReadAll(out.Body)
+		if err != nil {
+			t.Fatalf("client-side checksum validation failed: %v", err)
+		}
+		if string(body) != content {
+			t.Errorf("content mismatch: %q", body)
+		}
+		checksumOf := func(cs ...*string) string {
+			var s strings.Builder
+			for _, c := range cs {
+				s.WriteString(aws.ToString(c))
+			}
+			return s.String()
+		}
+		if checksumOf(put.ChecksumCRC32, put.ChecksumCRC32C, put.ChecksumCRC64NVME, put.ChecksumSHA1, put.ChecksumSHA256) == "" {
+			// e.g. the ceph/demo RGW build does not store checksums
+			t.Skip("backend does not support checksums")
+		}
+		if checksumOf(out.ChecksumCRC32, out.ChecksumCRC32C, out.ChecksumCRC64NVME, out.ChecksumSHA1, out.ChecksumSHA256) == "" {
+			t.Error("expect a checksum on the GetObject response")
+		}
+	})
 	t.Run("PresignedURL", func(t *testing.T) {
 		presigner := s3.NewPresignClient(client)
 		content := "presigned integration content"

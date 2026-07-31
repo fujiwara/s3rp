@@ -46,6 +46,10 @@ type chunkedReader struct {
 	chunkSig   string // declared signature of the current chunk
 	chunkHash  hash.Hash
 
+	// checksum trailer verification (when the request declares one)
+	ckAlg  string
+	ckHash hash.Hash
+
 	remaining int64 // undelivered bytes of the current chunk
 	started   bool
 	eof       bool
@@ -55,7 +59,9 @@ type chunkedReader struct {
 // newChunkedReader returns a reader that decodes an aws-chunked request body.
 // When vr's payload hash declares signed chunks, each chunk signature is
 // verified against the signature chain seeded by the request signature.
-func newChunkedReader(body io.Reader, vr *verifiedRequest) io.Reader {
+// When trailerAlg names a checksum algorithm (from the x-amz-trailer
+// header), the trailer checksum is verified against the decoded payload.
+func newChunkedReader(body io.Reader, vr *verifiedRequest, trailerAlg string) io.Reader {
 	signed := vr.PayloadHash == streamingSHA256 || vr.PayloadHash == streamingSHA256T
 	cr := &chunkedReader{
 		r:       bufio.NewReader(body),
@@ -68,6 +74,10 @@ func newChunkedReader(body io.Reader, vr *verifiedRequest) io.Reader {
 		cr.scope = vr.Scope
 		cr.prevSig = vr.Signature
 		cr.chunkHash = sha256.New()
+	}
+	if cr.trailer && trailerAlg != "" {
+		cr.ckAlg = trailerAlg
+		cr.ckHash = newChecksumHash(trailerAlg)
 	}
 	return cr
 }
@@ -114,6 +124,9 @@ func (cr *chunkedReader) Read(p []byte) (int, error) {
 		cr.remaining -= int64(n)
 		if cr.signed {
 			cr.chunkHash.Write(p[:n])
+		}
+		if cr.ckHash != nil {
+			cr.ckHash.Write(p[:n])
 		}
 	}
 	if err == io.EOF && cr.remaining > 0 {
@@ -171,14 +184,15 @@ func (cr *chunkedReader) verifyChunk() error {
 	}, "\n")
 	want := hex.EncodeToString(hmacSHA256(cr.signingKey, []byte(stringToSign)))
 	if subtle.ConstantTimeCompare([]byte(want), []byte(cr.chunkSig)) != 1 {
-		return fmt.Errorf("chunk signature mismatch")
+		return errSignatureDoesNotMatch()
 	}
 	cr.prevSig = cr.chunkSig
 	cr.chunkHash.Reset()
 	return nil
 }
 
-// discardTrailers reads and discards trailing headers after the final chunk.
+// discardTrailers reads the trailing headers after the final chunk,
+// verifying the declared checksum trailer against the decoded payload.
 func (cr *chunkedReader) discardTrailers() error {
 	if !cr.trailer {
 		// optional final CRLF
@@ -187,14 +201,24 @@ func (cr *chunkedReader) discardTrailers() error {
 	}
 	for {
 		line, err := cr.readLine()
-		if err == io.EOF {
+		if err == io.EOF || (err == nil && line == "") {
 			return nil
 		}
 		if err != nil {
 			return err
 		}
-		if line == "" {
-			return nil
+		if cr.ckHash == nil {
+			continue
+		}
+		name, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(name), "x-amz-checksum-"+cr.ckAlg) {
+			if strings.TrimSpace(value) != checksumBase64(cr.ckHash) {
+				return newS3Error(400, "BadDigest",
+					fmt.Sprintf("The %s you specified did not match the calculated checksum.", strings.ToUpper(cr.ckAlg)))
+			}
 		}
 	}
 }

@@ -37,6 +37,10 @@ Verification re-signs a clone of the request with the SDK's own `v4.Signer` and 
 - Presigned URLs verify the same way via `PresignHTTP`; auth query params are stripped first (the signer re-adds them). S3's presigner disables header hoisting (signed `x-amz-meta-*` must be sent by the uploader) and strips Content-Type from presigned PUTs.
 - aws-chunked bodies (`STREAMING-AWS4-HMAC-SHA256-PAYLOAD` and trailer variants) are mandatory to decode — the aws CLI uses them for every upload over http. chunked.go verifies the per-chunk HMAC chain seeded by the request signature; AWS docs known-answer vectors are the test fixtures.
 
+## Checksums (checksum.go)
+
+`x-amz-checksum-*` flows end-to-end: precomputed headers pass through; trailing checksums in aws-chunked bodies are verified by the proxy (chunked.go, `BadDigest` on mismatch) and the algorithm is forwarded as `ChecksumAlgorithm` so the backend SDK recomputes and stores it — an explicit `ChecksumAlgorithm` forces calculation even under `RequestChecksumCalculationWhenRequired`. Downloads forward `x-amz-checksum-mode` and return the backend's checksum headers. Whether checksums exist depends on the backend (versitygw yes; the ceph/demo RGW build does not store them — the integration Checksum subtest skips there). CRC64NVME uses `crc64.MakeTable(0x9A6C9329AC4BC9B5)`; values are base64 of the big-endian sum.
+
 ## Backend client construction (backend.go) — real failure modes
 
 Two settings are load-bearing for non-AWS backends; removing either breaks PutObject:
