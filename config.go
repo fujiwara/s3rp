@@ -5,7 +5,9 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strings"
 
+	"github.com/fujiwara/s3rp/policy"
 	"github.com/fujiwara/s3rp/store"
 	"github.com/goccy/go-yaml"
 )
@@ -49,6 +51,7 @@ type UserConfig struct {
 type BucketConfig struct {
 	Name    string         `yaml:"name" json:"name"`
 	Backend *BackendConfig `yaml:"backend" json:"backend"`
+	Policy  string         `yaml:"policy,omitempty" json:"policy,omitempty"` // bucket policy JSON text
 }
 
 type KeyConfig struct {
@@ -172,6 +175,20 @@ func (c *Config) Validate() error {
 			// empty credentials mean the SDK default credential chain
 			if (b.Backend.AccessKeyID == "") != (b.Backend.SecretAccessKey == "") {
 				return fmt.Errorf("bucket %s: backend access_key_id and secret_access_key must be set together", b.Name)
+			}
+
+			if b.Policy != "" {
+				p, err := policy.Parse(b.Policy)
+				if err != nil {
+					return fmt.Errorf("bucket %s: invalid policy: %w", b.Name, err)
+				}
+				for _, st := range p.Statement {
+					for _, res := range st.Resource {
+						if res != b.Name && !strings.HasPrefix(res, b.Name+"/") {
+							return fmt.Errorf("bucket %s: policy resource %q does not refer to this bucket", b.Name, res)
+						}
+					}
+				}
 			}
 		}
 	}

@@ -7,6 +7,8 @@ package store
 import (
 	"context"
 	"errors"
+
+	"github.com/fujiwara/s3rp/policy"
 )
 
 // ErrNotFound is returned by Store implementations when the requested
@@ -41,6 +43,12 @@ type Bucket struct {
 	Tenant  string
 	Name    string
 	Backend *Backend
+
+	// PolicyText is the raw bucket policy JSON (empty if none); Policy is
+	// its parsed form. Implementations store the text and parse it with
+	// policy.Parse.
+	PolicyText string
+	Policy     *policy.Policy
 }
 
 // Backend is the definition of an S3-compatible backend for a bucket.

@@ -516,9 +516,9 @@ func TestProxyNotImplemented(t *testing.T) {
 		call func(ctx context.Context, client *s3.Client) error
 	}{
 		{
-			name: "GetBucketPolicy",
+			name: "GetBucketWebsite",
 			call: func(ctx context.Context, client *s3.Client) error {
-				_, err := client.GetBucketPolicy(ctx, &s3.GetBucketPolicyInput{
+				_, err := client.GetBucketWebsite(ctx, &s3.GetBucketWebsiteInput{
 					Bucket: aws.String("testbucket"),
 				})
 				return err
