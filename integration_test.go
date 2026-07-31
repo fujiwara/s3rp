@@ -396,6 +396,43 @@ func TestIntegration(t *testing.T) {
 			t.Errorf("expect no del/ objects, got %v", list.Contents)
 		}
 	})
+	t.Run("ObjectTagging", func(t *testing.T) {
+		if _, err := client.PutObjectTagging(t.Context(), &s3.PutObjectTaggingInput{
+			Bucket: aws.String("it-bucket"),
+			Key:    aws.String("dir/test.txt"),
+			Tagging: &types.Tagging{TagSet: []types.Tag{
+				{Key: aws.String("env"), Value: aws.String("integration")},
+			}},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		got, err := client.GetObjectTagging(t.Context(), &s3.GetObjectTaggingInput{
+			Bucket: aws.String("it-bucket"),
+			Key:    aws.String("dir/test.txt"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got.TagSet) != 1 || aws.ToString(got.TagSet[0].Value) != "integration" {
+			t.Errorf("unexpected tag set %v", got.TagSet)
+		}
+		if _, err := client.DeleteObjectTagging(t.Context(), &s3.DeleteObjectTaggingInput{
+			Bucket: aws.String("it-bucket"),
+			Key:    aws.String("dir/test.txt"),
+		}); err != nil {
+			t.Fatal(err)
+		}
+		got, err = client.GetObjectTagging(t.Context(), &s3.GetObjectTaggingInput{
+			Bucket: aws.String("it-bucket"),
+			Key:    aws.String("dir/test.txt"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got.TagSet) != 0 {
+			t.Errorf("expect empty tag set after delete, got %v", got.TagSet)
+		}
+	})
 	t.Run("PresignedURL", func(t *testing.T) {
 		presigner := s3.NewPresignClient(client)
 		content := "presigned integration content"

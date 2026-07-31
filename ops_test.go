@@ -3,6 +3,7 @@ package s3rp_test
 import (
 	"errors"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -106,6 +107,74 @@ func TestProxyDeleteObjects(t *testing.T) {
 	}
 	if len(in.Delete.Objects) != 3 || aws.ToString(in.Delete.Objects[2].Key) != "c.txt" {
 		t.Errorf("unexpected objects %v", in.Delete.Objects)
+	}
+}
+
+func TestProxyObjectTagging(t *testing.T) {
+	stub := &stubBackend{
+		getTagOut: &s3.GetObjectTaggingOutput{
+			TagSet: []types.Tag{
+				{Key: aws.String("env"), Value: aws.String("test")},
+				{Key: aws.String("team"), Value: aws.String("sre")},
+			},
+		},
+	}
+	client, _ := newTestProxy(t, stub)
+
+	if _, err := client.PutObjectTagging(t.Context(), &s3.PutObjectTaggingInput{
+		Bucket: aws.String("testbucket"),
+		Key:    aws.String("dir/tagged.txt"),
+		Tagging: &types.Tagging{TagSet: []types.Tag{
+			{Key: aws.String("env"), Value: aws.String("test")},
+			{Key: aws.String("team"), Value: aws.String("sre")},
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if aws.ToString(stub.putTagIn.Bucket) != "backend-testbucket" {
+		t.Errorf("expect backend-testbucket, got %s", aws.ToString(stub.putTagIn.Bucket))
+	}
+	if len(stub.putTagIn.Tagging.TagSet) != 2 || aws.ToString(stub.putTagIn.Tagging.TagSet[1].Key) != "team" {
+		t.Errorf("unexpected tag set %v", stub.putTagIn.Tagging.TagSet)
+	}
+
+	got, err := client.GetObjectTagging(t.Context(), &s3.GetObjectTaggingInput{
+		Bucket: aws.String("testbucket"),
+		Key:    aws.String("dir/tagged.txt"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.TagSet) != 2 || aws.ToString(got.TagSet[0].Key) != "env" || aws.ToString(got.TagSet[1].Value) != "sre" {
+		t.Errorf("unexpected tag set %v", got.TagSet)
+	}
+
+	if _, err := client.DeleteObjectTagging(t.Context(), &s3.DeleteObjectTaggingInput{
+		Bucket: aws.String("testbucket"),
+		Key:    aws.String("dir/tagged.txt"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if aws.ToString(stub.delTagIn.Key) != "dir/tagged.txt" {
+		t.Errorf("unexpected key %v", stub.delTagIn.Key)
+	}
+}
+
+func TestProxyPutObjectWithTaggingHeader(t *testing.T) {
+	stub := &stubBackend{
+		putOut: &s3.PutObjectOutput{ETag: aws.String(`"e"`)},
+	}
+	client, _ := newTestProxy(t, stub)
+	if _, err := client.PutObject(t.Context(), &s3.PutObjectInput{
+		Bucket:  aws.String("testbucket"),
+		Key:     aws.String("tagged-on-put.txt"),
+		Body:    strings.NewReader("x"),
+		Tagging: aws.String("env=test&team=sre"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := aws.ToString(stub.putIn.Tagging); got != "env=test&team=sre" {
+		t.Errorf("unexpected tagging %q", got)
 	}
 }
 

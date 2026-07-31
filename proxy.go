@@ -70,6 +70,9 @@ func (app *S3RP) getObject(w http.ResponseWriter, r *http.Request, rt *bucketRT,
 	if out.AcceptRanges != nil {
 		h.Set("Accept-Ranges", *out.AcceptRanges)
 	}
+	if out.TagCount != nil {
+		h.Set("x-amz-tagging-count", strconv.FormatInt(int64(*out.TagCount), 10))
+	}
 	status := http.StatusOK
 	if out.ContentRange != nil {
 		h.Set("Content-Range", *out.ContentRange)
@@ -154,6 +157,9 @@ func (app *S3RP) putObject(w http.ResponseWriter, r *http.Request, rt *bucketRT,
 	}
 	if v := r.Header.Get("x-amz-storage-class"); v != "" {
 		in.StorageClass = types.StorageClass(v)
+	}
+	if v := r.Header.Get("x-amz-tagging"); v != "" {
+		in.Tagging = aws.String(v)
 	}
 	if md := metadataFromHeaders(r.Header); len(md) > 0 {
 		in.Metadata = md

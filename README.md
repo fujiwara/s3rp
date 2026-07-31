@@ -110,6 +110,9 @@ $ aws --endpoint-url http://localhost:8080 s3api list-objects-v2 --bucket photos
 - HeadBucket
 - GetBucketLocation
 - ListBuckets
+- GetObjectTagging
+- PutObjectTagging
+- DeleteObjectTagging
 - CreateMultipartUpload
 - UploadPart
 - UploadPartCopy
