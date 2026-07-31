@@ -2,6 +2,7 @@ package s3rp
 
 import (
 	"errors"
+	"github.com/fujiwara/s3rp/store"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -103,13 +104,23 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 			return newS3Error(http.StatusMethodNotAllowed, "MethodNotAllowed",
 				"The specified method is not allowed against this resource.")
 		}
-		return app.listBuckets(w, vr)
+		return app.listBuckets(w, r, vr)
 	}
 
-	rt := app.keys[vr.AccessKeyID].tenant.buckets[bucket]
-	if rt == nil {
-		return errAccessDenied()
+	b, err := app.store.GetBucket(r.Context(), vr.Tenant, bucket)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return errAccessDenied()
+		}
+		slog.ErrorContext(r.Context(), "failed to look up bucket", "error", err)
+		return newS3Error(http.StatusInternalServerError, "InternalError", "bucket lookup failed")
 	}
+	client, err := app.backendClient(r.Context(), b.Backend)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "failed to build backend client", "error", err)
+		return newS3Error(http.StatusInternalServerError, "InternalError", "backend client failed")
+	}
+	rt := &bucketRT{cfg: b, client: client}
 
 	query := r.URL.Query()
 	if key == "" {

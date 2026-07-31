@@ -6,6 +6,7 @@ import (
 	"os"
 	"regexp"
 
+	"github.com/fujiwara/s3rp/store"
 	"github.com/goccy/go-yaml"
 )
 
@@ -16,26 +17,12 @@ const (
 
 var bucketNameRegexp = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`)
 
-// Password is a string that is masked when marshaled to JSON or YAML.
-type Password string
-
-func (p Password) String() string {
-	return string(p)
-}
-
-func (p Password) MarshalJSON() ([]byte, error) {
-	if p == "" {
-		return []byte(`""`), nil
-	}
-	return []byte(`"********"`), nil
-}
-
-func (p Password) MarshalYAML() ([]byte, error) {
-	if p == "" {
-		return []byte(`""`), nil
-	}
-	return []byte(`"********"`), nil
-}
+// Password and BackendConfig are defined in the store package; the aliases
+// keep the config schema in one place with the rest of the config types.
+type (
+	Password      = store.Password
+	BackendConfig = store.Backend
+)
 
 type Config struct {
 	Listen  string          `yaml:"listen" json:"listen"`
@@ -52,15 +39,6 @@ type TenantConfig struct {
 type BucketConfig struct {
 	Name    string         `yaml:"name" json:"name"`
 	Backend *BackendConfig `yaml:"backend" json:"backend"`
-}
-
-type BackendConfig struct {
-	Endpoint        string   `yaml:"endpoint" json:"endpoint"`
-	Region          string   `yaml:"region" json:"region"`
-	Bucket          string   `yaml:"bucket,omitempty" json:"bucket,omitempty"`
-	AccessKeyID     string   `yaml:"access_key_id" json:"access_key_id"`
-	SecretAccessKey Password `yaml:"secret_access_key" json:"secret_access_key"`
-	UsePathStyle    *bool    `yaml:"use_path_style,omitempty" json:"use_path_style,omitempty"`
 }
 
 type KeyConfig struct {

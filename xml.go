@@ -270,11 +270,11 @@ type ListAllMyBucketsResult struct {
 	XMLNS   string   `xml:"xmlns,attr"`
 	Owner   Owner    `xml:"Owner"`
 	Buckets struct {
-		Bucket []Bucket `xml:"Bucket"`
+		Bucket []BucketEntry `xml:"Bucket"`
 	} `xml:"Buckets"`
 }
 
-type Bucket struct {
+type BucketEntry struct {
 	Name         string `xml:"Name"`
 	CreationDate string `xml:"CreationDate"`
 }
