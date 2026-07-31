@@ -19,10 +19,17 @@ func TestLoadConfig(t *testing.T) {
 	if cfg.Listen != ":8080" {
 		t.Errorf("expect :8080, got %s", cfg.Listen)
 	}
-	if len(cfg.Buckets) != 2 {
-		t.Fatalf("expect 2 buckets, got %d", len(cfg.Buckets))
+	if len(cfg.Tenants) != 2 {
+		t.Fatalf("expect 2 tenants, got %d", len(cfg.Tenants))
 	}
-	photos := cfg.Buckets[0]
+	acme := cfg.Tenants[0]
+	if acme.Name != "acme" {
+		t.Errorf("expect acme, got %s", acme.Name)
+	}
+	if len(acme.Keys) != 2 || len(acme.Buckets) != 2 {
+		t.Fatalf("expect 2 keys and 2 buckets, got %d keys %d buckets", len(acme.Keys), len(acme.Buckets))
+	}
+	photos := acme.Buckets[0]
 	if photos.Backend.AccessKeyID != "backendkey" {
 		t.Errorf("env not expanded: %s", photos.Backend.AccessKeyID)
 	}
@@ -32,7 +39,7 @@ func TestLoadConfig(t *testing.T) {
 	if photos.Backend.Bucket != "photos-prod" {
 		t.Errorf("expect photos-prod, got %s", photos.Backend.Bucket)
 	}
-	logs := cfg.Buckets[1]
+	logs := acme.Buckets[1]
 	// defaults
 	if logs.Backend.Region != s3rp.DefaultRegion {
 		t.Errorf("expect default region, got %s", logs.Backend.Region)
@@ -51,74 +58,116 @@ var validateTestCases = []struct {
 	errStr string
 }{
 	{
-		name:   "no buckets",
+		name:   "no tenants",
 		yaml:   `listen: ":8080"`,
-		errStr: "no buckets",
+		errStr: "no tenants",
 	},
 	{
-		name: "duplicate bucket",
+		name: "duplicate tenant",
 		yaml: `
-buckets:
+tenants:
   - name: foo
-    backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
-    keys: [{access_key_id: k, secret_access_key: s}]
+    keys: [{access_key_id: k1, secret_access_key: s}]
+    buckets:
+      - name: bucket1
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
   - name: foo
-    backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
+    keys: [{access_key_id: k2, secret_access_key: s}]
+    buckets:
+      - name: bucket2
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
+`,
+		errStr: "duplicate tenant name",
+	},
+	{
+		name: "duplicate access key id across tenants",
+		yaml: `
+tenants:
+  - name: foo
     keys: [{access_key_id: k, secret_access_key: s}]
+    buckets:
+      - name: bucket1
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
+  - name: bar
+    keys: [{access_key_id: k, secret_access_key: s}]
+    buckets:
+      - name: bucket2
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
+`,
+		errStr: "duplicate access_key_id",
+	},
+	{
+		name: "duplicate bucket name across tenants",
+		yaml: `
+tenants:
+  - name: foo
+    keys: [{access_key_id: k1, secret_access_key: s}]
+    buckets:
+      - name: shared
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
+  - name: bar
+    keys: [{access_key_id: k2, secret_access_key: s}]
+    buckets:
+      - name: shared
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
 `,
 		errStr: "duplicate bucket name",
 	},
 	{
 		name: "invalid bucket name",
 		yaml: `
-buckets:
-  - name: "Invalid_Bucket"
-    backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
+tenants:
+  - name: foo
     keys: [{access_key_id: k, secret_access_key: s}]
+    buckets:
+      - name: "Invalid_Bucket"
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
 `,
 		errStr: "invalid bucket name",
 	},
 	{
-		name: "credentials not set together",
-		yaml: `
-buckets:
-  - name: foo
-    backend: {endpoint: http://b.example.com, access_key_id: a}
-    keys: [{access_key_id: k, secret_access_key: s}]
-`,
-		errStr: "must be set together",
-	},
-	{
-		name: "invalid endpoint scheme",
-		yaml: `
-buckets:
-  - name: foo
-    backend: {endpoint: "ftp://b.example.com", access_key_id: a, secret_access_key: s}
-    keys: [{access_key_id: k, secret_access_key: s}]
-`,
-		errStr: "http(s)",
-	},
-	{
 		name: "no keys",
 		yaml: `
-buckets:
+tenants:
   - name: foo
-    backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
+    buckets:
+      - name: bucket1
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
 `,
 		errStr: "at least one key",
 	},
 	{
-		name: "same key id different secrets",
+		name: "no buckets",
 		yaml: `
-buckets:
+tenants:
   - name: foo
-    backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
-    keys: [{access_key_id: k, secret_access_key: s1}]
-  - name: bar
-    backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
-    keys: [{access_key_id: k, secret_access_key: s2}]
+    keys: [{access_key_id: k, secret_access_key: s}]
 `,
-		errStr: "different secrets",
+		errStr: "at least one bucket",
+	},
+	{
+		name: "invalid endpoint scheme",
+		yaml: `
+tenants:
+  - name: foo
+    keys: [{access_key_id: k, secret_access_key: s}]
+    buckets:
+      - name: bucket1
+        backend: {endpoint: "ftp://b.example.com", access_key_id: a, secret_access_key: s}
+`,
+		errStr: "http(s)",
+	},
+	{
+		name: "credentials not set together",
+		yaml: `
+tenants:
+  - name: foo
+    keys: [{access_key_id: k, secret_access_key: s}]
+    buckets:
+      - name: bucket1
+        backend: {endpoint: http://b.example.com, access_key_id: a}
+`,
+		errStr: "must be set together",
 	},
 }
 
@@ -147,11 +196,13 @@ func TestConfigAWSBackendDefaults(t *testing.T) {
 	dir := t.TempDir()
 	f := dir + "/aws.yaml"
 	if err := writeFile(t, f, `
-buckets:
+tenants:
   - name: foo
-    backend:
-      region: ap-northeast-1
     keys: [{access_key_id: k, secret_access_key: s}]
+    buckets:
+      - name: bucket1
+        backend:
+          region: ap-northeast-1
 `); err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +210,7 @@ buckets:
 	if err != nil {
 		t.Fatal(err)
 	}
-	b := cfg.Buckets[0].Backend
+	b := cfg.Tenants[0].Buckets[0].Backend
 	if b.UsePathStyle == nil || *b.UsePathStyle {
 		t.Error("expect use_path_style default false without endpoint")
 	}

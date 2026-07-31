@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/fujiwara/s3rp/store"
 	"log/slog"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
@@ -15,55 +17,84 @@ import (
 // S3RP is an S3 API reverse proxy that verifies SigV4 signatures with
 // front-side access keys and forwards operations to per-bucket backends.
 type S3RP struct {
-	cfg     *Config
-	keys    map[string]*frontKey // front access key id -> key
-	buckets map[string]*bucketRT // bucket name -> runtime
-	signer  *v4.Signer
-	now     func() time.Time
+	cfg    *Config
+	store  store.Store
+	signer *v4.Signer
+	now    func() time.Time
+
+	newClient func(ctx context.Context, b *BackendConfig) (BackendClient, error)
+	clients   map[clientCacheKey]BackendClient
+	clientsMu sync.RWMutex
 }
 
-// frontKey is a front-side access key and the buckets it may access.
-type frontKey struct {
-	secret  Password
-	buckets map[string]*bucketRT // front bucket name -> runtime
-}
-
+// bucketRT is a bucket resolved for a request: its definition and the
+// backend client to use.
 type bucketRT struct {
-	cfg    *BucketConfig
+	cfg    *store.Bucket
 	client BackendClient
+}
+
+// clientCacheKey identifies a backend client. Clients are bucket-agnostic:
+// buckets sharing the same backend endpoint and credentials share a client.
+type clientCacheKey struct {
+	endpoint     string
+	region       string
+	accessKeyID  string
+	secret       Password
+	usePathStyle bool
+}
+
+func newClientCacheKey(b *BackendConfig) clientCacheKey {
+	return clientCacheKey{
+		endpoint:     b.Endpoint,
+		region:       b.Region,
+		accessKeyID:  b.AccessKeyID,
+		secret:       b.SecretAccessKey,
+		usePathStyle: b.UsePathStyle != nil && *b.UsePathStyle,
+	}
 }
 
 // New creates an S3RP from a config.
 func New(ctx context.Context, cfg *Config) (*S3RP, error) {
-	app := &S3RP{
-		cfg:     cfg,
-		keys:    make(map[string]*frontKey),
-		buckets: make(map[string]*bucketRT),
+	return NewWithStore(ctx, cfg, NewConfigStore(cfg))
+}
+
+// NewWithStore creates an S3RP using the given Store for tenant, key and
+// bucket definitions.
+func NewWithStore(_ context.Context, cfg *Config, store store.Store) (*S3RP, error) {
+	return &S3RP{
+		cfg:   cfg,
+		store: store,
 		signer: v4.NewSigner(func(o *v4.SignerOptions) {
 			o.DisableURIPathEscaping = true // S3 mode
 		}),
-		now: time.Now,
+		now:       time.Now,
+		newClient: newBackendClient,
+		clients:   make(map[clientCacheKey]BackendClient),
+	}, nil
+}
+
+// backendClient returns the backend client for a backend definition,
+// constructing and caching it on first use.
+func (app *S3RP) backendClient(ctx context.Context, b *BackendConfig) (BackendClient, error) {
+	key := newClientCacheKey(b)
+	app.clientsMu.RLock()
+	client, ok := app.clients[key]
+	app.clientsMu.RUnlock()
+	if ok {
+		return client, nil
 	}
-	for _, b := range cfg.Buckets {
-		client, err := newBackendClient(ctx, b.Backend)
-		if err != nil {
-			return nil, fmt.Errorf("bucket %s: %w", b.Name, err)
-		}
-		rt := &bucketRT{cfg: b, client: client}
-		app.buckets[b.Name] = rt
-		for _, k := range b.Keys {
-			fk := app.keys[k.AccessKeyID]
-			if fk == nil {
-				fk = &frontKey{
-					secret:  k.SecretAccessKey,
-					buckets: make(map[string]*bucketRT),
-				}
-				app.keys[k.AccessKeyID] = fk
-			}
-			fk.buckets[b.Name] = rt
-		}
+	client, err := app.newClient(ctx, b)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build backend client: %w", err)
 	}
-	return app, nil
+	app.clientsMu.Lock()
+	defer app.clientsMu.Unlock()
+	if cached, ok := app.clients[key]; ok {
+		return cached, nil
+	}
+	app.clients[key] = client
+	return client, nil
 }
 
 // Run parses the command line, loads the config and serves until ctx is done.

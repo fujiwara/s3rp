@@ -51,39 +51,41 @@ Flags:
 
 The config file is YAML. Environment variables in the file are expanded (`${VAR}` or `$VAR`).
 
+Access keys are issued per tenant; a tenant owns one or more buckets, and every key of a tenant can access all of its buckets.
+
 ```yaml
 listen: ":8080"
-buckets:
-  - name: photos                     # bucket name on the front side
-    backend:
-      endpoint: http://ceph.internal:7480
-      region: us-east-1              # default "us-east-1"
-      bucket: photos-prod            # bucket name on the backend (default: same as name)
-      access_key_id: ${CEPH_ACCESS_KEY_ID}
-      secret_access_key: ${CEPH_SECRET_ACCESS_KEY}
-      use_path_style: true           # default true
-    keys:                            # front-side access keys (multiple allowed)
+tenants:
+  - name: acme                       # tenant identifier
+    keys:                            # tenant access keys (multiple allowed)
       - access_key_id: S3RPKEY001
-        secret_access_key: ${FRONT_SECRET_001}
+        secret_access_key: ${ACME_SECRET_001}
       - access_key_id: S3RPKEY002
-        secret_access_key: ${FRONT_SECRET_002}
-  - name: logs
-    backend:
-      # no endpoint: Amazon S3, resolved by the SDK from the region
-      region: ap-northeast-1
-      access_key_id: ${AWS_ACCESS_KEY_ID_FOR_LOGS}
-      secret_access_key: ${AWS_SECRET_ACCESS_KEY_FOR_LOGS}
-    keys:
-      - access_key_id: S3RPKEY001    # the same key id may be used for multiple buckets
-        secret_access_key: ${FRONT_SECRET_001}
+        secret_access_key: ${ACME_SECRET_002}
+    buckets:                         # buckets owned by this tenant
+      - name: photos                 # bucket name on the front side
+        backend:
+          endpoint: http://ceph.internal:7480
+          region: us-east-1          # default "us-east-1"
+          bucket: photos-prod        # bucket name on the backend (default: same as name)
+          access_key_id: ${CEPH_ACCESS_KEY_ID}
+          secret_access_key: ${CEPH_SECRET_ACCESS_KEY}
+          use_path_style: true       # default true
+      - name: logs
+        backend:
+          # no endpoint: Amazon S3, resolved by the SDK from the region
+          region: ap-northeast-1
+          access_key_id: ${AWS_ACCESS_KEY_ID_FOR_LOGS}
+          secret_access_key: ${AWS_SECRET_ACCESS_KEY_FOR_LOGS}
 ```
 
 Notes:
 
+- Bucket names and access key ids must be unique across all tenants (path-style URLs carry no tenant discriminator).
 - When `backend.endpoint` is omitted, the backend is Amazon S3: the SDK resolves the endpoint from `region`, and `use_path_style` defaults to `false` (it defaults to `true` when an endpoint is set).
 - When `backend.access_key_id` and `backend.secret_access_key` are omitted, the SDK default credential chain is used (environment variables, shared config, IAM roles, etc.).
-- The same front access key id may appear under multiple buckets, but its secret must be identical everywhere.
-- `GET /` (ListBuckets) returns the buckets accessible by the authenticated key.
+- `GET /` (ListBuckets) returns the buckets of the key's tenant, with the tenant name as the owner.
+- Copying (CopyObject / UploadPartCopy) resolves the source within the requesting key's tenant, so cross-tenant copying is impossible.
 
 ## Client usage
 

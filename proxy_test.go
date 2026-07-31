@@ -485,6 +485,10 @@ func TestProxyListBuckets(t *testing.T) {
 	if aws.ToString(out.Buckets[0].Name) != "testbucket" {
 		t.Errorf("expect testbucket, got %s", aws.ToString(out.Buckets[0].Name))
 	}
+	// the owner is the tenant name
+	if aws.ToString(out.Owner.ID) != "testtenant" {
+		t.Errorf("expect owner testtenant, got %s", aws.ToString(out.Owner.ID))
+	}
 }
 
 func TestProxyAccessDeniedBucket(t *testing.T) {

@@ -471,21 +471,21 @@ func (app *S3RP) headBucket(w http.ResponseWriter, r *http.Request, rt *bucketRT
 	return nil
 }
 
-func (app *S3RP) listBuckets(w http.ResponseWriter, vr *verifiedRequest) error {
-	buckets := app.keys[vr.AccessKeyID].buckets
-	names := make([]string, 0, len(buckets))
-	for name := range buckets {
-		names = append(names, name)
+func (app *S3RP) listBuckets(w http.ResponseWriter, r *http.Request, vr *verifiedRequest) error {
+	names, err := app.store.ListBucketNames(r.Context(), vr.Tenant)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "failed to list buckets", "error", err)
+		return newS3Error(http.StatusInternalServerError, "InternalError", "bucket lookup failed")
 	}
 	sort.Strings(names)
 	result := &ListAllMyBucketsResult{
 		XMLNS: s3XMLNS,
-		Owner: Owner{ID: vr.AccessKeyID, DisplayName: vr.AccessKeyID},
+		Owner: Owner{ID: vr.Tenant, DisplayName: vr.Tenant},
 	}
 	for _, name := range names {
-		result.Buckets.Bucket = append(result.Buckets.Bucket, Bucket{
+		result.Buckets.Bucket = append(result.Buckets.Bucket, BucketEntry{
 			Name: name,
-			// buckets are defined in the config; expose a fixed date
+			// buckets are static definitions; expose a fixed date
 			CreationDate: s3Time(time.Unix(0, 0)),
 		})
 	}

@@ -2,7 +2,9 @@ package s3rp
 
 import (
 	"crypto/subtle"
+	"errors"
 	"fmt"
+	"github.com/fujiwara/s3rp/store"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -83,6 +85,7 @@ func parseAuthorizationHeader(v string) (*authHeader, error) {
 type verifiedRequest struct {
 	AccessKeyID     string
 	SecretAccessKey Password
+	Tenant          string
 	Signature       string
 	SigningTime     time.Time
 	Scope           string
@@ -122,11 +125,15 @@ func (app *S3RP) verifyHeaderRequest(r *http.Request) (*verifiedRequest, *S3Erro
 		return nil, newS3Error(http.StatusBadRequest, "AuthorizationHeaderMalformed",
 			"The authorization header is malformed; incorrect service.")
 	}
-	fk, ok := app.keys[auth.AccessKeyID]
-	if !ok {
-		return nil, errInvalidAccessKeyID()
+	key, err := app.store.GetKey(r.Context(), auth.AccessKeyID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, errInvalidAccessKeyID()
+		}
+		slog.ErrorContext(r.Context(), "failed to look up access key", "error", err)
+		return nil, newS3Error(http.StatusInternalServerError, "InternalError", "key lookup failed")
 	}
-	secret := fk.secret
+	secret := key.SecretAccessKey
 
 	amzDate := r.Header.Get(amzDateHeader)
 	if amzDate == "" {
@@ -183,6 +190,7 @@ func (app *S3RP) verifyHeaderRequest(r *http.Request) (*verifiedRequest, *S3Erro
 	return &verifiedRequest{
 		AccessKeyID:     auth.AccessKeyID,
 		SecretAccessKey: secret,
+		Tenant:          key.Tenant,
 		Signature:       auth.Signature,
 		SigningTime:     t,
 		Scope:           auth.scope(),
@@ -250,11 +258,15 @@ func (app *S3RP) verifyPresignedRequest(r *http.Request) (*verifiedRequest, *S3E
 	if t.After(now.Add(maxClockSkew)) {
 		return nil, newS3Error(http.StatusForbidden, "AccessDenied", "Request is not valid yet")
 	}
-	fk, ok := app.keys[akid]
-	if !ok {
-		return nil, errInvalidAccessKeyID()
+	key, err := app.store.GetKey(r.Context(), akid)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, errInvalidAccessKeyID()
+		}
+		slog.ErrorContext(r.Context(), "failed to look up access key", "error", err)
+		return nil, newS3Error(http.StatusInternalServerError, "InternalError", "key lookup failed")
 	}
-	secret := fk.secret
+	secret := key.SecretAccessKey
 
 	clone, err := cloneForSigning(r, signedHeaders)
 	if err != nil {
@@ -298,6 +310,7 @@ func (app *S3RP) verifyPresignedRequest(r *http.Request) (*verifiedRequest, *S3E
 	return &verifiedRequest{
 		AccessKeyID:     akid,
 		SecretAccessKey: secret,
+		Tenant:          key.Tenant,
 		Signature:       query.Get("X-Amz-Signature"),
 		SigningTime:     t,
 		Scope:           strings.Join([]string{scopeDate, region, service, "aws4_request"}, "/"),

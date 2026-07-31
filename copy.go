@@ -1,6 +1,8 @@
 package s3rp
 
 import (
+	"errors"
+	"github.com/fujiwara/s3rp/store"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -30,11 +32,16 @@ func (app *S3RP) resolveCopySource(r *http.Request, vr *verifiedRequest, dst *bu
 	if err != nil {
 		return "", newS3Error(http.StatusBadRequest, "InvalidArgument", "Invalid copy source")
 	}
-	src := app.keys[vr.AccessKeyID].buckets[srcBucket]
-	if src == nil {
-		return "", errAccessDenied()
+	// the source is resolved within the requesting key's tenant, so
+	// copying from another tenant's bucket is impossible by construction
+	src, err := app.store.GetBucket(r.Context(), vr.Tenant, srcBucket)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return "", errAccessDenied()
+		}
+		return "", newS3Error(http.StatusInternalServerError, "InternalError", "bucket lookup failed")
 	}
-	sb, db := src.cfg.Backend, dst.cfg.Backend
+	sb, db := src.Backend, dst.cfg.Backend
 	if sb.Endpoint != db.Endpoint || sb.Region != db.Region || sb.AccessKeyID != db.AccessKeyID {
 		return "", errNotImplemented("copying between different backends")
 	}

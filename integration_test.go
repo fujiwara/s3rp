@@ -41,17 +41,22 @@ func TestIntegration(t *testing.T) {
 	}
 
 	cfg := &s3rp.Config{
-		Buckets: []*s3rp.BucketConfig{
+		Tenants: []*s3rp.TenantConfig{
 			{
-				Name: "it-bucket",
-				Backend: &s3rp.BackendConfig{
-					Endpoint:        endpoint,
-					Bucket:          backendBucket,
-					AccessKeyID:     backendKey,
-					SecretAccessKey: s3rp.Password(backendSecret),
-				},
+				Name: "it-tenant",
 				Keys: []*s3rp.KeyConfig{
 					{AccessKeyID: testAccessKeyID, SecretAccessKey: testSecretAccessKey},
+				},
+				Buckets: []*s3rp.BucketConfig{
+					{
+						Name: "it-bucket",
+						Backend: &s3rp.BackendConfig{
+							Endpoint:        endpoint,
+							Bucket:          backendBucket,
+							AccessKeyID:     backendKey,
+							SecretAccessKey: s3rp.Password(backendSecret),
+						},
+					},
 				},
 			},
 		},

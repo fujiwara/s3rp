@@ -23,17 +23,22 @@ const (
 func newTestApp(t *testing.T) *s3rp.S3RP {
 	t.Helper()
 	cfg := &s3rp.Config{
-		Buckets: []*s3rp.BucketConfig{
+		Tenants: []*s3rp.TenantConfig{
 			{
-				Name: "testbucket",
-				Backend: &s3rp.BackendConfig{
-					Endpoint:        "http://backend.invalid",
-					Bucket:          "backend-testbucket",
-					AccessKeyID:     "backendkey",
-					SecretAccessKey: "backendsecret",
-				},
+				Name: "testtenant",
 				Keys: []*s3rp.KeyConfig{
 					{AccessKeyID: testAccessKeyID, SecretAccessKey: testSecretAccessKey},
+				},
+				Buckets: []*s3rp.BucketConfig{
+					{
+						Name: "testbucket",
+						Backend: &s3rp.BackendConfig{
+							Endpoint:        "http://backend.invalid",
+							Bucket:          "backend-testbucket",
+							AccessKeyID:     "backendkey",
+							SecretAccessKey: "backendsecret",
+						},
+					},
 				},
 			},
 		},
