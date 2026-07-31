@@ -13,26 +13,21 @@ S3 client --(SigV4, front keys)--> s3rp --(SigV4, backend keys)--> S3-compatible
 
 Use cases:
 
-- Issue access keys for buckets on backends that make key management hard.
+- Issue per-tenant access keys in front of backends that make key management hard.
 - Hide the backend credentials and endpoints from clients.
-- Route buckets on a single endpoint to different backends.
+- Serve buckets belonging to different tenants and backends from a single endpoint.
 
 ## Install
 
-### Homebrew
-
-```console
-$ brew install fujiwara/tap/s3rp
-```
-
 ### Binary
 
-Download the binary from [Releases](https://github.com/fujiwara/s3rp/releases).
+Download the binaries (`s3rp` and `s3rp-admin`) from [Releases](https://github.com/fujiwara/s3rp/releases).
 
 ### go install
 
 ```console
 $ go install github.com/fujiwara/s3rp/cmd/s3rp@latest
+$ go install github.com/fujiwara/s3rp/cmd/s3rp-admin@latest
 ```
 
 ## Usage
@@ -180,7 +175,7 @@ Whether a checksum is actually stored and returned depends on the backend (versi
 
 ### Bucket policies
 
-A bucket may carry an AWS-style policy document, written as JSON text in the config (`buckets[].policy`). GetBucketPolicy returns it; PutBucketPolicy / DeleteBucketPolicy are not supported (policies are defined in the config).
+A bucket may carry an AWS-style policy document, written as JSON text in the config (`buckets[].policy`) or the database. GetBucketPolicy returns it; PutBucketPolicy / DeleteBucketPolicy are not supported (policies are defined in the store, not via the S3 API).
 
 Two simplifications against AWS: principals are plain user names of the tenant under the `S3RP` key (no ARNs), and resources are plain `"bucket"` / `"bucket/prefix*"` strings (no ARNs). `*` in Action / Resource matches any characters including `/`.
 
@@ -215,7 +210,7 @@ Limitations: policies only cover users of the owning tenant; versioned operation
 
 ### CORS
 
-CORS is handled by the proxy itself (it is a contract between the browser and the server the browser talks to, so backend CORS settings are not passed through). Rules are defined per bucket in the config:
+CORS is handled by the proxy itself (it is a contract between the browser and the server the browser talks to, so backend CORS settings are not passed through). Rules are defined per bucket:
 
 ```yaml
 buckets:
@@ -231,7 +226,7 @@ buckets:
 
 Preflight `OPTIONS` requests are answered without authentication based on these rules, which makes browser-direct uploads via presigned URLs work. Actual responses carry `Access-Control-Allow-Origin` / `Access-Control-Allow-Credentials` / `Access-Control-Expose-Headers` when the request's `Origin` matches a rule. `*` in `allowed_origins` matches any characters (e.g. `https://*.example.com`).
 
-GetBucketCors returns the configuration (`NoSuchCORSConfiguration` when absent); PutBucketCors / DeleteBucketCors are not supported (rules are defined in the config).
+GetBucketCors returns the configuration (`NoSuchCORSConfiguration` when absent); PutBucketCors / DeleteBucketCors are not supported (rules are defined in the store, not via the S3 API).
 
 ### ACLs
 
