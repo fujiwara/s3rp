@@ -44,8 +44,13 @@ func TestIntegration(t *testing.T) {
 		Tenants: []*s3rp.TenantConfig{
 			{
 				Name: "it-tenant",
-				Keys: []*s3rp.KeyConfig{
-					{AccessKeyID: testAccessKeyID, SecretAccessKey: testSecretAccessKey},
+				Users: []*s3rp.UserConfig{
+					{
+						Name: "ituser",
+						Keys: []*s3rp.KeyConfig{
+							{AccessKeyID: testAccessKeyID, SecretAccessKey: testSecretAccessKey},
+						},
+					},
 				},
 				Buckets: []*s3rp.BucketConfig{
 					{

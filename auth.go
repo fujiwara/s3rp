@@ -86,6 +86,7 @@ type verifiedRequest struct {
 	AccessKeyID     string
 	SecretAccessKey Password
 	Tenant          string
+	User            string
 	Signature       string
 	SigningTime     time.Time
 	Scope           string
@@ -191,6 +192,7 @@ func (app *S3RP) verifyHeaderRequest(r *http.Request) (*verifiedRequest, *S3Erro
 		AccessKeyID:     auth.AccessKeyID,
 		SecretAccessKey: secret,
 		Tenant:          key.Tenant,
+		User:            key.User,
 		Signature:       auth.Signature,
 		SigningTime:     t,
 		Scope:           auth.scope(),
@@ -311,6 +313,7 @@ func (app *S3RP) verifyPresignedRequest(r *http.Request) (*verifiedRequest, *S3E
 		AccessKeyID:     akid,
 		SecretAccessKey: secret,
 		Tenant:          key.Tenant,
+		User:            key.User,
 		Signature:       query.Get("X-Amz-Signature"),
 		SigningTime:     t,
 		Scope:           strings.Join([]string{scopeDate, region, service, "aws4_request"}, "/"),

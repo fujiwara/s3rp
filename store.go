@@ -28,11 +28,14 @@ func NewConfigStore(cfg *Config) store.Store {
 			}
 		}
 		s.tenants[t.Name] = buckets
-		for _, k := range t.Keys {
-			s.keys[k.AccessKeyID] = &store.Key{
-				AccessKeyID:     k.AccessKeyID,
-				SecretAccessKey: k.SecretAccessKey,
-				Tenant:          t.Name,
+		for _, u := range t.Users {
+			for _, k := range u.Keys {
+				s.keys[k.AccessKeyID] = &store.Key{
+					AccessKeyID:     k.AccessKeyID,
+					SecretAccessKey: k.SecretAccessKey,
+					Tenant:          t.Name,
+					User:            u.Name,
+				}
 			}
 		}
 	}

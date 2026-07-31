@@ -26,8 +26,11 @@ func TestLoadConfig(t *testing.T) {
 	if acme.Name != "acme" {
 		t.Errorf("expect acme, got %s", acme.Name)
 	}
-	if len(acme.Keys) != 2 || len(acme.Buckets) != 2 {
-		t.Fatalf("expect 2 keys and 2 buckets, got %d keys %d buckets", len(acme.Keys), len(acme.Buckets))
+	if len(acme.Users) != 2 || len(acme.Buckets) != 2 {
+		t.Fatalf("expect 2 users and 2 buckets, got %d users %d buckets", len(acme.Users), len(acme.Buckets))
+	}
+	if acme.Users[0].Name != "app1" || len(acme.Users[0].Keys) != 2 {
+		t.Errorf("unexpected user %+v", acme.Users[0])
 	}
 	photos := acme.Buckets[0]
 	if photos.Backend.AccessKeyID != "backendkey" {
@@ -67,12 +70,12 @@ var validateTestCases = []struct {
 		yaml: `
 tenants:
   - name: foo
-    keys: [{access_key_id: k1, secret_access_key: s}]
+    users: [{name: user1, keys: [{access_key_id: k1, secret_access_key: s}]}]
     buckets:
       - name: bucket1
         backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
   - name: foo
-    keys: [{access_key_id: k2, secret_access_key: s}]
+    users: [{name: user1, keys: [{access_key_id: k2, secret_access_key: s}]}]
     buckets:
       - name: bucket2
         backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
@@ -84,12 +87,12 @@ tenants:
 		yaml: `
 tenants:
   - name: foo
-    keys: [{access_key_id: k, secret_access_key: s}]
+    users: [{name: user1, keys: [{access_key_id: k, secret_access_key: s}]}]
     buckets:
       - name: bucket1
         backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
   - name: bar
-    keys: [{access_key_id: k, secret_access_key: s}]
+    users: [{name: user1, keys: [{access_key_id: k, secret_access_key: s}]}]
     buckets:
       - name: bucket2
         backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
@@ -101,12 +104,12 @@ tenants:
 		yaml: `
 tenants:
   - name: foo
-    keys: [{access_key_id: k1, secret_access_key: s}]
+    users: [{name: user1, keys: [{access_key_id: k1, secret_access_key: s}]}]
     buckets:
       - name: shared
         backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
   - name: bar
-    keys: [{access_key_id: k2, secret_access_key: s}]
+    users: [{name: user1, keys: [{access_key_id: k2, secret_access_key: s}]}]
     buckets:
       - name: shared
         backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
@@ -118,7 +121,7 @@ tenants:
 		yaml: `
 tenants:
   - name: foo
-    keys: [{access_key_id: k, secret_access_key: s}]
+    users: [{name: user1, keys: [{access_key_id: k, secret_access_key: s}]}]
     buckets:
       - name: "Invalid_Bucket"
         backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
@@ -126,10 +129,48 @@ tenants:
 		errStr: "invalid bucket name",
 	},
 	{
-		name: "no keys",
+		name: "no users",
 		yaml: `
 tenants:
   - name: foo
+    buckets:
+      - name: bucket1
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
+`,
+		errStr: "at least one user",
+	},
+	{
+		name: "invalid user name",
+		yaml: `
+tenants:
+  - name: foo
+    users: [{name: "User_1", keys: [{access_key_id: k, secret_access_key: s}]}]
+    buckets:
+      - name: bucket1
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
+`,
+		errStr: "invalid user name",
+	},
+	{
+		name: "duplicate user name",
+		yaml: `
+tenants:
+  - name: foo
+    users:
+      - {name: user1, keys: [{access_key_id: k1, secret_access_key: s}]}
+      - {name: user1, keys: [{access_key_id: k2, secret_access_key: s}]}
+    buckets:
+      - name: bucket1
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
+`,
+		errStr: "duplicate user name",
+	},
+	{
+		name: "user without keys",
+		yaml: `
+tenants:
+  - name: foo
+    users: [{name: user1}]
     buckets:
       - name: bucket1
         backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
@@ -141,7 +182,7 @@ tenants:
 		yaml: `
 tenants:
   - name: foo
-    keys: [{access_key_id: k, secret_access_key: s}]
+    users: [{name: user1, keys: [{access_key_id: k, secret_access_key: s}]}]
 `,
 		errStr: "at least one bucket",
 	},
@@ -150,7 +191,7 @@ tenants:
 		yaml: `
 tenants:
   - name: foo
-    keys: [{access_key_id: k, secret_access_key: s}]
+    users: [{name: user1, keys: [{access_key_id: k, secret_access_key: s}]}]
     buckets:
       - name: bucket1
         backend: {endpoint: "ftp://b.example.com", access_key_id: a, secret_access_key: s}
@@ -162,7 +203,7 @@ tenants:
 		yaml: `
 tenants:
   - name: foo
-    keys: [{access_key_id: k, secret_access_key: s}]
+    users: [{name: user1, keys: [{access_key_id: k, secret_access_key: s}]}]
     buckets:
       - name: bucket1
         backend: {endpoint: http://b.example.com, access_key_id: a}
@@ -198,7 +239,7 @@ func TestConfigAWSBackendDefaults(t *testing.T) {
 	if err := writeFile(t, f, `
 tenants:
   - name: foo
-    keys: [{access_key_id: k, secret_access_key: s}]
+    users: [{name: user-1_a, keys: [{access_key_id: k, secret_access_key: s}]}]
     buckets:
       - name: bucket1
         backend:

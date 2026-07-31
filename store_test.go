@@ -24,8 +24,16 @@ func TestConfigStore(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if key.Tenant != "acme" || key.SecretAccessKey.String() != "frontsecret001" {
+		if key.Tenant != "acme" || key.User != "app1" || key.SecretAccessKey.String() != "frontsecret001" {
 			t.Errorf("unexpected key %+v", key)
+		}
+		// a key of another user of the same tenant
+		key2, err := st.GetKey(ctx, "S3RPKEY003")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if key2.Tenant != "acme" || key2.User != "batch" {
+			t.Errorf("unexpected key %+v", key2)
 		}
 		if _, err := st.GetKey(ctx, "NOSUCHKEY"); !errors.Is(err, store.ErrNotFound) {
 			t.Errorf("expect ErrNotFound, got %v", err)

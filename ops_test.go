@@ -186,8 +186,13 @@ func TestProxyTenantIsolation(t *testing.T) {
 		Tenants: []*s3rp.TenantConfig{
 			{
 				Name: "tenant-a",
-				Keys: []*s3rp.KeyConfig{
-					{AccessKeyID: "TENANTAKEY", SecretAccessKey: "tenantasecret"},
+				Users: []*s3rp.UserConfig{
+					{
+						Name: "usera",
+						Keys: []*s3rp.KeyConfig{
+							{AccessKeyID: "TENANTAKEY", SecretAccessKey: "tenantasecret"},
+						},
+					},
 				},
 				Buckets: []*s3rp.BucketConfig{
 					{
@@ -200,8 +205,13 @@ func TestProxyTenantIsolation(t *testing.T) {
 			},
 			{
 				Name: "tenant-b",
-				Keys: []*s3rp.KeyConfig{
-					{AccessKeyID: "TENANTBKEY", SecretAccessKey: "tenantbsecret"},
+				Users: []*s3rp.UserConfig{
+					{
+						Name: "userb",
+						Keys: []*s3rp.KeyConfig{
+							{AccessKeyID: "TENANTBKEY", SecretAccessKey: "tenantbsecret"},
+						},
+					},
 				},
 				Buckets: []*s3rp.BucketConfig{
 					{
@@ -422,8 +432,13 @@ func newCopyTestProxy(t *testing.T) (*s3.Client, *stubBackend) {
 		Tenants: []*s3rp.TenantConfig{
 			{
 				Name: "copytenant",
-				Keys: []*s3rp.KeyConfig{
-					{AccessKeyID: testAccessKeyID, SecretAccessKey: testSecretAccessKey},
+				Users: []*s3rp.UserConfig{
+					{
+						Name: "copyuser",
+						Keys: []*s3rp.KeyConfig{
+							{AccessKeyID: testAccessKeyID, SecretAccessKey: testSecretAccessKey},
+						},
+					},
 				},
 				Buckets: []*s3rp.BucketConfig{
 					sameBackend("srcbucket"),
