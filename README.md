@@ -1,21 +1,38 @@
 # s3rp
 
-s3rp is an S3 API reverse proxy with SigV4 re-signing.
+s3rp is a multi-tenant S3 API gateway: an S3-compatible endpoint that authenticates tenants with their own access keys and forwards each operation to a per-bucket backend under the backend's own credentials.
 
 > [!WARNING]
-> This is a proof of concept toward a multi-tenant S3-compatible object storage service, built to validate the architecture (SigV4 verification, operation reconstruction via aws-sdk-go-v2, tenant/user model, bucket policies). **Do not use it for any other purpose.** It is not production-ready: tenants and backends are defined in a static YAML file (a database-backed control plane is planned), the config format may change without notice, and no security review has been done.
-
-Clients access s3rp using the S3 API (path-style) with access keys issued per tenant user. s3rp verifies the SigV4 signature of incoming requests, then executes the operations against per-bucket backends (any S3-compatible server: Ceph, versitygw, Amazon S3, etc.) using the backend's own credentials.
+> This is a **proof of concept**. Its goal is to validate an architecture, not to be a product. **Do not use it for any other purpose.** It is not production-ready: definitions can live in a static YAML file or a sqlite database, the config/schema may change without notice, and no security review has been done.
 
 ```
-S3 client --(SigV4, front keys)--> s3rp --(SigV4, backend keys)--> S3-compatible backend
+S3 client --(SigV4, tenant keys)--> s3rp --(SigV4, backend keys)--> S3-compatible backend
+                                      │
+                            reads definitions from
+                                      ▼
+                        store (YAML / sqlite), read-only
 ```
 
-Use cases:
+## What this PoC validates
 
-- Issue per-tenant access keys in front of backends that make key management hard.
-- Hide the backend credentials and endpoints from clients.
-- Serve buckets belonging to different tenants and backends from a single endpoint.
+s3rp is not an object storage implementation — it stores no data itself. It explores the **data plane of a managed, multi-tenant S3 service** that sits in front of existing S3-compatible storage (Ceph RGW, versitygw, Amazon S3, ...). The questions it answers, and the design decisions behind them:
+
+**Why a reverse proxy?** A managed service needs one identity/authorization plane over heterogeneous backends. Tenants get their own keys and never see the backend's credentials, endpoints, or even the real bucket names; the operator can place a tenant's bucket on any backend and move it without the tenant noticing. The proxy is where per-tenant authentication, authorization (bucket policies), metering points, and a uniform API surface naturally live.
+
+**Why reconstruct operations with aws-sdk-go-v2 instead of forwarding the HTTP request?** A transparent SigV4-resigning proxy would be less code, but a multi-tenant service must *understand* each request, not just relay bytes:
+
+- **Authorization by operation** — every request maps to an `s3:*` action evaluated against the bucket policy; an allow-list of implemented operations means unsupported/dangerous ones fail closed rather than leaking through.
+- **Namespace virtualization** — the front bucket name is rewritten to the backend bucket, and (crucially) rewritten *back* in responses (`ListBucketResult`, multipart results, error `Resource`), which a byte-forwarding proxy cannot do without parsing and rebuilding responses anyway.
+- **Uniform behavior** — the SDK absorbs backend quirks (endpoint resolution, retries, checksum negotiation), so the tenant-facing contract is owned by s3rp, not by whichever backend happens to serve a bucket.
+
+The cost is that each operation is implemented explicitly; that trade-off, and its edge cases (SigV4 verification, aws-chunked decoding, checksum pass-through), are much of what this PoC exercises.
+
+**What is data plane vs. control plane?** This repo is the **data plane**: it only ever *reads* definitions (tenants, users, keys, buckets, policies), through a small read-only [`store.Store`](store/store.go) interface. All *writes* are deliberately out of scope — in a managed offering they belong to a separate control plane API (create tenants, issue/rotate keys, place buckets) with its own credentials and audit trail. The read/write split is enforced here so the boundary is real, not aspirational:
+
+- the proxy links only SELECT queries and opens the database read-only (`mode=ro`);
+- all writes go through a **separate `s3rp-admin` binary** (schema migration and importing definitions), so the proxy deployment contains no write code or write credentials.
+
+`s3rp-admin` is a stand-in for that future control plane, just enough to populate the store. Building the control plane itself (authn, quotas, billing, self-service) is conventional CRUD work with no architectural uncertainty, so it is intentionally left unimplemented.
 
 ## Install
 
@@ -125,6 +142,8 @@ $ aws --endpoint-url http://localhost:8080 s3api list-objects-v2 --bucket photos
 ```
 
 ## Supported operations
+
+Because operations are reconstructed rather than forwarded, each one is implemented explicitly. The list below is the surface the PoC covers so far — enough to exercise real clients (the AWS CLI and SDKs) end to end against real backends. Anything not listed returns `NotImplemented` (fail closed).
 
 - GetObject
 - PutObject
