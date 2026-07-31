@@ -472,15 +472,15 @@ func (app *S3RP) headBucket(w http.ResponseWriter, r *http.Request, rt *bucketRT
 }
 
 func (app *S3RP) listBuckets(w http.ResponseWriter, vr *verifiedRequest) error {
-	buckets := app.keys[vr.AccessKeyID].buckets
-	names := make([]string, 0, len(buckets))
-	for name := range buckets {
+	tenant := app.keys[vr.AccessKeyID].tenant
+	names := make([]string, 0, len(tenant.buckets))
+	for name := range tenant.buckets {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	result := &ListAllMyBucketsResult{
 		XMLNS: s3XMLNS,
-		Owner: Owner{ID: vr.AccessKeyID, DisplayName: vr.AccessKeyID},
+		Owner: Owner{ID: tenant.cfg.Name, DisplayName: tenant.cfg.Name},
 	}
 	for _, name := range names {
 		result.Buckets.Bucket = append(result.Buckets.Bucket, Bucket{

@@ -106,7 +106,7 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 		return app.listBuckets(w, vr)
 	}
 
-	rt := app.keys[vr.AccessKeyID].buckets[bucket]
+	rt := app.keys[vr.AccessKeyID].tenant.buckets[bucket]
 	if rt == nil {
 		return errAccessDenied()
 	}

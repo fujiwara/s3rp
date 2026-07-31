@@ -23,13 +23,9 @@ func (app *S3RP) SetNow(f func() time.Time) {
 }
 
 // SetBackend replaces the backend client of a bucket for tests.
+// bucketRT is shared between app.buckets and the tenant indexes.
 func (app *S3RP) SetBackend(bucket string, client BackendClient) {
 	app.buckets[bucket].client = client
-	for _, fk := range app.keys {
-		if rt, ok := fk.buckets[bucket]; ok {
-			rt.client = client
-		}
-	}
 }
 
 func NewChunkedReader(body io.Reader, vr *VerifiedRequest) io.Reader {

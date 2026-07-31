@@ -179,6 +179,103 @@ func TestProxyPutObjectWithTaggingHeader(t *testing.T) {
 	}
 }
 
+// TestProxyTenantIsolation verifies that a key of one tenant cannot access
+// another tenant's bucket, and that ListBuckets only shows the own tenant.
+func TestProxyTenantIsolation(t *testing.T) {
+	cfg := &s3rp.Config{
+		Tenants: []*s3rp.TenantConfig{
+			{
+				Name: "tenant-a",
+				Keys: []*s3rp.KeyConfig{
+					{AccessKeyID: "TENANTAKEY", SecretAccessKey: "tenantasecret"},
+				},
+				Buckets: []*s3rp.BucketConfig{
+					{
+						Name: "bucket-a",
+						Backend: &s3rp.BackendConfig{
+							Endpoint: "http://backend.invalid", AccessKeyID: "bk", SecretAccessKey: "bs",
+						},
+					},
+				},
+			},
+			{
+				Name: "tenant-b",
+				Keys: []*s3rp.KeyConfig{
+					{AccessKeyID: "TENANTBKEY", SecretAccessKey: "tenantbsecret"},
+				},
+				Buckets: []*s3rp.BucketConfig{
+					{
+						Name: "bucket-b",
+						Backend: &s3rp.BackendConfig{
+							Endpoint: "http://backend.invalid", AccessKeyID: "bk", SecretAccessKey: "bs",
+						},
+					},
+				},
+			},
+		},
+	}
+	cfg.SetDefaults()
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	app, err := s3rp.New(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stub := &stubBackend{
+		getOut: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("x"))},
+	}
+	app.SetBackend("bucket-a", stub)
+	app.SetBackend("bucket-b", stub)
+	ts := newTestServerForApp(t, app)
+	awscfg, err := awsconfig.LoadDefaultConfig(t.Context(),
+		awsconfig.WithRegion("us-east-1"),
+		awsconfig.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider("TENANTAKEY", "tenantasecret", ""),
+		),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientA := s3.NewFromConfig(awscfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(ts.URL)
+		o.UsePathStyle = true
+	})
+
+	// own bucket is accessible
+	out, err := clientA.GetObject(t.Context(), &s3.GetObjectInput{
+		Bucket: aws.String("bucket-a"), Key: aws.String("k"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out.Body.Close()
+
+	// another tenant's bucket is denied
+	_, err = clientA.GetObject(t.Context(), &s3.GetObjectInput{
+		Bucket: aws.String("bucket-b"), Key: aws.String("k"),
+	})
+	if err == nil {
+		t.Fatal("expect error accessing another tenant's bucket")
+	}
+	var apiErr smithy.APIError
+	if !errors.As(err, &apiErr) || apiErr.ErrorCode() != "AccessDenied" {
+		t.Errorf("expect AccessDenied, got %v", err)
+	}
+
+	// ListBuckets shows only the own tenant's buckets with the tenant owner
+	list, err := clientA.ListBuckets(t.Context(), &s3.ListBucketsInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Buckets) != 1 || aws.ToString(list.Buckets[0].Name) != "bucket-a" {
+		t.Errorf("unexpected buckets %v", list.Buckets)
+	}
+	if aws.ToString(list.Owner.ID) != "tenant-a" {
+		t.Errorf("expect owner tenant-a, got %s", aws.ToString(list.Owner.ID))
+	}
+}
+
 func TestProxyBucketVersioning(t *testing.T) {
 	stub := &stubBackend{
 		getVerOut: &s3.GetBucketVersioningOutput{
@@ -306,8 +403,8 @@ func TestProxyVersionID(t *testing.T) {
 	}
 }
 
-// newCopyTestProxy builds a proxy with two buckets on the same backend and
-// one on a different backend, all accessible by the same front key.
+// newCopyTestProxy builds a proxy with one tenant holding two buckets on the
+// same backend and one on a different backend.
 func newCopyTestProxy(t *testing.T) (*s3.Client, *stubBackend) {
 	t.Helper()
 	sameBackend := func(name string) *s3rp.BucketConfig {
@@ -319,24 +416,26 @@ func newCopyTestProxy(t *testing.T) (*s3.Client, *stubBackend) {
 				AccessKeyID:     "backendkey",
 				SecretAccessKey: "backendsecret",
 			},
-			Keys: []*s3rp.KeyConfig{
-				{AccessKeyID: testAccessKeyID, SecretAccessKey: testSecretAccessKey},
-			},
 		}
 	}
 	cfg := &s3rp.Config{
-		Buckets: []*s3rp.BucketConfig{
-			sameBackend("srcbucket"),
-			sameBackend("dstbucket"),
+		Tenants: []*s3rp.TenantConfig{
 			{
-				Name: "remotebucket",
-				Backend: &s3rp.BackendConfig{
-					Endpoint:        "http://other-backend.invalid",
-					AccessKeyID:     "otherkey",
-					SecretAccessKey: "othersecret",
-				},
+				Name: "copytenant",
 				Keys: []*s3rp.KeyConfig{
 					{AccessKeyID: testAccessKeyID, SecretAccessKey: testSecretAccessKey},
+				},
+				Buckets: []*s3rp.BucketConfig{
+					sameBackend("srcbucket"),
+					sameBackend("dstbucket"),
+					{
+						Name: "remotebucket",
+						Backend: &s3rp.BackendConfig{
+							Endpoint:        "http://other-backend.invalid",
+							AccessKeyID:     "otherkey",
+							SecretAccessKey: "othersecret",
+						},
+					},
 				},
 			},
 		},

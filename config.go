@@ -39,13 +39,19 @@ func (p Password) MarshalYAML() ([]byte, error) {
 
 type Config struct {
 	Listen  string          `yaml:"listen" json:"listen"`
+	Tenants []*TenantConfig `yaml:"tenants" json:"tenants"`
+}
+
+// TenantConfig defines a tenant: its access keys and the buckets it owns.
+type TenantConfig struct {
+	Name    string          `yaml:"name" json:"name"`
+	Keys    []*KeyConfig    `yaml:"keys" json:"keys"`
 	Buckets []*BucketConfig `yaml:"buckets" json:"buckets"`
 }
 
 type BucketConfig struct {
 	Name    string         `yaml:"name" json:"name"`
 	Backend *BackendConfig `yaml:"backend" json:"backend"`
-	Keys    []*KeyConfig   `yaml:"keys" json:"keys"`
 }
 
 type BackendConfig struct {
@@ -83,79 +89,88 @@ func (c *Config) SetDefaults() {
 	if c.Listen == "" {
 		c.Listen = DefaultListen
 	}
-	for _, b := range c.Buckets {
-		if b.Backend == nil {
-			continue
-		}
-		if b.Backend.Region == "" {
-			b.Backend.Region = DefaultRegion
-		}
-		if b.Backend.Bucket == "" {
-			b.Backend.Bucket = b.Name
-		}
-		if b.Backend.UsePathStyle == nil {
-			// S3-compatible servers conventionally need path-style,
-			// while AWS S3 (no endpoint) prefers virtual-hosted style
-			usePathStyle := b.Backend.Endpoint != ""
-			b.Backend.UsePathStyle = &usePathStyle
+	for _, t := range c.Tenants {
+		for _, b := range t.Buckets {
+			if b.Backend == nil {
+				continue
+			}
+			if b.Backend.Region == "" {
+				b.Backend.Region = DefaultRegion
+			}
+			if b.Backend.Bucket == "" {
+				b.Backend.Bucket = b.Name
+			}
+			if b.Backend.UsePathStyle == nil {
+				// S3-compatible servers conventionally need path-style,
+				// while AWS S3 (no endpoint) prefers virtual-hosted style
+				usePathStyle := b.Backend.Endpoint != ""
+				b.Backend.UsePathStyle = &usePathStyle
+			}
 		}
 	}
 }
 
 func (c *Config) Validate() error {
-	if len(c.Buckets) == 0 {
-		return fmt.Errorf("no buckets defined")
+	if len(c.Tenants) == 0 {
+		return fmt.Errorf("no tenants defined")
 	}
-	names := make(map[string]bool, len(c.Buckets))
-	keySecrets := make(map[string]Password)
-	for _, b := range c.Buckets {
-		if b.Name == "" {
-			return fmt.Errorf("bucket name is required")
+	tenantNames := make(map[string]bool, len(c.Tenants))
+	// bucket names and access key ids must be unique across all tenants:
+	// path-style URLs carry no tenant discriminator, and a key belongs to
+	// exactly one tenant
+	bucketNames := make(map[string]bool)
+	keyIDs := make(map[string]bool)
+	for _, t := range c.Tenants {
+		if t.Name == "" {
+			return fmt.Errorf("tenant name is required")
 		}
-		if !bucketNameRegexp.MatchString(b.Name) {
-			return fmt.Errorf("invalid bucket name %q", b.Name)
+		if tenantNames[t.Name] {
+			return fmt.Errorf("duplicate tenant name %q", t.Name)
 		}
-		if names[b.Name] {
-			return fmt.Errorf("duplicate bucket name %q", b.Name)
-		}
-		names[b.Name] = true
+		tenantNames[t.Name] = true
 
-		if b.Backend == nil {
-			return fmt.Errorf("bucket %s: backend is required", b.Name)
+		if len(t.Keys) == 0 {
+			return fmt.Errorf("tenant %s: at least one key is required", t.Name)
 		}
-		// an empty endpoint means AWS S3 (resolved by the SDK from the region)
-		if b.Backend.Endpoint != "" {
-			if u, err := url.Parse(b.Backend.Endpoint); err != nil {
-				return fmt.Errorf("bucket %s: invalid backend endpoint: %w", b.Name, err)
-			} else if u.Scheme != "http" && u.Scheme != "https" {
-				return fmt.Errorf("bucket %s: backend endpoint must be an http(s) URL: %s", b.Name, b.Backend.Endpoint)
-			}
-		}
-		// empty credentials mean the SDK default credential chain
-		if (b.Backend.AccessKeyID == "") != (b.Backend.SecretAccessKey == "") {
-			return fmt.Errorf("bucket %s: backend access_key_id and secret_access_key must be set together", b.Name)
-		}
-
-		if len(b.Keys) == 0 {
-			return fmt.Errorf("bucket %s: at least one key is required", b.Name)
-		}
-		inBucket := make(map[string]bool, len(b.Keys))
-		for _, k := range b.Keys {
+		for _, k := range t.Keys {
 			if k.AccessKeyID == "" || k.SecretAccessKey == "" {
-				return fmt.Errorf("bucket %s: key access_key_id and secret_access_key are required", b.Name)
+				return fmt.Errorf("tenant %s: key access_key_id and secret_access_key are required", t.Name)
 			}
-			if inBucket[k.AccessKeyID] {
-				return fmt.Errorf("bucket %s: duplicate key access_key_id %q", b.Name, k.AccessKeyID)
+			if keyIDs[k.AccessKeyID] {
+				return fmt.Errorf("duplicate access_key_id %q", k.AccessKeyID)
 			}
-			inBucket[k.AccessKeyID] = true
-			// verification looks up the secret by access key id alone,
-			// so the same id must not have different secrets across buckets
-			if secret, ok := keySecrets[k.AccessKeyID]; ok {
-				if secret != k.SecretAccessKey {
-					return fmt.Errorf("access_key_id %q has different secrets across buckets", k.AccessKeyID)
+			keyIDs[k.AccessKeyID] = true
+		}
+
+		if len(t.Buckets) == 0 {
+			return fmt.Errorf("tenant %s: at least one bucket is required", t.Name)
+		}
+		for _, b := range t.Buckets {
+			if b.Name == "" {
+				return fmt.Errorf("tenant %s: bucket name is required", t.Name)
+			}
+			if !bucketNameRegexp.MatchString(b.Name) {
+				return fmt.Errorf("invalid bucket name %q", b.Name)
+			}
+			if bucketNames[b.Name] {
+				return fmt.Errorf("duplicate bucket name %q", b.Name)
+			}
+			bucketNames[b.Name] = true
+
+			if b.Backend == nil {
+				return fmt.Errorf("bucket %s: backend is required", b.Name)
+			}
+			// an empty endpoint means AWS S3 (resolved by the SDK from the region)
+			if b.Backend.Endpoint != "" {
+				if u, err := url.Parse(b.Backend.Endpoint); err != nil {
+					return fmt.Errorf("bucket %s: invalid backend endpoint: %w", b.Name, err)
+				} else if u.Scheme != "http" && u.Scheme != "https" {
+					return fmt.Errorf("bucket %s: backend endpoint must be an http(s) URL: %s", b.Name, b.Backend.Endpoint)
 				}
-			} else {
-				keySecrets[k.AccessKeyID] = k.SecretAccessKey
+			}
+			// empty credentials mean the SDK default credential chain
+			if (b.Backend.AccessKeyID == "") != (b.Backend.SecretAccessKey == "") {
+				return fmt.Errorf("bucket %s: backend access_key_id and secret_access_key must be set together", b.Name)
 			}
 		}
 	}

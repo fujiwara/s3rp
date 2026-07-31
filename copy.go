@@ -30,7 +30,9 @@ func (app *S3RP) resolveCopySource(r *http.Request, vr *verifiedRequest, dst *bu
 	if err != nil {
 		return "", newS3Error(http.StatusBadRequest, "InvalidArgument", "Invalid copy source")
 	}
-	src := app.keys[vr.AccessKeyID].buckets[srcBucket]
+	// the source is resolved within the requesting key's tenant, so
+	// copying from another tenant's bucket is impossible by construction
+	src := app.keys[vr.AccessKeyID].tenant.buckets[srcBucket]
 	if src == nil {
 		return "", errAccessDenied()
 	}

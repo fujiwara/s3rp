@@ -22,9 +22,15 @@ type S3RP struct {
 	now     func() time.Time
 }
 
-// frontKey is a front-side access key and the buckets it may access.
+// frontKey is a front-side access key. It belongs to exactly one tenant.
 type frontKey struct {
-	secret  Password
+	secret Password
+	tenant *tenantRT
+}
+
+// tenantRT is the runtime state of a tenant.
+type tenantRT struct {
+	cfg     *TenantConfig
 	buckets map[string]*bucketRT // front bucket name -> runtime
 }
 
@@ -44,23 +50,25 @@ func New(ctx context.Context, cfg *Config) (*S3RP, error) {
 		}),
 		now: time.Now,
 	}
-	for _, b := range cfg.Buckets {
-		client, err := newBackendClient(ctx, b.Backend)
-		if err != nil {
-			return nil, fmt.Errorf("bucket %s: %w", b.Name, err)
+	for _, t := range cfg.Tenants {
+		tenant := &tenantRT{
+			cfg:     t,
+			buckets: make(map[string]*bucketRT, len(t.Buckets)),
 		}
-		rt := &bucketRT{cfg: b, client: client}
-		app.buckets[b.Name] = rt
-		for _, k := range b.Keys {
-			fk := app.keys[k.AccessKeyID]
-			if fk == nil {
-				fk = &frontKey{
-					secret:  k.SecretAccessKey,
-					buckets: make(map[string]*bucketRT),
-				}
-				app.keys[k.AccessKeyID] = fk
+		for _, b := range t.Buckets {
+			client, err := newBackendClient(ctx, b.Backend)
+			if err != nil {
+				return nil, fmt.Errorf("bucket %s: %w", b.Name, err)
 			}
-			fk.buckets[b.Name] = rt
+			rt := &bucketRT{cfg: b, client: client}
+			tenant.buckets[b.Name] = rt
+			app.buckets[b.Name] = rt
+		}
+		for _, k := range t.Keys {
+			app.keys[k.AccessKeyID] = &frontKey{
+				secret: k.SecretAccessKey,
+				tenant: tenant,
+			}
 		}
 	}
 	return app, nil
