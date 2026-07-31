@@ -201,6 +201,52 @@ type Upload struct {
 	Initiated    string `xml:"Initiated,omitempty"`
 }
 
+// VersioningConfiguration is the request and response body of
+// PutBucketVersioning / GetBucketVersioning.
+type VersioningConfiguration struct {
+	XMLName xml.Name `xml:"VersioningConfiguration"`
+	XMLNS   string   `xml:"xmlns,attr,omitempty"`
+	Status  string   `xml:"Status,omitempty"`
+}
+
+// ListVersionsResult is the response of ListObjectVersions.
+type ListVersionsResult struct {
+	XMLName             xml.Name            `xml:"ListVersionsResult"`
+	XMLNS               string              `xml:"xmlns,attr"`
+	Name                string              `xml:"Name"`
+	Prefix              string              `xml:"Prefix"`
+	KeyMarker           string              `xml:"KeyMarker"`
+	VersionIDMarker     string              `xml:"VersionIdMarker"`
+	NextKeyMarker       string              `xml:"NextKeyMarker,omitempty"`
+	NextVersionIDMarker string              `xml:"NextVersionIdMarker,omitempty"`
+	MaxKeys             int32               `xml:"MaxKeys"`
+	Delimiter           string              `xml:"Delimiter,omitempty"`
+	EncodingType        string              `xml:"EncodingType,omitempty"`
+	IsTruncated         bool                `xml:"IsTruncated"`
+	Versions            []ObjectVersion     `xml:"Version"`
+	DeleteMarkers       []DeleteMarkerEntry `xml:"DeleteMarker"`
+	CommonPrefixes      []CommonPrefix      `xml:"CommonPrefixes"`
+}
+
+type ObjectVersion struct {
+	Key          string `xml:"Key"`
+	VersionID    string `xml:"VersionId"`
+	IsLatest     bool   `xml:"IsLatest"`
+	LastModified string `xml:"LastModified,omitempty"`
+	ETag         string `xml:"ETag"`
+	Size         int64  `xml:"Size"`
+	StorageClass string `xml:"StorageClass,omitempty"`
+	Owner        *Owner `xml:"Owner,omitempty"`
+}
+
+type DeleteMarkerEntry struct {
+	Key          string `xml:"Key"`
+	VersionID    string `xml:"VersionId"`
+	IsLatest     bool   `xml:"IsLatest"`
+	LastModified string `xml:"LastModified,omitempty"`
+	Owner        *Owner `xml:"Owner,omitempty"`
+}
+
 // Tagging is the request and response body of PutObjectTagging /
 // GetObjectTagging.
 type Tagging struct {

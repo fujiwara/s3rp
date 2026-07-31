@@ -113,6 +113,9 @@ $ aws --endpoint-url http://localhost:8080 s3api list-objects-v2 --bucket photos
 - GetObjectTagging
 - PutObjectTagging
 - DeleteObjectTagging
+- GetBucketVersioning
+- PutBucketVersioning
+- ListObjectVersions
 - CreateMultipartUpload
 - UploadPart
 - UploadPartCopy
@@ -124,6 +127,8 @@ $ aws --endpoint-url http://localhost:8080 s3api list-objects-v2 --bucket photos
 Other operations return a `NotImplemented` error.
 
 CopyObject and UploadPartCopy work between buckets served by the same backend (same endpoint, region and credentials); copying across different backends returns `NotImplemented`. The copy source bucket must be accessible by the requesting access key.
+
+The `versionId` query parameter is passed through on GetObject, HeadObject, DeleteObject and the object tagging operations. Versioning requires a backend that supports it.
 
 `aws-chunked` request bodies (`STREAMING-AWS4-HMAC-SHA256-PAYLOAD` and the trailer variants), which the AWS CLI and SDKs use for uploads over plain http endpoints, are decoded and their chunk signatures are verified.
 
