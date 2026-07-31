@@ -3,10 +3,23 @@ before:
   hooks:
     - go mod download
 builds:
-  - env:
+  - id: s3rp
+    env:
       - CGO_ENABLED=0
     main: ./cmd/s3rp/
     binary: s3rp
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+  - id: s3rp-admin
+    env:
+      - CGO_ENABLED=0
+    main: ./cmd/s3rp-admin/
+    binary: s3rp-admin
     goos:
       - linux
       - darwin

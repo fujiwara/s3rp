@@ -31,7 +31,22 @@ type (
 
 type Config struct {
 	Listen  string          `yaml:"listen" json:"listen"`
-	Tenants []*TenantConfig `yaml:"tenants" json:"tenants"`
+	Store   *StoreConfig    `yaml:"store,omitempty" json:"store,omitempty"`
+	Tenants []*TenantConfig `yaml:"tenants,omitempty" json:"tenants,omitempty"`
+}
+
+// StoreConfig selects where tenant/user/bucket definitions come from.
+type StoreConfig struct {
+	Driver string `yaml:"driver" json:"driver"` // "yaml" (default) or "sqlite"
+	DSN    string `yaml:"dsn,omitempty" json:"dsn,omitempty"`
+}
+
+// StoreDriver returns the effective store driver.
+func (c *Config) StoreDriver() string {
+	if c.Store == nil || c.Store.Driver == "" {
+		return "yaml"
+	}
+	return c.Store.Driver
 }
 
 // TenantConfig defines a tenant: its users and the buckets it owns.
@@ -103,6 +118,20 @@ func (c *Config) SetDefaults() {
 }
 
 func (c *Config) Validate() error {
+	switch c.StoreDriver() {
+	case "yaml":
+	case "sqlite":
+		if c.Store.DSN == "" {
+			return fmt.Errorf("store.dsn is required for the sqlite driver")
+		}
+		if len(c.Tenants) > 0 {
+			return fmt.Errorf("tenants must not be defined in the config when store.driver is sqlite")
+		}
+		return nil
+	default:
+		return fmt.Errorf("unknown store driver %q", c.Store.Driver)
+	}
+
 	if len(c.Tenants) == 0 {
 		return fmt.Errorf("no tenants defined")
 	}

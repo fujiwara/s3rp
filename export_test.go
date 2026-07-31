@@ -1,6 +1,7 @@
 package s3rp
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"time"
@@ -23,16 +24,16 @@ func (app *S3RP) SetNow(f func() time.Time) {
 }
 
 // SetBackend replaces the backend client of a bucket for tests by
-// pre-warming the client cache for the bucket's backend.
+// pre-warming the client cache for the bucket's backend. Works with any
+// Store implementation.
 func (app *S3RP) SetBackend(bucket string, client BackendClient) {
-	cs := app.store.(*configStore)
-	for _, buckets := range cs.tenants {
-		if b, ok := buckets[bucket]; ok {
-			app.clientsMu.Lock()
-			app.clients[newClientCacheKey(b.Backend)] = client
-			app.clientsMu.Unlock()
-		}
+	b, err := app.store.GetBucketByName(context.Background(), bucket)
+	if err != nil {
+		panic(err)
 	}
+	app.clientsMu.Lock()
+	app.clients[newClientCacheKey(b.Backend)] = client
+	app.clientsMu.Unlock()
 }
 
 func NewChunkedReader(body io.Reader, vr *VerifiedRequest, trailerAlg string) io.Reader {

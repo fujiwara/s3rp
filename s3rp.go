@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/fujiwara/s3rp/store"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/fujiwara/s3rp/store"
+	"github.com/fujiwara/s3rp/store/rdb"
 
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 )
@@ -54,9 +57,19 @@ func newClientCacheKey(b *BackendConfig) clientCacheKey {
 	}
 }
 
-// New creates an S3RP from a config.
+// New creates an S3RP from a config, selecting the definition store by
+// the store.driver setting.
 func New(ctx context.Context, cfg *Config) (*S3RP, error) {
-	return NewWithStore(ctx, cfg, NewConfigStore(cfg))
+	switch cfg.StoreDriver() {
+	case "sqlite":
+		st, err := rdb.Open(cfg.Store.DSN)
+		if err != nil {
+			return nil, err
+		}
+		return NewWithStore(ctx, cfg, st)
+	default:
+		return NewWithStore(ctx, cfg, NewConfigStore(cfg))
+	}
 }
 
 // NewWithStore creates an S3RP using the given Store for tenant, key and
@@ -115,6 +128,12 @@ func Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		// e.g. the sqlite-backed store holds a database handle
+		if c, ok := app.store.(io.Closer); ok {
+			c.Close()
+		}
+	}()
 	return app.Serve(ctx)
 }
 

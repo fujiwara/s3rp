@@ -96,6 +96,27 @@ Notes:
 - `GET /` (ListBuckets) returns the buckets of the key's tenant, with the tenant name as the owner.
 - Copying (CopyObject / UploadPartCopy) resolves the source within the requesting key's tenant, so cross-tenant copying is impossible.
 
+### Definition store
+
+By default, tenants and buckets are defined directly in the YAML config as above. They can instead be read from a sqlite database:
+
+```yaml
+listen: ":8080"
+store:
+  driver: sqlite
+  dsn: s3rp.db
+# tenants: must not be present with the sqlite driver
+```
+
+The proxy always opens the database **read-only** (a `mode=` parameter in the DSN is rejected). All writes go through the separate `s3rp-admin` binary, so the proxy deployment carries no write code or credentials:
+
+```console
+$ s3rp-admin --dsn s3rp.db migrate                       # apply the schema (idempotent)
+$ s3rp-admin --dsn s3rp.db import --config tenants.yaml  # load a tenants-form YAML into the DB
+```
+
+The schema lives in `db/schema.sql`, shared by the read side (proxy) and write side (admin) via sqlc-generated packages.
+
 ## Client usage
 
 Point any S3 client at s3rp with path-style addressing and a front-side key.
