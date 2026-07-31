@@ -106,6 +106,12 @@ $ aws --endpoint-url http://localhost:8080 s3api list-objects-v2 --bucket photos
 - ListObjectsV2
 - HeadBucket
 - ListBuckets
+- CreateMultipartUpload
+- UploadPart
+- CompleteMultipartUpload
+- AbortMultipartUpload
+- ListParts
+- ListMultipartUploads
 
 Other operations return a `NotImplemented` error.
 
@@ -114,7 +120,7 @@ Other operations return a `NotImplemented` error.
 ## Limitations
 
 - Presigned URLs are not supported.
-- Multipart uploads are not supported. Configure your client to avoid multipart (e.g. `aws configure set s3.multipart_threshold 5GB`).
+- UploadPartCopy and CopyObject are not supported.
 - The payload SHA-256 declared in `x-amz-content-sha256` is not independently verified against the request body (the signature covers the declared hash; verifying the body would require buffering it). Chunk signatures of `aws-chunked` bodies are verified.
 - Requests that sign the `user-agent` or other headers the AWS SDK signer ignores will fail verification. Real AWS SDK/CLI clients do not do this.
 

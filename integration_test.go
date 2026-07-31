@@ -168,6 +168,100 @@ func TestIntegration(t *testing.T) {
 			t.Errorf("unexpected buckets %v", out.Buckets)
 		}
 	})
+	t.Run("MultipartUpload", func(t *testing.T) {
+		// non-last parts must be at least 5MiB
+		part1 := strings.Repeat("p", 5*1024*1024)
+		part2 := "tail part"
+		create, err := client.CreateMultipartUpload(t.Context(), &s3.CreateMultipartUploadInput{
+			Bucket:      aws.String("it-bucket"),
+			Key:         aws.String("dir/multipart.bin"),
+			ContentType: aws.String("application/octet-stream"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		uploadID := create.UploadId
+		var completed []types.CompletedPart
+		for i, content := range []string{part1, part2} {
+			part, err := client.UploadPart(t.Context(), &s3.UploadPartInput{
+				Bucket:     aws.String("it-bucket"),
+				Key:        aws.String("dir/multipart.bin"),
+				UploadId:   uploadID,
+				PartNumber: aws.Int32(int32(i + 1)),
+				Body:       strings.NewReader(content),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			completed = append(completed, types.CompletedPart{
+				ETag:       part.ETag,
+				PartNumber: aws.Int32(int32(i + 1)),
+			})
+		}
+		parts, err := client.ListParts(t.Context(), &s3.ListPartsInput{
+			Bucket:   aws.String("it-bucket"),
+			Key:      aws.String("dir/multipart.bin"),
+			UploadId: uploadID,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(parts.Parts) != 2 {
+			t.Errorf("expect 2 parts, got %d", len(parts.Parts))
+		}
+		if _, err := client.CompleteMultipartUpload(t.Context(), &s3.CompleteMultipartUploadInput{
+			Bucket:          aws.String("it-bucket"),
+			Key:             aws.String("dir/multipart.bin"),
+			UploadId:        uploadID,
+			MultipartUpload: &types.CompletedMultipartUpload{Parts: completed},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		out, err := client.GetObject(t.Context(), &s3.GetObjectInput{
+			Bucket: aws.String("it-bucket"),
+			Key:    aws.String("dir/multipart.bin"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer out.Body.Close()
+		body, err := io.ReadAll(out.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(body) != part1+part2 {
+			t.Errorf("content mismatch: got %d bytes, want %d", len(body), len(part1)+len(part2))
+		}
+		if _, err := client.DeleteObject(t.Context(), &s3.DeleteObjectInput{
+			Bucket: aws.String("it-bucket"),
+			Key:    aws.String("dir/multipart.bin"),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("AbortMultipartUpload", func(t *testing.T) {
+		create, err := client.CreateMultipartUpload(t.Context(), &s3.CreateMultipartUploadInput{
+			Bucket: aws.String("it-bucket"),
+			Key:    aws.String("dir/aborted.bin"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := client.AbortMultipartUpload(t.Context(), &s3.AbortMultipartUploadInput{
+			Bucket:   aws.String("it-bucket"),
+			Key:      aws.String("dir/aborted.bin"),
+			UploadId: create.UploadId,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := client.ListParts(t.Context(), &s3.ListPartsInput{
+			Bucket:   aws.String("it-bucket"),
+			Key:      aws.String("dir/aborted.bin"),
+			UploadId: create.UploadId,
+		}); err == nil {
+			t.Error("expect error listing parts of an aborted upload")
+		}
+	})
 	t.Run("DeleteObject", func(t *testing.T) {
 		if _, err := client.DeleteObject(t.Context(), &s3.DeleteObjectInput{
 			Bucket: aws.String("it-bucket"),
