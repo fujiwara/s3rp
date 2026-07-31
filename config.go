@@ -94,8 +94,10 @@ func (c *Config) SetDefaults() {
 			b.Backend.Bucket = b.Name
 		}
 		if b.Backend.UsePathStyle == nil {
-			t := true
-			b.Backend.UsePathStyle = &t
+			// S3-compatible servers conventionally need path-style,
+			// while AWS S3 (no endpoint) prefers virtual-hosted style
+			usePathStyle := b.Backend.Endpoint != ""
+			b.Backend.UsePathStyle = &usePathStyle
 		}
 	}
 }
@@ -121,16 +123,17 @@ func (c *Config) Validate() error {
 		if b.Backend == nil {
 			return fmt.Errorf("bucket %s: backend is required", b.Name)
 		}
-		if b.Backend.Endpoint == "" {
-			return fmt.Errorf("bucket %s: backend endpoint is required", b.Name)
+		// an empty endpoint means AWS S3 (resolved by the SDK from the region)
+		if b.Backend.Endpoint != "" {
+			if u, err := url.Parse(b.Backend.Endpoint); err != nil {
+				return fmt.Errorf("bucket %s: invalid backend endpoint: %w", b.Name, err)
+			} else if u.Scheme != "http" && u.Scheme != "https" {
+				return fmt.Errorf("bucket %s: backend endpoint must be an http(s) URL: %s", b.Name, b.Backend.Endpoint)
+			}
 		}
-		if u, err := url.Parse(b.Backend.Endpoint); err != nil {
-			return fmt.Errorf("bucket %s: invalid backend endpoint: %w", b.Name, err)
-		} else if u.Scheme != "http" && u.Scheme != "https" {
-			return fmt.Errorf("bucket %s: backend endpoint must be an http(s) URL: %s", b.Name, b.Backend.Endpoint)
-		}
-		if b.Backend.AccessKeyID == "" || b.Backend.SecretAccessKey == "" {
-			return fmt.Errorf("bucket %s: backend access_key_id and secret_access_key are required", b.Name)
+		// empty credentials mean the SDK default credential chain
+		if (b.Backend.AccessKeyID == "") != (b.Backend.SecretAccessKey == "") {
+			return fmt.Errorf("bucket %s: backend access_key_id and secret_access_key must be set together", b.Name)
 		}
 
 		if len(b.Keys) == 0 {

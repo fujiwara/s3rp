@@ -79,14 +79,14 @@ buckets:
 		errStr: "invalid bucket name",
 	},
 	{
-		name: "missing endpoint",
+		name: "credentials not set together",
 		yaml: `
 buckets:
   - name: foo
-    backend: {access_key_id: a, secret_access_key: s}
+    backend: {endpoint: http://b.example.com, access_key_id: a}
     keys: [{access_key_id: k, secret_access_key: s}]
 `,
-		errStr: "endpoint is required",
+		errStr: "must be set together",
 	},
 	{
 		name: "invalid endpoint scheme",
@@ -138,6 +138,33 @@ func TestConfigValidate(t *testing.T) {
 				t.Errorf("expect error containing %q, got %q", tc.errStr, err.Error())
 			}
 		})
+	}
+}
+
+// A backend without an endpoint means AWS S3: virtual-hosted style and the
+// SDK default credential chain.
+func TestConfigAWSBackendDefaults(t *testing.T) {
+	dir := t.TempDir()
+	f := dir + "/aws.yaml"
+	if err := writeFile(t, f, `
+buckets:
+  - name: foo
+    backend:
+      region: ap-northeast-1
+    keys: [{access_key_id: k, secret_access_key: s}]
+`); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := s3rp.LoadConfig(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := cfg.Buckets[0].Backend
+	if b.UsePathStyle == nil || *b.UsePathStyle {
+		t.Error("expect use_path_style default false without endpoint")
+	}
+	if b.Region != "ap-northeast-1" {
+		t.Errorf("unexpected region %s", b.Region)
 	}
 }
 
