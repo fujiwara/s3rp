@@ -199,6 +199,33 @@ tenants:
 		errStr: "http(s)",
 	},
 	{
+		name: "malformed policy json",
+		yaml: `
+tenants:
+  - name: foo
+    users: [{name: user1, keys: [{access_key_id: k, secret_access_key: s}]}]
+    buckets:
+      - name: bucket1
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
+        policy: "{not json"
+`,
+		errStr: "invalid policy",
+	},
+	{
+		name: "policy resource refers to another bucket",
+		yaml: `
+tenants:
+  - name: foo
+    users: [{name: user1, keys: [{access_key_id: k, secret_access_key: s}]}]
+    buckets:
+      - name: bucket1
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
+        policy: |
+          {"Statement": [{"Effect": "Deny", "Principal": "*", "Action": "s3:PutObject", "Resource": "otherbucket/*"}]}
+`,
+		errStr: "does not refer to this bucket",
+	},
+	{
 		name: "credentials not set together",
 		yaml: `
 tenants:

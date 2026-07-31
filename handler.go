@@ -130,6 +130,10 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt *bucketRT, vr *verifiedRequest, query url.Values) error {
+	// the resource of bucket-level operations is the bucket itself
+	authorize := func(action string) *S3Error {
+		return app.authorize(vr, rt.cfg, action, rt.cfg.Name)
+	}
 	switch r.Method {
 	case http.MethodGet:
 		switch {
@@ -137,9 +141,15 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 			if err := listMultipartUploadsParams.check(query); err != nil {
 				return err
 			}
+			if err := authorize("s3:ListBucketMultipartUploads"); err != nil {
+				return err
+			}
 			return app.listMultipartUploads(w, r, rt)
 		case query.Has("location"):
 			if err := locationOnlyParams.check(query); err != nil {
+				return err
+			}
+			if err := authorize("s3:GetBucketLocation"); err != nil {
 				return err
 			}
 			return app.getBucketLocation(w, rt)
@@ -147,9 +157,23 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 			if err := aclOnlyParams.check(query); err != nil {
 				return err
 			}
+			if err := authorize("s3:GetBucketAcl"); err != nil {
+				return err
+			}
 			return app.getBucketACL(w, vr)
+		case query.Has("policy"):
+			if err := policyOnlyParams.check(query); err != nil {
+				return err
+			}
+			if err := authorize("s3:GetBucketPolicy"); err != nil {
+				return err
+			}
+			return app.getBucketPolicy(w, rt)
 		case query.Has("versioning"):
 			if err := versioningOnlyParams.check(query); err != nil {
+				return err
+			}
+			if err := authorize("s3:GetBucketVersioning"); err != nil {
 				return err
 			}
 			return app.getBucketVersioning(w, r, rt)
@@ -157,9 +181,15 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 			if err := listObjectVersionsParams.check(query); err != nil {
 				return err
 			}
+			if err := authorize("s3:ListBucket"); err != nil {
+				return err
+			}
 			return app.listObjectVersions(w, r, rt)
 		case query.Get("list-type") == "2":
 			if err := listObjectsV2Params.check(query); err != nil {
+				return err
+			}
+			if err := authorize("s3:ListBucket"); err != nil {
 				return err
 			}
 			return app.listObjectsV2(w, r, rt)
@@ -167,13 +197,22 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 			if err := listObjectsV1Params.check(query); err != nil {
 				return err
 			}
+			if err := authorize("s3:ListBucket"); err != nil {
+				return err
+			}
 			return app.listObjectsV1(w, r, rt)
 		}
 	case http.MethodHead:
+		if err := authorize("s3:ListBucket"); err != nil {
+			return err
+		}
 		return app.headBucket(w, r, rt)
 	case http.MethodPut:
 		if query.Has("versioning") {
 			if err := versioningOnlyParams.check(query); err != nil {
+				return err
+			}
+			if err := authorize("s3:PutBucketVersioning"); err != nil {
 				return err
 			}
 			return app.putBucketVersioning(w, r, rt, vr)
@@ -181,12 +220,23 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 		if query.Has("acl") {
 			return errACLNotSupported()
 		}
+		if query.Has("policy") {
+			// bucket policies are defined in the config (or a future
+			// control plane), not via the S3 API
+			return errNotImplemented("PutBucketPolicy")
+		}
+		return errNotImplemented("this bucket operation")
+	case http.MethodDelete:
+		if query.Has("policy") {
+			return errNotImplemented("DeleteBucketPolicy")
+		}
 		return errNotImplemented("this bucket operation")
 	case http.MethodPost:
 		if query.Has("delete") {
 			if err := deleteOnlyParams.check(query); err != nil {
 				return err
 			}
+			// s3:DeleteObject is evaluated per object inside
 			return app.deleteObjects(w, r, rt, vr)
 		}
 		return errNotImplemented("this bucket operation")
@@ -196,10 +246,16 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 }
 
 func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt *bucketRT, vr *verifiedRequest, query url.Values, key string) error {
+	authorize := func(action string) *S3Error {
+		return app.authorize(vr, rt.cfg, action, rt.cfg.Name+"/"+key)
+	}
 	switch r.Method {
 	case http.MethodGet:
 		if query.Has("uploadId") {
 			if err := listPartsParams.check(query); err != nil {
+				return err
+			}
+			if err := authorize("s3:ListMultipartUploadParts"); err != nil {
 				return err
 			}
 			return app.listParts(w, r, rt, key)
@@ -208,10 +264,16 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 			if err := taggingParams.check(query); err != nil {
 				return err
 			}
+			if err := authorize("s3:GetObjectTagging"); err != nil {
+				return err
+			}
 			return app.getObjectTagging(w, r, rt, key)
 		}
 		if query.Has("acl") {
 			if err := aclParams.check(query); err != nil {
+				return err
+			}
+			if err := authorize("s3:GetObjectAcl"); err != nil {
 				return err
 			}
 			return app.getObjectACL(w, r, rt, key, vr)
@@ -219,15 +281,24 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 		if err := getObjectParams.check(query); err != nil {
 			return err
 		}
+		if err := authorize("s3:GetObject"); err != nil {
+			return err
+		}
 		return app.getObject(w, r, rt, key)
 	case http.MethodHead:
 		if err := versionIDOnlyParams.check(query); err != nil {
+			return err
+		}
+		if err := authorize("s3:GetObject"); err != nil {
 			return err
 		}
 		return app.headObject(w, r, rt, key)
 	case http.MethodPut:
 		if query.Has("tagging") {
 			if err := taggingParams.check(query); err != nil {
+				return err
+			}
+			if err := authorize("s3:PutObjectTagging"); err != nil {
 				return err
 			}
 			return app.putObjectTagging(w, r, rt, key, vr)
@@ -238,6 +309,9 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 		hasCopySource := r.Header.Get("x-amz-copy-source") != ""
 		if query.Has("uploadId") || query.Has("partNumber") {
 			if err := uploadPartParams.check(query); err != nil {
+				return err
+			}
+			if err := authorize("s3:PutObject"); err != nil {
 				return err
 			}
 			if hasCopySource {
@@ -251,6 +325,9 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 		if err := checkACLHeader(r); err != nil {
 			return err
 		}
+		if err := authorize("s3:PutObject"); err != nil {
+			return err
+		}
 		if hasCopySource {
 			return app.copyObject(w, r, rt, key, vr)
 		}
@@ -260,15 +337,24 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 			if err := uploadIDOnlyParams.check(query); err != nil {
 				return err
 			}
+			if err := authorize("s3:AbortMultipartUpload"); err != nil {
+				return err
+			}
 			return app.abortMultipartUpload(w, r, rt, key)
 		}
 		if query.Has("tagging") {
 			if err := taggingParams.check(query); err != nil {
 				return err
 			}
+			if err := authorize("s3:DeleteObjectTagging"); err != nil {
+				return err
+			}
 			return app.deleteObjectTagging(w, r, rt, key)
 		}
 		if err := versionIDOnlyParams.check(query); err != nil {
+			return err
+		}
+		if err := authorize("s3:DeleteObject"); err != nil {
 			return err
 		}
 		return app.deleteObject(w, r, rt, key)
@@ -281,9 +367,15 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 			if err := checkACLHeader(r); err != nil {
 				return err
 			}
+			if err := authorize("s3:PutObject"); err != nil {
+				return err
+			}
 			return app.createMultipartUpload(w, r, rt, key)
 		case query.Has("uploadId"):
 			if err := uploadIDOnlyParams.check(query); err != nil {
+				return err
+			}
+			if err := authorize("s3:PutObject"); err != nil {
 				return err
 			}
 			return app.completeMultipartUpload(w, r, rt, key, vr)
@@ -332,6 +424,7 @@ func (p paramSet) check(query url.Values) *S3Error {
 var (
 	noParams             = newParamSet()
 	aclOnlyParams        = newParamSet("acl")
+	policyOnlyParams     = newParamSet("policy")
 	aclParams            = newParamSet("acl", "versionId")
 	locationOnlyParams   = newParamSet("location")
 	deleteOnlyParams     = newParamSet("delete")

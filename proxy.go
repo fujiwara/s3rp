@@ -405,13 +405,28 @@ func (app *S3RP) deleteObjects(w http.ResponseWriter, r *http.Request, rt *bucke
 		return newS3Error(http.StatusBadRequest, "MalformedXML",
 			"The XML you provided was not well-formed or did not validate against our published schema.")
 	}
+	// the policy is evaluated per object, like AWS: denied keys are
+	// reported as errors and only the permitted ones reach the backend
+	result := &DeleteResult{XMLNS: s3XMLNS}
 	objects := make([]types.ObjectIdentifier, 0, len(req.Objects))
 	for _, o := range req.Objects {
+		if s3err := app.authorize(vr, rt.cfg, "s3:DeleteObject", rt.cfg.Name+"/"+o.Key); s3err != nil {
+			result.Errors = append(result.Errors, DeleteError{
+				Key:       o.Key,
+				VersionID: o.VersionID,
+				Code:      s3err.Code,
+				Message:   s3err.Message,
+			})
+			continue
+		}
 		oi := types.ObjectIdentifier{Key: aws.String(o.Key)}
 		if o.VersionID != "" {
 			oi.VersionId = aws.String(o.VersionID)
 		}
 		objects = append(objects, oi)
+	}
+	if len(objects) == 0 {
+		return writeXML(w, result)
 	}
 	in := &s3.DeleteObjectsInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
@@ -424,7 +439,6 @@ func (app *S3RP) deleteObjects(w http.ResponseWriter, r *http.Request, rt *bucke
 	if err != nil {
 		return fromSDKError(err, r.URL.Path)
 	}
-	result := &DeleteResult{XMLNS: s3XMLNS}
 	for _, d := range out.Deleted {
 		deleted := DeletedObject{}
 		if d.Key != nil {

@@ -2,7 +2,9 @@ package s3rp
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/fujiwara/s3rp/policy"
 	"github.com/fujiwara/s3rp/store"
 )
 
@@ -21,11 +23,21 @@ func NewConfigStore(cfg *Config) store.Store {
 	for _, t := range cfg.Tenants {
 		buckets := make(map[string]*store.Bucket, len(t.Buckets))
 		for _, b := range t.Buckets {
-			buckets[b.Name] = &store.Bucket{
-				Tenant:  t.Name,
-				Name:    b.Name,
-				Backend: b.Backend,
+			bucket := &store.Bucket{
+				Tenant:     t.Name,
+				Name:       b.Name,
+				Backend:    b.Backend,
+				PolicyText: b.Policy,
 			}
+			if b.Policy != "" {
+				// the config is validated, so this cannot fail
+				p, err := policy.Parse(b.Policy)
+				if err != nil {
+					panic(fmt.Sprintf("bucket %s: invalid policy after validation: %v", b.Name, err))
+				}
+				bucket.Policy = p
+			}
+			buckets[b.Name] = bucket
 		}
 		s.tenants[t.Name] = buckets
 		for _, u := range t.Users {

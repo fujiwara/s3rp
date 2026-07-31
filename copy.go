@@ -41,6 +41,10 @@ func (app *S3RP) resolveCopySource(r *http.Request, vr *verifiedRequest, dst *bu
 		}
 		return "", newS3Error(http.StatusInternalServerError, "InternalError", "bucket lookup failed")
 	}
+	// reading the copy source needs s3:GetObject on the source bucket
+	if s3err := app.authorize(vr, src, "s3:GetObject", src.Name+"/"+srcKey); s3err != nil {
+		return "", s3err
+	}
 	sb, db := src.Backend, dst.cfg.Backend
 	if sb.Endpoint != db.Endpoint || sb.Region != db.Region || sb.AccessKeyID != db.AccessKeyID {
 		return "", errNotImplemented("copying between different backends")

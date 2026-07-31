@@ -126,6 +126,7 @@ $ aws --endpoint-url http://localhost:8080 s3api list-objects-v2 --bucket photos
 - ListObjectVersions
 - GetBucketAcl
 - GetObjectAcl
+- GetBucketPolicy
 - CreateMultipartUpload
 - UploadPart
 - UploadPartCopy
@@ -139,6 +140,41 @@ Other operations return a `NotImplemented` error.
 CopyObject and UploadPartCopy work between buckets served by the same backend (same endpoint, region and credentials); copying across different backends returns `NotImplemented`. The copy source bucket must be accessible by the requesting access key.
 
 The `versionId` query parameter is passed through on GetObject, HeadObject, DeleteObject and the object tagging operations. Versioning requires a backend that supports it.
+
+### Bucket policies
+
+A bucket may carry an AWS-style policy document, written as JSON text in the config (`buckets[].policy`). GetBucketPolicy returns it; PutBucketPolicy / DeleteBucketPolicy are not supported (policies are defined in the config).
+
+Two simplifications against AWS: principals are plain user names of the tenant under the `S3RP` key (no ARNs), and resources are plain `"bucket"` / `"bucket/prefix*"` strings (no ARNs). `*` in Action / Resource matches any characters including `/`.
+
+```yaml
+buckets:
+  - name: photos
+    backend: { ... }
+    policy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "BatchIsReadOnly",
+            "Effect": "Deny",
+            "Principal": {"S3RP": ["batch"]},
+            "Action": ["s3:PutObject", "s3:DeleteObject"],
+            "Resource": ["photos/*"]
+          }
+        ]
+      }
+```
+
+Evaluation model: every user of a tenant has full access to the tenant's buckets by default, and explicit `Deny` statements restrict it. `Allow` statements are accepted but have no effect yet (everything is already allowed); they will become meaningful when anonymous and cross-tenant access are introduced.
+
+Principal forms:
+
+- `{"S3RP": ["name", ...]}` — the listed users of the tenant.
+- `"*"` — all users, including ones added later. Note that the scope of `"*"` will widen when anonymous / cross-tenant access arrives (an `Allow` with `"*"` will then mean public access).
+- `NotPrincipal` (exclusive with `Principal`) — everyone except the listed users. `Deny` + `NotPrincipal` expresses "only these users may ..." so that newly added users are denied by default.
+
+Limitations: policies only cover users of the owning tenant; versioned operations use the same action names as unversioned ones (no `s3:GetObjectVersion` distinction). DeleteObjects is evaluated per object: denied keys are reported in the `Error` entries of the response. Copying evaluates `s3:GetObject` on the source and `s3:PutObject` on the destination.
 
 ### ACLs
 
