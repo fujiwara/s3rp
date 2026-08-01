@@ -155,6 +155,13 @@ func TestRDBStoreReadOnly(t *testing.T) {
 	if err := db.Migrate(t.Context(), sqldb); err != nil {
 		t.Errorf("migrate must be idempotent: %v", err)
 	}
+	// the tenant_id index for ListBucketNames must exist
+	var name string
+	err = sqldb.QueryRowContext(t.Context(),
+		`SELECT name FROM sqlite_master WHERE type='index' AND name='idx_buckets_tenant_id'`).Scan(&name)
+	if err != nil {
+		t.Errorf("expected index idx_buckets_tenant_id to exist: %v", err)
+	}
 }
 
 // TestRDBStorePolicyAndCORS verifies that policy and CORS definitions
