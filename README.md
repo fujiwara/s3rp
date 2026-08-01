@@ -313,7 +313,7 @@ The S3 API lives in `s3gw`, separate from the parts of this repository that are 
 | `store.Store` | where definitions come from: tenants, users, access keys, and where each bucket really lives. This is your control plane's read side. |
 | `s3gw.Authorizer` | what the policies cannot express — an exhausted quota, a suspended tenant, a rate limit. Consulted after the bucket and user policies have already allowed the operation. |
 | `s3gw.Interceptor` | what you meter. It wraps the operation, so the byte counts are filled in by the time `next` returns. |
-| `s3gw.Observer` | how requests are logged. The gateway does not log — it reports what it knows once per request and lets you choose the format, level and destination. |
+| `s3gw.Observer` | how requests are logged. The gateway does not log — once per request it reports who asked, what they asked for, what they were told and why — and leaves the format, level and destination to you. |
 
 **What the gateway does**: SigV4 verification (header and presigned), `aws-chunked` decoding and checksums, bucket and user policy evaluation, CORS, the operations themselves, and the routing that reaches them — refusing unknown ones rather than passing them through.
 
@@ -392,12 +392,17 @@ func main() {
 			slog.ErrorContext(ctx, "request failed", "code", info.Code,
 				"error", info.Err, "request_id", info.RequestID)
 		}
-		slog.InfoContext(ctx, "request",
+		attrs := []any{
 			"method", info.Method, "path", info.Path,
 			"query", info.RawQuery, // presigned signature already masked
 			"tenant", info.Tenant, "user", info.User, // empty if unverified
 			"status", info.Status, "bytes_out", info.BytesOut,
-			"duration", info.Duration, "request_id", info.RequestID)
+			"duration", info.Duration, "request_id", info.RequestID,
+		}
+		if info.Op != nil { // nil when the request never reached an operation
+			attrs = append(attrs, "action", info.Op.Action, "bucket", info.Op.Bucket)
+		}
+		slog.InfoContext(ctx, "request", attrs...)
 	})
 
 	log.Fatal(http.ListenAndServe(":8080", gw.Handler()))
