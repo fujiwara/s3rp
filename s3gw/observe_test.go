@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fujiwara/s3rp/s3gw"
 	"github.com/google/go-cmp/cmp"
@@ -169,4 +170,66 @@ func TestRequestInfoJSON(t *testing.T) {
 			t.Errorf("expect %s to be omitted on success: %s", absent, b)
 		}
 	}
+}
+
+// TestObserverIdentityAndOp covers the three shapes a record takes, which is
+// the reason the identity is kept apart from the operation: a service has to
+// be able to say who was refused, not only who succeeded.
+func TestObserverIdentityAndOp(t *testing.T) {
+	t.Run("an operation that ran", func(t *testing.T) {
+		gw := newTestGateway(t)
+		var got *s3gw.RequestInfo
+		gw.SetObserver(func(_ context.Context, info *s3gw.RequestInfo) { got = info })
+		serve(t, gw, stubGet{body: "hello"})
+
+		if got.Tenant != "testtenant" || got.User != "testuser" {
+			t.Errorf("expect the identity, got %+v", got)
+		}
+		if got.Op == nil {
+			t.Fatal("expect the operation")
+		}
+		if got.Op.Action != "s3:GetObject" || got.Op.Bucket != "testbucket" || got.Op.Key != "a.txt" {
+			t.Errorf("unexpected operation %+v", got.Op)
+		}
+	})
+
+	// authenticated, then refused: the identity is exactly what an operator
+	// needs here, and there is no operation to report
+	t.Run("refused after the signature verified", func(t *testing.T) {
+		gw := newTestGateway(t)
+		var got *s3gw.RequestInfo
+		gw.SetObserver(func(_ context.Context, info *s3gw.RequestInfo) { got = info })
+		req := signedRequest(t, "GET", "http://s3.example.com/nosuchbucket/a.txt",
+			nil, emptyPayloadHash, time.Now(), testCreds(), nil)
+		w := httptest.NewRecorder()
+		gw.Handler().ServeHTTP(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("expect the bucket to be refused, got %d", w.Code)
+		}
+		if got.Tenant != "testtenant" || got.User != "testuser" {
+			t.Errorf("expect the identity of the refused request, got %+v", got)
+		}
+		if got.Op != nil {
+			t.Errorf("expect no operation, got %+v", got.Op)
+		}
+	})
+
+	t.Run("signature that did not verify", func(t *testing.T) {
+		gw := newTestGateway(t)
+		var got *s3gw.RequestInfo
+		gw.SetObserver(func(_ context.Context, info *s3gw.RequestInfo) { got = info })
+		req := signedRequest(t, "GET", "http://s3.example.com/testbucket/a.txt",
+			nil, emptyPayloadHash, time.Now(),
+			aws.Credentials{AccessKeyID: testAccessKeyID, SecretAccessKey: "wrong"}, nil)
+		w := httptest.NewRecorder()
+		gw.Handler().ServeHTTP(w, req)
+
+		if got.Tenant != "" || got.User != "" || got.Op != nil {
+			t.Errorf("nothing is proven by a bad signature, got %+v", got)
+		}
+		if got.Code != "SignatureDoesNotMatch" {
+			t.Errorf("unexpected code %q", got.Code)
+		}
+	})
 }

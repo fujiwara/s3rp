@@ -27,6 +27,17 @@ type RequestInfo struct {
 	Status    int    `json:"status"`
 	// Code is the S3 error code the client was given, empty on success.
 	Code string `json:"code,omitempty"`
+	// Tenant and User are the identity the signature proved, known from the
+	// moment it verifies — so they are recorded even for a request that is
+	// then refused, which is when knowing who asked matters most. They are
+	// empty when the signature itself did not verify.
+	Tenant string `json:"tenant,omitempty"`
+	User   string `json:"user,omitempty"`
+	// Op is the operation the request resolved to, present only once routing
+	// and the policies have passed. A request refused before that — an
+	// unverifiable signature, an unknown bucket, a denied action — has none,
+	// which is why the identity above is kept separately.
+	Op *Op `json:"op,omitempty"`
 	// Err is what actually went wrong, when anything did. It is never sent to
 	// the client — it may name backend endpoints and buckets — so this is the
 	// only place it can be recorded.
@@ -58,6 +69,16 @@ func (i RequestInfo) MarshalJSON() ([]byte, error) {
 		info
 		Error string `json:"error,omitempty"`
 	}{info(i), msg})
+}
+
+type infoKey struct{}
+
+// recordOf returns the record being assembled for the request, or nil when
+// there is no observer to receive it, or when a handler was invoked outside
+// wrapHandler as tests do.
+func recordOf(ctx context.Context) *RequestInfo {
+	info, _ := ctx.Value(infoKey{}).(*RequestInfo)
+	return info
 }
 
 // Observer is called once per request, after the response has been written.

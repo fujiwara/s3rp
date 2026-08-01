@@ -61,7 +61,7 @@ func logRequest(ctx context.Context, info *s3gw.RequestInfo) {
 		}
 		slog.Log(ctx, level, "request failed", attrs...)
 	}
-	slog.InfoContext(ctx, "request",
+	attrs := []any{
 		"remote", info.RemoteAddr,
 		"method", info.Method,
 		"path", info.Path,
@@ -72,7 +72,17 @@ func logRequest(ctx context.Context, info *s3gw.RequestInfo) {
 		"bytes_out", info.BytesOut,
 		"duration", info.Duration.String(),
 		"request_id", info.RequestID,
-	)
+	}
+	// who asked is known as soon as the signature verifies, so it is logged
+	// even for a request that is then refused; what they asked for is only
+	// known once the request reached an operation
+	if info.Tenant != "" {
+		attrs = append(attrs, "tenant", info.Tenant, "user", info.User)
+	}
+	if info.Op != nil {
+		attrs = append(attrs, "action", info.Op.Action, "bucket", info.Op.Bucket)
+	}
+	slog.InfoContext(ctx, "request", attrs...)
 }
 
 // Run parses the command line, loads the config and serves until ctx is done.

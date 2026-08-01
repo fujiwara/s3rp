@@ -1,6 +1,7 @@
 package s3gw
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/url"
@@ -61,6 +62,20 @@ func (g *Gateway) wrapHandler(h handlerFunc) http.HandlerFunc {
 		start := time.Now()
 		requestID := s3err.NewRequestID()
 		w.Header().Set("x-amz-request-id", requestID)
+		// The record is assembled as the request goes: the identity is known
+		// once the signature verifies, the operation only after routing and
+		// the policies pass. Without an observer none of that is collected.
+		var info *RequestInfo
+		if g.observer != nil {
+			info = &RequestInfo{
+				Method:     r.Method,
+				Path:       r.URL.Path,
+				RemoteAddr: r.RemoteAddr,
+				RequestID:  requestID,
+				Start:      start,
+			}
+			r = r.WithContext(context.WithValue(r.Context(), infoKey{}, info))
+		}
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		body := &countingBody{}
 		if r.Body != nil {
@@ -84,23 +99,16 @@ func (g *Gateway) wrapHandler(h handlerFunc) http.HandlerFunc {
 			cause = errors.Unwrap(s3e)
 			s3err.Write(sw, r, s3e, requestID)
 		}
-		if g.observer == nil {
+		if info == nil {
 			return
 		}
-		g.observer(r.Context(), &RequestInfo{
-			Method:     r.Method,
-			Path:       r.URL.Path,
-			RawQuery:   redactQuery(r.URL.Query()),
-			RemoteAddr: r.RemoteAddr,
-			RequestID:  requestID,
-			Status:     sw.status,
-			Code:       code,
-			Err:        cause,
-			Start:      start,
-			Duration:   time.Since(start),
-			BytesIn:    body.n,
-			BytesOut:   sw.written,
-		})
+		info.RawQuery = redactQuery(r.URL.Query())
+		info.Status = sw.status
+		info.Code = code
+		info.Err = cause
+		info.Duration = time.Since(start)
+		info.BytesIn, info.BytesOut = body.n, sw.written
+		g.observer(r.Context(), info)
 	}
 }
 
@@ -140,6 +148,9 @@ func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	vr, s3e := g.verifyRequest(r)
 	if s3e != nil {
 		return s3e
+	}
+	if info := recordOf(r.Context()); info != nil {
+		info.Tenant, info.User = vr.Tenant, vr.User
 	}
 	bucket, key, err := splitPath(r.URL.EscapedPath())
 	if err != nil {
@@ -244,6 +255,9 @@ func (c *opCtx) dispatch(routes []route) error {
 			User:   c.vr.User,
 			Bucket: c.rt.cfg.Name,
 			Key:    c.key,
+		}
+		if info := recordOf(c.r.Context()); info != nil {
+			info.Op = op
 		}
 		return c.g.runOp(c.r.Context(), op, c, func() error {
 			return rt.handle(c.g, c)
