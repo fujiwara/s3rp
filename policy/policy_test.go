@@ -601,7 +601,6 @@ func TestPolicyLimits(t *testing.T) {
 		{"too many statements", &policy.UserPolicy{Statements: overStmts}, "at most"},
 		{"too many actions", &policy.UserPolicy{Statements: []policy.ActionStatement{{Effect: "Allow", Action: overActions}}}, "at most"},
 		{"action pattern too long", &policy.UserPolicy{Statements: []policy.ActionStatement{{Effect: "Allow", Action: []string{longPat}}}}, "too long"},
-		{"policy too large", &policy.UserPolicy{Statements: bigStmts}, "at most"},
 	}
 	for _, tc := range userCases {
 		t.Run("user/"+tc.name, func(t *testing.T) {
@@ -610,6 +609,19 @@ func TestPolicyLimits(t *testing.T) {
 			}
 		})
 	}
+
+	// The byte cap applies to the serialized form, so it is enforced by
+	// MarshalUserPolicy rather than the structural validation: a policy within
+	// every structural cap can still be too large once marshaled.
+	t.Run("user/policy too large", func(t *testing.T) {
+		up := &policy.UserPolicy{Statements: bigStmts}
+		if err := policy.ValidateUserPolicy(up); err != nil {
+			t.Fatalf("structural validation should pass: %v", err)
+		}
+		if _, err := policy.MarshalUserPolicy(up); err == nil || !strings.Contains(err.Error(), "at most") {
+			t.Errorf("expect marshal to reject an oversized policy, got %v", err)
+		}
+	})
 }
 
 func repeatQuoted(s string, n int) string {

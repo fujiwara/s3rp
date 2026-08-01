@@ -84,12 +84,16 @@ func BenchmarkAllows(b *testing.B) {
 	}
 }
 
-// BenchmarkDeleteObjects mirrors the proxy's per-request path: resolve the
-// resource-independent parts once, then test only the resource for each of
-// 1000 keys. The benign case must stay O(1) per key (AlwaysAllows); the
-// adversarial case is bounded by the resource-pattern count cap.
+// BenchmarkDeleteObjects mirrors the proxy's per-request path (see the
+// DeleteObjects loop in proxy.go): resolve the resource-independent parts
+// once, skip the per-object work entirely when nothing can deny, and
+// otherwise test only the resource for each of 1000 keys. The benign case
+// must stay O(1) for the whole batch — if the AlwaysAllows skip regresses it
+// jumps by three orders of magnitude — and the adversarial case is bounded by
+// the resource-pattern count cap.
 func BenchmarkDeleteObjects(b *testing.B) {
 	up := maxUserPolicy()
+	const bucket = "photos"
 	keys := make([]string, 1000)
 	for i := range keys {
 		keys[i] = worstKey()
@@ -101,8 +105,11 @@ func BenchmarkDeleteObjects(b *testing.B) {
 				continue
 			}
 			e := p.DenyEvaluatorFor("someuser", "s3:DeleteObject")
+			if e.AlwaysAllows() {
+				continue // the proxy skips the per-object loop entirely
+			}
 			for _, k := range keys {
-				e.Denies(k)
+				e.Denies(bucket + "/" + k)
 			}
 		}
 	}

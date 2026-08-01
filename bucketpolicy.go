@@ -54,6 +54,12 @@ func (a perObjectAuthorizer) denies(resource string) bool {
 	return a.denyAll || a.eval.Denies(resource)
 }
 
+// allowsEverything reports that no resource can be denied for this action, so
+// the caller may skip the per-object check altogether.
+func (a perObjectAuthorizer) allowsEverything() bool {
+	return !a.denyAll && a.eval.AlwaysAllows()
+}
+
 // getBucketPolicy returns the raw bucket policy JSON.
 func (app *S3RP) getBucketPolicy(c *opCtx) error {
 	w, rt := c.w, c.rt

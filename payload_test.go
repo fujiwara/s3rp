@@ -35,6 +35,22 @@ func TestPayloadVerifier(t *testing.T) {
 		assertS3Code(t, err, "XAmzContentSHA256Mismatch")
 	})
 
+	// a mis-cased but valid hash must still be verified, not silently skipped
+	t.Run("uppercase hash is accepted", func(t *testing.T) {
+		r := s3rp.NewPayloadVerifier(bytes.NewReader(body), strings.ToUpper(want), int64(len(body)))
+		if _, err := io.ReadAll(r); err != nil {
+			t.Errorf("uppercase hash should verify: %v", err)
+		}
+	})
+
+	t.Run("uppercase hash still rejects tampering", func(t *testing.T) {
+		tampered := append([]byte(nil), body...)
+		tampered[0] = 'H'
+		r := s3rp.NewPayloadVerifier(bytes.NewReader(tampered), strings.ToUpper(want), int64(len(tampered)))
+		_, err := io.ReadAll(r)
+		assertS3Code(t, err, "XAmzContentSHA256Mismatch")
+	})
+
 	t.Run("verified without reading to EOF", func(t *testing.T) {
 		tampered := append([]byte(nil), body...)
 		tampered[len(tampered)-1] = 'X'

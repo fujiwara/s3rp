@@ -474,16 +474,21 @@ func (app *S3RP) deleteObjects(c *opCtx) error {
 	if bypass {
 		bypassAuth = app.perObjectAuthorizer(vr, rt.cfg, "s3:BypassGovernanceRetention")
 	}
+	// when nothing can deny any key, the per-object check (and building its
+	// resource string) is skipped entirely
+	checkPerObject := !delAuth.allowsEverything() || (bypass && !bypassAuth.allowsEverything())
 	result := &DeleteResult{XMLNS: s3XMLNS}
 	objects := make([]types.ObjectIdentifier, 0, len(req.Objects))
 	for _, o := range req.Objects {
-		resource := rt.cfg.Name + "/" + o.Key
-		if delAuth.denies(resource) || (bypass && bypassAuth.denies(resource)) {
-			s3err := errAccessDenied()
-			result.Errors = append(result.Errors, DeleteError{
-				Key: o.Key, VersionID: o.VersionID, Code: s3err.Code, Message: s3err.Message,
-			})
-			continue
+		if checkPerObject {
+			resource := rt.cfg.Name + "/" + o.Key
+			if delAuth.denies(resource) || (bypass && bypassAuth.denies(resource)) {
+				s3err := errAccessDenied()
+				result.Errors = append(result.Errors, DeleteError{
+					Key: o.Key, VersionID: o.VersionID, Code: s3err.Code, Message: s3err.Message,
+				})
+				continue
+			}
 		}
 		oi := types.ObjectIdentifier{Key: aws.String(o.Key)}
 		if o.VersionID != "" {
@@ -609,14 +614,16 @@ func requestBody(r *http.Request, vr *verifiedRequest) (io.Reader, int64, *S3Err
 	}
 }
 
-// isHexSHA256 reports whether s is a 64-character lowercase hex string, i.e. a
-// concrete SHA-256 payload hash rather than a sentinel like UNSIGNED-PAYLOAD.
+// isHexSHA256 reports whether s is a 64-character hex string, i.e. a concrete
+// SHA-256 payload hash rather than a sentinel like UNSIGNED-PAYLOAD. Upper
+// case is accepted too: skipping verification for a mis-cased but otherwise
+// valid hash would fail open.
 func isHexSHA256(s string) bool {
 	if len(s) != 64 {
 		return false
 	}
 	for _, c := range s {
-		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
 			return false
 		}
 	}
@@ -636,7 +643,8 @@ type payloadVerifier struct {
 }
 
 func newPayloadVerifier(r io.Reader, want string, length int64) *payloadVerifier {
-	return &payloadVerifier{r: r, h: sha256.New(), want: want, remaining: length}
+	// hex.EncodeToString produces lower case, so normalize the expected value
+	return &payloadVerifier{r: r, h: sha256.New(), want: strings.ToLower(want), remaining: length}
 }
 
 func (v *payloadVerifier) Read(p []byte) (int, error) {

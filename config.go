@@ -179,7 +179,13 @@ func (c *Config) Validate() error {
 				keyIDs[k.AccessKeyID] = true
 			}
 			if len(u.Policy) > 0 {
-				if err := policy.ValidateUserPolicy(&policy.UserPolicy{Statements: u.Policy}); err != nil {
+				up := &policy.UserPolicy{Statements: u.Policy}
+				if err := policy.ValidateUserPolicy(up); err != nil {
+					return fmt.Errorf("tenant %s: user %s: invalid policy: %w", t.Name, u.Name, err)
+				}
+				// the byte cap applies to the serialized form, which the YAML
+				// path does not otherwise produce
+				if _, err := policy.MarshalUserPolicy(up); err != nil {
 					return fmt.Errorf("tenant %s: user %s: invalid policy: %w", t.Name, u.Name, err)
 				}
 			}
