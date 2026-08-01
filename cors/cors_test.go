@@ -104,6 +104,8 @@ func TestAllowPreflight(t *testing.T) {
 		}{
 			{"allowed exactly", "content-type", true},
 			{"case-insensitive", "Content-Type", true},
+			{"wildcard entry", "x-amz-meta-foo", true},
+			{"wildcard entry, mis-cased", "X-Amz-Meta-Foo", true},
 			{"not allowed", "x-custom-header", false},
 			{"one of several not allowed", "content-type, x-custom-header", false},
 		}

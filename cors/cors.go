@@ -110,9 +110,14 @@ func setAllowOrigin(h http.Header, rule *Rule, origin string) {
 	h.Set("Access-Control-Allow-Credentials", "true")
 }
 
+// headerAllowed reports whether a requested header matches an AllowedHeaders
+// entry. As in AWS, an entry may carry a "*" wildcard ("x-amz-*" allows every
+// Amazon-specific header), and matching is case-insensitive because header
+// names are.
 func headerAllowed(allowed []string, header string) bool {
+	header = strings.ToLower(header)
 	for _, a := range allowed {
-		if a == "*" || strings.EqualFold(a, header) {
+		if policy.Match(strings.ToLower(a), header) {
 			return true
 		}
 	}
