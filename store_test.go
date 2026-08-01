@@ -155,6 +155,13 @@ func TestRDBStoreReadOnly(t *testing.T) {
 	if err := db.Migrate(t.Context(), sqldb); err != nil {
 		t.Errorf("migrate must be idempotent: %v", err)
 	}
+	// the tenant_id index for ListBucketNames must exist
+	var name string
+	err = sqldb.QueryRowContext(t.Context(),
+		`SELECT name FROM sqlite_master WHERE type='index' AND name='idx_buckets_tenant_id'`).Scan(&name)
+	if err != nil {
+		t.Errorf("expected index idx_buckets_tenant_id to exist: %v", err)
+	}
 }
 
 // TestRDBStorePolicyAndCORS verifies that policy and CORS definitions
@@ -228,9 +235,10 @@ func TestRDBStoreInvalidUserPolicy(t *testing.T) {
 }
 
 // TestImportRejectsOversizeUserPolicy verifies that db.Import fails early for
-// a user policy that is structurally valid but marshals larger than the read
-// path (store/rdb.GetKey) will accept, so the DB never holds a policy the
-// proxy would reject at request time.
+// a user policy that passes the per-statement/action caps but marshals larger
+// than MaxPolicyBytes is rejected on both the config path (ValidateUserPolicy)
+// and, as a backstop, the DB import path (marshalUserPolicy) — so neither the
+// YAML store nor the DB ever holds a policy the read path would reject.
 func TestImportRejectsOversizeUserPolicy(t *testing.T) {
 	// within the per-statement/action caps but well over MaxPolicyBytes once
 	// marshaled (MaxStatements * MaxActionsPerStatement * ~120-byte patterns)
@@ -258,10 +266,12 @@ func TestImportRejectsOversizeUserPolicy(t *testing.T) {
 		}},
 	}
 	cfg.SetDefaults()
-	// the structural caps pass; only the byte cap should catch it
-	if err := cfg.Validate(); err != nil {
-		t.Fatalf("config should pass structural validation: %v", err)
+	// the config path (ValidateUserPolicy) rejects it on the byte cap even
+	// though the structural caps pass
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "at most") {
+		t.Errorf("expect config validation to reject oversized user policy, got %v", err)
 	}
+	// the DB import path rejects it too, independently of config validation
 	dsn := t.TempDir() + "/s3rp.db"
 	sqldb, err := sql.Open("sqlite", dsn)
 	if err != nil {

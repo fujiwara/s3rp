@@ -151,6 +151,13 @@ func (app *S3RP) Serve(ctx context.Context) error {
 	srv := &http.Server{
 		Addr:    app.cfg.Listen,
 		Handler: app.Handler(),
+		// Bound slow-client attacks (slowloris) without capping transfer time:
+		// ReadTimeout/WriteTimeout are intentionally left unset so large object
+		// uploads and downloads are not cut off mid-stream. ReadHeaderTimeout
+		// bounds how long a client may take to send request headers, and
+		// IdleTimeout reaps idle keep-alive connections.
+		ReadHeaderTimeout: 30 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 	go func() {
 		<-ctx.Done()

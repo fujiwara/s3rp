@@ -1,8 +1,12 @@
 package s3rp
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"encoding/xml"
 	"fmt"
+	"hash"
 	"io"
 	"log/slog"
 	"net/http"
@@ -593,8 +597,62 @@ func requestBody(r *http.Request, vr *verifiedRequest) (io.Reader, int64, *S3Err
 			return nil, 0, newS3Error(http.StatusLengthRequired, "MissingContentLength",
 				"You must provide the Content-Length HTTP header.")
 		}
+		// When the client signed a concrete payload hash (not UNSIGNED-PAYLOAD),
+		// the signature only commits to the header value, not the bytes; the
+		// backend is sent the body as UNSIGNED-PAYLOAD, so verify the body
+		// against the signed hash here (as S3 does) or a tampered payload would
+		// be committed unverified.
+		if isHexSHA256(vr.PayloadHash) {
+			return newPayloadVerifier(r.Body, vr.PayloadHash, r.ContentLength), r.ContentLength, nil
+		}
 		return r.Body, r.ContentLength, nil
 	}
+}
+
+// isHexSHA256 reports whether s is a 64-character lowercase hex string, i.e. a
+// concrete SHA-256 payload hash rather than a sentinel like UNSIGNED-PAYLOAD.
+func isHexSHA256(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+// payloadVerifier checks a request body's SHA-256 against the value the client
+// signed in x-amz-content-sha256. It verifies as soon as the declared length
+// has been read (and on EOF), aborting the stream on mismatch so an altered
+// payload never reaches the backend.
+type payloadVerifier struct {
+	r         io.Reader
+	h         hash.Hash
+	want      string
+	remaining int64
+	done      bool
+}
+
+func newPayloadVerifier(r io.Reader, want string, length int64) *payloadVerifier {
+	return &payloadVerifier{r: r, h: sha256.New(), want: want, remaining: length}
+}
+
+func (v *payloadVerifier) Read(p []byte) (int, error) {
+	n, err := v.r.Read(p)
+	if n > 0 {
+		v.h.Write(p[:n])
+		v.remaining -= int64(n)
+	}
+	if !v.done && (v.remaining <= 0 || err == io.EOF) {
+		v.done = true
+		got := hex.EncodeToString(v.h.Sum(nil))
+		if subtle.ConstantTimeCompare([]byte(got), []byte(v.want)) != 1 {
+			return 0, errContentSHA256Mismatch()
+		}
+	}
+	return n, err
 }
 
 func writeXML(w http.ResponseWriter, v any) error {

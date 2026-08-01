@@ -583,6 +583,16 @@ func TestPolicyLimits(t *testing.T) {
 	for i := range overActions {
 		overActions[i] = "s3:GetObject"
 	}
+	// structurally valid but marshals over MaxPolicyBytes (statements/actions
+	// within caps, each action pattern near the max length)
+	bigActions := make([]string, policy.MaxActionsPerStatement)
+	for i := range bigActions {
+		bigActions[i] = "s3:" + strings.Repeat("z", policy.MaxPatternLen-4)
+	}
+	bigStmts := make([]policy.ActionStatement, policy.MaxStatements)
+	for i := range bigStmts {
+		bigStmts[i] = policy.ActionStatement{Effect: "Allow", Action: bigActions}
+	}
 	userCases := []struct {
 		name   string
 		up     *policy.UserPolicy
@@ -591,6 +601,7 @@ func TestPolicyLimits(t *testing.T) {
 		{"too many statements", &policy.UserPolicy{Statements: overStmts}, "at most"},
 		{"too many actions", &policy.UserPolicy{Statements: []policy.ActionStatement{{Effect: "Allow", Action: overActions}}}, "at most"},
 		{"action pattern too long", &policy.UserPolicy{Statements: []policy.ActionStatement{{Effect: "Allow", Action: []string{longPat}}}}, "too long"},
+		{"policy too large", &policy.UserPolicy{Statements: bigStmts}, "at most"},
 	}
 	for _, tc := range userCases {
 		t.Run("user/"+tc.name, func(t *testing.T) {

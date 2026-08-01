@@ -301,6 +301,16 @@ func ValidateUserPolicy(up *UserPolicy) error {
 			}
 		}
 	}
+	// enforce the same serialized-size cap as bucket policies (Parse) and the
+	// DB read path (store/rdb.GetKey), so the YAML/config path cannot accept a
+	// user policy larger than the documented limit.
+	data, err := json.Marshal(up)
+	if err != nil {
+		return err
+	}
+	if len(data) > MaxPolicyBytes {
+		return fmt.Errorf("policy is %d bytes, at most %d are allowed", len(data), MaxPolicyBytes)
+	}
 	return nil
 }
 

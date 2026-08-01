@@ -11,7 +11,12 @@ var (
 	FromSDKError = fromSDKError
 	NewS3Error   = newS3Error
 	WriteS3Error = writeS3Error
+	RedactQuery  = redactQuery
 )
+
+func NewPayloadVerifier(r io.Reader, want string, length int64) io.Reader {
+	return newPayloadVerifier(r, want, length)
+}
 
 type VerifiedRequest = verifiedRequest
 

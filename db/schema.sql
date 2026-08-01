@@ -27,3 +27,7 @@ CREATE TABLE IF NOT EXISTS buckets (
   policy    TEXT NOT NULL DEFAULT '', -- bucket policy JSON text ('' = none)
   cors      TEXT NOT NULL DEFAULT ''  -- []store.CORSRule as JSON ('' = none)
 );
+
+-- ListBucketNames filters by tenant_id. buckets.name already has an implicit
+-- unique index for GetBucketByName, but tenant_id needs its own.
+CREATE INDEX IF NOT EXISTS idx_buckets_tenant_id ON buckets (tenant_id);

@@ -91,11 +91,9 @@ func (cr *chunkedReader) Read(p []byte) (int, error) {
 	}
 	for cr.remaining == 0 {
 		if cr.started {
-			// consume CRLF after the chunk data, then verify it
+			// the previous chunk was verified as soon as its data completed
+			// (below); here we only consume the CRLF that frames it
 			if err := cr.readCRLF(); err != nil {
-				return 0, cr.fail(err)
-			}
-			if err := cr.verifyChunk(); err != nil {
 				return 0, cr.fail(err)
 			}
 		}
@@ -134,6 +132,15 @@ func (cr *chunkedReader) Read(p []byte) (int, error) {
 	}
 	if err != nil && err != io.EOF {
 		return n, cr.fail(err)
+	}
+	// Verify the chunk signature the moment its data is complete, before
+	// handing the final bytes to the caller — so integrity does not depend on
+	// the consumer reading past the last byte to reach EOF. On failure the
+	// just-read bytes are dropped (the stream is aborted).
+	if cr.remaining == 0 {
+		if verr := cr.verifyChunk(); verr != nil {
+			return 0, cr.fail(verr)
+		}
 	}
 	return n, nil
 }
