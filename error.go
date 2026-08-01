@@ -51,6 +51,9 @@ var (
 	errSignatureDoesNotMatch = func() *S3Error {
 		return newS3Error(http.StatusForbidden, "SignatureDoesNotMatch", "The request signature we calculated does not match the signature you provided. Check your key and signing method.")
 	}
+	errContentSHA256Mismatch = func() *S3Error {
+		return newS3Error(http.StatusBadRequest, "XAmzContentSHA256Mismatch", "The provided 'x-amz-content-sha256' header does not match what was computed.")
+	}
 )
 
 // wellKnownErrorStatus maps S3 error codes to HTTP statuses, for errors

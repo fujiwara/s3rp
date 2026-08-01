@@ -14,6 +14,10 @@ var (
 	RedactQuery  = redactQuery
 )
 
+func NewPayloadVerifier(r io.Reader, want string, length int64) io.Reader {
+	return newPayloadVerifier(r, want, length)
+}
+
 type VerifiedRequest = verifiedRequest
 
 func (app *S3RP) VerifyRequest(r *http.Request) (*VerifiedRequest, *S3Error) {

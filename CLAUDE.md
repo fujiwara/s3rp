@@ -28,6 +28,7 @@ It deliberately reconstructs operations through the SDK instead of transparently
 - CORS is handled by the proxy (not the backend): preflight `OPTIONS` is unauthenticated and handled before signature verification. Required for browser-direct presigned uploads.
 - Object Lock is passed through to the backend (WORM enforcement is the backend's job). Bucket must be created with Object Lock enabled on the backend (s3rp does not proxy CreateBucket). Backend behavior differs — Ceph RGW/S3 honor governance bypass, versitygw does not — so the integration ObjectLock bypass-delete is best-effort, not asserted.
 - CopyObject / UploadPartCopy work only between buckets on the same backend; the source resolves within the requester's tenant, making cross-tenant copies impossible by construction.
+- Two tenants must not map front buckets to the same physical backend bucket (endpoint + backend bucket name); config validation rejects it, since sharing a physical bucket would break tenant isolation (within one tenant it is allowed).
 - Responses must expose the **front** bucket name (ListObjectsV2 `Name`, multipart results, error `Resource`), never the backend bucket rename.
 
 ## SigV4 verification (auth.go) — the trickiest part
@@ -39,7 +40,8 @@ Verification re-signs a clone of the request with the SDK's own `v4.Signer` and 
 - The signer includes `content-length` in canonical headers based on `Request.ContentLength`, not the header map — the clone sets the field when the header was signed.
 - The clone preserves the raw request escaping via `url.ParseRequestURI(r.RequestURI)`.
 - Presigned URLs verify the same way via `PresignHTTP`; auth query params are stripped first (the signer re-adds them). S3's presigner disables header hoisting (signed `x-amz-meta-*` must be sent by the uploader) and strips Content-Type from presigned PUTs.
-- aws-chunked bodies (`STREAMING-AWS4-HMAC-SHA256-PAYLOAD` and trailer variants) are mandatory to decode — the aws CLI uses them for every upload over http. chunked.go verifies the per-chunk HMAC chain seeded by the request signature; AWS docs known-answer vectors are the test fixtures.
+- aws-chunked bodies (`STREAMING-AWS4-HMAC-SHA256-PAYLOAD` and trailer variants) are mandatory to decode — the aws CLI uses them for every upload over http. chunked.go verifies the per-chunk HMAC chain seeded by the request signature; AWS docs known-answer vectors are the test fixtures. Each chunk is verified the moment its data completes (not on the following read), so integrity does not depend on the consumer reading to EOF.
+- Payload integrity: the SigV4 signature commits to the `x-amz-content-sha256` header value, not the bytes. Since the backend is sent the body as `UNSIGNED-PAYLOAD`, the proxy verifies the body against a concrete signed hash itself (proxy.go `payloadVerifier`, `XAmzContentSHA256Mismatch` on mismatch); `UNSIGNED-PAYLOAD` requests have nothing to verify. A body-read `*S3Error` surfaces to the client because `fromSDKError` unwraps it via `errors.As`.
 
 ## Checksums (checksum.go)
 
