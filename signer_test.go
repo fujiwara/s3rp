@@ -104,16 +104,14 @@ func TestSignerCacheManyKeys(t *testing.T) {
 	var wg sync.WaitGroup
 	for round := range 3 {
 		for i := range signerTestKeys {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				req := signedGetFor(t, i, fmt.Sprintf("secret%02d", i))
 				w := httptest.NewRecorder()
 				h.ServeHTTP(w, req)
 				if w.Code != http.StatusOK {
 					t.Errorf("round %d key %d: status %d: %s", round, i, w.Code, w.Body.String())
 				}
-			}()
+			})
 		}
 	}
 	wg.Wait()

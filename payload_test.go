@@ -58,7 +58,7 @@ func TestPayloadVerifier(t *testing.T) {
 		// read exactly the declared length, byte by byte, then stop
 		buf := make([]byte, 1)
 		var readErr error
-		for i := 0; i < len(tampered); i++ {
+		for range tampered {
 			if _, err := r.Read(buf); err != nil {
 				readErr = err
 				break
