@@ -57,7 +57,7 @@ func (app *S3RP) getObjectACL(w http.ResponseWriter, r *http.Request, rt *bucket
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
 	}
-	if v := r.URL.Query().Get("versionId"); v != "" {
+	if v := r.URL.Query().Get(qpVersionID); v != "" {
 		in.VersionId = aws.String(v)
 	}
 	if _, err := rt.client.HeadObject(r.Context(), in); err != nil {

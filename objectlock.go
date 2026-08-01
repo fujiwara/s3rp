@@ -83,7 +83,7 @@ func (app *S3RP) getObjectRetention(w http.ResponseWriter, r *http.Request, rt *
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
 	}
-	if v := r.URL.Query().Get("versionId"); v != "" {
+	if v := r.URL.Query().Get(qpVersionID); v != "" {
 		in.VersionId = aws.String(v)
 	}
 	out, err := rt.client.GetObjectRetention(r.Context(), in)
@@ -120,7 +120,7 @@ func (app *S3RP) putObjectRetention(w http.ResponseWriter, r *http.Request, rt *
 		}
 		in.Retention.RetainUntilDate = aws.Time(t)
 	}
-	if v := r.URL.Query().Get("versionId"); v != "" {
+	if v := r.URL.Query().Get(qpVersionID); v != "" {
 		in.VersionId = aws.String(v)
 	}
 	if bypassGovernanceRetention(r) {
@@ -138,7 +138,7 @@ func (app *S3RP) getObjectLegalHold(w http.ResponseWriter, r *http.Request, rt *
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
 	}
-	if v := r.URL.Query().Get("versionId"); v != "" {
+	if v := r.URL.Query().Get(qpVersionID); v != "" {
 		in.VersionId = aws.String(v)
 	}
 	out, err := rt.client.GetObjectLegalHold(r.Context(), in)
@@ -162,7 +162,7 @@ func (app *S3RP) putObjectLegalHold(w http.ResponseWriter, r *http.Request, rt *
 		Key:       aws.String(key),
 		LegalHold: &types.ObjectLockLegalHold{Status: types.ObjectLockLegalHoldStatus(req.Status)},
 	}
-	if v := r.URL.Query().Get("versionId"); v != "" {
+	if v := r.URL.Query().Get(qpVersionID); v != "" {
 		in.VersionId = aws.String(v)
 	}
 	if _, err := rt.client.PutObjectLegalHold(r.Context(), in); err != nil {

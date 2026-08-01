@@ -142,7 +142,7 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 	switch r.Method {
 	case http.MethodGet:
 		switch {
-		case query.Has("uploads"):
+		case query.Has(subUploads):
 			if err := listMultipartUploadsParams.check(query); err != nil {
 				return err
 			}
@@ -150,7 +150,7 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 				return err
 			}
 			return app.listMultipartUploads(w, r, rt)
-		case query.Has("location"):
+		case query.Has(subLocation):
 			if err := locationOnlyParams.check(query); err != nil {
 				return err
 			}
@@ -158,7 +158,7 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 				return err
 			}
 			return app.getBucketLocation(w, rt)
-		case query.Has("acl"):
+		case query.Has(subACL):
 			if err := aclOnlyParams.check(query); err != nil {
 				return err
 			}
@@ -166,7 +166,7 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 				return err
 			}
 			return app.getBucketACL(w, vr)
-		case query.Has("policy"):
+		case query.Has(subPolicy):
 			if err := policyOnlyParams.check(query); err != nil {
 				return err
 			}
@@ -174,7 +174,7 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 				return err
 			}
 			return app.getBucketPolicy(w, rt)
-		case query.Has("cors"):
+		case query.Has(subCORS):
 			if err := corsOnlyParams.check(query); err != nil {
 				return err
 			}
@@ -182,7 +182,7 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 				return err
 			}
 			return app.getBucketCors(w, rt)
-		case query.Has("object-lock"):
+		case query.Has(subObjectLock):
 			if err := objectLockOnlyParams.check(query); err != nil {
 				return err
 			}
@@ -190,7 +190,7 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 				return err
 			}
 			return app.getObjectLockConfiguration(w, r, rt)
-		case query.Has("versioning"):
+		case query.Has(subVersioning):
 			if err := versioningOnlyParams.check(query); err != nil {
 				return err
 			}
@@ -198,7 +198,7 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 				return err
 			}
 			return app.getBucketVersioning(w, r, rt)
-		case query.Has("versions"):
+		case query.Has(subVersions):
 			if err := listObjectVersionsParams.check(query); err != nil {
 				return err
 			}
@@ -206,7 +206,7 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 				return err
 			}
 			return app.listObjectVersions(w, r, rt)
-		case query.Get("list-type") == "2":
+		case query.Get(qpListType) == "2":
 			if err := listObjectsV2Params.check(query); err != nil {
 				return err
 			}
@@ -229,7 +229,7 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 		}
 		return app.headBucket(w, r, rt)
 	case http.MethodPut:
-		if query.Has("versioning") {
+		if query.Has(subVersioning) {
 			if err := versioningOnlyParams.check(query); err != nil {
 				return err
 			}
@@ -238,7 +238,7 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 			}
 			return app.putBucketVersioning(w, r, rt, vr)
 		}
-		if query.Has("object-lock") {
+		if query.Has(subObjectLock) {
 			if err := objectLockOnlyParams.check(query); err != nil {
 				return err
 			}
@@ -247,28 +247,28 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 			}
 			return app.putObjectLockConfiguration(w, r, rt, vr)
 		}
-		if query.Has("acl") {
+		if query.Has(subACL) {
 			return errACLNotSupported()
 		}
-		if query.Has("policy") {
+		if query.Has(subPolicy) {
 			// bucket policies are defined in the config (or a future
 			// control plane), not via the S3 API
 			return errNotImplemented("PutBucketPolicy")
 		}
-		if query.Has("cors") {
+		if query.Has(subCORS) {
 			return errNotImplemented("PutBucketCors")
 		}
 		return errNotImplemented("this bucket operation")
 	case http.MethodDelete:
-		if query.Has("policy") {
+		if query.Has(subPolicy) {
 			return errNotImplemented("DeleteBucketPolicy")
 		}
-		if query.Has("cors") {
+		if query.Has(subCORS) {
 			return errNotImplemented("DeleteBucketCors")
 		}
 		return errNotImplemented("this bucket operation")
 	case http.MethodPost:
-		if query.Has("delete") {
+		if query.Has(subDelete) {
 			if err := deleteOnlyParams.check(query); err != nil {
 				return err
 			}
@@ -287,7 +287,7 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 	}
 	switch r.Method {
 	case http.MethodGet:
-		if query.Has("uploadId") {
+		if query.Has(qpUploadID) {
 			if err := listPartsParams.check(query); err != nil {
 				return err
 			}
@@ -296,7 +296,7 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 			}
 			return app.listParts(w, r, rt, key)
 		}
-		if query.Has("tagging") {
+		if query.Has(subTagging) {
 			if err := taggingParams.check(query); err != nil {
 				return err
 			}
@@ -305,7 +305,7 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 			}
 			return app.getObjectTagging(w, r, rt, key)
 		}
-		if query.Has("acl") {
+		if query.Has(subACL) {
 			if err := aclParams.check(query); err != nil {
 				return err
 			}
@@ -314,7 +314,7 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 			}
 			return app.getObjectACL(w, r, rt, key, vr)
 		}
-		if query.Has("retention") {
+		if query.Has(subRetention) {
 			if err := retentionParams.check(query); err != nil {
 				return err
 			}
@@ -323,7 +323,7 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 			}
 			return app.getObjectRetention(w, r, rt, key)
 		}
-		if query.Has("legal-hold") {
+		if query.Has(subLegalHold) {
 			if err := legalHoldParams.check(query); err != nil {
 				return err
 			}
@@ -348,7 +348,7 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 		}
 		return app.headObject(w, r, rt, key)
 	case http.MethodPut:
-		if query.Has("tagging") {
+		if query.Has(subTagging) {
 			if err := taggingParams.check(query); err != nil {
 				return err
 			}
@@ -357,10 +357,10 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 			}
 			return app.putObjectTagging(w, r, rt, key, vr)
 		}
-		if query.Has("acl") {
+		if query.Has(subACL) {
 			return errACLNotSupported()
 		}
-		if query.Has("retention") {
+		if query.Has(subRetention) {
 			if err := retentionParams.check(query); err != nil {
 				return err
 			}
@@ -374,7 +374,7 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 			}
 			return app.putObjectRetention(w, r, rt, key, vr)
 		}
-		if query.Has("legal-hold") {
+		if query.Has(subLegalHold) {
 			if err := legalHoldParams.check(query); err != nil {
 				return err
 			}
@@ -384,7 +384,7 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 			return app.putObjectLegalHold(w, r, rt, key, vr)
 		}
 		hasCopySource := r.Header.Get("x-amz-copy-source") != ""
-		if query.Has("uploadId") || query.Has("partNumber") {
+		if query.Has(qpUploadID) || query.Has(qpPartNumber) {
 			if err := uploadPartParams.check(query); err != nil {
 				return err
 			}
@@ -410,7 +410,7 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 		}
 		return app.putObject(w, r, rt, key, vr)
 	case http.MethodDelete:
-		if query.Has("uploadId") {
+		if query.Has(qpUploadID) {
 			if err := uploadIDOnlyParams.check(query); err != nil {
 				return err
 			}
@@ -419,7 +419,7 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 			}
 			return app.abortMultipartUpload(w, r, rt, key)
 		}
-		if query.Has("tagging") {
+		if query.Has(subTagging) {
 			if err := taggingParams.check(query); err != nil {
 				return err
 			}
@@ -442,7 +442,7 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 		return app.deleteObject(w, r, rt, key)
 	case http.MethodPost:
 		switch {
-		case query.Has("uploads"):
+		case query.Has(subUploads):
 			if err := uploadsOnlyParams.check(query); err != nil {
 				return err
 			}
@@ -453,7 +453,7 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 				return err
 			}
 			return app.createMultipartUpload(w, r, rt, key)
-		case query.Has("uploadId"):
+		case query.Has(qpUploadID):
 			if err := uploadIDOnlyParams.check(query); err != nil {
 				return err
 			}
@@ -503,37 +503,62 @@ func (p paramSet) check(query url.Values) *S3Error {
 	return nil
 }
 
+// Query parameters that select an operation. Using named constants (rather
+// than repeating the literal in the dispatch switch and its paramSet) makes
+// a typo a compile error instead of a silent misroute, and keeps each key
+// defined in one place.
+const (
+	// subresource discriminators
+	subACL        = "acl"
+	subCORS       = "cors"
+	subDelete     = "delete"
+	subLegalHold  = "legal-hold"
+	subLocation   = "location"
+	subObjectLock = "object-lock"
+	subPolicy     = "policy"
+	subRetention  = "retention"
+	subTagging    = "tagging"
+	subUploads    = "uploads"
+	subVersioning = "versioning"
+	subVersions   = "versions"
+	// other operation-selecting parameters
+	qpUploadID   = "uploadId"
+	qpPartNumber = "partNumber"
+	qpListType   = "list-type"
+	qpVersionID  = "versionId"
+)
+
 var (
 	noParams             = newParamSet()
-	aclOnlyParams        = newParamSet("acl")
-	policyOnlyParams     = newParamSet("policy")
-	corsOnlyParams       = newParamSet("cors")
-	objectLockOnlyParams = newParamSet("object-lock")
-	retentionParams      = newParamSet("retention", "versionId")
-	legalHoldParams      = newParamSet("legal-hold", "versionId")
-	aclParams            = newParamSet("acl", "versionId")
-	locationOnlyParams   = newParamSet("location")
-	deleteOnlyParams     = newParamSet("delete")
-	uploadsOnlyParams    = newParamSet("uploads")
-	uploadIDOnlyParams   = newParamSet("uploadId")
-	versionIDOnlyParams  = newParamSet("versionId")
-	versioningOnlyParams = newParamSet("versioning")
-	taggingParams        = newParamSet("tagging", "versionId")
-	uploadPartParams     = newParamSet("uploadId", "partNumber")
-	listPartsParams      = newParamSet("uploadId", "max-parts", "part-number-marker")
+	aclOnlyParams        = newParamSet(subACL)
+	policyOnlyParams     = newParamSet(subPolicy)
+	corsOnlyParams       = newParamSet(subCORS)
+	objectLockOnlyParams = newParamSet(subObjectLock)
+	retentionParams      = newParamSet(subRetention, qpVersionID)
+	legalHoldParams      = newParamSet(subLegalHold, qpVersionID)
+	aclParams            = newParamSet(subACL, qpVersionID)
+	locationOnlyParams   = newParamSet(subLocation)
+	deleteOnlyParams     = newParamSet(subDelete)
+	uploadsOnlyParams    = newParamSet(subUploads)
+	uploadIDOnlyParams   = newParamSet(qpUploadID)
+	versionIDOnlyParams  = newParamSet(qpVersionID)
+	versioningOnlyParams = newParamSet(subVersioning)
+	taggingParams        = newParamSet(subTagging, qpVersionID)
+	uploadPartParams     = newParamSet(qpUploadID, qpPartNumber)
+	listPartsParams      = newParamSet(qpUploadID, "max-parts", "part-number-marker")
 	listObjectsV1Params  = newParamSet(
 		"prefix", "delimiter", "marker", "max-keys", "encoding-type")
 	listObjectsV2Params = newParamSet(
-		"list-type", "prefix", "delimiter", "max-keys", "continuation-token",
+		qpListType, "prefix", "delimiter", "max-keys", "continuation-token",
 		"start-after", "fetch-owner", "encoding-type")
 	listObjectVersionsParams = newParamSet(
-		"versions", "prefix", "delimiter", "key-marker", "version-id-marker",
+		subVersions, "prefix", "delimiter", "key-marker", "version-id-marker",
 		"max-keys", "encoding-type")
 	listMultipartUploadsParams = newParamSet(
-		"uploads", "prefix", "delimiter", "key-marker", "upload-id-marker",
+		subUploads, "prefix", "delimiter", "key-marker", "upload-id-marker",
 		"max-uploads", "encoding-type")
 	getObjectParams = newParamSet(
-		"versionId", "response-content-type", "response-content-disposition",
+		qpVersionID, "response-content-type", "response-content-disposition",
 		"response-cache-control", "response-content-encoding",
 		"response-content-language", "response-expires")
 )
