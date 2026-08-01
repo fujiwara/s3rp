@@ -5,10 +5,6 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/xml"
-	"github.com/fujiwara/s3rp/checksum"
-	"github.com/fujiwara/s3rp/s3err"
-	"github.com/fujiwara/s3rp/s3xml"
-	"github.com/fujiwara/s3rp/sigv4"
 	"hash"
 	"io"
 	"log/slog"
@@ -17,6 +13,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/fujiwara/s3rp/checksum"
+	"github.com/fujiwara/s3rp/s3err"
+	"github.com/fujiwara/s3rp/s3xml"
+	"github.com/fujiwara/s3rp/sigv4"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -566,8 +567,7 @@ func (app *S3RP) headBucket(c *opCtx) error {
 func (app *S3RP) listBuckets(w http.ResponseWriter, r *http.Request, vr *verifiedRequest) error {
 	names, err := app.store.ListBucketNames(r.Context(), vr.Tenant)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "failed to list buckets", "error", err)
-		return s3err.New(http.StatusInternalServerError, "InternalError", "bucket lookup failed")
+		return s3err.Internal(err, "bucket lookup failed")
 	}
 	sort.Strings(names)
 	result := &s3xml.ListAllMyBucketsResult{

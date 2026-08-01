@@ -2,14 +2,15 @@ package s3rp
 
 import (
 	"errors"
-	"github.com/fujiwara/s3rp/cors"
-	"github.com/fujiwara/s3rp/s3err"
-	"github.com/fujiwara/s3rp/store"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/fujiwara/s3rp/cors"
+	"github.com/fujiwara/s3rp/s3err"
+	"github.com/fujiwara/s3rp/store"
 )
 
 type handlerFunc func(w http.ResponseWriter, r *http.Request) error
@@ -49,6 +50,21 @@ func (w *statusWriter) WriteHeader(status int) {
 	w.ResponseWriter.WriteHeader(status)
 }
 
+// logFailure records why a request failed. Server-side faults are logged at
+// error level; a refusal the client caused (4xx) is logged at info, since it
+// is routine but still worth being able to explain afterwards.
+func logFailure(r *http.Request, s3e *s3err.Error, requestID string) {
+	level := slog.LevelInfo
+	if s3e.Status() >= http.StatusInternalServerError {
+		level = slog.LevelError
+	}
+	attrs := []any{"code", s3e.Code, "status", s3e.Status(), "request_id", requestID}
+	if cause := errors.Unwrap(s3e); cause != nil {
+		attrs = append(attrs, "error", cause)
+	}
+	slog.Log(r.Context(), level, "request failed", attrs...)
+}
+
 func (app *S3RP) wrapHandler(h handlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -56,13 +72,21 @@ func (app *S3RP) wrapHandler(h handlerFunc) http.HandlerFunc {
 		w.Header().Set("x-amz-request-id", requestID)
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		err := h(sw, r)
+		var code string
 		if err != nil {
 			var s3e *s3err.Error
 			if !errors.As(err, &s3e) {
-				slog.ErrorContext(r.Context(), "internal error", "error", err, "request_id", requestID)
-				s3e = s3err.New(http.StatusInternalServerError, "InternalError",
-					"We encountered an internal error. Please try again.")
+				// an error that is not an S3 error at all: the operation
+				// layer should not produce these, so the error itself is the
+				// only description we have
+				s3e = s3err.Internal(err, "We encountered an internal error. Please try again.")
 			}
+			code = s3e.Code
+			// Every failure is logged here, once, rather than at each site
+			// that gives up: the cause never reaches the client, so this is
+			// the only place it can be seen. It is keyed by the request id the
+			// client is handed, so a reported id leads straight to the reason.
+			logFailure(r, s3e, requestID)
 			s3err.Write(sw, r, s3e, requestID)
 		}
 		slog.InfoContext(r.Context(), "request",
@@ -71,6 +95,7 @@ func (app *S3RP) wrapHandler(h handlerFunc) http.HandlerFunc {
 			"path", r.URL.Path,
 			"query", redactQuery(r.URL.Query()),
 			"status", sw.status,
+			"code", code,
 			"duration", time.Since(start).String(),
 			"request_id", requestID,
 		)
@@ -132,13 +157,11 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 		if errors.Is(err, store.ErrNotFound) {
 			return s3err.AccessDenied()
 		}
-		slog.ErrorContext(r.Context(), "failed to look up bucket", "error", err)
-		return s3err.New(http.StatusInternalServerError, "InternalError", "bucket lookup failed")
+		return s3err.Internal(err, "bucket lookup failed")
 	}
 	client, err := app.backendClient(r.Context(), b.Backend)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "failed to build backend client", "error", err)
-		return s3err.New(http.StatusInternalServerError, "InternalError", "backend client failed")
+		return s3err.Internal(err, "backend client failed")
 	}
 	rt := &bucketRT{cfg: b, client: client}
 	cors.SetHeaders(w, r, b.CORS)
