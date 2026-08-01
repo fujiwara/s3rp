@@ -142,6 +142,9 @@ func (c *Config) Validate() error {
 	// exactly one tenant
 	bucketNames := make(map[string]bool)
 	keyIDs := make(map[string]bool)
+	// tracks which tenant owns each physical backend target (endpoint + backend
+	// bucket): two tenants mapping to the same physical bucket would share data
+	backendOwner := make(map[string]string)
 	for _, t := range c.Tenants {
 		if t.Name == "" {
 			return fmt.Errorf("tenant name is required")
@@ -212,6 +215,19 @@ func (c *Config) Validate() error {
 			if (b.Backend.AccessKeyID == "") != (b.Backend.SecretAccessKey == "") {
 				return fmt.Errorf("bucket %s: backend access_key_id and secret_access_key must be set together", b.Name)
 			}
+			// two tenants must not target the same physical backend bucket, or
+			// each could read/overwrite/delete the other's objects. The backend
+			// bucket defaults to the front name (see SetDefaults).
+			backendBucket := b.Backend.Bucket
+			if backendBucket == "" {
+				backendBucket = b.Name
+			}
+			target := b.Backend.Endpoint + "\x00" + backendBucket
+			if owner, ok := backendOwner[target]; ok && owner != t.Name {
+				return fmt.Errorf("bucket %s: backend bucket %q on %q is already used by tenant %s (cross-tenant sharing is not allowed)",
+					b.Name, backendBucket, b.Backend.Endpoint, owner)
+			}
+			backendOwner[target] = t.Name
 
 			if b.Policy != "" {
 				p, err := policy.Parse(b.Policy)

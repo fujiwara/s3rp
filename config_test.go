@@ -117,6 +117,23 @@ tenants:
 		errStr: "duplicate bucket name",
 	},
 	{
+		name: "cross-tenant shared backend bucket",
+		yaml: `
+tenants:
+  - name: foo
+    users: [{name: user1, keys: [{access_key_id: k1, secret_access_key: s}]}]
+    buckets:
+      - name: fronta
+        backend: {endpoint: http://b.example.com, bucket: physical, access_key_id: a, secret_access_key: s}
+  - name: bar
+    users: [{name: user1, keys: [{access_key_id: k2, secret_access_key: s}]}]
+    buckets:
+      - name: frontb
+        backend: {endpoint: http://b.example.com, bucket: physical, access_key_id: a, secret_access_key: s}
+`,
+		errStr: "cross-tenant sharing is not allowed",
+	},
+	{
 		name: "invalid bucket name",
 		yaml: `
 tenants:
