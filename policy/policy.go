@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 )
 
 // Effect is the result of evaluating a policy.
@@ -52,6 +53,8 @@ const (
 type Policy struct {
 	Version   string      `json:"Version,omitempty"`
 	Statement []Statement `json:"Statement"`
+
+	compileOnce sync.Once // precompiles statement patterns to runes on first Evaluate
 }
 
 // Statement is a single statement of a policy.
@@ -62,6 +65,11 @@ type Statement struct {
 	NotPrincipal *Principal    `json:"NotPrincipal,omitempty"`
 	Action       StringOrSlice `json:"Action"`
 	Resource     StringOrSlice `json:"Resource"`
+
+	// precompiled by Policy.compile: action patterns are lower-cased for
+	// case-insensitive matching, resource patterns kept as-is.
+	actionRunes   [][]rune
+	resourceRunes [][]rune
 }
 
 // Principal is either "*" (all users) or {"S3RP": user names}.
@@ -200,12 +208,17 @@ func validateAction(a string) error {
 // nil or empty policy allows every action (the default: allow s3:*).
 type UserPolicy struct {
 	Statements []ActionStatement `yaml:"policy" json:"policy"`
+
+	compileOnce sync.Once // precompiles action patterns to runes on first Allows
 }
 
 // ActionStatement is one allow/deny rule of a UserPolicy.
 type ActionStatement struct {
 	Effect string   `yaml:"effect" json:"effect"`
 	Action []string `yaml:"action" json:"action"`
+
+	// precompiled by UserPolicy.compile: lower-cased action patterns.
+	actionRunes [][]rune
 }
 
 // Allows reports whether the user may perform action. With no statements it
@@ -216,11 +229,13 @@ func (up *UserPolicy) Allows(action string) bool {
 	if up == nil || len(up.Statements) == 0 {
 		return true
 	}
+	up.compileOnce.Do(up.compile)
 	// Convert the action to runes once; every pattern is matched against it.
 	actionRunes := []rune(strings.ToLower(action))
 	allowed := false
-	for _, st := range up.Statements {
-		if !matchAnyFold(st.Action, actionRunes) {
+	for i := range up.Statements {
+		st := &up.Statements[i]
+		if !matchAnyRunes(st.actionRunes, actionRunes) {
 			continue
 		}
 		// Only the two well-known effects have meaning; anything else is
@@ -233,6 +248,14 @@ func (up *UserPolicy) Allows(action string) bool {
 		}
 	}
 	return allowed
+}
+
+// compile precomputes the rune form of every action pattern so Allows does
+// not reconvert them on each request.
+func (up *UserPolicy) compile() {
+	for i := range up.Statements {
+		up.Statements[i].actionRunes = lowerPatternRunes(up.Statements[i].Action)
+	}
 }
 
 // ValidateUserPolicy checks a user policy's effects and actions.
@@ -269,20 +292,22 @@ func (p *Policy) Evaluate(principal, action, resource string) Effect {
 	// AWS treats the Action element as case-insensitive; comparing it
 	// case-sensitively would let a mis-cased Deny silently fail open. The
 	// Resource is an object key and stays case-sensitive.
+	p.compileOnce.Do(p.compile)
 	// Convert the action and resource to runes once, up front, rather than
 	// on every Match call: with the same value reused across every statement
 	// and pattern, this is the dominant cost for a large policy or a long key.
 	actionRunes := []rune(strings.ToLower(action))
 	resourceRunes := []rune(resource)
 	result := None
-	for _, st := range p.Statement {
+	for i := range p.Statement {
+		st := &p.Statement[i]
 		if !st.matchPrincipal(principal) {
 			continue
 		}
-		if !matchAnyFold(st.Action, actionRunes) {
+		if !matchAnyRunes(st.actionRunes, actionRunes) {
 			continue
 		}
-		if !matchAny(st.Resource, resourceRunes) {
+		if !matchAnyRunes(st.resourceRunes, resourceRunes) {
 			continue
 		}
 		if st.Effect == "Deny" {
@@ -293,6 +318,16 @@ func (p *Policy) Evaluate(principal, action, resource string) Effect {
 	return result
 }
 
+// compile precomputes the rune form of every action and resource pattern so
+// Evaluate does not reconvert them on each request. Action patterns are
+// lower-cased for AWS-style case-insensitive matching.
+func (p *Policy) compile() {
+	for i := range p.Statement {
+		p.Statement[i].actionRunes = lowerPatternRunes(p.Statement[i].Action)
+		p.Statement[i].resourceRunes = patternRunes(p.Statement[i].Resource)
+	}
+}
+
 func (st *Statement) matchPrincipal(principal string) bool {
 	if st.Principal != nil {
 		return st.Principal.All || slices.Contains(st.Principal.Users, principal)
@@ -301,24 +336,34 @@ func (st *Statement) matchPrincipal(principal string) bool {
 	return !slices.Contains(st.NotPrincipal.Users, principal)
 }
 
-func matchAny(patterns []string, value []rune) bool {
+// matchAnyRunes reports whether value matches any of the precompiled rune
+// patterns.
+func matchAnyRunes(patterns [][]rune, value []rune) bool {
 	for _, p := range patterns {
-		if matchRunes([]rune(p), value) {
+		if matchRunes(p, value) {
 			return true
 		}
 	}
 	return false
 }
 
-// matchAnyFold matches value (already lower-cased runes) against patterns
-// case-insensitively, used for AWS-style case-insensitive actions.
-func matchAnyFold(patterns []string, value []rune) bool {
-	for _, p := range patterns {
-		if matchRunes([]rune(strings.ToLower(p)), value) {
-			return true
-		}
+// patternRunes converts patterns to their rune form as-is.
+func patternRunes(patterns []string) [][]rune {
+	out := make([][]rune, len(patterns))
+	for i, p := range patterns {
+		out[i] = []rune(p)
 	}
-	return false
+	return out
+}
+
+// lowerPatternRunes converts patterns to lower-cased rune form, for
+// case-insensitive action matching.
+func lowerPatternRunes(patterns []string) [][]rune {
+	out := make([][]rune, len(patterns))
+	for i, p := range patterns {
+		out[i] = []rune(strings.ToLower(p))
+	}
+	return out
 }
 
 // Match matches value against a pattern where "*" matches any sequence of

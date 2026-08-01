@@ -130,6 +130,8 @@ func marshalUserPolicy(statements []policy.ActionStatement) (string, error) {
 	if len(statements) == 0 {
 		return "", nil
 	}
-	data, err := json.Marshal(policy.UserPolicy{Statements: statements})
+	// marshal via pointer: UserPolicy carries a sync.Once (a lock), which
+	// must not be copied by value.
+	data, err := json.Marshal(&policy.UserPolicy{Statements: statements})
 	return string(data), err
 }
