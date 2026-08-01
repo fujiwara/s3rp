@@ -172,7 +172,8 @@ func (app *S3RP) verifyHeaderRequest(r *http.Request) (*verifiedRequest, *S3Erro
 		AccessKeyID:     auth.AccessKeyID,
 		SecretAccessKey: secret.String(),
 	}
-	if err := app.signer.SignHTTP(r.Context(), creds, clone, payloadHash, auth.Service, auth.Region, t); err != nil {
+	signer := app.signers.get(auth.AccessKeyID)
+	if err := signer.SignHTTP(r.Context(), creds, clone, payloadHash, auth.Service, auth.Region, t); err != nil {
 		slog.ErrorContext(r.Context(), "failed to sign request for verification", "error", err)
 		return nil, newS3Error(http.StatusInternalServerError, "InternalError", "signing failed")
 	}
@@ -290,7 +291,7 @@ func (app *S3RP) verifyPresignedRequest(r *http.Request) (*verifiedRequest, *S3E
 		payloadHash = "UNSIGNED-PAYLOAD"
 	}
 	creds := aws.Credentials{AccessKeyID: akid, SecretAccessKey: secret.String()}
-	signedURI, _, err := app.signer.PresignHTTP(r.Context(), creds, clone, payloadHash, service, region, t)
+	signedURI, _, err := app.signers.get(akid).PresignHTTP(r.Context(), creds, clone, payloadHash, service, region, t)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to presign request for verification", "error", err)
 		return nil, newS3Error(http.StatusInternalServerError, "InternalError", "signing failed")
