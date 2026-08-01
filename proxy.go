@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/xml"
 	"fmt"
+	"github.com/fujiwara/s3rp/checksum"
 	"hash"
 	"io"
 	"log/slog"
@@ -84,13 +85,13 @@ func (app *S3RP) getObject(c *opCtx) error {
 	if out.TagCount != nil {
 		h.Set("x-amz-tagging-count", strconv.FormatInt(int64(*out.TagCount), 10))
 	}
-	setChecksumHeaders(h, checksums{
+	checksum.SetHeaders(h, checksum.Values{
 		CRC32:     out.ChecksumCRC32,
 		CRC32C:    out.ChecksumCRC32C,
 		CRC64NVME: out.ChecksumCRC64NVME,
 		SHA1:      out.ChecksumSHA1,
 		SHA256:    out.ChecksumSHA256,
-	}, out.ChecksumType)
+	}, string(out.ChecksumType))
 	setObjectLockResponseHeaders(h, out.ObjectLockMode, out.ObjectLockRetainUntilDate, out.ObjectLockLegalHoldStatus)
 	status := http.StatusOK
 	if out.ContentRange != nil {
@@ -142,13 +143,13 @@ func (app *S3RP) headObject(c *opCtx) error {
 	if out.AcceptRanges != nil {
 		w.Header().Set("Accept-Ranges", *out.AcceptRanges)
 	}
-	setChecksumHeaders(w.Header(), checksums{
+	checksum.SetHeaders(w.Header(), checksum.Values{
 		CRC32:     out.ChecksumCRC32,
 		CRC32C:    out.ChecksumCRC32C,
 		CRC64NVME: out.ChecksumCRC64NVME,
 		SHA1:      out.ChecksumSHA1,
 		SHA256:    out.ChecksumSHA256,
-	}, out.ChecksumType)
+	}, string(out.ChecksumType))
 	setObjectLockResponseHeaders(w.Header(), out.ObjectLockMode, out.ObjectLockRetainUntilDate, out.ObjectLockLegalHoldStatus)
 	w.WriteHeader(http.StatusOK)
 	return nil
@@ -200,13 +201,13 @@ func (app *S3RP) putObject(c *opCtx) error {
 	if md := metadataFromHeaders(r.Header); len(md) > 0 {
 		in.Metadata = md
 	}
-	cs := checksumsFromHeaders(r.Header)
+	cs := checksum.FromHeaders(r.Header)
 	in.ChecksumCRC32 = cs.CRC32
 	in.ChecksumCRC32C = cs.CRC32C
 	in.ChecksumCRC64NVME = cs.CRC64NVME
 	in.ChecksumSHA1 = cs.SHA1
 	in.ChecksumSHA256 = cs.SHA256
-	if alg := trailerChecksumAlgorithm(r.Header); alg != "" {
+	if alg := checksum.TrailerAlgorithm(r.Header); alg != "" {
 		// the client sends the checksum as an aws-chunked trailer, which
 		// is verified by the chunked reader; the backend SDK recomputes
 		// and stores it (an explicit ChecksumAlgorithm forces calculation
@@ -224,13 +225,13 @@ func (app *S3RP) putObject(c *opCtx) error {
 	if out.VersionId != nil {
 		w.Header().Set("x-amz-version-id", *out.VersionId)
 	}
-	setChecksumHeaders(w.Header(), checksums{
+	checksum.SetHeaders(w.Header(), checksum.Values{
 		CRC32:     out.ChecksumCRC32,
 		CRC32C:    out.ChecksumCRC32C,
 		CRC64NVME: out.ChecksumCRC64NVME,
 		SHA1:      out.ChecksumSHA1,
 		SHA256:    out.ChecksumSHA256,
-	}, out.ChecksumType)
+	}, string(out.ChecksumType))
 	w.WriteHeader(http.StatusOK)
 	return nil
 }
@@ -596,7 +597,7 @@ func requestBody(r *http.Request, vr *verifiedRequest) (io.Reader, int64, *S3Err
 			return nil, 0, newS3Error(http.StatusBadRequest, "InvalidRequest",
 				"Invalid x-amz-decoded-content-length header")
 		}
-		return newChunkedReader(r.Body, vr, trailerChecksumAlgorithm(r.Header)), length, nil
+		return newChunkedReader(r.Body, vr, checksum.TrailerAlgorithm(r.Header)), length, nil
 	default:
 		if r.ContentLength < 0 {
 			return nil, 0, newS3Error(http.StatusLengthRequired, "MissingContentLength",

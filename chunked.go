@@ -7,6 +7,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
+	"github.com/fujiwara/s3rp/checksum"
 	"hash"
 	"io"
 	"strconv"
@@ -77,7 +78,7 @@ func newChunkedReader(body io.Reader, vr *verifiedRequest, trailerAlg string) io
 	}
 	if cr.trailer && trailerAlg != "" {
 		cr.ckAlg = trailerAlg
-		cr.ckHash = newChecksumHash(trailerAlg)
+		cr.ckHash = checksum.NewHash(trailerAlg)
 	}
 	return cr
 }
@@ -222,7 +223,7 @@ func (cr *chunkedReader) discardTrailers() error {
 			continue
 		}
 		if strings.EqualFold(strings.TrimSpace(name), "x-amz-checksum-"+cr.ckAlg) {
-			if strings.TrimSpace(value) != checksumBase64(cr.ckHash) {
+			if strings.TrimSpace(value) != checksum.Base64(cr.ckHash) {
 				return newS3Error(400, "BadDigest",
 					fmt.Sprintf("The %s you specified did not match the calculated checksum.", strings.ToUpper(cr.ckAlg)))
 			}
