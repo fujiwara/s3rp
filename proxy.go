@@ -86,6 +86,7 @@ func (app *S3RP) getObject(w http.ResponseWriter, r *http.Request, rt *bucketRT,
 		SHA1:      out.ChecksumSHA1,
 		SHA256:    out.ChecksumSHA256,
 	}, out.ChecksumType)
+	setObjectLockResponseHeaders(h, out.ObjectLockMode, out.ObjectLockRetainUntilDate, out.ObjectLockLegalHoldStatus)
 	status := http.StatusOK
 	if out.ContentRange != nil {
 		h.Set("Content-Range", *out.ContentRange)
@@ -142,6 +143,7 @@ func (app *S3RP) headObject(w http.ResponseWriter, r *http.Request, rt *bucketRT
 		SHA1:      out.ChecksumSHA1,
 		SHA256:    out.ChecksumSHA256,
 	}, out.ChecksumType)
+	setObjectLockResponseHeaders(w.Header(), out.ObjectLockMode, out.ObjectLockRetainUntilDate, out.ObjectLockLegalHoldStatus)
 	w.WriteHeader(http.StatusOK)
 	return nil
 }
@@ -187,6 +189,7 @@ func (app *S3RP) putObject(w http.ResponseWriter, r *http.Request, rt *bucketRT,
 	if v := r.Header.Get("x-amz-tagging"); v != "" {
 		in.Tagging = aws.String(v)
 	}
+	applyObjectLockHeaders(r, &in.ObjectLockMode, &in.ObjectLockRetainUntilDate, &in.ObjectLockLegalHoldStatus)
 	if md := metadataFromHeaders(r.Header); len(md) > 0 {
 		in.Metadata = md
 	}
@@ -232,6 +235,9 @@ func (app *S3RP) deleteObject(w http.ResponseWriter, r *http.Request, rt *bucket
 	}
 	if v := r.URL.Query().Get("versionId"); v != "" {
 		in.VersionId = aws.String(v)
+	}
+	if bypassGovernanceRetention(r) {
+		in.BypassGovernanceRetention = aws.Bool(true)
 	}
 	out, err := rt.client.DeleteObject(r.Context(), in)
 	if err != nil {
@@ -447,17 +453,24 @@ func (app *S3RP) deleteObjects(w http.ResponseWriter, r *http.Request, rt *bucke
 	}
 	// the policy is evaluated per object, like AWS: denied keys are
 	// reported as errors and only the permitted ones reach the backend
+	bypass := bypassGovernanceRetention(r)
 	result := &DeleteResult{XMLNS: s3XMLNS}
 	objects := make([]types.ObjectIdentifier, 0, len(req.Objects))
 	for _, o := range req.Objects {
-		if s3err := app.authorize(vr, rt.cfg, "s3:DeleteObject", rt.cfg.Name+"/"+o.Key); s3err != nil {
+		action := "s3:DeleteObject"
+		if s3err := app.authorize(vr, rt.cfg, action, rt.cfg.Name+"/"+o.Key); s3err != nil {
 			result.Errors = append(result.Errors, DeleteError{
-				Key:       o.Key,
-				VersionID: o.VersionID,
-				Code:      s3err.Code,
-				Message:   s3err.Message,
+				Key: o.Key, VersionID: o.VersionID, Code: s3err.Code, Message: s3err.Message,
 			})
 			continue
+		}
+		if bypass {
+			if s3err := app.authorize(vr, rt.cfg, "s3:BypassGovernanceRetention", rt.cfg.Name+"/"+o.Key); s3err != nil {
+				result.Errors = append(result.Errors, DeleteError{
+					Key: o.Key, VersionID: o.VersionID, Code: s3err.Code, Message: s3err.Message,
+				})
+				continue
+			}
 		}
 		oi := types.ObjectIdentifier{Key: aws.String(o.Key)}
 		if o.VersionID != "" {
@@ -474,6 +487,9 @@ func (app *S3RP) deleteObjects(w http.ResponseWriter, r *http.Request, rt *bucke
 			Objects: objects,
 			Quiet:   aws.Bool(req.Quiet),
 		},
+	}
+	if bypassGovernanceRetention(r) {
+		in.BypassGovernanceRetention = aws.Bool(true)
 	}
 	out, err := rt.client.DeleteObjects(r.Context(), in)
 	if err != nil {

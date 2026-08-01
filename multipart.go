@@ -48,6 +48,7 @@ func (app *S3RP) createMultipartUpload(w http.ResponseWriter, r *http.Request, r
 	if v := r.Header.Get("x-amz-tagging"); v != "" {
 		in.Tagging = aws.String(v)
 	}
+	applyObjectLockHeaders(r, &in.ObjectLockMode, &in.ObjectLockRetainUntilDate, &in.ObjectLockLegalHoldStatus)
 	if md := metadataFromHeaders(r.Header); len(md) > 0 {
 		in.Metadata = md
 	}
