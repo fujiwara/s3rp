@@ -29,7 +29,7 @@ func (app *S3RP) getObject(w http.ResponseWriter, r *http.Request, rt *bucketRT,
 		in.ChecksumMode = types.ChecksumModeEnabled
 	}
 	query := r.URL.Query()
-	if v := query.Get("versionId"); v != "" {
+	if v := query.Get(qpVersionID); v != "" {
 		in.VersionId = aws.String(v)
 	}
 	if v := query.Get("response-content-type"); v != "" {
@@ -109,7 +109,7 @@ func (app *S3RP) headObject(w http.ResponseWriter, r *http.Request, rt *bucketRT
 	if v := r.Header.Get("Range"); v != "" {
 		in.Range = aws.String(v)
 	}
-	if v := r.URL.Query().Get("versionId"); v != "" {
+	if v := r.URL.Query().Get(qpVersionID); v != "" {
 		in.VersionId = aws.String(v)
 	}
 	if strings.EqualFold(r.Header.Get("x-amz-checksum-mode"), "enabled") {
@@ -233,7 +233,7 @@ func (app *S3RP) deleteObject(w http.ResponseWriter, r *http.Request, rt *bucket
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
 	}
-	if v := r.URL.Query().Get("versionId"); v != "" {
+	if v := r.URL.Query().Get(qpVersionID); v != "" {
 		in.VersionId = aws.String(v)
 	}
 	if bypassGovernanceRetention(r) {
