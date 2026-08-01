@@ -487,6 +487,70 @@ func TestValidateUserPolicy(t *testing.T) {
 	}
 }
 
+// TestPolicyLimits verifies that oversized policies are rejected at
+// parse/validate time. Policies are tenant-authored, so unbounded size would
+// let a single authorization do unbounded glob work (amplified per object by
+// DeleteObjects).
+func TestPolicyLimits(t *testing.T) {
+	longPat := "s3:" + strings.Repeat("x", policy.MaxPatternLen)
+
+	// bucket policy limits
+	tooManyStmts := make([]string, policy.MaxStatements+1)
+	for i := range tooManyStmts {
+		tooManyStmts[i] = `{"Effect":"Deny","Principal":"*","Action":"s3:GetObject","Resource":"b/*"}`
+	}
+	bucketCases := []struct {
+		name, text, errStr string
+	}{
+		{"too many statements", `{"Statement":[` + strings.Join(tooManyStmts, ",") + `]}`, "at most"},
+		{"too many actions", `{"Statement":[{"Effect":"Deny","Principal":"*","Action":[` + repeatQuoted(`"s3:GetObject"`, policy.MaxActionsPerStatement+1) + `],"Resource":"b/*"}]}`, "at most"},
+		{"too many resources", `{"Statement":[{"Effect":"Deny","Principal":"*","Action":"s3:GetObject","Resource":[` + repeatQuoted(`"b/*"`, policy.MaxResourcesPerStatement+1) + `]}]}`, "at most"},
+		{"action pattern too long", `{"Statement":[{"Effect":"Deny","Principal":"*","Action":"` + longPat + `","Resource":"b/*"}]}`, "too long"},
+		{"resource pattern too long", `{"Statement":[{"Effect":"Deny","Principal":"*","Action":"s3:GetObject","Resource":"` + strings.Repeat("a", policy.MaxPatternLen+1) + `"}]}`, "too long"},
+	}
+	for _, tc := range bucketCases {
+		t.Run("bucket/"+tc.name, func(t *testing.T) {
+			if _, err := policy.Parse(tc.text); err == nil || !strings.Contains(err.Error(), tc.errStr) {
+				t.Errorf("expect error containing %q, got %v", tc.errStr, err)
+			}
+		})
+	}
+
+	// user policy limits
+	overStmts := make([]policy.ActionStatement, policy.MaxStatements+1)
+	for i := range overStmts {
+		overStmts[i] = policy.ActionStatement{Effect: "Allow", Action: []string{"s3:GetObject"}}
+	}
+	overActions := make([]string, policy.MaxActionsPerStatement+1)
+	for i := range overActions {
+		overActions[i] = "s3:GetObject"
+	}
+	userCases := []struct {
+		name   string
+		up     *policy.UserPolicy
+		errStr string
+	}{
+		{"too many statements", &policy.UserPolicy{Statements: overStmts}, "at most"},
+		{"too many actions", &policy.UserPolicy{Statements: []policy.ActionStatement{{Effect: "Allow", Action: overActions}}}, "at most"},
+		{"action pattern too long", &policy.UserPolicy{Statements: []policy.ActionStatement{{Effect: "Allow", Action: []string{longPat}}}}, "too long"},
+	}
+	for _, tc := range userCases {
+		t.Run("user/"+tc.name, func(t *testing.T) {
+			if err := policy.ValidateUserPolicy(tc.up); err == nil || !strings.Contains(err.Error(), tc.errStr) {
+				t.Errorf("expect error containing %q, got %v", tc.errStr, err)
+			}
+		})
+	}
+}
+
+func repeatQuoted(s string, n int) string {
+	parts := make([]string, n)
+	for i := range parts {
+		parts[i] = s
+	}
+	return strings.Join(parts, ",")
+}
+
 // TestEvaluateActionCaseInsensitive verifies that actions match regardless
 // of case (as in AWS), so a mis-cased Deny cannot silently fail open, while
 // resources stay case-sensitive.
