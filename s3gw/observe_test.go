@@ -2,6 +2,7 @@ package s3gw_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fujiwara/s3rp/s3gw"
+	"github.com/google/go-cmp/cmp"
 )
 
 // stubGet is a backend that answers GetObject, or fails the way a backend
@@ -121,5 +123,50 @@ func TestNoObserverIsSilent(t *testing.T) {
 	serve(t, newTestGateway(t), stubGet{body: "hello"})
 	if buf.Len() != 0 {
 		t.Errorf("expect no logging without an observer, got %s", buf.String())
+	}
+}
+
+// TestRequestInfoJSON pins the shape a service gets when it emits the record
+// as it stands: snake_case keys, and the reason for a failure as a message
+// rather than the empty object an error marshals to on its own.
+func TestRequestInfoJSON(t *testing.T) {
+	info := &s3gw.RequestInfo{
+		Method: "GET", Path: "/photos/a.jpg", RemoteAddr: "10.0.0.5:1234",
+		RawQuery: "X-Amz-Signature=REDACTED", RequestID: "abc123",
+		Status: 502, Code: "InternalError",
+		Err:      errors.New("connection refused"),
+		BytesOut: 217,
+		Start:    time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC),
+		Duration: 1500 * time.Microsecond,
+	}
+	var got map[string]any
+	b, err := json.Marshal(info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{
+		"method": "GET", "path": "/photos/a.jpg", "remote_addr": "10.0.0.5:1234",
+		"raw_query": "X-Amz-Signature=REDACTED", "request_id": "abc123",
+		"status": float64(502), "code": "InternalError",
+		"error":    "connection refused", // not {}
+		"bytes_in": float64(0), "bytes_out": float64(217),
+		"start": "2026-08-01T12:00:00Z", "duration": float64(1500000), // nanoseconds
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("unexpected JSON (-want +got):\n%s", diff)
+	}
+
+	// a success carries no code and no error
+	b, err = json.Marshal(s3gw.RequestInfo{Method: "GET", Status: 200})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, absent := range []string{`"code"`, `"error"`} {
+		if strings.Contains(string(b), absent) {
+			t.Errorf("expect %s to be omitted on success: %s", absent, b)
+		}
 	}
 }

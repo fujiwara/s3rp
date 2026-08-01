@@ -19,23 +19,23 @@ import (
 type Op struct {
 	// Method distinguishes operations that share an action, notably
 	// HeadObject from GetObject.
-	Method string
+	Method string `json:"method"`
 	// Action is the s3:* action authorized for this operation. It is empty
 	// for the few operations that authorize themselves per object, such as
 	// DeleteObjects.
-	Action string
-	Tenant string
-	User   string
+	Action string `json:"action,omitempty"`
+	Tenant string `json:"tenant"`
+	User   string `json:"user"`
 	// Bucket is the front bucket name. The backend name it maps to is
 	// deliberately not exposed: nothing outside the proxy should depend on it.
-	Bucket string
-	Key    string
+	Bucket string `json:"bucket"`
+	Key    string `json:"key,omitempty"`
 
 	// BytesIn and BytesOut count the request and response bodies as seen on
 	// the wire, so an upload sent with aws-chunked framing counts the frames
 	// too. They are filled in by the time an Interceptor's next returns.
-	BytesIn  int64
-	BytesOut int64
+	BytesIn  int64 `json:"bytes_in"`
+	BytesOut int64 `json:"bytes_out"`
 }
 
 // Authorizer is consulted for every operation, after the bucket and user
