@@ -243,6 +243,13 @@ func (b *stubBackend) PutObjectLegalHold(ctx context.Context, in *s3.PutObjectLe
 // returns a real aws-sdk-go-v2 S3 client pointed at it with front credentials.
 func newTestProxy(t *testing.T, stub *stubBackend) (*s3.Client, *httptest.Server) {
 	t.Helper()
+	client, ts, _ := newTestProxyWithApp(t, stub)
+	return client, ts
+}
+
+// newTestProxyWithApp also hands back the app, for tests that install hooks.
+func newTestProxyWithApp(t *testing.T, stub *stubBackend) (*s3.Client, *httptest.Server, *s3rp.S3RP) {
+	t.Helper()
 	app := newTestApp(t)
 	app.SetBackend("testbucket", stub)
 	ts := httptest.NewServer(app.Handler())
@@ -261,7 +268,7 @@ func newTestProxy(t *testing.T, stub *stubBackend) (*s3.Client, *httptest.Server
 		o.UsePathStyle = true
 		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
 	})
-	return client, ts
+	return client, ts, app
 }
 
 func TestProxyGetObject(t *testing.T) {
