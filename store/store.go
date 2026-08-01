@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/fujiwara/s3rp/cors"
 	"github.com/fujiwara/s3rp/policy"
 )
 
@@ -60,14 +61,10 @@ type Bucket struct {
 	CORS []*CORSRule
 }
 
-// CORSRule is a single CORS rule of a bucket.
-type CORSRule struct {
-	AllowedOrigins []string `yaml:"allowed_origins" json:"allowed_origins"`
-	AllowedMethods []string `yaml:"allowed_methods" json:"allowed_methods"`
-	AllowedHeaders []string `yaml:"allowed_headers,omitempty" json:"allowed_headers,omitempty"`
-	ExposeHeaders  []string `yaml:"expose_headers,omitempty" json:"expose_headers,omitempty"`
-	MaxAgeSeconds  int      `yaml:"max_age_seconds,omitempty" json:"max_age_seconds,omitempty"`
-}
+// CORSRule is one CORS rule of a bucket. It is an alias of cors.Rule: the
+// shape belongs to the CORS protocol, and the alias lets definitions be
+// stored and evaluated without conversion.
+type CORSRule = cors.Rule
 
 // DefaultRegion is used when a backend definition omits the region.
 const DefaultRegion = "us-east-1"
