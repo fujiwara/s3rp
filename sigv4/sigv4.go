@@ -107,7 +107,18 @@ type Verifier struct {
 
 // NewVerifier returns a Verifier ready for concurrent use.
 func NewVerifier() *Verifier {
-	return &Verifier{signers: newSignerCache()}
+	return &Verifier{signers: newSignerCache(defaultSignerSlots)}
+}
+
+// SetSignerCacheSize replaces the per-access-key signer cache with one of n
+// slots (default 512). The cache is direct-mapped, so n bounds memory to n
+// signers (a few hundred bytes each); size it to the number of access keys
+// expected to verify concurrently — a displaced key just re-derives its
+// signing key on its next request. Values below 1 are treated as 1. Call
+// before serving requests: like setting Now, it is not synchronized with
+// concurrent verification, and cached signers are discarded.
+func (v *Verifier) SetSignerCacheSize(n int) {
+	v.signers = newSignerCache(n)
 }
 
 func (v *Verifier) now() time.Time {

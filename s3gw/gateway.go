@@ -12,10 +12,11 @@ package s3gw
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/fujiwara/s3rp/sigv4"
 	"github.com/fujiwara/s3rp/store"
+
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 // Gateway serves the S3 API: it verifies the SigV4 signature of each request
@@ -34,9 +35,14 @@ type Gateway struct {
 	observer     Observer
 
 	newClient func(ctx context.Context, b *store.Backend) (BackendClient, error)
-	clients   map[clientCacheKey]BackendClient
-	clientsMu sync.RWMutex
+	clients   *lru.Cache[clientCacheKey, BackendClient]
 }
+
+// defaultClientCacheSize bounds the backend client cache. Each client carries
+// its own HTTP connection pool, and with a database store the number of
+// distinct backends grows with tenants, so the cache must not be unbounded.
+// Adjustable with SetClientCacheSize.
+const defaultClientCacheSize = 128
 
 // bucketRT is a bucket resolved for a request: its definition and the
 // backend client to use.
@@ -67,33 +73,31 @@ func newClientCacheKey(b *store.Backend) clientCacheKey {
 
 // New returns a Gateway serving the definitions in st.
 func New(st store.Store) *Gateway {
+	clients, _ := lru.New[clientCacheKey, BackendClient](defaultClientCacheSize)
 	return &Gateway{
 		store:     st,
 		verifier:  sigv4.NewVerifier(),
 		newClient: newBackendClient,
-		clients:   make(map[clientCacheKey]BackendClient),
+		clients:   clients,
 	}
 }
 
 // backendClient returns the backend client for a backend definition,
-// constructing and caching it on first use.
+// constructing and caching it on first use. An evicted client is simply
+// rebuilt on its next request; its idle connections close on their own.
 func (g *Gateway) backendClient(ctx context.Context, b *store.Backend) (BackendClient, error) {
 	key := newClientCacheKey(b)
-	g.clientsMu.RLock()
-	client, ok := g.clients[key]
-	g.clientsMu.RUnlock()
-	if ok {
+	if client, ok := g.clients.Get(key); ok {
 		return client, nil
 	}
 	client, err := g.newClient(ctx, b)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build backend client: %w", err)
 	}
-	g.clientsMu.Lock()
-	defer g.clientsMu.Unlock()
-	if cached, ok := g.clients[key]; ok {
-		return cached, nil
+	// another goroutine may have built the same client meanwhile; converge on
+	// the one already cached so a backend keeps a single connection pool
+	if previous, ok, _ := g.clients.PeekOrAdd(key, client); ok {
+		return previous, nil
 	}
-	g.clients[key] = client
 	return client, nil
 }

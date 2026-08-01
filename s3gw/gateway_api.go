@@ -14,11 +14,24 @@ func (g *Gateway) SetBackend(bucket string, client BackendClient) error {
 	if err != nil {
 		return err
 	}
-	g.clientsMu.Lock()
-	defer g.clientsMu.Unlock()
-	g.clients[newClientCacheKey(b.Backend)] = client
+	g.clients.Add(newClientCacheKey(b.Backend), client)
 	return nil
 }
+
+// SetClientCacheSize resizes the backend client cache (default 128 entries,
+// LRU). Size it to the number of distinct backends expected to be active at
+// once; an evicted client is rebuilt on its next request. Values below 1 are
+// treated as 1.
+func (g *Gateway) SetClientCacheSize(n int) {
+	if n < 1 {
+		n = 1
+	}
+	g.clients.Resize(n)
+}
+
+// SetSignerCacheSize resizes the per-access-key signer cache used by
+// signature verification. See sigv4.Verifier.SetSignerCacheSize.
+func (g *Gateway) SetSignerCacheSize(n int) { g.verifier.SetSignerCacheSize(n) }
 
 // SetNow replaces the clock used for signature expiry and clock-skew checks.
 func (g *Gateway) SetNow(f func() time.Time) { g.verifier.Now = f }

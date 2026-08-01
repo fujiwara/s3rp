@@ -11,7 +11,9 @@ require (
 	github.com/aws/smithy-go v1.27.5
 	github.com/goccy/go-yaml v1.19.2
 	github.com/google/go-cmp v0.7.0
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	golang.org/x/sys v0.47.0
+	modernc.org/sqlite v1.55.0
 )
 
 require (
@@ -36,5 +38,4 @@ require (
 	modernc.org/libc v1.74.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.55.0 // indirect
 )

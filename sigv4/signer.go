@@ -7,11 +7,11 @@ import (
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 )
 
-// signerShards is the fixed number of slots in the signer cache. Memory is
-// bounded to this many signers regardless of how many access keys exist, which
-// matters because access keys are per user and can grow without limit (unlike
-// backends, which are few). Each slot is a few hundred bytes.
-const signerShards = 512
+// defaultSignerSlots is the default number of slots in the signer cache.
+// Memory is bounded to this many signers regardless of how many access keys
+// exist, which matters because access keys are per user and can grow without
+// limit (unlike backends, which are few). Each slot is a few hundred bytes.
+const defaultSignerSlots = 512
 
 // signerCache hands out a SigV4 signer per access key.
 //
@@ -29,8 +29,8 @@ const signerShards = 512
 // there is no eviction bookkeeping. A displaced key just re-derives on its next
 // request, which is the behavior we had before this cache existed.
 type signerCache struct {
-	seed   maphash.Seed
-	shards [signerShards]signerSlot
+	seed  maphash.Seed
+	slots []signerSlot
 }
 
 type signerSlot struct {
@@ -39,13 +39,16 @@ type signerSlot struct {
 	signer      *v4.Signer
 }
 
-func newSignerCache() *signerCache {
-	return &signerCache{seed: maphash.MakeSeed()}
+func newSignerCache(size int) *signerCache {
+	if size < 1 {
+		size = 1
+	}
+	return &signerCache{seed: maphash.MakeSeed(), slots: make([]signerSlot, size)}
 }
 
 // get returns the signer for an access key id, creating it on first use.
 func (c *signerCache) get(accessKeyID string) *v4.Signer {
-	slot := &c.shards[maphash.String(c.seed, accessKeyID)%signerShards]
+	slot := &c.slots[maphash.String(c.seed, accessKeyID)%uint64(len(c.slots))]
 
 	slot.mu.RLock()
 	if slot.accessKeyID == accessKeyID {
