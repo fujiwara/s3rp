@@ -2,6 +2,7 @@ package s3rp
 
 import (
 	"errors"
+	"github.com/fujiwara/s3rp/cors"
 	"github.com/fujiwara/s3rp/store"
 	"log/slog"
 	"net/http"
@@ -139,7 +140,7 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 		return newS3Error(http.StatusInternalServerError, "InternalError", "backend client failed")
 	}
 	rt := &bucketRT{cfg: b, client: client}
-	setCORSHeaders(w, r, b)
+	cors.SetHeaders(w, r, b.CORS)
 
 	query := r.URL.Query()
 	if key == "" {
