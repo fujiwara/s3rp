@@ -134,7 +134,8 @@ func Parse(text string) (*Policy, error) {
 			return nil, fmt.Errorf("%s: at least one action is required", name)
 		}
 		for _, a := range st.Action {
-			if a != "s3:*" && !strings.HasPrefix(a, "s3:") {
+			// the action prefix is case-insensitive, matching evaluation
+			if !strings.HasPrefix(strings.ToLower(a), "s3:") {
 				return nil, fmt.Errorf("%s: action %q must start with s3:", name, a)
 			}
 		}
@@ -149,12 +150,16 @@ func Parse(text string) (*Policy, error) {
 // action on a resource ("bucket" or "bucket/key"). Deny takes precedence
 // over Allow; None means no statement matched.
 func (p *Policy) Evaluate(principal, action, resource string) Effect {
+	// AWS treats the Action element as case-insensitive; comparing it
+	// case-sensitively would let a mis-cased Deny silently fail open. The
+	// Resource is an object key and stays case-sensitive.
+	action = strings.ToLower(action)
 	result := None
 	for _, st := range p.Statement {
 		if !st.matchPrincipal(principal) {
 			continue
 		}
-		if !matchAny(st.Action, action) {
+		if !matchAnyFold(st.Action, action) {
 			continue
 		}
 		if !matchAny(st.Resource, resource) {
@@ -179,6 +184,17 @@ func (st *Statement) matchPrincipal(principal string) bool {
 func matchAny(patterns []string, value string) bool {
 	for _, p := range patterns {
 		if Match(p, value) {
+			return true
+		}
+	}
+	return false
+}
+
+// matchAnyFold matches value (already lower-cased) against patterns
+// case-insensitively, used for AWS-style case-insensitive actions.
+func matchAnyFold(patterns []string, value string) bool {
+	for _, p := range patterns {
+		if Match(strings.ToLower(p), value) {
 			return true
 		}
 	}
