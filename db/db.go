@@ -13,6 +13,7 @@ import (
 
 	"github.com/fujiwara/s3rp"
 	"github.com/fujiwara/s3rp/db/writedb"
+	"github.com/fujiwara/s3rp/policy"
 	"github.com/fujiwara/s3rp/store"
 )
 
@@ -60,9 +61,14 @@ func Import(ctx context.Context, sqldb *sql.DB, cfg *s3rp.Config) error {
 			return fmt.Errorf("tenant %s: %w", t.Name, err)
 		}
 		for _, u := range t.Users {
+			userPolicy, err := marshalUserPolicy(u.Policy)
+			if err != nil {
+				return fmt.Errorf("user %s/%s: %w", t.Name, u.Name, err)
+			}
 			userID, err := q.CreateUser(ctx, writedb.CreateUserParams{
 				TenantID: tenantID,
 				Name:     u.Name,
+				Policy:   userPolicy,
 			})
 			if err != nil {
 				return fmt.Errorf("user %s/%s: %w", t.Name, u.Name, err)
@@ -117,5 +123,13 @@ func marshalCORS(rules []*store.CORSRule) (string, error) {
 		return "", nil
 	}
 	data, err := json.Marshal(rules)
+	return string(data), err
+}
+
+func marshalUserPolicy(statements []policy.ActionStatement) (string, error) {
+	if len(statements) == 0 {
+		return "", nil
+	}
+	data, err := json.Marshal(policy.UserPolicy{Statements: statements})
 	return string(data), err
 }

@@ -28,13 +28,23 @@ func storeContract(t *testing.T, st store.Store) {
 		if key.Tenant != "acme" || key.User != "app1" || key.SecretAccessKey.String() != "frontsecret001" {
 			t.Errorf("unexpected key %+v", key)
 		}
-		// a key of another user of the same tenant
+		// app1 has no user policy (default allow all)
+		if key.Policy != nil {
+			t.Errorf("expect no policy for app1, got %+v", key.Policy)
+		}
+		// a key of another user of the same tenant, carrying a user policy
 		key2, err := st.GetKey(ctx, "S3RPKEY003")
 		if err != nil {
 			t.Fatal(err)
 		}
 		if key2.Tenant != "acme" || key2.User != "batch" {
 			t.Errorf("unexpected key %+v", key2)
+		}
+		if key2.Policy == nil || key2.Policy.Allows("s3:PutObject") {
+			t.Errorf("batch policy should deny PutObject: %+v", key2.Policy)
+		}
+		if !key2.Policy.Allows("s3:GetObject") || key2.Policy.Allows("s3:GetObjectAcl") {
+			t.Errorf("batch policy Get*/deny GetObjectAcl mismatch: %+v", key2.Policy)
 		}
 		if _, err := st.GetKey(ctx, "NOSUCHKEY"); !errors.Is(err, store.ErrNotFound) {
 			t.Errorf("expect ErrNotFound, got %v", err)
@@ -183,6 +193,35 @@ func TestRDBStorePolicyAndCORS(t *testing.T) {
 	// the backend secret must survive (Password masks on ordinary marshal)
 	if b.Backend.SecretAccessKey.String() != "backendsecret" {
 		t.Errorf("backend secret lost: %q", b.Backend.SecretAccessKey.String())
+	}
+}
+
+// TestRDBStoreInvalidUserPolicy verifies that a user policy which is valid
+// JSON but semantically invalid (an effect that is neither Allow nor Deny),
+// slipped past config validation straight into the store, makes GetKey fail
+// closed rather than silently mis-evaluating.
+func TestRDBStoreInvalidUserPolicy(t *testing.T) {
+	dsn := buildTestDB(t, loadTestConfig(t))
+	sqldb, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqldb.Close()
+	_, err = sqldb.ExecContext(t.Context(),
+		`UPDATE users SET policy = ? WHERE name = 'app1'`,
+		`{"policy":[{"effect":"Bad","action":["s3:GetObject"]}]}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqldb.Close()
+
+	st, err := rdb.Open(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	if _, err := st.GetKey(t.Context(), "S3RPKEY001"); err == nil {
+		t.Error("expect GetKey to reject an invalid stored policy")
 	}
 }
 

@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
   id        INTEGER PRIMARY KEY,
   tenant_id INTEGER NOT NULL REFERENCES tenants (id),
   name      TEXT NOT NULL,
+  policy    TEXT NOT NULL DEFAULT '', -- user identity policy as JSON ('' = allow all)
   UNIQUE (tenant_id, name)
 );
 

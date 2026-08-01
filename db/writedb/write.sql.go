@@ -62,16 +62,17 @@ func (q *Queries) CreateTenant(ctx context.Context, name string) (int64, error) 
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (tenant_id, name) VALUES (?, ?) RETURNING id
+INSERT INTO users (tenant_id, name, policy) VALUES (?, ?, ?) RETURNING id
 `
 
 type CreateUserParams struct {
 	TenantID int64
 	Name     string
+	Policy   string
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, createUser, arg.TenantID, arg.Name)
+	row := q.db.QueryRowContext(ctx, createUser, arg.TenantID, arg.Name, arg.Policy)
 	var id int64
 	err := row.Scan(&id)
 	return id, err

@@ -15,10 +15,12 @@ import (
 // Allow statements are accepted but have no effect yet — they will become
 // meaningful with anonymous and cross-tenant access.
 func (app *S3RP) authorize(vr *verifiedRequest, b *store.Bucket, action, resource string) *S3Error {
-	if b.Policy == nil {
-		return nil
+	// the user's identity policy gates the action first (default allow all);
+	// then the bucket policy may add a resource-specific Deny.
+	if !vr.UserPolicy.Allows(action) {
+		return errAccessDenied()
 	}
-	if b.Policy.Evaluate(vr.User, action, resource) == policy.Deny {
+	if b.Policy != nil && b.Policy.Evaluate(vr.User, action, resource) == policy.Deny {
 		return errAccessDenied()
 	}
 	return nil

@@ -12,6 +12,11 @@ tenants:
         keys:
           - access_key_id: S3RPKEY003
             secret_access_key: frontsecret003
+        policy:
+          - effect: Allow
+            action: [s3:Get*, s3:List*]
+          - effect: Deny
+            action: [s3:GetObjectAcl]
     buckets:
       - name: photos
         backend:

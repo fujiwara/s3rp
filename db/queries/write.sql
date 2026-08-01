@@ -5,7 +5,7 @@
 INSERT INTO tenants (name) VALUES (?) RETURNING id;
 
 -- name: CreateUser :one
-INSERT INTO users (tenant_id, name) VALUES (?, ?) RETURNING id;
+INSERT INTO users (tenant_id, name, policy) VALUES (?, ?, ?) RETURNING id;
 
 -- name: CreateAccessKey :exec
 INSERT INTO access_keys (access_key_id, user_id, secret_access_key) VALUES (?, ?, ?);

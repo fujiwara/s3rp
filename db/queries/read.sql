@@ -3,7 +3,7 @@
 -- which is generated into a package the proxy never imports.
 
 -- name: GetKey :one
-SELECT ak.access_key_id, ak.secret_access_key, u.name AS user_name, t.name AS tenant_name
+SELECT ak.access_key_id, ak.secret_access_key, u.name AS user_name, u.policy AS user_policy, t.name AS tenant_name
 FROM access_keys ak
 JOIN users u ON u.id = ak.user_id
 JOIN tenants t ON t.id = u.tenant_id

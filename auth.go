@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"errors"
 	"fmt"
+	"github.com/fujiwara/s3rp/policy"
 	"github.com/fujiwara/s3rp/store"
 	"log/slog"
 	"net/http"
@@ -87,6 +88,7 @@ type verifiedRequest struct {
 	SecretAccessKey Password
 	Tenant          string
 	User            string
+	UserPolicy      *policy.UserPolicy
 	Signature       string
 	SigningTime     time.Time
 	Scope           string
@@ -193,6 +195,7 @@ func (app *S3RP) verifyHeaderRequest(r *http.Request) (*verifiedRequest, *S3Erro
 		SecretAccessKey: secret,
 		Tenant:          key.Tenant,
 		User:            key.User,
+		UserPolicy:      key.Policy,
 		Signature:       auth.Signature,
 		SigningTime:     t,
 		Scope:           auth.scope(),
@@ -314,6 +317,7 @@ func (app *S3RP) verifyPresignedRequest(r *http.Request) (*verifiedRequest, *S3E
 		SecretAccessKey: secret,
 		Tenant:          key.Tenant,
 		User:            key.User,
+		UserPolicy:      key.Policy,
 		Signature:       query.Get("X-Amz-Signature"),
 		SigningTime:     t,
 		Scope:           strings.Join([]string{scopeDate, region, service, "aws4_request"}, "/"),
