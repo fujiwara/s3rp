@@ -65,12 +65,22 @@ type stubBackend struct {
 	putVerIn   *s3.PutBucketVersioningInput
 	listVerIn  *s3.ListObjectVersionsInput
 	listVerOut *s3.ListObjectVersionsOutput
-	delObjsIn  *s3.DeleteObjectsInput
-	delObjsOut *s3.DeleteObjectsOutput
-	copyIn     *s3.CopyObjectInput
-	copyOut    *s3.CopyObjectOutput
-	upcIn      *s3.UploadPartCopyInput
-	upcOut     *s3.UploadPartCopyOutput
+
+	getLockCfgIn    *s3.GetObjectLockConfigurationInput
+	getLockCfgOut   *s3.GetObjectLockConfigurationOutput
+	putLockCfgIn    *s3.PutObjectLockConfigurationInput
+	getRetentionIn  *s3.GetObjectRetentionInput
+	getRetentionOut *s3.GetObjectRetentionOutput
+	putRetentionIn  *s3.PutObjectRetentionInput
+	getLegalHoldIn  *s3.GetObjectLegalHoldInput
+	getLegalHoldOut *s3.GetObjectLegalHoldOutput
+	putLegalHoldIn  *s3.PutObjectLegalHoldInput
+	delObjsIn       *s3.DeleteObjectsInput
+	delObjsOut      *s3.DeleteObjectsOutput
+	copyIn          *s3.CopyObjectInput
+	copyOut         *s3.CopyObjectOutput
+	upcIn           *s3.UploadPartCopyInput
+	upcOut          *s3.UploadPartCopyOutput
 }
 
 func (b *stubBackend) GetObject(ctx context.Context, in *s3.GetObjectInput, _ ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
@@ -197,6 +207,36 @@ func (b *stubBackend) PutObjectTagging(ctx context.Context, in *s3.PutObjectTagg
 func (b *stubBackend) DeleteObjectTagging(ctx context.Context, in *s3.DeleteObjectTaggingInput, _ ...func(*s3.Options)) (*s3.DeleteObjectTaggingOutput, error) {
 	b.delTagIn = in
 	return &s3.DeleteObjectTaggingOutput{}, nil
+}
+
+func (b *stubBackend) GetObjectLockConfiguration(ctx context.Context, in *s3.GetObjectLockConfigurationInput, _ ...func(*s3.Options)) (*s3.GetObjectLockConfigurationOutput, error) {
+	b.getLockCfgIn = in
+	return b.getLockCfgOut, nil
+}
+
+func (b *stubBackend) PutObjectLockConfiguration(ctx context.Context, in *s3.PutObjectLockConfigurationInput, _ ...func(*s3.Options)) (*s3.PutObjectLockConfigurationOutput, error) {
+	b.putLockCfgIn = in
+	return &s3.PutObjectLockConfigurationOutput{}, nil
+}
+
+func (b *stubBackend) GetObjectRetention(ctx context.Context, in *s3.GetObjectRetentionInput, _ ...func(*s3.Options)) (*s3.GetObjectRetentionOutput, error) {
+	b.getRetentionIn = in
+	return b.getRetentionOut, nil
+}
+
+func (b *stubBackend) PutObjectRetention(ctx context.Context, in *s3.PutObjectRetentionInput, _ ...func(*s3.Options)) (*s3.PutObjectRetentionOutput, error) {
+	b.putRetentionIn = in
+	return &s3.PutObjectRetentionOutput{}, nil
+}
+
+func (b *stubBackend) GetObjectLegalHold(ctx context.Context, in *s3.GetObjectLegalHoldInput, _ ...func(*s3.Options)) (*s3.GetObjectLegalHoldOutput, error) {
+	b.getLegalHoldIn = in
+	return b.getLegalHoldOut, nil
+}
+
+func (b *stubBackend) PutObjectLegalHold(ctx context.Context, in *s3.PutObjectLegalHoldInput, _ ...func(*s3.Options)) (*s3.PutObjectLegalHoldOutput, error) {
+	b.putLegalHoldIn = in
+	return &s3.PutObjectLegalHoldOutput{}, nil
 }
 
 // newTestProxy boots the proxy on an httptest server with a stub backend and

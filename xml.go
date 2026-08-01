@@ -258,6 +258,42 @@ type DeleteMarkerEntry struct {
 	Owner        *Owner `xml:"Owner,omitempty"`
 }
 
+// ObjectLockConfiguration is the request/response body of
+// Put/GetObjectLockConfiguration.
+type ObjectLockConfiguration struct {
+	XMLName           xml.Name        `xml:"ObjectLockConfiguration"`
+	XMLNS             string          `xml:"xmlns,attr,omitempty"`
+	ObjectLockEnabled string          `xml:"ObjectLockEnabled,omitempty"`
+	Rule              *ObjectLockRule `xml:"Rule,omitempty"`
+}
+
+type ObjectLockRule struct {
+	DefaultRetention *DefaultRetention `xml:"DefaultRetention,omitempty"`
+}
+
+type DefaultRetention struct {
+	Mode  string `xml:"Mode,omitempty"`
+	Days  int32  `xml:"Days,omitempty"`
+	Years int32  `xml:"Years,omitempty"`
+}
+
+// ObjectLockRetention is the request/response body of
+// Put/GetObjectRetention.
+type ObjectLockRetention struct {
+	XMLName         xml.Name `xml:"Retention"`
+	XMLNS           string   `xml:"xmlns,attr,omitempty"`
+	Mode            string   `xml:"Mode,omitempty"`
+	RetainUntilDate string   `xml:"RetainUntilDate,omitempty"`
+}
+
+// ObjectLockLegalHold is the request/response body of
+// Put/GetObjectLegalHold.
+type ObjectLockLegalHold struct {
+	XMLName xml.Name `xml:"LegalHold"`
+	XMLNS   string   `xml:"xmlns,attr,omitempty"`
+	Status  string   `xml:"Status,omitempty"`
+}
+
 // Tagging is the request and response body of PutObjectTagging /
 // GetObjectTagging.
 type Tagging struct {

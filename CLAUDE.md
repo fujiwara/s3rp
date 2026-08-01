@@ -24,6 +24,7 @@ It deliberately reconstructs operations through the SDK instead of transparently
 - Bucket policy: AWS-style JSON text; principals are plain user names under the `"S3RP"` key, `"*"` = all users, `NotPrincipal` = everyone-except; resources are plain `bucket/prefix*` (no ARNs anywhere — explicit owner preference). Semantics: tenant users have full access as the baseline; explicit Deny restricts. Allow is inert until anonymous / cross-tenant access exist.
 - ACLs mimic ACL-disabled buckets (AWS default since 2023): GET returns a fixed tenant-FULL_CONTROL stub, writes get `AccessControlListNotSupported`. Do not proxy ACLs to backends.
 - CORS is handled by the proxy (not the backend): preflight `OPTIONS` is unauthenticated and handled before signature verification. Required for browser-direct presigned uploads.
+- Object Lock is passed through to the backend (WORM enforcement is the backend's job). Bucket must be created with Object Lock enabled on the backend (s3rp does not proxy CreateBucket). Backend behavior differs — Ceph RGW/S3 honor governance bypass, versitygw does not — so the integration ObjectLock bypass-delete is best-effort, not asserted.
 - CopyObject / UploadPartCopy work only between buckets on the same backend; the source resolves within the requester's tenant, making cross-tenant copies impossible by construction.
 - Responses must expose the **front** bucket name (ListObjectsV2 `Name`, multipart results, error `Resource`), never the backend bucket rename.
 

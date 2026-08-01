@@ -166,6 +166,12 @@ Because operations are reconstructed rather than forwarded, each one is implemen
 - GetObjectAcl
 - GetBucketPolicy
 - GetBucketCors
+- GetObjectLockConfiguration
+- PutObjectLockConfiguration
+- GetObjectRetention
+- PutObjectRetention
+- GetObjectLegalHold
+- PutObjectLegalHold
 - CreateMultipartUpload
 - UploadPart
 - UploadPartCopy
@@ -181,6 +187,12 @@ CopyObject and UploadPartCopy work between buckets served by the same backend (s
 The `versionId` query parameter is passed through on GetObject, HeadObject, DeleteObject, GetObjectAcl and the object tagging operations. Versioning requires a backend that supports it.
 
 `aws-chunked` request bodies (`STREAMING-AWS4-HMAC-SHA256-PAYLOAD` and the trailer variants), which the AWS CLI and SDKs use for uploads over plain http endpoints, are decoded and their chunk signatures are verified.
+
+### Object Lock
+
+Object Lock (WORM) is passed through to the backend, which enforces the retention. The object-lock configuration, per-object retention, and legal hold operations are proxied, and the `x-amz-object-lock-*` headers on uploads and `x-amz-bypass-governance-retention` on deletes are forwarded. Bucket policies gain the corresponding actions (`s3:GetObjectRetention`, `s3:PutObjectRetention`, `s3:GetObjectLegalHold`, `s3:PutObjectLegalHold`, `s3:BypassGovernanceRetention`, `s3:Get/PutBucketObjectLockConfiguration`).
+
+Object Lock must be enabled when a bucket is created, and s3rp does not proxy CreateBucket, so the backend bucket must have been created with Object Lock enabled. The exact behavior depends on the backend: Ceph RGW and Amazon S3 support it fully, while versitygw enforces retention but does not honor governance-mode bypass.
 
 ### Checksums
 

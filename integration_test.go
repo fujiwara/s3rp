@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -577,6 +578,84 @@ func TestIntegration(t *testing.T) {
 		if checksumOf(out.ChecksumCRC32, out.ChecksumCRC32C, out.ChecksumCRC64NVME, out.ChecksumSHA1, out.ChecksumSHA256) == "" {
 			t.Error("expect a checksum on the GetObject response")
 		}
+	})
+	t.Run("ObjectLock", func(t *testing.T) {
+		// Object Lock requires a bucket created with it enabled on the
+		// backend; s3rp does not proxy CreateBucket, so make one directly.
+		const lockBackendBucket = "s3rp-it-lock-backend"
+		if _, err := backendClient.CreateBucket(t.Context(), &s3.CreateBucketInput{
+			Bucket:                     aws.String(lockBackendBucket),
+			ObjectLockEnabledForBucket: aws.Bool(true),
+		}); err != nil {
+			var exists *types.BucketAlreadyOwnedByYou
+			if !errors.As(err, &exists) {
+				t.Skipf("backend does not support Object Lock buckets: %v", err)
+			}
+		}
+		lockCfg := &s3rp.Config{
+			Tenants: []*s3rp.TenantConfig{{
+				Name:  "lock-tenant",
+				Users: []*s3rp.UserConfig{{Name: "lockuser", Keys: []*s3rp.KeyConfig{{AccessKeyID: testAccessKeyID, SecretAccessKey: testSecretAccessKey}}}},
+				Buckets: []*s3rp.BucketConfig{{
+					Name: "lock-bucket",
+					Backend: &s3rp.BackendConfig{
+						Endpoint: endpoint, Bucket: lockBackendBucket,
+						AccessKeyID: backendKey, SecretAccessKey: s3rp.Password(backendSecret),
+					},
+				}},
+			}},
+		}
+		lockCfg.SetDefaults()
+		if err := lockCfg.Validate(); err != nil {
+			t.Fatal(err)
+		}
+		lockApp, err := s3rp.New(t.Context(), lockCfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lockTS := httptest.NewServer(lockApp.Handler())
+		t.Cleanup(lockTS.Close)
+		lc := newS3Client(t, lockTS.URL, testAccessKeyID, testSecretAccessKey)
+
+		until := time.Now().Add(24 * time.Hour).UTC().Truncate(time.Second)
+		if _, err := lc.PutObject(t.Context(), &s3.PutObjectInput{
+			Bucket:                    aws.String("lock-bucket"),
+			Key:                       aws.String("locked.txt"),
+			Body:                      strings.NewReader("worm"),
+			ObjectLockMode:            types.ObjectLockModeGovernance,
+			ObjectLockRetainUntilDate: aws.Time(until),
+		}); err != nil {
+			t.Fatal(err)
+		}
+		head, err := lc.HeadObject(t.Context(), &s3.HeadObjectInput{
+			Bucket: aws.String("lock-bucket"), Key: aws.String("locked.txt"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if head.ObjectLockMode != types.ObjectLockModeGovernance {
+			t.Errorf("expect GOVERNANCE, got %v", head.ObjectLockMode)
+		}
+		// the object version is protected: delete without bypass fails
+		vers, err := lc.ListObjectVersions(t.Context(), &s3.ListObjectVersionsInput{
+			Bucket: aws.String("lock-bucket"), Prefix: aws.String("locked.txt"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		vid := vers.Versions[0].VersionId
+		if _, err := lc.DeleteObject(t.Context(), &s3.DeleteObjectInput{
+			Bucket: aws.String("lock-bucket"), Key: aws.String("locked.txt"), VersionId: vid,
+		}); err == nil {
+			t.Error("expect delete of a locked version to be denied")
+		}
+		// s3rp forwards x-amz-bypass-governance-retention; whether the
+		// backend honors it for GOVERNANCE mode is backend-dependent
+		// (Ceph RGW does, versitygw does not), so this is best-effort.
+		_, _ = lc.DeleteObject(t.Context(), &s3.DeleteObjectInput{
+			Bucket: aws.String("lock-bucket"), Key: aws.String("locked.txt"),
+			VersionId: vid, BypassGovernanceRetention: aws.Bool(true),
+		})
 	})
 	t.Run("PresignedURL", func(t *testing.T) {
 		presigner := s3.NewPresignClient(client)

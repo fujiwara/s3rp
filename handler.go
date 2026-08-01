@@ -182,6 +182,14 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 				return err
 			}
 			return app.getBucketCors(w, rt)
+		case query.Has("object-lock"):
+			if err := objectLockOnlyParams.check(query); err != nil {
+				return err
+			}
+			if err := authorize("s3:GetBucketObjectLockConfiguration"); err != nil {
+				return err
+			}
+			return app.getObjectLockConfiguration(w, r, rt)
 		case query.Has("versioning"):
 			if err := versioningOnlyParams.check(query); err != nil {
 				return err
@@ -229,6 +237,15 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 				return err
 			}
 			return app.putBucketVersioning(w, r, rt, vr)
+		}
+		if query.Has("object-lock") {
+			if err := objectLockOnlyParams.check(query); err != nil {
+				return err
+			}
+			if err := authorize("s3:PutBucketObjectLockConfiguration"); err != nil {
+				return err
+			}
+			return app.putObjectLockConfiguration(w, r, rt, vr)
 		}
 		if query.Has("acl") {
 			return errACLNotSupported()
@@ -297,6 +314,24 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 			}
 			return app.getObjectACL(w, r, rt, key, vr)
 		}
+		if query.Has("retention") {
+			if err := retentionParams.check(query); err != nil {
+				return err
+			}
+			if err := authorize("s3:GetObjectRetention"); err != nil {
+				return err
+			}
+			return app.getObjectRetention(w, r, rt, key)
+		}
+		if query.Has("legal-hold") {
+			if err := legalHoldParams.check(query); err != nil {
+				return err
+			}
+			if err := authorize("s3:GetObjectLegalHold"); err != nil {
+				return err
+			}
+			return app.getObjectLegalHold(w, r, rt, key)
+		}
 		if err := getObjectParams.check(query); err != nil {
 			return err
 		}
@@ -324,6 +359,29 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 		}
 		if query.Has("acl") {
 			return errACLNotSupported()
+		}
+		if query.Has("retention") {
+			if err := retentionParams.check(query); err != nil {
+				return err
+			}
+			if bypassGovernanceRetention(r) {
+				if err := authorize("s3:BypassGovernanceRetention"); err != nil {
+					return err
+				}
+			}
+			if err := authorize("s3:PutObjectRetention"); err != nil {
+				return err
+			}
+			return app.putObjectRetention(w, r, rt, key, vr)
+		}
+		if query.Has("legal-hold") {
+			if err := legalHoldParams.check(query); err != nil {
+				return err
+			}
+			if err := authorize("s3:PutObjectLegalHold"); err != nil {
+				return err
+			}
+			return app.putObjectLegalHold(w, r, rt, key, vr)
 		}
 		hasCopySource := r.Header.Get("x-amz-copy-source") != ""
 		if query.Has("uploadId") || query.Has("partNumber") {
@@ -372,6 +430,11 @@ func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt 
 		}
 		if err := versionIDOnlyParams.check(query); err != nil {
 			return err
+		}
+		if bypassGovernanceRetention(r) {
+			if err := authorize("s3:BypassGovernanceRetention"); err != nil {
+				return err
+			}
 		}
 		if err := authorize("s3:DeleteObject"); err != nil {
 			return err
@@ -445,6 +508,9 @@ var (
 	aclOnlyParams        = newParamSet("acl")
 	policyOnlyParams     = newParamSet("policy")
 	corsOnlyParams       = newParamSet("cors")
+	objectLockOnlyParams = newParamSet("object-lock")
+	retentionParams      = newParamSet("retention", "versionId")
+	legalHoldParams      = newParamSet("legal-hold", "versionId")
 	aclParams            = newParamSet("acl", "versionId")
 	locationOnlyParams   = newParamSet("location")
 	deleteOnlyParams     = newParamSet("delete")
