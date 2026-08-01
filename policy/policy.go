@@ -301,17 +301,24 @@ func ValidateUserPolicy(up *UserPolicy) error {
 			}
 		}
 	}
-	// enforce the same serialized-size cap as bucket policies (Parse) and the
-	// DB read path (store/rdb.GetKey), so the YAML/config path cannot accept a
-	// user policy larger than the documented limit.
+	return nil
+}
+
+// MarshalUserPolicy serializes a user policy for storage and enforces
+// MaxPolicyBytes on the result. The byte cap applies to the serialized form,
+// so it lives here rather than in ValidateUserPolicy: callers that already
+// hold the serialized policy (the DB read path) check the raw string
+// directly, and ValidateUserPolicy stays allocation-free for the request
+// hot path.
+func MarshalUserPolicy(up *UserPolicy) (string, error) {
 	data, err := json.Marshal(up)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if len(data) > MaxPolicyBytes {
-		return fmt.Errorf("policy is %d bytes, at most %d are allowed", len(data), MaxPolicyBytes)
+		return "", fmt.Errorf("policy is %d bytes, at most %d are allowed", len(data), MaxPolicyBytes)
 	}
-	return nil
+	return string(data), nil
 }
 
 // Evaluate evaluates the policy for a principal (user name) performing an
