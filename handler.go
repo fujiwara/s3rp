@@ -42,12 +42,19 @@ func (app *S3RP) Handler() http.Handler {
 
 type statusWriter struct {
 	http.ResponseWriter
-	status int
+	status  int
+	written int64
 }
 
 func (w *statusWriter) WriteHeader(status int) {
 	w.status = status
 	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *statusWriter) Write(p []byte) (int, error) {
+	n, err := w.ResponseWriter.Write(p)
+	w.written += int64(n)
+	return n, err
 }
 
 // logFailure records why a request failed. Server-side faults are logged at
@@ -71,6 +78,9 @@ func (app *S3RP) wrapHandler(h handlerFunc) http.HandlerFunc {
 		requestID := s3err.NewRequestID()
 		w.Header().Set("x-amz-request-id", requestID)
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+		if r.Body != nil {
+			r.Body = &countingBody{ReadCloser: r.Body}
+		}
 		err := h(sw, r)
 		var code string
 		if err != nil {
@@ -235,7 +245,17 @@ func (c *opCtx) dispatch(routes []route) error {
 				return err
 			}
 		}
-		return rt.handle(c.app, c)
+		op := &Op{
+			Method: c.r.Method,
+			Action: rt.action,
+			Tenant: c.vr.Tenant,
+			User:   c.vr.User,
+			Bucket: c.rt.cfg.Name,
+			Key:    c.key,
+		}
+		return c.app.runOp(c.r.Context(), op, c, func() error {
+			return rt.handle(c.app, c)
+		})
 	}
 	return s3err.NotImplemented("this operation")
 }

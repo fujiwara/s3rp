@@ -23,6 +23,9 @@ type S3RP struct {
 	store    store.Store
 	verifier *sigv4.Verifier
 
+	authorizer   Authorizer
+	interceptors []Interceptor
+
 	newClient func(ctx context.Context, b *BackendConfig) (BackendClient, error)
 	clients   map[clientCacheKey]BackendClient
 	clientsMu sync.RWMutex
