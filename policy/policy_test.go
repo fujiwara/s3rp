@@ -232,3 +232,34 @@ func TestEvaluateActionWildcard(t *testing.T) {
 		t.Errorf("expect Deny for s3:*, got %v", got)
 	}
 }
+
+// TestEvaluateActionCaseInsensitive verifies that actions match regardless
+// of case (as in AWS), so a mis-cased Deny cannot silently fail open, while
+// resources stay case-sensitive.
+func TestEvaluateActionCaseInsensitive(t *testing.T) {
+	p, err := policy.Parse(`{
+		"Statement": [
+			{"Effect": "Deny", "Principal": {"S3RP": ["batch"]}, "Action": ["s3:putobject", "S3:DeleteObject", "s3:Get*"], "Resource": "photos/*"}
+		]
+	}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the proxy always passes the canonical action name
+	cases := []struct {
+		action   string
+		resource string
+		want     policy.Effect
+	}{
+		{"s3:PutObject", "photos/a", policy.Deny},    // policy lower-cased
+		{"s3:DeleteObject", "photos/a", policy.Deny}, // policy S3: prefix
+		{"s3:GetObject", "photos/a", policy.Deny},    // wildcard, mixed case
+		{"s3:HeadObject", "photos/a", policy.None},   // not covered
+		{"s3:PutObject", "Photos/a", policy.None},    // resource case-sensitive
+	}
+	for _, tc := range cases {
+		if got := p.Evaluate("batch", tc.action, tc.resource); got != tc.want {
+			t.Errorf("Evaluate(%q, %q) = %v, want %v", tc.action, tc.resource, got, tc.want)
+		}
+	}
+}
