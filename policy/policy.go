@@ -103,6 +103,11 @@ func Parse(text string) (*Policy, error) {
 	if err := json.Unmarshal([]byte(text), &p); err != nil {
 		return nil, fmt.Errorf("malformed policy JSON: %w", err)
 	}
+	// Version is optional, but if present it must be a recognized value
+	// (AWS accepts only these two); a typo would otherwise pass silently.
+	if p.Version != "" && p.Version != "2012-10-17" && p.Version != "2008-10-17" {
+		return nil, fmt.Errorf("unsupported policy version %q", p.Version)
+	}
 	if len(p.Statement) == 0 {
 		return nil, fmt.Errorf("policy must contain at least one statement")
 	}
