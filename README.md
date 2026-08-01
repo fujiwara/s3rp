@@ -313,6 +313,7 @@ The S3 API lives in `s3gw`, separate from the parts of this repository that are 
 | `store.Store` | where definitions come from: tenants, users, access keys, and where each bucket really lives. This is your control plane's read side. |
 | `s3gw.Authorizer` | what the policies cannot express — an exhausted quota, a suspended tenant, a rate limit. Consulted after the bucket and user policies have already allowed the operation. |
 | `s3gw.Interceptor` | what you meter. It wraps the operation, so the byte counts are filled in by the time `next` returns. |
+| `s3gw.Observer` | how requests are logged. The gateway does not log — it reports what it knows once per request and lets you choose the format, level and destination. |
 
 **What the gateway does**: SigV4 verification (header and presigned), `aws-chunked` decoding and checksums, bucket and user policy evaluation, CORS, the operations themselves, and the routing that reaches them — refusing unknown ones rather than passing them through.
 
@@ -324,6 +325,7 @@ package main
 import (
 	"context"
 	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/fujiwara/s3rp/s3err"
@@ -380,6 +382,23 @@ func main() {
 		meter(op) // op.BytesIn and op.BytesOut are filled in by now
 		return err
 	})
+
+	// the gateway does not log; this is where a request is recorded, in
+	// whatever form your service already uses
+	gw.SetObserver(func(ctx context.Context, info *s3gw.RequestInfo) {
+		if info.Err != nil {
+			// only place the reason for a failure can be seen; the client was
+			// told no more than info.Code
+			slog.ErrorContext(ctx, "request failed", "code", info.Code,
+				"error", info.Err, "request_id", info.RequestID)
+		}
+		slog.InfoContext(ctx, "request",
+			"method", info.Method, "path", info.Path,
+			"query", info.RawQuery, // presigned signature already masked
+			"status", info.Status, "bytes_out", info.BytesOut,
+			"duration", info.Duration, "request_id", info.RequestID)
+	})
+
 	log.Fatal(http.ListenAndServe(":8080", gw.Handler()))
 }
 ```
@@ -390,7 +409,8 @@ func main() {
 - An interceptor wraps **one inbound request**: it runs after routing and the policy checks, around the handler, so the call to the backend — including any retries the SDK makes internally — happens inside `next`. Metering is therefore straightforward: record once `next` returns, and the counts are what was actually read from and written to the client.
 - A client that retries sends a **new request**, which is verified, authorized and metered on its own. That is what the server served; whether a retry should count toward a quota or an invoice is the application's decision, not the gateway's.
 - `Op.BytesIn` / `BytesOut` count bytes on the wire, so an `aws-chunked` upload includes its framing.
-- Failures are logged once at the request boundary with the `x-amz-request-id` the client receives; the cause never reaches the client. See `s3err`.
+- **Nothing is logged unless you install an observer**, including failures. The cause of a failure is not recoverable anywhere else: it never reaches the client, by design. An observer is called once per request, after the response has been written, whether or not the request ever reached an operation — a signature that did not verify or a bucket that does not exist never reaches an interceptor, but is still observed.
+- Log `RequestInfo.RawQuery`, not the request's own query string: the gateway masks the presigned authentication parameters, and a presigned URL's signature is a bearer credential until it expires.
 - Two tenants must not map buckets to the same physical backend bucket — the gateway cannot detect this, so validate it where definitions are written.
 
 **The other packages** are usable on their own: `sigv4` (server-side SigV4 verification and `aws-chunked` decoding), `policy` (AWS-style policy evaluation), `s3err`, `s3xml`, `checksum` and `cors`. `checksum`, `policy` and `s3xml` depend only on the standard library.

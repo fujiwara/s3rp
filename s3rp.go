@@ -40,7 +40,39 @@ func New(ctx context.Context, cfg *Config) (*S3RP, error) {
 // NewWithStore creates an S3RP using the given Store for tenant, key and
 // bucket definitions.
 func NewWithStore(_ context.Context, cfg *Config, st store.Store) (*S3RP, error) {
-	return &S3RP{Gateway: s3gw.New(st), cfg: cfg, store: st}, nil
+	gw := s3gw.New(st)
+	gw.SetObserver(logRequest)
+	return &S3RP{Gateway: gw, cfg: cfg, store: st}, nil
+}
+
+// logRequest writes the access log, and the reason whenever a request failed.
+// The gateway reports rather than logs, so the format and the level are
+// decided here: a server-side fault is an error, a refusal the client caused
+// is routine but still worth being able to explain afterwards.
+func logRequest(ctx context.Context, info *s3gw.RequestInfo) {
+	if info.Code != "" {
+		level := slog.LevelInfo
+		if info.Status >= http.StatusInternalServerError {
+			level = slog.LevelError
+		}
+		attrs := []any{"code", info.Code, "status", info.Status, "request_id", info.RequestID}
+		if info.Err != nil {
+			attrs = append(attrs, "error", info.Err)
+		}
+		slog.Log(ctx, level, "request failed", attrs...)
+	}
+	slog.InfoContext(ctx, "request",
+		"remote", info.RemoteAddr,
+		"method", info.Method,
+		"path", info.Path,
+		"query", info.RawQuery,
+		"status", info.Status,
+		"code", info.Code,
+		"bytes_in", info.BytesIn,
+		"bytes_out", info.BytesOut,
+		"duration", info.Duration.String(),
+		"request_id", info.RequestID,
+	)
 }
 
 // Run parses the command line, loads the config and serves until ctx is done.
