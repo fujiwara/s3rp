@@ -69,6 +69,9 @@ type CORSRule struct {
 	MaxAgeSeconds  int      `yaml:"max_age_seconds,omitempty" json:"max_age_seconds,omitempty"`
 }
 
+// DefaultRegion is used when a backend definition omits the region.
+const DefaultRegion = "us-east-1"
+
 // Backend is the definition of an S3-compatible backend for a bucket.
 // An empty Endpoint means Amazon S3 (resolved by the SDK from the region);
 // empty credentials mean the SDK default credential chain.
@@ -79,6 +82,26 @@ type Backend struct {
 	AccessKeyID     string   `yaml:"access_key_id" json:"access_key_id"`
 	SecretAccessKey Password `yaml:"secret_access_key" json:"secret_access_key"`
 	UsePathStyle    *bool    `yaml:"use_path_style,omitempty" json:"use_path_style,omitempty"`
+}
+
+// SetDefaults fills in the optional fields of a backend definition, given the
+// front-side bucket name it belongs to. Every Store implementation must apply
+// it so callers always receive a fully resolved backend: the config store
+// defaults at load time, and the DB store defaults after unmarshaling a row,
+// whose optional columns may legitimately be absent.
+func (b *Backend) SetDefaults(bucketName string) {
+	if b.Region == "" {
+		b.Region = DefaultRegion
+	}
+	if b.Bucket == "" {
+		b.Bucket = bucketName
+	}
+	if b.UsePathStyle == nil {
+		// S3-compatible servers conventionally need path-style, while
+		// Amazon S3 (no endpoint) prefers virtual-hosted style
+		usePathStyle := b.Endpoint != ""
+		b.UsePathStyle = &usePathStyle
+	}
 }
 
 // Password is a string that is masked when marshaled to JSON or YAML.

@@ -14,7 +14,9 @@ import (
 
 const (
 	DefaultListen = ":8080"
-	DefaultRegion = "us-east-1"
+	// DefaultRegion lives with the backend definition it applies to, so both
+	// Store implementations resolve it identically.
+	DefaultRegion = store.DefaultRegion
 )
 
 var (
@@ -102,18 +104,7 @@ func (c *Config) SetDefaults() {
 			if b.Backend == nil {
 				continue
 			}
-			if b.Backend.Region == "" {
-				b.Backend.Region = DefaultRegion
-			}
-			if b.Backend.Bucket == "" {
-				b.Backend.Bucket = b.Name
-			}
-			if b.Backend.UsePathStyle == nil {
-				// S3-compatible servers conventionally need path-style,
-				// while AWS S3 (no endpoint) prefers virtual-hosted style
-				usePathStyle := b.Backend.Endpoint != ""
-				b.Backend.UsePathStyle = &usePathStyle
-			}
+			b.Backend.SetDefaults(b.Name)
 		}
 	}
 }
