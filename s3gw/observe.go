@@ -34,6 +34,11 @@ type RequestInfo struct {
 	// the wire, for the whole request including failures.
 	BytesIn  int64
 	BytesOut int64
+	// Start is when the request began, and with Duration brackets it. It is
+	// here so the record stands on its own: an observer that hands it to
+	// something else — a metering queue, a batch — must not have to stamp the
+	// time itself at the moment it is called.
+	Start    time.Time
 	Duration time.Duration
 }
 

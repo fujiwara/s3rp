@@ -76,8 +76,15 @@ func TestObserverSeesEveryRequest(t *testing.T) {
 		t.Errorf("request id %q does not match the response header %q",
 			info.RequestID, res.Header().Get("x-amz-request-id"))
 	}
+	// the record must stand on its own: when it happened, not only how long
 	if info.Duration <= 0 {
 		t.Error("expect a duration")
+	}
+	if info.Start.IsZero() {
+		t.Error("expect a start time")
+	}
+	if before := info.Start.Add(info.Duration); before.After(time.Now()) {
+		t.Errorf("start %v plus duration %v is in the future", info.Start, info.Duration)
 	}
 }
 

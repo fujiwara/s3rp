@@ -96,6 +96,7 @@ func (g *Gateway) wrapHandler(h handlerFunc) http.HandlerFunc {
 			Status:     sw.status,
 			Code:       code,
 			Err:        cause,
+			Start:      start,
 			Duration:   time.Since(start),
 			BytesIn:    body.n,
 			BytesOut:   sw.written,
