@@ -1,4 +1,4 @@
-package s3rp_test
+package s3err_test
 
 import (
 	"net/http"
@@ -9,7 +9,7 @@ import (
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/smithy-go"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
-	"github.com/fujiwara/s3rp"
+	"github.com/fujiwara/s3rp/s3err"
 )
 
 var fromSDKErrorTestCases = []struct {
@@ -64,7 +64,7 @@ var fromSDKErrorTestCases = []struct {
 func TestFromSDKError(t *testing.T) {
 	for _, tc := range fromSDKErrorTestCases {
 		t.Run(tc.name, func(t *testing.T) {
-			e := s3rp.FromSDKError(tc.err, "/bucket/key")
+			e := s3err.FromSDKError(tc.err, "/bucket/key")
 			if e.Code != tc.wantCode {
 				t.Errorf("expect code %s, got %s", tc.wantCode, e.Code)
 			}
@@ -79,8 +79,8 @@ func TestWriteS3Error(t *testing.T) {
 	t.Run("GET has XML body", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/bucket/key", nil)
-		e := s3rp.NewS3Error(http.StatusForbidden, "AccessDenied", "Access Denied")
-		s3rp.WriteS3Error(w, r, e, "reqid123")
+		e := s3err.New(http.StatusForbidden, "AccessDenied", "Access Denied")
+		s3err.Write(w, r, e, "reqid123")
 		if w.Code != http.StatusForbidden {
 			t.Errorf("expect 403, got %d", w.Code)
 		}
@@ -97,8 +97,8 @@ func TestWriteS3Error(t *testing.T) {
 	t.Run("HEAD has no body", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodHead, "/bucket/key", nil)
-		e := s3rp.NewS3Error(http.StatusNotFound, "NotFound", "Not Found")
-		s3rp.WriteS3Error(w, r, e, "reqid123")
+		e := s3err.New(http.StatusNotFound, "NotFound", "Not Found")
+		s3err.Write(w, r, e, "reqid123")
 		if w.Code != http.StatusNotFound {
 			t.Errorf("expect 404, got %d", w.Code)
 		}

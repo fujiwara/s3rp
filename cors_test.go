@@ -1,6 +1,7 @@
 package s3rp_test
 
 import (
+	"github.com/fujiwara/s3rp/cors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,7 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fujiwara/s3rp"
-	"github.com/fujiwara/s3rp/store"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -30,7 +30,7 @@ func newCORSTestProxy(t *testing.T) (*httptest.Server, *s3rp.S3RP) {
 						Backend: &s3rp.BackendConfig{
 							Endpoint: "http://backend.invalid", AccessKeyID: "bk", SecretAccessKey: "bs",
 						},
-						CORS: []*store.CORSRule{
+						CORS: []*cors.Rule{
 							{
 								AllowedOrigins: []string{"https://app.example.com", "https://*.preview.example.com"},
 								AllowedMethods: []string{"GET", "PUT"},

@@ -2,6 +2,7 @@ package s3rp
 
 import (
 	"encoding/xml"
+	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/s3xml"
 	"io"
 	"net/http"
@@ -19,7 +20,7 @@ func (app *S3RP) getBucketVersioning(c *opCtx) error {
 	}
 	out, err := rt.client.GetBucketVersioning(r.Context(), in)
 	if err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	return s3xml.Write(w, &s3xml.VersioningConfiguration{
 		XMLNS:  s3xml.Namespace,
@@ -29,23 +30,23 @@ func (app *S3RP) getBucketVersioning(c *opCtx) error {
 
 func (app *S3RP) putBucketVersioning(c *opCtx) error {
 	w, r, rt, vr := c.w, c.r, c.rt, c.vr
-	body, _, s3err := requestBody(r, vr)
-	if s3err != nil {
-		return s3err
+	body, _, s3e := requestBody(r, vr)
+	if s3e != nil {
+		return s3e
 	}
 	data, err := io.ReadAll(io.LimitReader(body, maxXMLBodySize))
 	if err != nil {
-		return newS3Error(http.StatusBadRequest, "InvalidRequest", "failed to read request body")
+		return s3err.New(http.StatusBadRequest, "InvalidRequest", "failed to read request body")
 	}
 	var req s3xml.VersioningConfiguration
 	if err := xml.Unmarshal(data, &req); err != nil {
-		return newS3Error(http.StatusBadRequest, "MalformedXML",
+		return s3err.New(http.StatusBadRequest, "MalformedXML",
 			"The XML you provided was not well-formed or did not validate against our published schema.")
 	}
 	switch req.Status {
 	case "Enabled", "Suspended":
 	default:
-		return newS3Error(http.StatusBadRequest, "MalformedXML",
+		return s3err.New(http.StatusBadRequest, "MalformedXML",
 			"The XML you provided was not well-formed or did not validate against our published schema.")
 	}
 	in := &s3.PutBucketVersioningInput{
@@ -55,7 +56,7 @@ func (app *S3RP) putBucketVersioning(c *opCtx) error {
 		},
 	}
 	if _, err := rt.client.PutBucketVersioning(r.Context(), in); err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	w.WriteHeader(http.StatusOK)
 	return nil
@@ -82,7 +83,7 @@ func (app *S3RP) listObjectVersions(c *opCtx) error {
 	if v := query.Get("max-keys"); v != "" {
 		maxKeys, err := strconv.ParseInt(v, 10, 32)
 		if err != nil {
-			return newS3Error(http.StatusBadRequest, "InvalidArgument",
+			return s3err.New(http.StatusBadRequest, "InvalidArgument",
 				"Argument max-keys must be an integer.")
 		}
 		in.MaxKeys = aws.Int32(int32(maxKeys))
@@ -92,7 +93,7 @@ func (app *S3RP) listObjectVersions(c *opCtx) error {
 	}
 	out, err := rt.client.ListObjectVersions(r.Context(), in)
 	if err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	result := &s3xml.ListVersionsResult{
 		XMLNS: s3xml.Namespace,

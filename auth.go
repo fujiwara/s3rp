@@ -3,6 +3,7 @@ package s3rp
 import (
 	"context"
 	"errors"
+	"github.com/fujiwara/s3rp/s3err"
 	"net/http"
 
 	"github.com/fujiwara/s3rp/policy"
@@ -25,11 +26,11 @@ type verifiedRequest struct {
 // verifyRequest authenticates an incoming request, either by the
 // Authorization header or by presigned URL query parameters, and resolves the
 // identity behind the access key.
-func (app *S3RP) verifyRequest(r *http.Request) (*verifiedRequest, *S3Error) {
+func (app *S3RP) verifyRequest(r *http.Request) (*verifiedRequest, *s3err.Error) {
 	// the store lookup that supplies the secret also yields the identity, so
 	// capture it here instead of looking the key up twice
 	var key *store.Key
-	verified, s3err := app.verifier.Verify(r, func(ctx context.Context, accessKeyID string) (string, error) {
+	verified, s3e := app.verifier.Verify(r, func(ctx context.Context, accessKeyID string) (string, error) {
 		k, err := app.store.GetKey(ctx, accessKeyID)
 		if err != nil {
 			if errors.Is(err, store.ErrNotFound) {
@@ -40,8 +41,8 @@ func (app *S3RP) verifyRequest(r *http.Request) (*verifiedRequest, *S3Error) {
 		key = k
 		return k.SecretAccessKey.String(), nil
 	})
-	if s3err != nil {
-		return nil, s3err
+	if s3e != nil {
+		return nil, s3e
 	}
 	return &verifiedRequest{
 		Verified:   verified,

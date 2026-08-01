@@ -2,6 +2,7 @@ package s3rp
 
 import (
 	"encoding/xml"
+	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/s3xml"
 	"io"
 	"net/http"
@@ -24,7 +25,7 @@ func (app *S3RP) getObjectLockConfiguration(c *opCtx) error {
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 	})
 	if err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	result := &s3xml.ObjectLockConfiguration{XMLNS: s3xml.Namespace}
 	if c := out.ObjectLockConfiguration; c != nil {
@@ -75,7 +76,7 @@ func (app *S3RP) putObjectLockConfiguration(c *opCtx) error {
 		in.Token = aws.String(v)
 	}
 	if _, err := rt.client.PutObjectLockConfiguration(r.Context(), in); err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	w.WriteHeader(http.StatusOK)
 	return nil
@@ -92,7 +93,7 @@ func (app *S3RP) getObjectRetention(c *opCtx) error {
 	}
 	out, err := rt.client.GetObjectRetention(r.Context(), in)
 	if err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	result := &s3xml.ObjectLockRetention{XMLNS: s3xml.Namespace}
 	if out.Retention != nil {
@@ -121,7 +122,7 @@ func (app *S3RP) putObjectRetention(c *opCtx) error {
 			t, err = time.Parse(time.RFC3339, req.RetainUntilDate)
 		}
 		if err != nil {
-			return newS3Error(http.StatusBadRequest, "InvalidRequest", "invalid RetainUntilDate")
+			return s3err.New(http.StatusBadRequest, "InvalidRequest", "invalid RetainUntilDate")
 		}
 		in.Retention.RetainUntilDate = aws.Time(t)
 	}
@@ -132,7 +133,7 @@ func (app *S3RP) putObjectRetention(c *opCtx) error {
 		in.BypassGovernanceRetention = aws.Bool(true)
 	}
 	if _, err := rt.client.PutObjectRetention(r.Context(), in); err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	w.WriteHeader(http.StatusOK)
 	return nil
@@ -149,7 +150,7 @@ func (app *S3RP) getObjectLegalHold(c *opCtx) error {
 	}
 	out, err := rt.client.GetObjectLegalHold(r.Context(), in)
 	if err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	result := &s3xml.ObjectLockLegalHold{XMLNS: s3xml.Namespace}
 	if out.LegalHold != nil {
@@ -173,7 +174,7 @@ func (app *S3RP) putObjectLegalHold(c *opCtx) error {
 		in.VersionId = aws.String(v)
 	}
 	if _, err := rt.client.PutObjectLegalHold(r.Context(), in); err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	w.WriteHeader(http.StatusOK)
 	return nil
@@ -216,17 +217,17 @@ func setObjectLockResponseHeaders(h http.Header, mode types.ObjectLockMode, reta
 }
 
 // readXMLBody decodes an XML request body (aws-chunked aware) into v.
-func readXMLBody(r *http.Request, vr *verifiedRequest, v any) *S3Error {
-	body, _, s3err := requestBody(r, vr)
-	if s3err != nil {
-		return s3err
+func readXMLBody(r *http.Request, vr *verifiedRequest, v any) *s3err.Error {
+	body, _, s3e := requestBody(r, vr)
+	if s3e != nil {
+		return s3e
 	}
 	data, err := io.ReadAll(io.LimitReader(body, maxXMLBodySize))
 	if err != nil {
-		return newS3Error(http.StatusBadRequest, "InvalidRequest", "failed to read request body")
+		return s3err.New(http.StatusBadRequest, "InvalidRequest", "failed to read request body")
 	}
 	if err := xml.Unmarshal(data, v); err != nil {
-		return newS3Error(http.StatusBadRequest, "MalformedXML",
+		return s3err.New(http.StatusBadRequest, "MalformedXML",
 			"The XML you provided was not well-formed or did not validate against our published schema.")
 	}
 	return nil

@@ -2,6 +2,7 @@ package s3rp
 
 import (
 	"errors"
+	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/s3xml"
 	"github.com/fujiwara/s3rp/store"
 	"net/http"
@@ -17,38 +18,38 @@ import (
 // resolveCopySource resolves an x-amz-copy-source header value
 // (front bucket/key) to the backend copy source of the same backend.
 // Copying between different backends is not supported.
-func (app *S3RP) resolveCopySource(r *http.Request, vr *verifiedRequest, dst *bucketRT) (string, *S3Error) {
+func (app *S3RP) resolveCopySource(r *http.Request, vr *verifiedRequest, dst *bucketRT) (string, *s3err.Error) {
 	raw := strings.TrimPrefix(r.Header.Get("x-amz-copy-source"), "/")
 	rawPath, versionID, _ := strings.Cut(raw, "?")
 	rawBucket, rawKey, ok := strings.Cut(rawPath, "/")
 	if !ok || rawKey == "" {
-		return "", newS3Error(http.StatusBadRequest, "InvalidArgument",
+		return "", s3err.New(http.StatusBadRequest, "InvalidArgument",
 			"Copy Source must mention the source bucket and key: sourcebucket/sourcekey")
 	}
 	srcBucket, err := url.PathUnescape(rawBucket)
 	if err != nil {
-		return "", newS3Error(http.StatusBadRequest, "InvalidArgument", "Invalid copy source")
+		return "", s3err.New(http.StatusBadRequest, "InvalidArgument", "Invalid copy source")
 	}
 	srcKey, err := unescapeKey(rawKey)
 	if err != nil {
-		return "", newS3Error(http.StatusBadRequest, "InvalidArgument", "Invalid copy source")
+		return "", s3err.New(http.StatusBadRequest, "InvalidArgument", "Invalid copy source")
 	}
 	// the source is resolved within the requesting key's tenant, so
 	// copying from another tenant's bucket is impossible by construction
 	src, err := app.store.GetBucket(r.Context(), vr.Tenant, srcBucket)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return "", errAccessDenied()
+			return "", s3err.AccessDenied()
 		}
-		return "", newS3Error(http.StatusInternalServerError, "InternalError", "bucket lookup failed")
+		return "", s3err.New(http.StatusInternalServerError, "InternalError", "bucket lookup failed")
 	}
 	// reading the copy source needs s3:GetObject on the source bucket
-	if s3err := app.authorize(vr, src, "s3:GetObject", src.Name+"/"+srcKey); s3err != nil {
-		return "", s3err
+	if s3e := app.authorize(vr, src, "s3:GetObject", src.Name+"/"+srcKey); s3e != nil {
+		return "", s3e
 	}
 	sb, db := src.Backend, dst.cfg.Backend
 	if sb.Endpoint != db.Endpoint || sb.Region != db.Region || sb.AccessKeyID != db.AccessKeyID {
-		return "", errNotImplemented("copying between different backends")
+		return "", s3err.NotImplemented("copying between different backends")
 	}
 	copySource := (&url.URL{Path: "/" + sb.Bucket + "/" + srcKey}).EscapedPath()[1:]
 	if versionID != "" {
@@ -59,9 +60,9 @@ func (app *S3RP) resolveCopySource(r *http.Request, vr *verifiedRequest, dst *bu
 
 func (app *S3RP) copyObject(c *opCtx) error {
 	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
-	copySource, s3err := app.resolveCopySource(r, vr, rt)
-	if s3err != nil {
-		return s3err
+	copySource, s3e := app.resolveCopySource(r, vr, rt)
+	if s3e != nil {
+		return s3e
 	}
 	in := &s3.CopyObjectInput{
 		Bucket:     aws.String(rt.cfg.Backend.Bucket),
@@ -104,7 +105,7 @@ func (app *S3RP) copyObject(c *opCtx) error {
 	}
 	out, err := rt.client.CopyObject(r.Context(), in)
 	if err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	if out.VersionId != nil {
 		w.Header().Set("x-amz-version-id", *out.VersionId)
@@ -126,14 +127,14 @@ func (app *S3RP) copyObject(c *opCtx) error {
 
 func (app *S3RP) uploadPartCopy(c *opCtx) error {
 	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
-	copySource, s3err := app.resolveCopySource(r, vr, rt)
-	if s3err != nil {
-		return s3err
+	copySource, s3e := app.resolveCopySource(r, vr, rt)
+	if s3e != nil {
+		return s3e
 	}
 	query := r.URL.Query()
 	partNumber, err := strconv.ParseInt(query.Get("partNumber"), 10, 32)
 	if err != nil {
-		return newS3Error(http.StatusBadRequest, "InvalidArgument",
+		return s3err.New(http.StatusBadRequest, "InvalidArgument",
 			"Argument partNumber must be an integer.")
 	}
 	in := &s3.UploadPartCopyInput{
@@ -148,7 +149,7 @@ func (app *S3RP) uploadPartCopy(c *opCtx) error {
 	}
 	out, err := rt.client.UploadPartCopy(r.Context(), in)
 	if err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	if out.CopySourceVersionId != nil {
 		w.Header().Set("x-amz-copy-source-version-id", *out.CopySourceVersionId)

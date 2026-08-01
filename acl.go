@@ -1,6 +1,7 @@
 package s3rp
 
 import (
+	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/s3xml"
 	"net/http"
 
@@ -14,14 +15,14 @@ import (
 // modifying ACLs is rejected, and only canned ACLs that are no-ops on an
 // ACL-disabled bucket are accepted on uploads.
 
-func errACLNotSupported() *S3Error {
-	return newS3Error(http.StatusBadRequest, "AccessControlListNotSupported",
+func errACLNotSupported() *s3err.Error {
+	return s3err.New(http.StatusBadRequest, "AccessControlListNotSupported",
 		"The bucket does not allow ACLs")
 }
 
 // checkACLHeader rejects canned ACLs other than the ones an ACL-disabled
 // bucket accepts.
-func checkACLHeader(r *http.Request) *S3Error {
+func checkACLHeader(r *http.Request) *s3err.Error {
 	switch r.Header.Get("x-amz-acl") {
 	case "", "private", "bucket-owner-full-control":
 		return nil
@@ -64,7 +65,7 @@ func (app *S3RP) getObjectACL(c *opCtx) error {
 		in.VersionId = aws.String(v)
 	}
 	if _, err := rt.client.HeadObject(r.Context(), in); err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	return s3xml.Write(w, ownerFullControlPolicy(vr.Tenant))
 }

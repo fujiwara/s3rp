@@ -58,13 +58,8 @@ type Bucket struct {
 	Policy     *policy.Policy
 
 	// CORS is the CORS configuration of the bucket (nil if none).
-	CORS []*CORSRule
+	CORS []*cors.Rule
 }
-
-// CORSRule is one CORS rule of a bucket. It is an alias of cors.Rule: the
-// shape belongs to the CORS protocol, and the alias lets definitions be
-// stored and evaluated without conversion.
-type CORSRule = cors.Rule
 
 // DefaultRegion is used when a backend definition omits the region.
 const DefaultRegion = "us-east-1"
