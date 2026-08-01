@@ -1,4 +1,7 @@
-package s3rp
+// Package s3err renders S3 API error responses and maps aws-sdk-go-v2
+// errors onto them, preserving the backend's error code and HTTP status. It
+// is independent of the proxy so any service speaking the S3 API can reuse it.
+package s3err
 
 import (
 	"context"
@@ -14,9 +17,9 @@ import (
 	"github.com/aws/smithy-go"
 )
 
-// S3Error is an S3 API error response.
+// Error is an S3 API error response.
 // https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
-type S3Error struct {
+type Error struct {
 	XMLName   xml.Name `xml:"Error"`
 	Code      string   `xml:"Code"`
 	Message   string   `xml:"Message"`
@@ -26,33 +29,33 @@ type S3Error struct {
 	status int
 }
 
-func (e *S3Error) Error() string {
+func (e *Error) Error() string {
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }
 
-func (e *S3Error) Status() int {
+func (e *Error) Status() int {
 	return e.status
 }
 
-func newS3Error(status int, code, message string) *S3Error {
-	return &S3Error{status: status, Code: code, Message: message}
+func New(status int, code, message string) *Error {
+	return &Error{status: status, Code: code, Message: message}
 }
 
 var (
-	errNotImplemented = func(what string) *S3Error {
-		return newS3Error(http.StatusNotImplemented, "NotImplemented", fmt.Sprintf("%s is not implemented", what))
+	NotImplemented = func(what string) *Error {
+		return New(http.StatusNotImplemented, "NotImplemented", fmt.Sprintf("%s is not implemented", what))
 	}
-	errAccessDenied = func() *S3Error {
-		return newS3Error(http.StatusForbidden, "AccessDenied", "Access Denied")
+	AccessDenied = func() *Error {
+		return New(http.StatusForbidden, "AccessDenied", "Access Denied")
 	}
-	errInvalidAccessKeyID = func() *S3Error {
-		return newS3Error(http.StatusForbidden, "InvalidAccessKeyId", "The AWS Access Key Id you provided does not exist in our records.")
+	InvalidAccessKeyID = func() *Error {
+		return New(http.StatusForbidden, "InvalidAccessKeyId", "The AWS Access Key Id you provided does not exist in our records.")
 	}
-	errSignatureDoesNotMatch = func() *S3Error {
-		return newS3Error(http.StatusForbidden, "SignatureDoesNotMatch", "The request signature we calculated does not match the signature you provided. Check your key and signing method.")
+	SignatureDoesNotMatch = func() *Error {
+		return New(http.StatusForbidden, "SignatureDoesNotMatch", "The request signature we calculated does not match the signature you provided. Check your key and signing method.")
 	}
-	errContentSHA256Mismatch = func() *S3Error {
-		return newS3Error(http.StatusBadRequest, "XAmzContentSHA256Mismatch", "The provided 'x-amz-content-sha256' header does not match what was computed.")
+	ContentSHA256Mismatch = func() *Error {
+		return New(http.StatusBadRequest, "XAmzContentSHA256Mismatch", "The provided 'x-amz-content-sha256' header does not match what was computed.")
 	}
 )
 
@@ -68,20 +71,20 @@ var wellKnownErrorStatus = map[string]int{
 	"InvalidRange":       http.StatusRequestedRangeNotSatisfiable,
 }
 
-// fromSDKError converts an error returned by the aws-sdk-go-v2 S3 client
-// into an S3Error, preserving the backend's error code and HTTP status
+// FromSDKError converts an error returned by the aws-sdk-go-v2 S3 client
+// into an Error, preserving the backend's error code and HTTP status
 // where possible.
-func fromSDKError(err error, resource string) *S3Error {
-	// an S3Error raised by the proxy itself (e.g. the chunked reader
+func FromSDKError(err error, resource string) *Error {
+	// an Error raised by the proxy itself (e.g. the chunked reader
 	// aborting on a signature or checksum mismatch) passes through
-	var own *S3Error
+	var own *Error
 	if errors.As(err, &own) {
 		if own.Resource == "" {
 			own.Resource = resource
 		}
 		return own
 	}
-	s3err := &S3Error{
+	s3err := &Error{
 		status:   http.StatusBadGateway,
 		Code:     "InternalError",
 		Message:  "We encountered an internal error. Please try again.",
@@ -115,9 +118,9 @@ func fromSDKError(err error, resource string) *S3Error {
 	return s3err
 }
 
-// writeS3Error writes an S3 XML error response.
+// Write writes an S3 XML error response.
 // HEAD responses and 304 must not carry a body.
-func writeS3Error(w http.ResponseWriter, r *http.Request, e *S3Error, requestID string) {
+func Write(w http.ResponseWriter, r *http.Request, e *Error, requestID string) {
 	e.RequestID = requestID
 	if e.Resource == "" {
 		e.Resource = r.URL.Path
@@ -137,7 +140,7 @@ func writeS3Error(w http.ResponseWriter, r *http.Request, e *S3Error, requestID 
 	w.Write(b)
 }
 
-func newRequestID() string {
+func NewRequestID() string {
 	b := make([]byte, 8)
 	rand.Read(b)
 	return hex.EncodeToString(b)
