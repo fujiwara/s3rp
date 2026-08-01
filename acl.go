@@ -1,6 +1,7 @@
 package s3rp
 
 import (
+	"github.com/fujiwara/s3rp/s3xml"
 	"net/http"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -28,14 +29,14 @@ func checkACLHeader(r *http.Request) *S3Error {
 	return errACLNotSupported()
 }
 
-func ownerFullControlPolicy(owner string) *AccessControlPolicy {
-	policy := &AccessControlPolicy{
-		XMLNS: s3XMLNS,
-		Owner: Owner{ID: owner, DisplayName: owner},
+func ownerFullControlPolicy(owner string) *s3xml.AccessControlPolicy {
+	policy := &s3xml.AccessControlPolicy{
+		XMLNS: s3xml.Namespace,
+		Owner: s3xml.Owner{ID: owner, DisplayName: owner},
 	}
-	policy.AccessControlList.Grants = []Grant{
+	policy.AccessControlList.Grants = []s3xml.Grant{
 		{
-			Grantee: Grantee{
+			Grantee: s3xml.Grantee{
 				XMLNSXSI:    "http://www.w3.org/2001/XMLSchema-instance",
 				Type:        "CanonicalUser",
 				ID:          owner,
@@ -49,7 +50,7 @@ func ownerFullControlPolicy(owner string) *AccessControlPolicy {
 
 func (app *S3RP) getBucketACL(c *opCtx) error {
 	w, vr := c.w, c.vr
-	return writeXML(w, ownerFullControlPolicy(vr.Tenant))
+	return s3xml.Write(w, ownerFullControlPolicy(vr.Tenant))
 }
 
 func (app *S3RP) getObjectACL(c *opCtx) error {
@@ -65,5 +66,5 @@ func (app *S3RP) getObjectACL(c *opCtx) error {
 	if _, err := rt.client.HeadObject(r.Context(), in); err != nil {
 		return fromSDKError(err, r.URL.Path)
 	}
-	return writeXML(w, ownerFullControlPolicy(vr.Tenant))
+	return s3xml.Write(w, ownerFullControlPolicy(vr.Tenant))
 }

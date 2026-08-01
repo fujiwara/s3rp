@@ -5,8 +5,8 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/xml"
-	"fmt"
 	"github.com/fujiwara/s3rp/checksum"
+	"github.com/fujiwara/s3rp/s3xml"
 	"github.com/fujiwara/s3rp/sigv4"
 	"hash"
 	"io"
@@ -299,8 +299,8 @@ func (app *S3RP) listObjectsV2(c *opCtx) error {
 	if err != nil {
 		return fromSDKError(err, r.URL.Path)
 	}
-	result := &ListBucketResult{
-		XMLNS: s3XMLNS,
+	result := &s3xml.ListBucketResult{
+		XMLNS: s3xml.Namespace,
 		Name:  rt.cfg.Name, // the front bucket name, not the backend one
 	}
 	if out.Prefix != nil {
@@ -333,23 +333,23 @@ func (app *S3RP) listObjectsV2(c *opCtx) error {
 	result.Contents = objectsFromSDK(out.Contents)
 	for _, cp := range out.CommonPrefixes {
 		if cp.Prefix != nil {
-			result.CommonPrefixes = append(result.CommonPrefixes, CommonPrefix{Prefix: *cp.Prefix})
+			result.CommonPrefixes = append(result.CommonPrefixes, s3xml.CommonPrefix{Prefix: *cp.Prefix})
 		}
 	}
-	return writeXML(w, result)
+	return s3xml.Write(w, result)
 }
 
-func objectsFromSDK(objects []types.Object) []Object {
-	result := make([]Object, 0, len(objects))
+func objectsFromSDK(objects []types.Object) []s3xml.Object {
+	result := make([]s3xml.Object, 0, len(objects))
 	for _, obj := range objects {
-		o := Object{
+		o := s3xml.Object{
 			StorageClass: string(obj.StorageClass),
 		}
 		if obj.Key != nil {
 			o.Key = *obj.Key
 		}
 		if obj.LastModified != nil {
-			o.LastModified = s3Time(*obj.LastModified)
+			o.LastModified = s3xml.FormatTime(*obj.LastModified)
 		}
 		if obj.ETag != nil {
 			o.ETag = *obj.ETag
@@ -358,7 +358,7 @@ func objectsFromSDK(objects []types.Object) []Object {
 			o.Size = *obj.Size
 		}
 		if obj.Owner != nil {
-			o.Owner = &Owner{}
+			o.Owner = &s3xml.Owner{}
 			if obj.Owner.ID != nil {
 				o.Owner.ID = *obj.Owner.ID
 			}
@@ -401,8 +401,8 @@ func (app *S3RP) listObjectsV1(c *opCtx) error {
 	if err != nil {
 		return fromSDKError(err, r.URL.Path)
 	}
-	result := &ListBucketResultV1{
-		XMLNS: s3XMLNS,
+	result := &s3xml.ListBucketResultV1{
+		XMLNS: s3xml.Namespace,
 		Name:  rt.cfg.Name, // the front bucket name, not the backend one
 	}
 	if out.Prefix != nil {
@@ -429,10 +429,10 @@ func (app *S3RP) listObjectsV1(c *opCtx) error {
 	result.Contents = objectsFromSDK(out.Contents)
 	for _, cp := range out.CommonPrefixes {
 		if cp.Prefix != nil {
-			result.CommonPrefixes = append(result.CommonPrefixes, CommonPrefix{Prefix: *cp.Prefix})
+			result.CommonPrefixes = append(result.CommonPrefixes, s3xml.CommonPrefix{Prefix: *cp.Prefix})
 		}
 	}
-	return writeXML(w, result)
+	return s3xml.Write(w, result)
 }
 
 // getBucketLocation answers from the config without calling the backend.
@@ -443,7 +443,7 @@ func (app *S3RP) getBucketLocation(c *opCtx) error {
 		// S3 convention: us-east-1 is represented as an empty value
 		region = ""
 	}
-	return writeXML(w, &LocationConstraint{XMLNS: s3XMLNS, Value: region})
+	return s3xml.Write(w, &s3xml.LocationConstraint{XMLNS: s3xml.Namespace, Value: region})
 }
 
 func (app *S3RP) deleteObjects(c *opCtx) error {
@@ -456,7 +456,7 @@ func (app *S3RP) deleteObjects(c *opCtx) error {
 	if err != nil {
 		return newS3Error(http.StatusBadRequest, "InvalidRequest", "failed to read request body")
 	}
-	var req deleteRequest
+	var req s3xml.DeleteRequest
 	if err := xml.Unmarshal(data, &req); err != nil {
 		return newS3Error(http.StatusBadRequest, "MalformedXML",
 			"The XML you provided was not well-formed or did not validate against our published schema.")
@@ -479,14 +479,14 @@ func (app *S3RP) deleteObjects(c *opCtx) error {
 	// when nothing can deny any key, the per-object check (and building its
 	// resource string) is skipped entirely
 	checkPerObject := !delAuth.allowsEverything() || (bypass && !bypassAuth.allowsEverything())
-	result := &DeleteResult{XMLNS: s3XMLNS}
+	result := &s3xml.DeleteResult{XMLNS: s3xml.Namespace}
 	objects := make([]types.ObjectIdentifier, 0, len(req.Objects))
 	for _, o := range req.Objects {
 		if checkPerObject {
 			resource := rt.cfg.Name + "/" + o.Key
 			if delAuth.denies(resource) || (bypass && bypassAuth.denies(resource)) {
 				s3err := errAccessDenied()
-				result.Errors = append(result.Errors, DeleteError{
+				result.Errors = append(result.Errors, s3xml.DeleteError{
 					Key: o.Key, VersionID: o.VersionID, Code: s3err.Code, Message: s3err.Message,
 				})
 				continue
@@ -499,7 +499,7 @@ func (app *S3RP) deleteObjects(c *opCtx) error {
 		objects = append(objects, oi)
 	}
 	if len(objects) == 0 {
-		return writeXML(w, result)
+		return s3xml.Write(w, result)
 	}
 	in := &s3.DeleteObjectsInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
@@ -516,7 +516,7 @@ func (app *S3RP) deleteObjects(c *opCtx) error {
 		return fromSDKError(err, r.URL.Path)
 	}
 	for _, d := range out.Deleted {
-		deleted := DeletedObject{}
+		deleted := s3xml.DeletedObject{}
 		if d.Key != nil {
 			deleted.Key = *d.Key
 		}
@@ -532,7 +532,7 @@ func (app *S3RP) deleteObjects(c *opCtx) error {
 		result.Deleted = append(result.Deleted, deleted)
 	}
 	for _, e := range out.Errors {
-		derr := DeleteError{}
+		derr := s3xml.DeleteError{}
 		if e.Key != nil {
 			derr.Key = *e.Key
 		}
@@ -547,7 +547,7 @@ func (app *S3RP) deleteObjects(c *opCtx) error {
 		}
 		result.Errors = append(result.Errors, derr)
 	}
-	return writeXML(w, result)
+	return s3xml.Write(w, result)
 }
 
 func (app *S3RP) headBucket(c *opCtx) error {
@@ -569,18 +569,18 @@ func (app *S3RP) listBuckets(w http.ResponseWriter, r *http.Request, vr *verifie
 		return newS3Error(http.StatusInternalServerError, "InternalError", "bucket lookup failed")
 	}
 	sort.Strings(names)
-	result := &ListAllMyBucketsResult{
-		XMLNS: s3XMLNS,
-		Owner: Owner{ID: vr.Tenant, DisplayName: vr.Tenant},
+	result := &s3xml.ListAllMyBucketsResult{
+		XMLNS: s3xml.Namespace,
+		Owner: s3xml.Owner{ID: vr.Tenant, DisplayName: vr.Tenant},
 	}
 	for _, name := range names {
-		result.Buckets.Bucket = append(result.Buckets.Bucket, BucketEntry{
+		result.Buckets.Bucket = append(result.Buckets.Bucket, s3xml.BucketEntry{
 			Name: name,
 			// buckets are static definitions; expose a fixed date
-			CreationDate: s3Time(time.Unix(0, 0)),
+			CreationDate: s3xml.FormatTime(time.Unix(0, 0)),
 		})
 	}
-	return writeXML(w, result)
+	return s3xml.Write(w, result)
 }
 
 // requestBody returns the payload reader and its decoded length,
@@ -663,18 +663,6 @@ func (v *payloadVerifier) Read(p []byte) (int, error) {
 		}
 	}
 	return n, err
-}
-
-func writeXML(w http.ResponseWriter, v any) error {
-	b, err := xml.Marshal(v)
-	if err != nil {
-		return fmt.Errorf("failed to marshal XML response: %w", err)
-	}
-	w.Header().Set("Content-Type", "application/xml")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(xml.Header))
-	w.Write(b)
-	return nil
 }
 
 func applyConditionalHeaders(r *http.Request, ifMatch, ifNoneMatch **string, ifModifiedSince, ifUnmodifiedSince **time.Time) {

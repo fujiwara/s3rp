@@ -2,6 +2,7 @@ package s3rp
 
 import (
 	"encoding/xml"
+	"github.com/fujiwara/s3rp/s3xml"
 	"io"
 	"net/http"
 	"time"
@@ -25,12 +26,12 @@ func (app *S3RP) getObjectLockConfiguration(c *opCtx) error {
 	if err != nil {
 		return fromSDKError(err, r.URL.Path)
 	}
-	result := &ObjectLockConfiguration{XMLNS: s3XMLNS}
+	result := &s3xml.ObjectLockConfiguration{XMLNS: s3xml.Namespace}
 	if c := out.ObjectLockConfiguration; c != nil {
 		result.ObjectLockEnabled = string(c.ObjectLockEnabled)
 		if c.Rule != nil && c.Rule.DefaultRetention != nil {
 			dr := c.Rule.DefaultRetention
-			result.Rule = &ObjectLockRule{DefaultRetention: &DefaultRetention{
+			result.Rule = &s3xml.ObjectLockRule{DefaultRetention: &s3xml.DefaultRetention{
 				Mode: string(dr.Mode),
 			}}
 			if dr.Days != nil {
@@ -41,12 +42,12 @@ func (app *S3RP) getObjectLockConfiguration(c *opCtx) error {
 			}
 		}
 	}
-	return writeXML(w, result)
+	return s3xml.Write(w, result)
 }
 
 func (app *S3RP) putObjectLockConfiguration(c *opCtx) error {
 	w, r, rt, vr := c.w, c.r, c.rt, c.vr
-	var req ObjectLockConfiguration
+	var req s3xml.ObjectLockConfiguration
 	if err := readXMLBody(r, vr, &req); err != nil {
 		return err
 	}
@@ -93,19 +94,19 @@ func (app *S3RP) getObjectRetention(c *opCtx) error {
 	if err != nil {
 		return fromSDKError(err, r.URL.Path)
 	}
-	result := &ObjectLockRetention{XMLNS: s3XMLNS}
+	result := &s3xml.ObjectLockRetention{XMLNS: s3xml.Namespace}
 	if out.Retention != nil {
 		result.Mode = string(out.Retention.Mode)
 		if out.Retention.RetainUntilDate != nil {
 			result.RetainUntilDate = out.Retention.RetainUntilDate.UTC().Format(objectLockTimeFormat)
 		}
 	}
-	return writeXML(w, result)
+	return s3xml.Write(w, result)
 }
 
 func (app *S3RP) putObjectRetention(c *opCtx) error {
 	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
-	var req ObjectLockRetention
+	var req s3xml.ObjectLockRetention
 	if err := readXMLBody(r, vr, &req); err != nil {
 		return err
 	}
@@ -150,16 +151,16 @@ func (app *S3RP) getObjectLegalHold(c *opCtx) error {
 	if err != nil {
 		return fromSDKError(err, r.URL.Path)
 	}
-	result := &ObjectLockLegalHold{XMLNS: s3XMLNS}
+	result := &s3xml.ObjectLockLegalHold{XMLNS: s3xml.Namespace}
 	if out.LegalHold != nil {
 		result.Status = string(out.LegalHold.Status)
 	}
-	return writeXML(w, result)
+	return s3xml.Write(w, result)
 }
 
 func (app *S3RP) putObjectLegalHold(c *opCtx) error {
 	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
-	var req ObjectLockLegalHold
+	var req s3xml.ObjectLockLegalHold
 	if err := readXMLBody(r, vr, &req); err != nil {
 		return err
 	}

@@ -2,6 +2,7 @@ package s3rp
 
 import (
 	"errors"
+	"github.com/fujiwara/s3rp/s3xml"
 	"net/http"
 
 	"github.com/fujiwara/s3rp/cors"
@@ -52,9 +53,9 @@ func (app *S3RP) getBucketCors(c *opCtx) error {
 		return newS3Error(http.StatusNotFound, "NoSuchCORSConfiguration",
 			"The CORS configuration does not exist")
 	}
-	result := &CORSConfiguration{XMLNS: s3XMLNS}
+	result := &s3xml.CORSConfiguration{XMLNS: s3xml.Namespace}
 	for _, rule := range rt.cfg.CORS {
-		xr := CORSRuleXML{
+		xr := s3xml.CORSRuleXML{
 			AllowedOrigin: rule.AllowedOrigins,
 			AllowedMethod: rule.AllowedMethods,
 			AllowedHeader: rule.AllowedHeaders,
@@ -63,5 +64,5 @@ func (app *S3RP) getBucketCors(c *opCtx) error {
 		}
 		result.Rules = append(result.Rules, xr)
 	}
-	return writeXML(w, result)
+	return s3xml.Write(w, result)
 }

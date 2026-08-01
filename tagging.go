@@ -2,6 +2,7 @@ package s3rp
 
 import (
 	"encoding/xml"
+	"github.com/fujiwara/s3rp/s3xml"
 	"io"
 	"net/http"
 
@@ -26,14 +27,14 @@ func (app *S3RP) getObjectTagging(c *opCtx) error {
 	if out.VersionId != nil {
 		w.Header().Set("x-amz-version-id", *out.VersionId)
 	}
-	result := &Tagging{XMLNS: s3XMLNS}
+	result := &s3xml.Tagging{XMLNS: s3xml.Namespace}
 	for _, tag := range out.TagSet {
-		result.TagSet.Tags = append(result.TagSet.Tags, Tag{
+		result.TagSet.Tags = append(result.TagSet.Tags, s3xml.Tag{
 			Key:   aws.ToString(tag.Key),
 			Value: aws.ToString(tag.Value),
 		})
 	}
-	return writeXML(w, result)
+	return s3xml.Write(w, result)
 }
 
 func (app *S3RP) putObjectTagging(c *opCtx) error {
@@ -46,7 +47,7 @@ func (app *S3RP) putObjectTagging(c *opCtx) error {
 	if err != nil {
 		return newS3Error(http.StatusBadRequest, "InvalidRequest", "failed to read request body")
 	}
-	var req Tagging
+	var req s3xml.Tagging
 	if err := xml.Unmarshal(data, &req); err != nil {
 		return newS3Error(http.StatusBadRequest, "MalformedXML",
 			"The XML you provided was not well-formed or did not validate against our published schema.")
