@@ -133,5 +133,13 @@ func marshalUserPolicy(statements []policy.ActionStatement) (string, error) {
 	// marshal via pointer: UserPolicy carries a sync.Once (a lock), which
 	// must not be copied by value.
 	data, err := json.Marshal(&policy.UserPolicy{Statements: statements})
-	return string(data), err
+	if err != nil {
+		return "", err
+	}
+	// enforce the same size cap as the read path (store/rdb.GetKey), so an
+	// oversized policy fails the import rather than at request time.
+	if len(data) > policy.MaxPolicyBytes {
+		return "", fmt.Errorf("user policy is %d bytes, at most %d are allowed", len(data), policy.MaxPolicyBytes)
+	}
+	return string(data), nil
 }

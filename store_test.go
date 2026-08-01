@@ -4,12 +4,14 @@ import (
 	"database/sql"
 	"errors"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fujiwara/s3rp"
 	"github.com/fujiwara/s3rp/db"
+	"github.com/fujiwara/s3rp/policy"
 	"github.com/fujiwara/s3rp/store"
 	"github.com/fujiwara/s3rp/store/rdb"
 	_ "modernc.org/sqlite"
@@ -222,6 +224,56 @@ func TestRDBStoreInvalidUserPolicy(t *testing.T) {
 	t.Cleanup(func() { st.Close() })
 	if _, err := st.GetKey(t.Context(), "S3RPKEY001"); err == nil {
 		t.Error("expect GetKey to reject an invalid stored policy")
+	}
+}
+
+// TestImportRejectsOversizeUserPolicy verifies that db.Import fails early for
+// a user policy that is structurally valid but marshals larger than the read
+// path (store/rdb.GetKey) will accept, so the DB never holds a policy the
+// proxy would reject at request time.
+func TestImportRejectsOversizeUserPolicy(t *testing.T) {
+	// within the per-statement/action caps but well over MaxPolicyBytes once
+	// marshaled (MaxStatements * MaxActionsPerStatement * ~120-byte patterns)
+	longAction := "s3:" + strings.Repeat("z", policy.MaxPatternLen-4)
+	actions := make([]string, policy.MaxActionsPerStatement)
+	for i := range actions {
+		actions[i] = longAction
+	}
+	stmts := make([]policy.ActionStatement, policy.MaxStatements)
+	for i := range stmts {
+		stmts[i] = policy.ActionStatement{Effect: "Allow", Action: actions}
+	}
+	cfg := &s3rp.Config{
+		Tenants: []*s3rp.TenantConfig{{
+			Name: "acme",
+			Users: []*s3rp.UserConfig{{
+				Name:   "bulk",
+				Keys:   []*s3rp.KeyConfig{{AccessKeyID: "S3RPKEYBULK", SecretAccessKey: "s"}},
+				Policy: stmts,
+			}},
+			Buckets: []*s3rp.BucketConfig{{
+				Name:    "bulk-bucket",
+				Backend: &s3rp.BackendConfig{Endpoint: "http://backend.example", AccessKeyID: "k", SecretAccessKey: "s"},
+			}},
+		}},
+	}
+	cfg.SetDefaults()
+	// the structural caps pass; only the byte cap should catch it
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("config should pass structural validation: %v", err)
+	}
+	dsn := t.TempDir() + "/s3rp.db"
+	sqldb, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqldb.Close()
+	if err := db.Migrate(t.Context(), sqldb); err != nil {
+		t.Fatal(err)
+	}
+	err = db.Import(t.Context(), sqldb, cfg)
+	if err == nil || !strings.Contains(err.Error(), "at most") {
+		t.Errorf("expect import to reject oversized user policy, got %v", err)
 	}
 }
 
