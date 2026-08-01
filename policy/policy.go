@@ -32,11 +32,14 @@ const (
 var userNameRegexp = regexp.MustCompile(`^[a-z][a-z0-9_-]+$`)
 
 // Structural limits on a policy document. Policies are tenant-authored, so
-// they are untrusted input; without bounds a large or pathological policy
-// makes every request that touches the bucket pay an unbounded O(n·m) glob
-// cost (amplified per object by DeleteObjects). These caps keep a single
-// authorization's work bounded to a small constant. They are far larger
-// than any real policy needs and are checked at parse/validate time.
+// they are untrusted input, and authorization runs on every request (per
+// object for DeleteObjects). The dominant worst-case cost is the number of
+// resource patterns matched (each adversarial pattern can force a full scan
+// of a ~1 KB object key), i.e. MaxStatements*MaxResourcesPerStatement; action
+// matching is against a short action string and stays cheap regardless of
+// count. These caps sit well above what any real policy needs while keeping a
+// worst-case evaluation to a few hundred microseconds, and are checked at
+// parse/validate time.
 const (
 	// MaxPolicyBytes caps the raw size of a policy document, checked before
 	// parsing so an oversized document is rejected without being unmarshaled
@@ -47,10 +50,13 @@ const (
 	MaxPrincipalUsers = 100
 	// MaxStatements caps the statements in one policy document.
 	MaxStatements = 20
-	// MaxActionsPerStatement caps the Action entries in one statement.
-	MaxActionsPerStatement = 20
+	// MaxActionsPerStatement caps the Action entries in one statement. Action
+	// matching is cheap (short string), so this is generous.
+	MaxActionsPerStatement = 30
 	// MaxResourcesPerStatement caps the Resource entries in one statement.
-	MaxResourcesPerStatement = 20
+	// Resource patterns are matched against the object key, so the total
+	// (MaxStatements*MaxResourcesPerStatement) bounds the worst-case cost.
+	MaxResourcesPerStatement = 10
 	// MaxPatternLen caps the length (in bytes) of a single action or
 	// resource pattern, bounding the per-pattern glob-match cost.
 	MaxPatternLen = 128

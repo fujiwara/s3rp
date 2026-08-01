@@ -267,7 +267,7 @@ Evaluation is IAM-style and independent of the bucket policy's baseline-allow mo
 
 A request must pass **both** layers: the user policy must allow the action **and** the bucket policy must not `Deny` it. Either denial returns `403 AccessDenied`. The check sits at the same single authorization chokepoint as bucket policies, so it covers every operation uniformly (including per-object DeleteObjects entries and the source/destination actions of a copy).
 
-Both bucket and user policies are bounded in size: at most 20 KB per document, 20 statements per policy, 20 actions and 20 resources per statement, 128 bytes per action/resource pattern, and 100 principal users per statement. Oversized policies are rejected when loaded.
+Both bucket and user policies are bounded in size: at most 20 KB per document, 20 statements per policy, 30 actions and 10 resources per statement, 128 bytes per action/resource pattern, and 100 principal users per statement. Oversized policies are rejected when loaded.
 
 ### CORS
 
