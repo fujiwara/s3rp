@@ -1,4 +1,4 @@
-package s3rp_test
+package sigv4_test
 
 import (
 	"bytes"
@@ -12,13 +12,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fujiwara/s3rp"
+	"github.com/fujiwara/s3rp/sigv4"
 )
 
 // Known-answer test vector from the AWS documentation.
 // https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-streaming.html
-func awsDocsVerifiedRequest() *s3rp.VerifiedRequest {
-	return &s3rp.VerifiedRequest{
+func awsDocsVerifiedRequest() *sigv4.Verified {
+	return &sigv4.Verified{
 		AccessKeyID:     "AKIAIOSFODNN7EXAMPLE",
 		SecretAccessKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
 		Signature:       "4f232c4386841ef735655705268965c44a0e4690baa4adea153f7db9fa80a0a9",
@@ -43,7 +43,7 @@ func awsDocsChunkedBody() []byte {
 }
 
 func TestChunkedReaderAWSDocsVector(t *testing.T) {
-	r := s3rp.NewChunkedReader(bytes.NewReader(awsDocsChunkedBody()), awsDocsVerifiedRequest(), "")
+	r := sigv4.NewChunkedReader(bytes.NewReader(awsDocsChunkedBody()), awsDocsVerifiedRequest(), "")
 	decoded, err := io.ReadAll(r)
 	if err != nil {
 		t.Fatal(err)
@@ -60,7 +60,7 @@ func TestChunkedReaderBadSignature(t *testing.T) {
 	body := awsDocsChunkedBody()
 	// corrupt the first chunk signature
 	corrupted := bytes.Replace(body, []byte("ad80c730"), []byte("deadbeef"), 1)
-	r := s3rp.NewChunkedReader(bytes.NewReader(corrupted), awsDocsVerifiedRequest(), "")
+	r := sigv4.NewChunkedReader(bytes.NewReader(corrupted), awsDocsVerifiedRequest(), "")
 	_, err := io.ReadAll(r)
 	if err == nil {
 		t.Fatal("expect error for bad chunk signature")
@@ -75,7 +75,7 @@ func TestChunkedReaderTamperedData(t *testing.T) {
 	// flip a payload byte without touching the signatures
 	i := bytes.IndexByte(body, 'a')
 	body[i] = 'b'
-	r := s3rp.NewChunkedReader(bytes.NewReader(body), awsDocsVerifiedRequest(), "")
+	r := sigv4.NewChunkedReader(bytes.NewReader(body), awsDocsVerifiedRequest(), "")
 	_, err := io.ReadAll(r)
 	if err == nil {
 		t.Fatal("expect error for tampered chunk data")
@@ -83,9 +83,9 @@ func TestChunkedReaderTamperedData(t *testing.T) {
 }
 
 // encodeSignedChunks encodes data as signed aws-chunked with the given chunk size.
-func encodeSignedChunks(t *testing.T, vr *s3rp.VerifiedRequest, data []byte, chunkSize int) []byte {
+func encodeSignedChunks(t *testing.T, vr *sigv4.Verified, data []byte, chunkSize int) []byte {
 	t.Helper()
-	secret := vr.SecretAccessKey.String()
+	secret := vr.SecretAccessKey
 	key := []byte("AWS4" + secret)
 	for _, v := range []string{vr.SigningTime.Format("20060102"), vr.Region, "s3", "aws4_request"} {
 		mac := hmac.New(sha256.New, key)
@@ -129,7 +129,7 @@ func TestChunkedReaderRoundTrip(t *testing.T) {
 		t.Run(fmt.Sprintf("chunk size %d", size), func(t *testing.T) {
 			data := []byte(strings.Repeat("0123456789abcdef", 100)) // 1600 bytes
 			encoded := encodeSignedChunks(t, vr, data, size)
-			r := s3rp.NewChunkedReader(bytes.NewReader(encoded), vr, "")
+			r := sigv4.NewChunkedReader(bytes.NewReader(encoded), vr, "")
 			decoded, err := io.ReadAll(r)
 			if err != nil {
 				t.Fatal(err)
@@ -153,7 +153,7 @@ func TestChunkedReaderUnsignedTrailer(t *testing.T) {
 	buf.WriteString("x-amz-checksum-crc32:AAAAAA==\r\n")
 	buf.WriteString("\r\n")
 	// no trailer algorithm declared: the (bogus) checksum is not verified
-	r := s3rp.NewChunkedReader(buf, vr, "")
+	r := sigv4.NewChunkedReader(buf, vr, "")
 	decoded, err := io.ReadAll(r)
 	if err != nil {
 		t.Fatal(err)
@@ -183,7 +183,7 @@ func TestChunkedReaderTrailerChecksum(t *testing.T) {
 
 	t.Run("valid checksum", func(t *testing.T) {
 		buf := encodeUnsignedTrailer(data, "x-amz-checksum-crc32", goodCRC32)
-		r := s3rp.NewChunkedReader(buf, vr, "crc32")
+		r := sigv4.NewChunkedReader(buf, vr, "crc32")
 		decoded, err := io.ReadAll(r)
 		if err != nil {
 			t.Fatal(err)
@@ -194,7 +194,7 @@ func TestChunkedReaderTrailerChecksum(t *testing.T) {
 	})
 	t.Run("checksum mismatch", func(t *testing.T) {
 		buf := encodeUnsignedTrailer(data, "x-amz-checksum-crc32", "AAAAAA==")
-		r := s3rp.NewChunkedReader(buf, vr, "crc32")
+		r := sigv4.NewChunkedReader(buf, vr, "crc32")
 		_, err := io.ReadAll(r)
 		if err == nil {
 			t.Fatal("expect error for checksum mismatch")
@@ -206,7 +206,7 @@ func TestChunkedReaderTrailerChecksum(t *testing.T) {
 	t.Run("sha256 roundtrip", func(t *testing.T) {
 		sum := sha256.Sum256(data)
 		buf := encodeUnsignedTrailer(data, "x-amz-checksum-sha256", base64.StdEncoding.EncodeToString(sum[:]))
-		r := s3rp.NewChunkedReader(buf, vr, "sha256")
+		r := sigv4.NewChunkedReader(buf, vr, "sha256")
 		if _, err := io.ReadAll(r); err != nil {
 			t.Fatal(err)
 		}

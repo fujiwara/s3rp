@@ -1,4 +1,4 @@
-package s3rp
+package sigv4
 
 import (
 	"bufio"
@@ -8,8 +8,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/fujiwara/s3rp/checksum"
+	"github.com/fujiwara/s3rp/s3err"
 	"hash"
 	"io"
+	"net/http"
 	"strconv"
 	"strings"
 )
@@ -21,8 +23,8 @@ import (
 var emptySHA256 = sha256.Sum256(nil)
 
 // deriveSigningKey derives the SigV4 signing key for the scope of vr.
-func deriveSigningKey(secret Password, date, region string) []byte {
-	k := hmacSHA256([]byte("AWS4"+secret.String()), []byte(date))
+func deriveSigningKey(secret string, date, region string) []byte {
+	k := hmacSHA256([]byte("AWS4"+secret), []byte(date))
 	k = hmacSHA256(k, []byte(region))
 	k = hmacSHA256(k, []byte("s3"))
 	return hmacSHA256(k, []byte("aws4_request"))
@@ -57,12 +59,12 @@ type chunkedReader struct {
 	err       error
 }
 
-// newChunkedReader returns a reader that decodes an aws-chunked request body.
+// NewChunkedReader returns a reader that decodes an aws-chunked request body.
 // When vr's payload hash declares signed chunks, each chunk signature is
 // verified against the signature chain seeded by the request signature.
 // When trailerAlg names a checksum algorithm (from the x-amz-trailer
 // header), the trailer checksum is verified against the decoded payload.
-func newChunkedReader(body io.Reader, vr *verifiedRequest, trailerAlg string) io.Reader {
+func NewChunkedReader(body io.Reader, vr *Verified, trailerAlg string) io.Reader {
 	signed := vr.PayloadHash == streamingSHA256 || vr.PayloadHash == streamingSHA256T
 	cr := &chunkedReader{
 		r:       bufio.NewReader(body),
@@ -192,7 +194,7 @@ func (cr *chunkedReader) verifyChunk() error {
 	}, "\n")
 	want := hex.EncodeToString(hmacSHA256(cr.signingKey, []byte(stringToSign)))
 	if subtle.ConstantTimeCompare([]byte(want), []byte(cr.chunkSig)) != 1 {
-		return errSignatureDoesNotMatch()
+		return s3err.SignatureDoesNotMatch()
 	}
 	cr.prevSig = cr.chunkSig
 	cr.chunkHash.Reset()
@@ -224,7 +226,7 @@ func (cr *chunkedReader) discardTrailers() error {
 		}
 		if strings.EqualFold(strings.TrimSpace(name), "x-amz-checksum-"+cr.ckAlg) {
 			if strings.TrimSpace(value) != checksum.Base64(cr.ckHash) {
-				return newS3Error(400, "BadDigest",
+				return s3err.New(http.StatusBadRequest, "BadDigest",
 					fmt.Sprintf("The %s you specified did not match the calculated checksum.", strings.ToUpper(cr.ckAlg)))
 			}
 		}
