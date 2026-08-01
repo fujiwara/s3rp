@@ -302,9 +302,100 @@ $ aws --endpoint-url http://localhost:8080 s3 presign s3://photos/foo.jpg
 http://localhost:8080/photos/foo.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&...
 ```
 
+## Building a service on the gateway
+
+The S3 API lives in `s3gw`, separate from the parts of this repository that are only its PoC packaging — the YAML config, its store, the CLI. A real service does not fork the proxy: it implements the two things that are genuinely its own and hands them to the gateway.
+
+**What you provide**
+
+| | |
+|---|---|
+| `store.Store` | where definitions come from: tenants, users, access keys, and where each bucket really lives. This is your control plane's read side. |
+| `s3gw.Authorizer` | what the policies cannot express — an exhausted quota, a suspended tenant, a rate limit. Consulted after the bucket and user policies have already allowed the operation. |
+| `s3gw.Interceptor` | what you meter. It wraps the operation, so the byte counts are filled in by the time `next` returns. |
+
+**What the gateway does**: SigV4 verification (header and presigned), `aws-chunked` decoding and checksums, bucket and user policy evaluation, CORS, the operations themselves, and the routing that reaches them — refusing unknown ones rather than passing them through.
+
+**What it deliberately does not do**: create tenants, buckets or keys. Those are control-plane writes; the gateway only ever reads definitions, so it can run with a read-only database account.
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+	"net/http"
+
+	"github.com/fujiwara/s3rp/s3err"
+	"github.com/fujiwara/s3rp/s3gw"
+	"github.com/fujiwara/s3rp/store"
+)
+
+// definitions is your control plane: which tenants and users exist, which
+// access keys they hold, and where each bucket really lives.
+type definitions struct{ /* your database */ }
+
+func (d *definitions) GetKey(ctx context.Context, accessKeyID string) (*store.Key, error) {
+	// look the key up; return an error wrapping store.ErrNotFound if absent
+	return &store.Key{
+		AccessKeyID: accessKeyID, SecretAccessKey: "…",
+		Tenant: "acme", User: "app1",
+	}, nil
+}
+
+func (d *definitions) GetBucket(ctx context.Context, tenant, bucket string) (*store.Bucket, error) {
+	return &store.Bucket{
+		Tenant: tenant, Name: bucket,
+		Backend: &store.Backend{
+			Endpoint: "https://rgw.internal:7480", Region: "us-east-1",
+			Bucket:      "acme-photos-a1b2", // the real name, never shown to the client
+			AccessKeyID: "…", SecretAccessKey: "…",
+		},
+	}, nil
+}
+
+// GetBucketByName resolves a bucket without a tenant, for unauthenticated
+// CORS preflights. Bucket names are globally unique for this reason.
+func (d *definitions) GetBucketByName(ctx context.Context, bucket string) (*store.Bucket, error) { /* … */ }
+
+func (d *definitions) ListBucketNames(ctx context.Context, tenant string) ([]string, error) { /* … */ }
+
+// quota refuses what a bucket policy cannot express.
+type quota struct{}
+
+func (quota) Authorize(ctx context.Context, op *s3gw.Op) error {
+	if op.Action == "s3:PutObject" && overQuota(op.Tenant) {
+		// any error refuses the request; an *s3err.Error chooses what the
+		// client is told, and the backend is never reached
+		return s3err.New(http.StatusForbidden, "QuotaExceeded", "Quota exceeded")
+	}
+	return nil
+}
+
+func main() {
+	gw := s3gw.New(&definitions{})
+	gw.SetAuthorizer(quota{})
+	gw.Use(func(ctx context.Context, op *s3gw.Op, next func() error) error {
+		err := next()
+		meter(op) // op.BytesIn and op.BytesOut are filled in by now
+		return err
+	})
+	log.Fatal(http.ListenAndServe(":8080", gw.Handler()))
+}
+```
+
+**Things worth knowing before you build on it**
+
+- Definitions are read on **every request** and nothing is cached: `GetKey` on each authentication, `GetBucket` on each bucket resolution. Caching is your store's business — it knows when a key is revoked, which the gateway cannot.
+- The SDK retries retryable statuses, so refusing with 429 or 503 calls your hooks **once per attempt**. Metering and quota logic must expect that.
+- `Op.BytesIn` / `BytesOut` count bytes on the wire, so an `aws-chunked` upload includes its framing.
+- Failures are logged once at the request boundary with the `x-amz-request-id` the client receives; the cause never reaches the client. See `s3err`.
+- Two tenants must not map buckets to the same physical backend bucket — the gateway cannot detect this, so validate it where definitions are written.
+
+**The other packages** are usable on their own: `sigv4` (server-side SigV4 verification and `aws-chunked` decoding), `policy` (AWS-style policy evaluation), `s3err`, `s3xml`, `checksum` and `cors`. `checksum`, `policy` and `s3xml` depend only on the standard library.
+
 ## Limitations
 
-- The payload SHA-256 declared in `x-amz-content-sha256` is not independently verified against the request body (the signature covers the declared hash; verifying the body would require buffering it). Chunk signatures and trailing checksums of `aws-chunked` bodies are verified.
 - Requests that sign the `user-agent` or other headers the AWS SDK signer ignores will fail verification. Real AWS SDK/CLI clients do not do this.
 
 ## Development
