@@ -17,7 +17,7 @@ S3 client --(SigV4, tenant keys)--> s3rp --(SigV4, backend keys)--> S3-compatibl
 
 s3rp is not an object storage implementation — it stores no data itself. It explores the **data plane of a managed, multi-tenant S3 service** that sits in front of existing S3-compatible storage (Ceph RGW, versitygw, Amazon S3, ...). The questions it answers, and the design decisions behind them:
 
-**Why a reverse proxy?** A managed service needs one identity/authorization plane over heterogeneous backends. Tenants get their own keys and never see the backend's credentials, endpoints, or even the real bucket names; the operator can place a tenant's bucket on any backend and move it without the tenant noticing. The proxy is where per-tenant authentication, authorization (bucket policies), metering points, and a uniform API surface naturally live.
+**Why a reverse proxy?** A managed service needs one identity/authorization plane over heterogeneous backends. Tenants get their own keys and never see the backend's credentials, endpoints, or even the real bucket names; the operator can place a tenant's bucket on any backend and move it without the tenant noticing. The proxy is where per-tenant authentication, authorization (bucket and user policies), metering, and a uniform API surface naturally live — the last two through [hooks a service installs](#building-a-service-on-the-gateway).
 
 **Why reconstruct operations with aws-sdk-go-v2 instead of forwarding the HTTP request?** A transparent SigV4-resigning proxy would be less code, but a multi-tenant service must *understand* each request, not just relay bytes:
 
@@ -398,13 +398,24 @@ func main() {
 ## Limitations
 
 - Requests that sign the `user-agent` or other headers the AWS SDK signer ignores will fail verification. Real AWS SDK/CLI clients do not do this.
+- Definitions are read from the store on every request and nothing is cached, so the store is on the hot path. Caching belongs to a store implementation, which is the only thing that knows when a key is revoked.
+- Every request is logged synchronously. At any real request rate that write dominates the request path — it roughly doubled the time of a small GET when measured — so a deployment would want the log buffered or sampled.
 
 ## Development
+
+The S3 API itself is the `s3gw` package, built on leaf packages (`sigv4`, `policy`, `s3err`, `s3xml`, `checksum`, `cors`) over the `store` contract; the root package is only the config, its store, the HTTP server and the CLI.
 
 Unit tests run without any backend:
 
 ```console
 $ go test -race ./...
+```
+
+Signature verification and policy evaluation run on every request, so when changing either, check the benchmarks that guard them — watch allocations as well as time, since a regression usually shows there first:
+
+```console
+$ go test ./policy -bench . -benchmem     # policy evaluation, incl. the worst case the size caps allow
+$ go test . -bench VerifyKeyDiversity -benchmem   # SigV4 verification across many access keys
 ```
 
 The integration test suite runs against a real S3-compatible backend, selected by environment variables. Two backends are provided in `compose.yml`:
