@@ -1,18 +1,19 @@
-package s3rp
+package s3gw
 
 import (
 	"encoding/xml"
-	"github.com/fujiwara/s3rp/s3err"
-	"github.com/fujiwara/s3rp/s3xml"
 	"io"
 	"net/http"
+
+	"github.com/fujiwara/s3rp/s3err"
+	"github.com/fujiwara/s3rp/s3xml"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
-func (app *S3RP) getObjectTagging(c *opCtx) error {
+func (g *Gateway) getObjectTagging(c *opCtx) error {
 	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.GetObjectTaggingInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
@@ -38,7 +39,7 @@ func (app *S3RP) getObjectTagging(c *opCtx) error {
 	return s3xml.Write(w, result)
 }
 
-func (app *S3RP) putObjectTagging(c *opCtx) error {
+func (g *Gateway) putObjectTagging(c *opCtx) error {
 	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
 	body, _, s3e := requestBody(r, vr)
 	if s3e != nil {
@@ -79,7 +80,7 @@ func (app *S3RP) putObjectTagging(c *opCtx) error {
 	return nil
 }
 
-func (app *S3RP) deleteObjectTagging(c *opCtx) error {
+func (g *Gateway) deleteObjectTagging(c *opCtx) error {
 	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.DeleteObjectTaggingInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),

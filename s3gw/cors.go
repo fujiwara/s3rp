@@ -1,4 +1,4 @@
-package s3rp
+package s3gw
 
 import (
 	"errors"
@@ -19,7 +19,7 @@ import (
 // handlePreflight answers a CORS preflight request. Preflights are sent by
 // browsers without authentication, so this runs before signature
 // verification and must not reveal anything beyond the CORS decision.
-func (app *S3RP) handlePreflight(w http.ResponseWriter, r *http.Request) error {
+func (g *Gateway) handlePreflight(w http.ResponseWriter, r *http.Request) error {
 	origin := r.Header.Get("Origin")
 	method := r.Header.Get("Access-Control-Request-Method")
 	if origin == "" || method == "" {
@@ -30,7 +30,7 @@ func (app *S3RP) handlePreflight(w http.ResponseWriter, r *http.Request) error {
 	if err != nil || bucket == "" {
 		return corsNotAllowed()
 	}
-	b, err := app.store.GetBucketByName(r.Context(), bucket)
+	b, err := g.store.GetBucketByName(r.Context(), bucket)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return corsNotAllowed()
@@ -49,7 +49,7 @@ func corsNotAllowed() *s3err.Error {
 }
 
 // getBucketCors returns the CORS configuration of the bucket as XML.
-func (app *S3RP) getBucketCors(c *opCtx) error {
+func (g *Gateway) getBucketCors(c *opCtx) error {
 	w, rt := c.w, c.rt
 	if len(rt.cfg.CORS) == 0 {
 		return s3err.New(http.StatusNotFound, "NoSuchCORSConfiguration",

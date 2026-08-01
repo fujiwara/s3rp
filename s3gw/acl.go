@@ -1,9 +1,10 @@
-package s3rp
+package s3gw
 
 import (
+	"net/http"
+
 	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/s3xml"
-	"net/http"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -49,12 +50,12 @@ func ownerFullControlPolicy(owner string) *s3xml.AccessControlPolicy {
 	return policy
 }
 
-func (app *S3RP) getBucketACL(c *opCtx) error {
+func (g *Gateway) getBucketACL(c *opCtx) error {
 	w, vr := c.w, c.vr
 	return s3xml.Write(w, ownerFullControlPolicy(vr.Tenant))
 }
 
-func (app *S3RP) getObjectACL(c *opCtx) error {
+func (g *Gateway) getObjectACL(c *opCtx) error {
 	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
 	// verify the object exists so that a missing key still errors
 	in := &s3.HeadObjectInput{

@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"github.com/fujiwara/s3rp"
+	"github.com/fujiwara/s3rp/s3gw"
+	"github.com/fujiwara/s3rp/sigv4"
 )
 
 func writeFile(t *testing.T, path, content string) error {
@@ -27,7 +29,7 @@ func newTestServerForApp(t *testing.T, app *s3rp.S3RP) *httptest.Server {
 }
 
 // encodeSignedChunks encodes data as signed aws-chunked with the given chunk size.
-func encodeSignedChunks(t *testing.T, vr *s3rp.VerifiedRequest, data []byte, chunkSize int) []byte {
+func encodeSignedChunks(t *testing.T, vr *sigv4.Verified, data []byte, chunkSize int) []byte {
 	t.Helper()
 	secret := vr.SecretAccessKey
 	key := []byte("AWS4" + secret)
@@ -65,4 +67,14 @@ func encodeSignedChunks(t *testing.T, vr *s3rp.VerifiedRequest, data []byte, chu
 	}
 	fmt.Fprintf(buf, "0;chunk-signature=%s\r\n\r\n", sign(nil))
 	return buf.Bytes()
+}
+
+// mustSetBackend substitutes a bucket's backend client, failing the test if
+// the bucket is not defined — a mistake in the fixture rather than something
+// the test under way should discover later as a confusing failure.
+func mustSetBackend(tb testing.TB, app *s3rp.S3RP, bucket string, client s3gw.BackendClient) {
+	tb.Helper()
+	if err := app.SetBackend(bucket, client); err != nil {
+		tb.Fatal(err)
+	}
 }

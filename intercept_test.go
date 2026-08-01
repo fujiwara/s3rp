@@ -11,8 +11,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
-	"github.com/fujiwara/s3rp"
 	"github.com/fujiwara/s3rp/s3err"
+	"github.com/fujiwara/s3rp/s3gw"
 )
 
 // These cover the two things a service needs from the hooks: being able to
@@ -21,10 +21,10 @@ import (
 
 type blocker struct {
 	err  error
-	seen []*s3rp.Op
+	seen []*s3gw.Op
 }
 
-func (b *blocker) Authorize(_ context.Context, op *s3rp.Op) error {
+func (b *blocker) Authorize(_ context.Context, op *s3gw.Op) error {
 	b.seen = append(b.seen, op)
 	return b.err
 }
@@ -73,8 +73,8 @@ func TestInterceptorMeters(t *testing.T) {
 	}
 	client, _, app := newTestProxyWithApp(t, stub)
 
-	var recorded []s3rp.Op
-	app.Use(func(ctx context.Context, op *s3rp.Op, next func() error) error {
+	var recorded []s3gw.Op
+	app.Use(func(ctx context.Context, op *s3gw.Op, next func() error) error {
 		err := next()
 		recorded = append(recorded, *op) // byte counts are filled in by now
 		return err
@@ -114,7 +114,7 @@ func TestInterceptorMeters(t *testing.T) {
 func TestInterceptorCanRefuseWithoutRunning(t *testing.T) {
 	stub := &stubBackend{getOut: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("x"))}}
 	client, _, app := newTestProxyWithApp(t, stub)
-	app.Use(func(ctx context.Context, op *s3rp.Op, next func() error) error {
+	app.Use(func(ctx context.Context, op *s3gw.Op, next func() error) error {
 		return s3err.New(http.StatusForbidden, "AccessDenied", "draining")
 	})
 	if _, err := client.GetObject(t.Context(), &s3.GetObjectInput{

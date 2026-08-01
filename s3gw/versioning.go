@@ -1,19 +1,20 @@
-package s3rp
+package s3gw
 
 import (
 	"encoding/xml"
-	"github.com/fujiwara/s3rp/s3err"
-	"github.com/fujiwara/s3rp/s3xml"
 	"io"
 	"net/http"
 	"strconv"
+
+	"github.com/fujiwara/s3rp/s3err"
+	"github.com/fujiwara/s3rp/s3xml"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
-func (app *S3RP) getBucketVersioning(c *opCtx) error {
+func (g *Gateway) getBucketVersioning(c *opCtx) error {
 	w, r, rt := c.w, c.r, c.rt
 	in := &s3.GetBucketVersioningInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
@@ -28,7 +29,7 @@ func (app *S3RP) getBucketVersioning(c *opCtx) error {
 	})
 }
 
-func (app *S3RP) putBucketVersioning(c *opCtx) error {
+func (g *Gateway) putBucketVersioning(c *opCtx) error {
 	w, r, rt, vr := c.w, c.r, c.rt, c.vr
 	body, _, s3e := requestBody(r, vr)
 	if s3e != nil {
@@ -62,7 +63,7 @@ func (app *S3RP) putBucketVersioning(c *opCtx) error {
 	return nil
 }
 
-func (app *S3RP) listObjectVersions(c *opCtx) error {
+func (g *Gateway) listObjectVersions(c *opCtx) error {
 	w, r, rt := c.w, c.r, c.rt
 	query := r.URL.Query()
 	in := &s3.ListObjectVersionsInput{

@@ -235,8 +235,8 @@ func TestProxyTenantIsolation(t *testing.T) {
 	stub := &stubBackend{
 		getOut: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("x"))},
 	}
-	app.SetBackend("bucket-a", stub)
-	app.SetBackend("bucket-b", stub)
+	mustSetBackend(t, app, "bucket-a", stub)
+	mustSetBackend(t, app, "bucket-b", stub)
 	ts := newTestServerForApp(t, app)
 	awscfg, err := awsconfig.LoadDefaultConfig(t.Context(),
 		awsconfig.WithRegion("us-east-1"),
@@ -477,7 +477,7 @@ func newCopyTestProxy(t *testing.T) (*s3.Client, *stubBackend) {
 		},
 	}
 	for _, name := range []string{"srcbucket", "dstbucket", "remotebucket"} {
-		app.SetBackend(name, stub)
+		mustSetBackend(t, app, name, stub)
 	}
 	ts := httptest.NewServer(app.Handler())
 	t.Cleanup(ts.Close)

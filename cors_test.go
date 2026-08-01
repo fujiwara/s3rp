@@ -1,12 +1,13 @@
 package s3rp_test
 
 import (
-	"github.com/fujiwara/s3rp/cors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/fujiwara/s3rp/cors"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -62,8 +63,8 @@ func newCORSTestProxy(t *testing.T) (*httptest.Server, *s3rp.S3RP) {
 		getOut: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("x")), ETag: aws.String(`"e"`)},
 		putOut: &s3.PutObjectOutput{ETag: aws.String(`"e"`)},
 	}
-	app.SetBackend("webbucket", stub)
-	app.SetBackend("plainbucket", stub)
+	mustSetBackend(t, app, "webbucket", stub)
+	mustSetBackend(t, app, "plainbucket", stub)
 	ts := httptest.NewServer(app.Handler())
 	t.Cleanup(ts.Close)
 	return ts, app

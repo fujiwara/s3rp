@@ -3,10 +3,11 @@ package s3rp_test
 import (
 	"database/sql"
 	"errors"
-	"github.com/fujiwara/s3rp/cors"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/fujiwara/s3rp/cors"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -348,7 +349,7 @@ func TestRDBStoreProxyE2E(t *testing.T) {
 		t.Fatal(err)
 	}
 	stub := newPolicyStub()
-	app.SetBackend("photos", stub)
+	mustSetBackend(t, app, "photos", stub)
 	ts := newTestServerForApp(t, app)
 	client := newS3Client(t, ts.URL, "S3RPKEY001", "frontsecret001")
 

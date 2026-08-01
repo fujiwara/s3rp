@@ -1,12 +1,13 @@
-package s3rp
+package s3gw
 
 import (
 	"encoding/xml"
-	"github.com/fujiwara/s3rp/s3err"
-	"github.com/fujiwara/s3rp/s3xml"
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/fujiwara/s3rp/s3err"
+	"github.com/fujiwara/s3rp/s3xml"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -19,7 +20,7 @@ import (
 
 const objectLockTimeFormat = "2006-01-02T15:04:05.000Z"
 
-func (app *S3RP) getObjectLockConfiguration(c *opCtx) error {
+func (g *Gateway) getObjectLockConfiguration(c *opCtx) error {
 	w, r, rt := c.w, c.r, c.rt
 	out, err := rt.client.GetObjectLockConfiguration(r.Context(), &s3.GetObjectLockConfigurationInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
@@ -46,7 +47,7 @@ func (app *S3RP) getObjectLockConfiguration(c *opCtx) error {
 	return s3xml.Write(w, result)
 }
 
-func (app *S3RP) putObjectLockConfiguration(c *opCtx) error {
+func (g *Gateway) putObjectLockConfiguration(c *opCtx) error {
 	w, r, rt, vr := c.w, c.r, c.rt, c.vr
 	var req s3xml.ObjectLockConfiguration
 	if err := readXMLBody(r, vr, &req); err != nil {
@@ -82,7 +83,7 @@ func (app *S3RP) putObjectLockConfiguration(c *opCtx) error {
 	return nil
 }
 
-func (app *S3RP) getObjectRetention(c *opCtx) error {
+func (g *Gateway) getObjectRetention(c *opCtx) error {
 	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.GetObjectRetentionInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
@@ -105,7 +106,7 @@ func (app *S3RP) getObjectRetention(c *opCtx) error {
 	return s3xml.Write(w, result)
 }
 
-func (app *S3RP) putObjectRetention(c *opCtx) error {
+func (g *Gateway) putObjectRetention(c *opCtx) error {
 	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
 	var req s3xml.ObjectLockRetention
 	if err := readXMLBody(r, vr, &req); err != nil {
@@ -139,7 +140,7 @@ func (app *S3RP) putObjectRetention(c *opCtx) error {
 	return nil
 }
 
-func (app *S3RP) getObjectLegalHold(c *opCtx) error {
+func (g *Gateway) getObjectLegalHold(c *opCtx) error {
 	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.GetObjectLegalHoldInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
@@ -159,7 +160,7 @@ func (app *S3RP) getObjectLegalHold(c *opCtx) error {
 	return s3xml.Write(w, result)
 }
 
-func (app *S3RP) putObjectLegalHold(c *opCtx) error {
+func (g *Gateway) putObjectLegalHold(c *opCtx) error {
 	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
 	var req s3xml.ObjectLockLegalHold
 	if err := readXMLBody(r, vr, &req); err != nil {

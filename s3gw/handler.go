@@ -1,4 +1,4 @@
-package s3rp
+package s3gw
 
 import (
 	"errors"
@@ -34,9 +34,9 @@ func redactQuery(q url.Values) string {
 // A single catch-all route is used instead of ServeMux patterns because the
 // mux cleans paths (collapsing // and resolving dot segments) and redirects,
 // which breaks S3 keys and signature verification.
-func (app *S3RP) Handler() http.Handler {
+func (g *Gateway) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", app.wrapHandler(app.handleRequest))
+	mux.HandleFunc("/", g.wrapHandler(g.handleRequest))
 	return mux
 }
 
@@ -72,7 +72,7 @@ func logFailure(r *http.Request, s3e *s3err.Error, requestID string) {
 	slog.Log(r.Context(), level, "request failed", attrs...)
 }
 
-func (app *S3RP) wrapHandler(h handlerFunc) http.HandlerFunc {
+func (g *Gateway) wrapHandler(h handlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		requestID := s3err.NewRequestID()
@@ -140,12 +140,12 @@ func unescapeKey(rawKey string) (string, error) {
 	return strings.Join(segments, "/"), nil
 }
 
-func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
+func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	// browsers send CORS preflights without authentication
 	if r.Method == http.MethodOptions {
-		return app.handlePreflight(w, r)
+		return g.handlePreflight(w, r)
 	}
-	vr, s3e := app.verifyRequest(r)
+	vr, s3e := g.verifyRequest(r)
 	if s3e != nil {
 		return s3e
 	}
@@ -159,17 +159,17 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 			return s3err.New(http.StatusMethodNotAllowed, "MethodNotAllowed",
 				"The specified method is not allowed against this resource.")
 		}
-		return app.listBuckets(w, r, vr)
+		return g.listBuckets(w, r, vr)
 	}
 
-	b, err := app.store.GetBucket(r.Context(), vr.Tenant, bucket)
+	b, err := g.store.GetBucket(r.Context(), vr.Tenant, bucket)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return s3err.AccessDenied()
 		}
 		return s3err.Internal(err, "bucket lookup failed")
 	}
-	client, err := app.backendClient(r.Context(), b.Backend)
+	client, err := g.backendClient(r.Context(), b.Backend)
 	if err != nil {
 		return s3err.Internal(err, "backend client failed")
 	}
@@ -178,15 +178,15 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 
 	query := r.URL.Query()
 	if key == "" {
-		return app.handleBucketRequest(w, r, rt, vr, query)
+		return g.handleBucketRequest(w, r, rt, vr, query)
 	}
-	return app.handleObjectRequest(w, r, rt, vr, query, key)
+	return g.handleObjectRequest(w, r, rt, vr, query, key)
 }
 
 // opCtx carries everything a routed operation needs. key is "" for
 // bucket-level operations.
 type opCtx struct {
-	app   *S3RP
+	g     *Gateway
 	w     http.ResponseWriter
 	r     *http.Request
 	rt    *bucketRT
@@ -202,11 +202,11 @@ func (c *opCtx) authorize(action string) *s3err.Error {
 	if c.key != "" {
 		resource += "/" + c.key
 	}
-	return c.app.authorize(c.vr, c.rt.cfg, action, resource)
+	return c.g.authorize(c.vr, c.rt.cfg, action, resource)
 }
 
 // route selects one operation by a query discriminator and describes the
-// checks to run before its handler. handle is a method value of *S3RP, so
+// checks to run before its handler. handle is a method value of *Gateway, so
 // the route table reads as a plain "discriminator -> handler" mapping.
 type route struct {
 	match  func(url.Values) bool // selects this route (nil = always, the fallback)
@@ -214,7 +214,7 @@ type route struct {
 	aclHdr bool                  // reject unsupported canned ACL headers first
 	bypass bool                  // also require s3:BypassGovernanceRetention when the bypass header is set
 	action string                // s3:* action to authorize ("" = handler authorizes itself)
-	handle func(*S3RP, *opCtx) error
+	handle func(*Gateway, *opCtx) error
 }
 
 // dispatch runs the first matching route's checks and handler, in the
@@ -253,28 +253,28 @@ func (c *opCtx) dispatch(routes []route) error {
 			Bucket: c.rt.cfg.Name,
 			Key:    c.key,
 		}
-		return c.app.runOp(c.r.Context(), op, c, func() error {
-			return rt.handle(c.app, c)
+		return c.g.runOp(c.r.Context(), op, c, func() error {
+			return rt.handle(c.g, c)
 		})
 	}
 	return s3err.NotImplemented("this operation")
 }
 
-func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt *bucketRT, vr *verifiedRequest, query url.Values) error {
+func (g *Gateway) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt *bucketRT, vr *verifiedRequest, query url.Values) error {
 	routes, ok := bucketRoutes[r.Method]
 	if !ok {
 		return s3err.NotImplemented("this bucket operation")
 	}
-	return (&opCtx{app: app, w: w, r: r, rt: rt, vr: vr, query: query}).dispatch(routes)
+	return (&opCtx{g: g, w: w, r: r, rt: rt, vr: vr, query: query}).dispatch(routes)
 }
 
-func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt *bucketRT, vr *verifiedRequest, query url.Values, key string) error {
+func (g *Gateway) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt *bucketRT, vr *verifiedRequest, query url.Values, key string) error {
 	routes, ok := objectRoutes[r.Method]
 	if !ok {
 		return s3err.New(http.StatusMethodNotAllowed, "MethodNotAllowed",
 			"The specified method is not allowed against this resource.")
 	}
-	return (&opCtx{app: app, w: w, r: r, rt: rt, vr: vr, query: query, key: key}).dispatch(routes)
+	return (&opCtx{g: g, w: w, r: r, rt: rt, vr: vr, query: query, key: key}).dispatch(routes)
 }
 
 func has(key string) func(url.Values) bool {
@@ -288,46 +288,46 @@ func hasUploadPart(q url.Values) bool { return q.Has(qpUploadID) || q.Has(qpPart
 // notImplemented returns a route whose handler always fails with the given
 // NotImplemented message (used for operations defined only in the store).
 func notImplemented(match func(url.Values) bool, what string) route {
-	return route{match: match, handle: func(*S3RP, *opCtx) error { return s3err.NotImplemented(what) }}
+	return route{match: match, handle: func(*Gateway, *opCtx) error { return s3err.NotImplemented(what) }}
 }
 
-func rejectACL(*S3RP, *opCtx) error { return errACLNotSupported() }
+func rejectACL(*Gateway, *opCtx) error { return errACLNotSupported() }
 
 // putObjectOrCopy and uploadPartOrCopy pick the copy variant when the
 // request carries an x-amz-copy-source header.
-func (app *S3RP) putObjectOrCopy(c *opCtx) error {
+func (g *Gateway) putObjectOrCopy(c *opCtx) error {
 	if c.r.Header.Get("x-amz-copy-source") != "" {
-		return app.copyObject(c)
+		return g.copyObject(c)
 	}
-	return app.putObject(c)
+	return g.putObject(c)
 }
 
-func (app *S3RP) uploadPartOrCopy(c *opCtx) error {
+func (g *Gateway) uploadPartOrCopy(c *opCtx) error {
 	if c.r.Header.Get("x-amz-copy-source") != "" {
-		return app.uploadPartCopy(c)
+		return g.uploadPartCopy(c)
 	}
-	return app.uploadPart(c)
+	return g.uploadPart(c)
 }
 
 var bucketRoutes = map[string][]route{
 	http.MethodGet: {
-		{match: has(subUploads), params: listMultipartUploadsParams, action: "s3:ListBucketMultipartUploads", handle: (*S3RP).listMultipartUploads},
-		{match: has(subLocation), params: locationOnlyParams, action: "s3:GetBucketLocation", handle: (*S3RP).getBucketLocation},
-		{match: has(subACL), params: aclOnlyParams, action: "s3:GetBucketAcl", handle: (*S3RP).getBucketACL},
-		{match: has(subPolicy), params: policyOnlyParams, action: "s3:GetBucketPolicy", handle: (*S3RP).getBucketPolicy},
-		{match: has(subCORS), params: corsOnlyParams, action: "s3:GetBucketCORS", handle: (*S3RP).getBucketCors},
-		{match: has(subObjectLock), params: objectLockOnlyParams, action: "s3:GetBucketObjectLockConfiguration", handle: (*S3RP).getObjectLockConfiguration},
-		{match: has(subVersioning), params: versioningOnlyParams, action: "s3:GetBucketVersioning", handle: (*S3RP).getBucketVersioning},
-		{match: has(subVersions), params: listObjectVersionsParams, action: "s3:ListBucket", handle: (*S3RP).listObjectVersions},
-		{match: hasListTypeV2, params: listObjectsV2Params, action: "s3:ListBucket", handle: (*S3RP).listObjectsV2},
-		{params: listObjectsV1Params, action: "s3:ListBucket", handle: (*S3RP).listObjectsV1},
+		{match: has(subUploads), params: listMultipartUploadsParams, action: "s3:ListBucketMultipartUploads", handle: (*Gateway).listMultipartUploads},
+		{match: has(subLocation), params: locationOnlyParams, action: "s3:GetBucketLocation", handle: (*Gateway).getBucketLocation},
+		{match: has(subACL), params: aclOnlyParams, action: "s3:GetBucketAcl", handle: (*Gateway).getBucketACL},
+		{match: has(subPolicy), params: policyOnlyParams, action: "s3:GetBucketPolicy", handle: (*Gateway).getBucketPolicy},
+		{match: has(subCORS), params: corsOnlyParams, action: "s3:GetBucketCORS", handle: (*Gateway).getBucketCors},
+		{match: has(subObjectLock), params: objectLockOnlyParams, action: "s3:GetBucketObjectLockConfiguration", handle: (*Gateway).getObjectLockConfiguration},
+		{match: has(subVersioning), params: versioningOnlyParams, action: "s3:GetBucketVersioning", handle: (*Gateway).getBucketVersioning},
+		{match: has(subVersions), params: listObjectVersionsParams, action: "s3:ListBucket", handle: (*Gateway).listObjectVersions},
+		{match: hasListTypeV2, params: listObjectsV2Params, action: "s3:ListBucket", handle: (*Gateway).listObjectsV2},
+		{params: listObjectsV1Params, action: "s3:ListBucket", handle: (*Gateway).listObjectsV1},
 	},
 	http.MethodHead: {
-		{action: "s3:ListBucket", handle: (*S3RP).headBucket},
+		{action: "s3:ListBucket", handle: (*Gateway).headBucket},
 	},
 	http.MethodPut: {
-		{match: has(subVersioning), params: versioningOnlyParams, action: "s3:PutBucketVersioning", handle: (*S3RP).putBucketVersioning},
-		{match: has(subObjectLock), params: objectLockOnlyParams, action: "s3:PutBucketObjectLockConfiguration", handle: (*S3RP).putObjectLockConfiguration},
+		{match: has(subVersioning), params: versioningOnlyParams, action: "s3:PutBucketVersioning", handle: (*Gateway).putBucketVersioning},
+		{match: has(subObjectLock), params: objectLockOnlyParams, action: "s3:PutBucketObjectLockConfiguration", handle: (*Gateway).putObjectLockConfiguration},
 		{match: has(subACL), handle: rejectACL},
 		// bucket policies and CORS rules are defined in the store, not via the S3 API
 		notImplemented(has(subPolicy), "PutBucketPolicy"),
@@ -341,39 +341,39 @@ var bucketRoutes = map[string][]route{
 	},
 	http.MethodPost: {
 		// s3:DeleteObject is evaluated per object inside deleteObjects
-		{match: has(subDelete), params: deleteOnlyParams, handle: (*S3RP).deleteObjects},
+		{match: has(subDelete), params: deleteOnlyParams, handle: (*Gateway).deleteObjects},
 		notImplemented(nil, "this bucket operation"),
 	},
 }
 
 var objectRoutes = map[string][]route{
 	http.MethodGet: {
-		{match: has(qpUploadID), params: listPartsParams, action: "s3:ListMultipartUploadParts", handle: (*S3RP).listParts},
-		{match: has(subTagging), params: taggingParams, action: "s3:GetObjectTagging", handle: (*S3RP).getObjectTagging},
-		{match: has(subACL), params: aclParams, action: "s3:GetObjectAcl", handle: (*S3RP).getObjectACL},
-		{match: has(subRetention), params: retentionParams, action: "s3:GetObjectRetention", handle: (*S3RP).getObjectRetention},
-		{match: has(subLegalHold), params: legalHoldParams, action: "s3:GetObjectLegalHold", handle: (*S3RP).getObjectLegalHold},
-		{params: getObjectParams, action: "s3:GetObject", handle: (*S3RP).getObject},
+		{match: has(qpUploadID), params: listPartsParams, action: "s3:ListMultipartUploadParts", handle: (*Gateway).listParts},
+		{match: has(subTagging), params: taggingParams, action: "s3:GetObjectTagging", handle: (*Gateway).getObjectTagging},
+		{match: has(subACL), params: aclParams, action: "s3:GetObjectAcl", handle: (*Gateway).getObjectACL},
+		{match: has(subRetention), params: retentionParams, action: "s3:GetObjectRetention", handle: (*Gateway).getObjectRetention},
+		{match: has(subLegalHold), params: legalHoldParams, action: "s3:GetObjectLegalHold", handle: (*Gateway).getObjectLegalHold},
+		{params: getObjectParams, action: "s3:GetObject", handle: (*Gateway).getObject},
 	},
 	http.MethodHead: {
-		{params: versionIDOnlyParams, action: "s3:GetObject", handle: (*S3RP).headObject},
+		{params: versionIDOnlyParams, action: "s3:GetObject", handle: (*Gateway).headObject},
 	},
 	http.MethodPut: {
-		{match: has(subTagging), params: taggingParams, action: "s3:PutObjectTagging", handle: (*S3RP).putObjectTagging},
+		{match: has(subTagging), params: taggingParams, action: "s3:PutObjectTagging", handle: (*Gateway).putObjectTagging},
 		{match: has(subACL), handle: rejectACL},
-		{match: has(subRetention), params: retentionParams, bypass: true, action: "s3:PutObjectRetention", handle: (*S3RP).putObjectRetention},
-		{match: has(subLegalHold), params: legalHoldParams, action: "s3:PutObjectLegalHold", handle: (*S3RP).putObjectLegalHold},
-		{match: hasUploadPart, params: uploadPartParams, action: "s3:PutObject", handle: (*S3RP).uploadPartOrCopy},
-		{params: noParams, aclHdr: true, action: "s3:PutObject", handle: (*S3RP).putObjectOrCopy},
+		{match: has(subRetention), params: retentionParams, bypass: true, action: "s3:PutObjectRetention", handle: (*Gateway).putObjectRetention},
+		{match: has(subLegalHold), params: legalHoldParams, action: "s3:PutObjectLegalHold", handle: (*Gateway).putObjectLegalHold},
+		{match: hasUploadPart, params: uploadPartParams, action: "s3:PutObject", handle: (*Gateway).uploadPartOrCopy},
+		{params: noParams, aclHdr: true, action: "s3:PutObject", handle: (*Gateway).putObjectOrCopy},
 	},
 	http.MethodDelete: {
-		{match: has(qpUploadID), params: uploadIDOnlyParams, action: "s3:AbortMultipartUpload", handle: (*S3RP).abortMultipartUpload},
-		{match: has(subTagging), params: taggingParams, action: "s3:DeleteObjectTagging", handle: (*S3RP).deleteObjectTagging},
-		{params: versionIDOnlyParams, bypass: true, action: "s3:DeleteObject", handle: (*S3RP).deleteObject},
+		{match: has(qpUploadID), params: uploadIDOnlyParams, action: "s3:AbortMultipartUpload", handle: (*Gateway).abortMultipartUpload},
+		{match: has(subTagging), params: taggingParams, action: "s3:DeleteObjectTagging", handle: (*Gateway).deleteObjectTagging},
+		{params: versionIDOnlyParams, bypass: true, action: "s3:DeleteObject", handle: (*Gateway).deleteObject},
 	},
 	http.MethodPost: {
-		{match: has(subUploads), params: uploadsOnlyParams, aclHdr: true, action: "s3:PutObject", handle: (*S3RP).createMultipartUpload},
-		{match: has(qpUploadID), params: uploadIDOnlyParams, action: "s3:PutObject", handle: (*S3RP).completeMultipartUpload},
+		{match: has(subUploads), params: uploadsOnlyParams, aclHdr: true, action: "s3:PutObject", handle: (*Gateway).createMultipartUpload},
+		{match: has(qpUploadID), params: uploadIDOnlyParams, action: "s3:PutObject", handle: (*Gateway).completeMultipartUpload},
 		notImplemented(nil, "this operation"),
 	},
 }

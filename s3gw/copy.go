@@ -1,4 +1,4 @@
-package s3rp
+package s3gw
 
 import (
 	"errors"
@@ -19,7 +19,7 @@ import (
 // resolveCopySource resolves an x-amz-copy-source header value
 // (front bucket/key) to the backend copy source of the same backend.
 // Copying between different backends is not supported.
-func (app *S3RP) resolveCopySource(r *http.Request, vr *verifiedRequest, dst *bucketRT) (string, *s3err.Error) {
+func (g *Gateway) resolveCopySource(r *http.Request, vr *verifiedRequest, dst *bucketRT) (string, *s3err.Error) {
 	raw := strings.TrimPrefix(r.Header.Get("x-amz-copy-source"), "/")
 	rawPath, versionID, _ := strings.Cut(raw, "?")
 	rawBucket, rawKey, ok := strings.Cut(rawPath, "/")
@@ -37,7 +37,7 @@ func (app *S3RP) resolveCopySource(r *http.Request, vr *verifiedRequest, dst *bu
 	}
 	// the source is resolved within the requesting key's tenant, so
 	// copying from another tenant's bucket is impossible by construction
-	src, err := app.store.GetBucket(r.Context(), vr.Tenant, srcBucket)
+	src, err := g.store.GetBucket(r.Context(), vr.Tenant, srcBucket)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return "", s3err.AccessDenied()
@@ -45,7 +45,7 @@ func (app *S3RP) resolveCopySource(r *http.Request, vr *verifiedRequest, dst *bu
 		return "", s3err.Internal(err, "bucket lookup failed")
 	}
 	// reading the copy source needs s3:GetObject on the source bucket
-	if s3e := app.authorize(vr, src, "s3:GetObject", src.Name+"/"+srcKey); s3e != nil {
+	if s3e := g.authorize(vr, src, "s3:GetObject", src.Name+"/"+srcKey); s3e != nil {
 		return "", s3e
 	}
 	sb, db := src.Backend, dst.cfg.Backend
@@ -59,9 +59,9 @@ func (app *S3RP) resolveCopySource(r *http.Request, vr *verifiedRequest, dst *bu
 	return copySource, nil
 }
 
-func (app *S3RP) copyObject(c *opCtx) error {
+func (g *Gateway) copyObject(c *opCtx) error {
 	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
-	copySource, s3e := app.resolveCopySource(r, vr, rt)
+	copySource, s3e := g.resolveCopySource(r, vr, rt)
 	if s3e != nil {
 		return s3e
 	}
@@ -126,9 +126,9 @@ func (app *S3RP) copyObject(c *opCtx) error {
 	return s3xml.Write(w, result)
 }
 
-func (app *S3RP) uploadPartCopy(c *opCtx) error {
+func (g *Gateway) uploadPartCopy(c *opCtx) error {
 	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
-	copySource, s3e := app.resolveCopySource(r, vr, rt)
+	copySource, s3e := g.resolveCopySource(r, vr, rt)
 	if s3e != nil {
 		return s3e
 	}

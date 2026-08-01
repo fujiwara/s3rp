@@ -1,4 +1,4 @@
-package s3rp_test
+package s3gw_test
 
 import (
 	"bytes"
@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/fujiwara/s3rp"
+	"github.com/fujiwara/s3rp/s3gw"
 )
 
 func TestPayloadVerifier(t *testing.T) {
@@ -17,7 +17,7 @@ func TestPayloadVerifier(t *testing.T) {
 	want := hex.EncodeToString(sum[:])
 
 	t.Run("matching hash passes", func(t *testing.T) {
-		r := s3rp.NewPayloadVerifier(bytes.NewReader(body), want, int64(len(body)))
+		r := s3gw.NewPayloadVerifier(bytes.NewReader(body), want, int64(len(body)))
 		got, err := io.ReadAll(r)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -30,14 +30,14 @@ func TestPayloadVerifier(t *testing.T) {
 	t.Run("tampered body is rejected", func(t *testing.T) {
 		tampered := append([]byte(nil), body...)
 		tampered[0] = 'H'
-		r := s3rp.NewPayloadVerifier(bytes.NewReader(tampered), want, int64(len(tampered)))
+		r := s3gw.NewPayloadVerifier(bytes.NewReader(tampered), want, int64(len(tampered)))
 		_, err := io.ReadAll(r)
 		assertS3Code(t, err, "XAmzContentSHA256Mismatch")
 	})
 
 	// a mis-cased but valid hash must still be verified, not silently skipped
 	t.Run("uppercase hash is accepted", func(t *testing.T) {
-		r := s3rp.NewPayloadVerifier(bytes.NewReader(body), strings.ToUpper(want), int64(len(body)))
+		r := s3gw.NewPayloadVerifier(bytes.NewReader(body), strings.ToUpper(want), int64(len(body)))
 		if _, err := io.ReadAll(r); err != nil {
 			t.Errorf("uppercase hash should verify: %v", err)
 		}
@@ -46,7 +46,7 @@ func TestPayloadVerifier(t *testing.T) {
 	t.Run("uppercase hash still rejects tampering", func(t *testing.T) {
 		tampered := append([]byte(nil), body...)
 		tampered[0] = 'H'
-		r := s3rp.NewPayloadVerifier(bytes.NewReader(tampered), strings.ToUpper(want), int64(len(tampered)))
+		r := s3gw.NewPayloadVerifier(bytes.NewReader(tampered), strings.ToUpper(want), int64(len(tampered)))
 		_, err := io.ReadAll(r)
 		assertS3Code(t, err, "XAmzContentSHA256Mismatch")
 	})
@@ -54,7 +54,7 @@ func TestPayloadVerifier(t *testing.T) {
 	t.Run("verified without reading to EOF", func(t *testing.T) {
 		tampered := append([]byte(nil), body...)
 		tampered[len(tampered)-1] = 'X'
-		r := s3rp.NewPayloadVerifier(bytes.NewReader(tampered), want, int64(len(tampered)))
+		r := s3gw.NewPayloadVerifier(bytes.NewReader(tampered), want, int64(len(tampered)))
 		// read exactly the declared length, byte by byte, then stop
 		buf := make([]byte, 1)
 		var readErr error
