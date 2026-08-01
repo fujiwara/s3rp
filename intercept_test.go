@@ -34,8 +34,8 @@ func TestAuthorizerCanRefuse(t *testing.T) {
 	client, _, app := newTestProxyWithApp(t, stub)
 
 	// the quota this service enforces is not expressible as a policy
-	// a retryable status would have the SDK try again, and the hook would run
-	// once per attempt; 403 keeps this test to a single, deterministic call
+	// a retryable status would have the client send the request again, and
+	// each attempt is hooked on its own; 403 keeps this to a single call
 	block := &blocker{err: s3err.New(http.StatusForbidden, "QuotaExceeded", "Quota exceeded")}
 	app.SetAuthorizer(block)
 

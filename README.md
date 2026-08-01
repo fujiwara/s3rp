@@ -387,7 +387,8 @@ func main() {
 **Things worth knowing before you build on it**
 
 - Definitions are read on **every request** and nothing is cached: `GetKey` on each authentication, `GetBucket` on each bucket resolution. Caching is your store's business — it knows when a key is revoked, which the gateway cannot.
-- The SDK retries retryable statuses, so refusing with 429 or 503 calls your hooks **once per attempt**. Metering and quota logic must expect that.
+- An interceptor wraps **one inbound request**: it runs after routing and the policy checks, around the handler, so the call to the backend — including any retries the SDK makes internally — happens inside `next`. Metering is therefore straightforward: record once `next` returns, and the counts are what was actually read from and written to the client.
+- A client that retries sends a **new request**, which is verified, authorized and metered on its own. That is what the server served; whether a retry should count toward a quota or an invoice is the application's decision, not the gateway's.
 - `Op.BytesIn` / `BytesOut` count bytes on the wire, so an `aws-chunked` upload includes its framing.
 - Failures are logged once at the request boundary with the `x-amz-request-id` the client receives; the cause never reaches the client. See `s3err`.
 - Two tenants must not map buckets to the same physical backend bucket — the gateway cannot detect this, so validate it where definitions are written.
