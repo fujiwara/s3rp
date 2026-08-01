@@ -2,6 +2,7 @@ package s3rp
 
 import (
 	"encoding/xml"
+	"github.com/fujiwara/s3rp/s3xml"
 	"io"
 	"net/http"
 	"strconv"
@@ -20,8 +21,8 @@ func (app *S3RP) getBucketVersioning(c *opCtx) error {
 	if err != nil {
 		return fromSDKError(err, r.URL.Path)
 	}
-	return writeXML(w, &VersioningConfiguration{
-		XMLNS:  s3XMLNS,
+	return s3xml.Write(w, &s3xml.VersioningConfiguration{
+		XMLNS:  s3xml.Namespace,
 		Status: string(out.Status),
 	})
 }
@@ -36,7 +37,7 @@ func (app *S3RP) putBucketVersioning(c *opCtx) error {
 	if err != nil {
 		return newS3Error(http.StatusBadRequest, "InvalidRequest", "failed to read request body")
 	}
-	var req VersioningConfiguration
+	var req s3xml.VersioningConfiguration
 	if err := xml.Unmarshal(data, &req); err != nil {
 		return newS3Error(http.StatusBadRequest, "MalformedXML",
 			"The XML you provided was not well-formed or did not validate against our published schema.")
@@ -93,8 +94,8 @@ func (app *S3RP) listObjectVersions(c *opCtx) error {
 	if err != nil {
 		return fromSDKError(err, r.URL.Path)
 	}
-	result := &ListVersionsResult{
-		XMLNS: s3XMLNS,
+	result := &s3xml.ListVersionsResult{
+		XMLNS: s3xml.Namespace,
 		Name:  rt.cfg.Name, // the front bucket name, not the backend one
 	}
 	if out.Prefix != nil {
@@ -125,7 +126,7 @@ func (app *S3RP) listObjectVersions(c *opCtx) error {
 		result.IsTruncated = *out.IsTruncated
 	}
 	for _, v := range out.Versions {
-		version := ObjectVersion{
+		version := s3xml.ObjectVersion{
 			StorageClass: string(v.StorageClass),
 		}
 		if v.Key != nil {
@@ -138,7 +139,7 @@ func (app *S3RP) listObjectVersions(c *opCtx) error {
 			version.IsLatest = *v.IsLatest
 		}
 		if v.LastModified != nil {
-			version.LastModified = s3Time(*v.LastModified)
+			version.LastModified = s3xml.FormatTime(*v.LastModified)
 		}
 		if v.ETag != nil {
 			version.ETag = *v.ETag
@@ -149,7 +150,7 @@ func (app *S3RP) listObjectVersions(c *opCtx) error {
 		result.Versions = append(result.Versions, version)
 	}
 	for _, d := range out.DeleteMarkers {
-		marker := DeleteMarkerEntry{}
+		marker := s3xml.DeleteMarkerEntry{}
 		if d.Key != nil {
 			marker.Key = *d.Key
 		}
@@ -160,14 +161,14 @@ func (app *S3RP) listObjectVersions(c *opCtx) error {
 			marker.IsLatest = *d.IsLatest
 		}
 		if d.LastModified != nil {
-			marker.LastModified = s3Time(*d.LastModified)
+			marker.LastModified = s3xml.FormatTime(*d.LastModified)
 		}
 		result.DeleteMarkers = append(result.DeleteMarkers, marker)
 	}
 	for _, cp := range out.CommonPrefixes {
 		if cp.Prefix != nil {
-			result.CommonPrefixes = append(result.CommonPrefixes, CommonPrefix{Prefix: *cp.Prefix})
+			result.CommonPrefixes = append(result.CommonPrefixes, s3xml.CommonPrefix{Prefix: *cp.Prefix})
 		}
 	}
-	return writeXML(w, result)
+	return s3xml.Write(w, result)
 }

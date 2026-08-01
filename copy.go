@@ -2,6 +2,7 @@ package s3rp
 
 import (
 	"errors"
+	"github.com/fujiwara/s3rp/s3xml"
 	"github.com/fujiwara/s3rp/store"
 	"net/http"
 	"net/url"
@@ -111,16 +112,16 @@ func (app *S3RP) copyObject(c *opCtx) error {
 	if out.CopySourceVersionId != nil {
 		w.Header().Set("x-amz-copy-source-version-id", *out.CopySourceVersionId)
 	}
-	result := &CopyObjectResult{XMLNS: s3XMLNS}
+	result := &s3xml.CopyObjectResult{XMLNS: s3xml.Namespace}
 	if cr := out.CopyObjectResult; cr != nil {
 		if cr.ETag != nil {
 			result.ETag = *cr.ETag
 		}
 		if cr.LastModified != nil {
-			result.LastModified = s3Time(*cr.LastModified)
+			result.LastModified = s3xml.FormatTime(*cr.LastModified)
 		}
 	}
-	return writeXML(w, result)
+	return s3xml.Write(w, result)
 }
 
 func (app *S3RP) uploadPartCopy(c *opCtx) error {
@@ -152,14 +153,14 @@ func (app *S3RP) uploadPartCopy(c *opCtx) error {
 	if out.CopySourceVersionId != nil {
 		w.Header().Set("x-amz-copy-source-version-id", *out.CopySourceVersionId)
 	}
-	result := &CopyPartResult{XMLNS: s3XMLNS}
+	result := &s3xml.CopyPartResult{XMLNS: s3xml.Namespace}
 	if cr := out.CopyPartResult; cr != nil {
 		if cr.ETag != nil {
 			result.ETag = *cr.ETag
 		}
 		if cr.LastModified != nil {
-			result.LastModified = s3Time(*cr.LastModified)
+			result.LastModified = s3xml.FormatTime(*cr.LastModified)
 		}
 	}
-	return writeXML(w, result)
+	return s3xml.Write(w, result)
 }

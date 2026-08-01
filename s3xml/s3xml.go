@@ -1,14 +1,20 @@
-package s3rp
+// Package s3xml holds the XML request and response bodies of the S3 API and
+// the helper to render them. The S3 API speaks XML, so any service
+// implementing it needs these wire types; they carry no proxy logic.
+package s3xml
 
 import (
 	"encoding/xml"
+	"fmt"
+	"net/http"
 	"time"
 )
 
-const s3XMLNS = "http://s3.amazonaws.com/doc/2006-03-01/"
+// Namespace is the XML namespace of S3 API documents.
+const Namespace = "http://s3.amazonaws.com/doc/2006-03-01/"
 
-// s3Time formats a time in the format S3 uses in XML responses.
-func s3Time(t time.Time) string {
+// FormatTime formats a time the way S3 does in XML responses.
+func FormatTime(t time.Time) string {
 	return t.UTC().Format("2006-01-02T15:04:05.000Z")
 }
 
@@ -71,14 +77,14 @@ type LocationConstraint struct {
 	Value   string   `xml:",chardata"`
 }
 
-// deleteRequest is the request body of DeleteObjects (Multi-Object Delete).
-type deleteRequest struct {
-	XMLName xml.Name       `xml:"Delete"`
-	Quiet   bool           `xml:"Quiet"`
-	Objects []deleteObject `xml:"Object"`
+// DeleteRequest is the request body of DeleteObjects (Multi-Object Delete).
+type DeleteRequest struct {
+	XMLName xml.Name              `xml:"Delete"`
+	Quiet   bool                  `xml:"Quiet"`
+	Objects []DeleteRequestObject `xml:"Object"`
 }
 
-type deleteObject struct {
+type DeleteRequestObject struct {
 	Key       string `xml:"Key"`
 	VersionID string `xml:"VersionId"`
 }
@@ -146,13 +152,13 @@ type CompleteMultipartUploadResult struct {
 	ChecksumType      string   `xml:"ChecksumType,omitempty"`
 }
 
-// completeMultipartUpload is the request body of CompleteMultipartUpload.
-type completeMultipartUpload struct {
+// CompleteMultipartUploadRequest is the request body of CompleteMultipartUpload.
+type CompleteMultipartUploadRequest struct {
 	XMLName xml.Name       `xml:"CompleteMultipartUpload"`
-	Parts   []completePart `xml:"Part"`
+	Parts   []CompletePart `xml:"Part"`
 }
 
-type completePart struct {
+type CompletePart struct {
 	PartNumber        int32  `xml:"PartNumber"`
 	ETag              string `xml:"ETag"`
 	ChecksumCRC32     string `xml:"ChecksumCRC32,omitempty"`
@@ -361,4 +367,17 @@ type ListAllMyBucketsResult struct {
 type BucketEntry struct {
 	Name         string `xml:"Name"`
 	CreationDate string `xml:"CreationDate"`
+}
+
+// Write renders v as an S3 XML response body with a 200 status.
+func Write(w http.ResponseWriter, v any) error {
+	b, err := xml.Marshal(v)
+	if err != nil {
+		return fmt.Errorf("failed to marshal XML response: %w", err)
+	}
+	w.Header().Set("Content-Type", "application/xml")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(xml.Header))
+	w.Write(b)
+	return nil
 }

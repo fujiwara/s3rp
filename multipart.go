@@ -3,6 +3,7 @@ package s3rp
 import (
 	"encoding/xml"
 	"github.com/fujiwara/s3rp/checksum"
+	"github.com/fujiwara/s3rp/s3xml"
 	"io"
 	"net/http"
 	"net/url"
@@ -70,8 +71,8 @@ func (app *S3RP) createMultipartUpload(c *opCtx) error {
 	if out.ChecksumType != "" {
 		w.Header().Set("x-amz-checksum-type", string(out.ChecksumType))
 	}
-	return writeXML(w, &InitiateMultipartUploadResult{
-		XMLNS:    s3XMLNS,
+	return s3xml.Write(w, &s3xml.InitiateMultipartUploadResult{
+		XMLNS:    s3xml.Namespace,
 		Bucket:   rt.cfg.Name, // the front bucket name, not the backend one
 		Key:      key,
 		UploadID: aws.ToString(out.UploadId),
@@ -138,7 +139,7 @@ func (app *S3RP) completeMultipartUpload(c *opCtx) error {
 	if err != nil {
 		return newS3Error(http.StatusBadRequest, "InvalidRequest", "failed to read request body")
 	}
-	var req completeMultipartUpload
+	var req s3xml.CompleteMultipartUploadRequest
 	if err := xml.Unmarshal(data, &req); err != nil {
 		return newS3Error(http.StatusBadRequest, "MalformedXML",
 			"The XML you provided was not well-formed or did not validate against our published schema.")
@@ -201,8 +202,8 @@ func (app *S3RP) completeMultipartUpload(c *opCtx) error {
 	if out.VersionId != nil {
 		w.Header().Set("x-amz-version-id", *out.VersionId)
 	}
-	return writeXML(w, &CompleteMultipartUploadResult{
-		XMLNS:             s3XMLNS,
+	return s3xml.Write(w, &s3xml.CompleteMultipartUploadResult{
+		XMLNS:             s3xml.Namespace,
 		Location:          location,
 		Bucket:            rt.cfg.Name,
 		Key:               key,
@@ -253,8 +254,8 @@ func (app *S3RP) listParts(c *opCtx) error {
 	if err != nil {
 		return fromSDKError(err, r.URL.Path)
 	}
-	result := &ListPartsResult{
-		XMLNS:        s3XMLNS,
+	result := &s3xml.ListPartsResult{
+		XMLNS:        s3xml.Namespace,
 		Bucket:       rt.cfg.Name,
 		Key:          key,
 		UploadID:     aws.ToString(in.UploadId),
@@ -273,12 +274,12 @@ func (app *S3RP) listParts(c *opCtx) error {
 		result.IsTruncated = *out.IsTruncated
 	}
 	for _, p := range out.Parts {
-		part := Part{}
+		part := s3xml.Part{}
 		if p.PartNumber != nil {
 			part.PartNumber = *p.PartNumber
 		}
 		if p.LastModified != nil {
-			part.LastModified = s3Time(*p.LastModified)
+			part.LastModified = s3xml.FormatTime(*p.LastModified)
 		}
 		if p.ETag != nil {
 			part.ETag = *p.ETag
@@ -288,7 +289,7 @@ func (app *S3RP) listParts(c *opCtx) error {
 		}
 		result.Parts = append(result.Parts, part)
 	}
-	return writeXML(w, result)
+	return s3xml.Write(w, result)
 }
 
 func (app *S3RP) listMultipartUploads(c *opCtx) error {
@@ -324,8 +325,8 @@ func (app *S3RP) listMultipartUploads(c *opCtx) error {
 	if err != nil {
 		return fromSDKError(err, r.URL.Path)
 	}
-	result := &ListMultipartUploadsResult{
-		XMLNS:  s3XMLNS,
+	result := &s3xml.ListMultipartUploadsResult{
+		XMLNS:  s3xml.Namespace,
 		Bucket: rt.cfg.Name,
 	}
 	if out.KeyMarker != nil {
@@ -353,7 +354,7 @@ func (app *S3RP) listMultipartUploads(c *opCtx) error {
 		result.IsTruncated = *out.IsTruncated
 	}
 	for _, u := range out.Uploads {
-		upload := Upload{
+		upload := s3xml.Upload{
 			StorageClass: string(u.StorageClass),
 		}
 		if u.Key != nil {
@@ -363,14 +364,14 @@ func (app *S3RP) listMultipartUploads(c *opCtx) error {
 			upload.UploadID = *u.UploadId
 		}
 		if u.Initiated != nil {
-			upload.Initiated = s3Time(*u.Initiated)
+			upload.Initiated = s3xml.FormatTime(*u.Initiated)
 		}
 		result.Uploads = append(result.Uploads, upload)
 	}
 	for _, cp := range out.CommonPrefixes {
 		if cp.Prefix != nil {
-			result.CommonPrefixes = append(result.CommonPrefixes, CommonPrefix{Prefix: *cp.Prefix})
+			result.CommonPrefixes = append(result.CommonPrefixes, s3xml.CommonPrefix{Prefix: *cp.Prefix})
 		}
 	}
-	return writeXML(w, result)
+	return s3xml.Write(w, result)
 }
