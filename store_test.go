@@ -196,6 +196,35 @@ func TestRDBStorePolicyAndCORS(t *testing.T) {
 	}
 }
 
+// TestRDBStoreInvalidUserPolicy verifies that a user policy which is valid
+// JSON but semantically invalid (an effect that is neither Allow nor Deny),
+// slipped past config validation straight into the store, makes GetKey fail
+// closed rather than silently mis-evaluating.
+func TestRDBStoreInvalidUserPolicy(t *testing.T) {
+	dsn := buildTestDB(t, loadTestConfig(t))
+	sqldb, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqldb.Close()
+	_, err = sqldb.ExecContext(t.Context(),
+		`UPDATE users SET policy = ? WHERE name = 'app1'`,
+		`{"policy":[{"effect":"Bad","action":["s3:GetObject"]}]}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqldb.Close()
+
+	st, err := rdb.Open(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	if _, err := st.GetKey(t.Context(), "S3RPKEY001"); err == nil {
+		t.Error("expect GetKey to reject an invalid stored policy")
+	}
+}
+
 // TestRDBStoreProxyE2E runs the proxy with the sqlite-backed store and a
 // real SDK client end to end.
 func TestRDBStoreProxyE2E(t *testing.T) {

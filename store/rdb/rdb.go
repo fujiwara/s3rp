@@ -75,6 +75,9 @@ func (s *Store) GetKey(ctx context.Context, accessKeyID string) (*store.Key, err
 		if err := json.Unmarshal([]byte(row.UserPolicy), &up); err != nil {
 			return nil, fmt.Errorf("user %s: malformed policy: %w", row.UserName, err)
 		}
+		if err := policy.ValidateUserPolicy(&up); err != nil {
+			return nil, fmt.Errorf("user %s: invalid policy: %w", row.UserName, err)
+		}
 		key.Policy = &up
 	}
 	return key, nil

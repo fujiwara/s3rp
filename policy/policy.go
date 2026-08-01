@@ -187,10 +187,14 @@ func (up *UserPolicy) Allows(action string) bool {
 		if !matchAnyFold(st.Action, action) {
 			continue
 		}
-		if st.Effect == "Deny" {
+		// Only the two well-known effects have meaning; anything else is
+		// ignored so a malformed effect cannot silently grant access.
+		switch st.Effect {
+		case "Deny":
 			return false
+		case "Allow":
+			allowed = true
 		}
-		allowed = true
 	}
 	return allowed
 }

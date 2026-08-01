@@ -434,6 +434,30 @@ func TestUserPolicyDenyOnly(t *testing.T) {
 	}
 }
 
+// TestUserPolicyUnknownEffect locks in that a statement whose effect is
+// neither Allow nor Deny (e.g. a typo that skipped validation because it was
+// written straight into the store) is ignored rather than granting access.
+func TestUserPolicyUnknownEffect(t *testing.T) {
+	// a mistyped Deny must not fail open into an allow
+	up := &policy.UserPolicy{Statements: []policy.ActionStatement{
+		{Effect: "Denyy", Action: []string{"s3:DeleteObject"}},
+	}}
+	if up.Allows("s3:DeleteObject") {
+		t.Error("an unrecognized effect must not grant access")
+	}
+	// even alongside a real Allow, the garbage statement grants nothing extra
+	up = &policy.UserPolicy{Statements: []policy.ActionStatement{
+		{Effect: "Allow", Action: []string{"s3:GetObject"}},
+		{Effect: "allow", Action: []string{"s3:PutObject"}}, // wrong case
+	}}
+	if !up.Allows("s3:GetObject") {
+		t.Error("valid Allow should still grant")
+	}
+	if up.Allows("s3:PutObject") {
+		t.Error("lower-case effect must not grant")
+	}
+}
+
 func TestValidateUserPolicy(t *testing.T) {
 	if err := policy.ValidateUserPolicy(nil); err != nil {
 		t.Errorf("nil policy is valid: %v", err)
