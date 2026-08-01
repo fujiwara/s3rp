@@ -302,6 +302,49 @@ $ aws --endpoint-url http://localhost:8080 s3 presign s3://photos/foo.jpg
 http://localhost:8080/photos/foo.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&...
 ```
 
+## Behind a TLS terminator
+
+s3rp serves plain HTTP, so a real deployment puts a reverse proxy in front of it. SigV4 signs the request itself, which makes that proxy part of the verification path: anything it rewrites, the signature no longer covers.
+
+**What breaks every request.** Verification re-signs the request as it arrived, from `RequestURI`, the `Host` header and the headers the client listed as signed:
+
+- **Preserve `Host`.** It is signed. nginx: `proxy_set_header Host $http_host;`. CloudFront sends the *origin's* hostname unless the Host header is forwarded, which fails every signature. ALB preserves it.
+- **Pass the request URI exactly as sent** — no normalization, no re-encoding, no merging of `//`. Beyond the signature, this decides what the object key *is*: `a//b` and `a/b` are different keys, and `%2F` in a key is not a separator. nginx: `proxy_pass` **without a URI part** (with one, nginx passes the normalized form), and `merge_slashes off;`.
+- **Do not alter signed headers.** Adding headers is safe — `X-Forwarded-*` is not signed — but rewriting or dropping one the client signed is not.
+
+**What breaks large transfers.** s3rp deliberately sets no read or write timeout so uploads and downloads are not cut off mid-stream; the proxy in front usually does, and usually buffers:
+
+- `proxy_request_buffering off;` — otherwise every upload lands on the proxy's disk first.
+- `client_max_body_size 0;` — the default 1 MB refuses ordinary objects; a single PUT can be 5 GiB.
+- Raise `proxy_read_timeout` / `proxy_send_timeout`; the 60 s default cuts off slow or large transfers.
+- Do not compress responses, and let `Expect: 100-continue` through — the AWS SDKs use it for uploads.
+
+**What corrupts accounting.** `proxy_next_upstream` includes `error` and `timeout` by default, so nginx may resend a **PUT** to another upstream. That is a duplicate upload, and a second request as far as s3rp is concerned — metering counts it twice, and it cannot tell the two apart. Set `proxy_next_upstream off;` or restrict it to idempotent cases.
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name s3.example.com;
+
+    merge_slashes off;            # object keys may contain //
+    client_max_body_size 0;       # a single PUT can be 5 GiB
+    proxy_request_buffering off;  # stream uploads rather than spool them
+    proxy_http_version 1.1;
+
+    location / {
+        proxy_pass http://s3rp:8080;   # no URI part: the request line is passed as sent
+        proxy_set_header Host $http_host;
+        proxy_next_upstream off;       # never resend a PUT elsewhere
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+}
+```
+
+**What you lose.** Every request now arrives from the proxy, so the `RemoteAddr` in the access log is the proxy's. s3rp does not interpret `X-Forwarded-For` — how many hops to trust is a property of the deployment, not of the gateway. A service that needs the client address should rewrite `RemoteAddr` in a handler wrapped around `gw.Handler()`, which the gateway reads for logging and uses for nothing else. Also leave the `x-amz-request-id` response header alone: it is what ties a user's report to the log line explaining it.
+
+**The hop itself.** The scheme is not part of a SigV4 signature, so terminating TLS and forwarding over plain HTTP verifies correctly — but that hop carries object payloads and the requests authenticating them, so it belongs on a trusted network or under mTLS.
+
 ## Building a service on the gateway
 
 The S3 API lives in `s3gw`, separate from the parts of this repository that are only its PoC packaging — the YAML config, its store, the CLI. A real service does not fork the proxy: it implements the two things that are genuinely its own and hands them to the gateway.
