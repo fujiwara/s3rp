@@ -31,6 +31,7 @@ type Gateway struct {
 
 	authorizer   Authorizer
 	interceptors []Interceptor
+	observer     Observer
 
 	newClient func(ctx context.Context, b *store.Backend) (BackendClient, error)
 	clients   map[clientCacheKey]BackendClient
