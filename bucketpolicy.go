@@ -26,6 +26,34 @@ func (app *S3RP) authorize(vr *verifiedRequest, b *store.Bucket, action, resourc
 	return nil
 }
 
+// perObjectAuthorizer pre-computes the resource-independent parts of
+// authorization once — the user policy for the action, and the bucket
+// policy's Deny statements that match this user and action — so a per-object
+// operation (DeleteObjects) evaluates only the resource for each key instead
+// of re-running the whole check per object. Only the resource varies per key.
+type perObjectAuthorizer struct {
+	denyAll bool                 // user policy denies the action for every resource
+	eval    policy.DenyEvaluator // bucket-policy resource-only deny evaluator
+}
+
+// perObjectAuthorizer builds the authorizer for one action, running the
+// resource-independent checks a single time.
+func (app *S3RP) perObjectAuthorizer(vr *verifiedRequest, b *store.Bucket, action string) perObjectAuthorizer {
+	if !vr.UserPolicy.Allows(action) {
+		return perObjectAuthorizer{denyAll: true}
+	}
+	a := perObjectAuthorizer{}
+	if b.Policy != nil {
+		a.eval = b.Policy.DenyEvaluatorFor(vr.User, action)
+	}
+	return a
+}
+
+// denies reports whether the given resource is denied for this action.
+func (a perObjectAuthorizer) denies(resource string) bool {
+	return a.denyAll || a.eval.Denies(resource)
+}
+
 // getBucketPolicy returns the raw bucket policy JSON.
 func (app *S3RP) getBucketPolicy(c *opCtx) error {
 	w, rt := c.w, c.rt

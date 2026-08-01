@@ -459,26 +459,27 @@ func (app *S3RP) deleteObjects(c *opCtx) error {
 		return newS3Error(http.StatusBadRequest, "MalformedXML",
 			"The XML you provided was not well-formed or did not validate against our published schema.")
 	}
-	// the policy is evaluated per object, like AWS: denied keys are
-	// reported as errors and only the permitted ones reach the backend
+	// the policy is evaluated per object, like AWS: denied keys are reported
+	// as errors and only the permitted ones reach the backend. The
+	// resource-independent parts of the check (user policy, and the bucket
+	// policy's matching Deny statements) are resolved once here so that only
+	// the resource is tested per key rather than the whole policy per object.
 	bypass := bypassGovernanceRetention(r)
+	delAuth := app.perObjectAuthorizer(vr, rt.cfg, "s3:DeleteObject")
+	var bypassAuth perObjectAuthorizer
+	if bypass {
+		bypassAuth = app.perObjectAuthorizer(vr, rt.cfg, "s3:BypassGovernanceRetention")
+	}
 	result := &DeleteResult{XMLNS: s3XMLNS}
 	objects := make([]types.ObjectIdentifier, 0, len(req.Objects))
 	for _, o := range req.Objects {
-		action := "s3:DeleteObject"
-		if s3err := app.authorize(vr, rt.cfg, action, rt.cfg.Name+"/"+o.Key); s3err != nil {
+		resource := rt.cfg.Name + "/" + o.Key
+		if delAuth.denies(resource) || (bypass && bypassAuth.denies(resource)) {
+			s3err := errAccessDenied()
 			result.Errors = append(result.Errors, DeleteError{
 				Key: o.Key, VersionID: o.VersionID, Code: s3err.Code, Message: s3err.Message,
 			})
 			continue
-		}
-		if bypass {
-			if s3err := app.authorize(vr, rt.cfg, "s3:BypassGovernanceRetention", rt.cfg.Name+"/"+o.Key); s3err != nil {
-				result.Errors = append(result.Errors, DeleteError{
-					Key: o.Key, VersionID: o.VersionID, Code: s3err.Code, Message: s3err.Message,
-				})
-				continue
-			}
 		}
 		oi := types.ObjectIdentifier{Key: aws.String(o.Key)}
 		if o.VersionID != "" {

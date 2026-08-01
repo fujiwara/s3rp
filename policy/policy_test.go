@@ -143,6 +143,54 @@ func TestParse(t *testing.T) {
 	}
 }
 
+// TestDenyEvaluator verifies the per-request evaluator (which pre-matches
+// principal and action) agrees with Evaluate on the Deny decision, and that
+// AlwaysAllows short-circuits when no Deny statement matches.
+func TestDenyEvaluator(t *testing.T) {
+	p, err := policy.Parse(`{
+		"Statement": [
+			{"Effect": "Deny", "Principal": {"S3RP": ["batch"]}, "Action": ["s3:DeleteObject", "s3:PutObject"], "Resource": ["photos/*", "photos/2026/*"]},
+			{"Effect": "Deny", "Principal": "*", "Action": "s3:DeleteObject", "Resource": "photos/archive/*"},
+			{"Effect": "Allow", "Principal": {"S3RP": ["batch"]}, "Action": "s3:GetObject", "Resource": "photos/*"}
+		]
+	}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		principal, action, resource string
+	}{
+		{"batch", "s3:DeleteObject", "photos/a.jpg"},
+		{"batch", "s3:DeleteObject", "logs/a.jpg"},
+		{"batch", "s3:DeleteObject", "photos/archive/x"},
+		{"app1", "s3:DeleteObject", "photos/a.jpg"},
+		{"app1", "s3:DeleteObject", "photos/archive/x"},
+		{"batch", "s3:GetObject", "photos/a.jpg"}, // only an inert Allow matches
+		{"batch", "s3:PutObject", "photos/a.jpg"},
+	}
+	for _, tc := range cases {
+		want := p.Evaluate(tc.principal, tc.action, tc.resource) == policy.Deny
+		eval := p.DenyEvaluatorFor(tc.principal, tc.action)
+		if got := eval.Denies(tc.resource); got != want {
+			t.Errorf("Denies(%s,%s,%s)=%v, Evaluate says deny=%v", tc.principal, tc.action, tc.resource, got, want)
+		}
+		if eval.AlwaysAllows() && eval.Denies(tc.resource) {
+			t.Errorf("AlwaysAllows but Denies(%s)", tc.resource)
+		}
+	}
+	// no Deny statement matches this action -> AlwaysAllows, per-object check skippable
+	if !p.DenyEvaluatorFor("batch", "s3:GetObject").AlwaysAllows() {
+		t.Error("expect AlwaysAllows when only an inert Allow matches")
+	}
+	if !p.DenyEvaluatorFor("app1", "s3:PutObject").AlwaysAllows() {
+		t.Error("expect AlwaysAllows when no statement matches the principal")
+	}
+	// a matching Deny is not AlwaysAllows
+	if p.DenyEvaluatorFor("batch", "s3:DeleteObject").AlwaysAllows() {
+		t.Error("expect not AlwaysAllows when a Deny matches")
+	}
+}
+
 func TestEvaluate(t *testing.T) {
 	p, err := policy.Parse(`{
 		"Statement": [

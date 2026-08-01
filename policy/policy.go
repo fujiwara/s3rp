@@ -337,6 +337,55 @@ func (p *Policy) Evaluate(principal, action, resource string) Effect {
 	return result
 }
 
+// DenyEvaluator answers whether a resource is denied for a principal/action
+// pair that has already been matched. It is built once per request (via
+// DenyEvaluatorFor) so that a per-object operation like DeleteObjects does
+// not re-match principal and action for every key — only the resource, which
+// is the only part that varies per object.
+type DenyEvaluator struct {
+	// resource patterns of every Deny statement whose principal and action
+	// matched; a resource is denied iff it matches any of them.
+	denyResources [][]rune
+}
+
+// DenyEvaluatorFor pre-matches principal and action and returns an evaluator
+// over the resource alone. Only Deny statements matter: bucket-policy Allow
+// statements are inert (the baseline already allows), so a matching Deny is
+// the only thing that can restrict access.
+func (p *Policy) DenyEvaluatorFor(principal, action string) DenyEvaluator {
+	p.compileOnce.Do(p.compile)
+	actionRunes := []rune(strings.ToLower(action))
+	var e DenyEvaluator
+	for i := range p.Statement {
+		st := &p.Statement[i]
+		if st.Effect != "Deny" {
+			continue
+		}
+		if !st.matchPrincipal(principal) {
+			continue
+		}
+		if !matchAnyRunes(st.actionRunes, actionRunes) {
+			continue
+		}
+		e.denyResources = append(e.denyResources, st.resourceRunes...)
+	}
+	return e
+}
+
+// AlwaysAllows reports that no Deny statement matched the principal/action,
+// so every resource is allowed and the per-object check can be skipped.
+func (e DenyEvaluator) AlwaysAllows() bool {
+	return len(e.denyResources) == 0
+}
+
+// Denies reports whether the resource is denied.
+func (e DenyEvaluator) Denies(resource string) bool {
+	if len(e.denyResources) == 0 {
+		return false
+	}
+	return matchAnyRunes(e.denyResources, []rune(resource))
+}
+
 // compile precomputes the rune form of every action and resource pattern so
 // Evaluate does not reconvert them on each request. Action patterns are
 // lower-cased for AWS-style case-insensitive matching.
