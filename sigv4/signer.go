@@ -1,4 +1,4 @@
-package s3rp
+package sigv4
 
 import (
 	"hash/maphash"

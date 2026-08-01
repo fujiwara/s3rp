@@ -7,6 +7,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"github.com/fujiwara/s3rp/checksum"
+	"github.com/fujiwara/s3rp/sigv4"
 	"hash"
 	"io"
 	"log/slog"
@@ -585,8 +586,8 @@ func (app *S3RP) listBuckets(w http.ResponseWriter, r *http.Request, vr *verifie
 // requestBody returns the payload reader and its decoded length,
 // decoding aws-chunked framing when the request declares it.
 func requestBody(r *http.Request, vr *verifiedRequest) (io.Reader, int64, *S3Error) {
-	switch vr.PayloadHash {
-	case streamingSHA256, streamingSHA256T, streamingUnsignedT:
+	switch {
+	case sigv4.IsStreaming(vr.PayloadHash):
 		decodedLength := r.Header.Get("x-amz-decoded-content-length")
 		if decodedLength == "" {
 			return nil, 0, newS3Error(http.StatusLengthRequired, "MissingContentLength",
@@ -597,7 +598,7 @@ func requestBody(r *http.Request, vr *verifiedRequest) (io.Reader, int64, *S3Err
 			return nil, 0, newS3Error(http.StatusBadRequest, "InvalidRequest",
 				"Invalid x-amz-decoded-content-length header")
 		}
-		return newChunkedReader(r.Body, vr, checksum.TrailerAlgorithm(r.Header)), length, nil
+		return sigv4.NewChunkedReader(r.Body, vr.Verified, checksum.TrailerAlgorithm(r.Header)), length, nil
 	default:
 		if r.ContentLength < 0 {
 			return nil, 0, newS3Error(http.StatusLengthRequired, "MissingContentLength",
