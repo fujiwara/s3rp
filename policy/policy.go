@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 )
 
 // Effect is the result of evaluating a policy.
@@ -30,10 +31,43 @@ const (
 
 var userNameRegexp = regexp.MustCompile(`^[a-z][a-z0-9_-]+$`)
 
+// Structural limits on a policy document. Policies are tenant-authored, so
+// they are untrusted input, and authorization runs on every request (per
+// object for DeleteObjects). The dominant worst-case cost is the number of
+// resource patterns matched (each adversarial pattern can force a full scan
+// of a ~1 KB object key), i.e. MaxStatements*MaxResourcesPerStatement; action
+// matching is against a short action string and stays cheap regardless of
+// count. These caps sit well above what any real policy needs while keeping a
+// worst-case evaluation to a few hundred microseconds, and are checked at
+// parse/validate time.
+const (
+	// MaxPolicyBytes caps the raw size of a policy document, checked before
+	// parsing so an oversized document is rejected without being unmarshaled
+	// into memory. Matches the AWS bucket-policy size limit (20 KB).
+	MaxPolicyBytes = 20 * 1024
+	// MaxPrincipalUsers caps the user names in one statement's Principal or
+	// NotPrincipal, bounding the per-statement principal-match cost.
+	MaxPrincipalUsers = 100
+	// MaxStatements caps the statements in one policy document.
+	MaxStatements = 20
+	// MaxActionsPerStatement caps the Action entries in one statement. Action
+	// matching is cheap (short string), so this is generous.
+	MaxActionsPerStatement = 30
+	// MaxResourcesPerStatement caps the Resource entries in one statement.
+	// Resource patterns are matched against the object key, so the total
+	// (MaxStatements*MaxResourcesPerStatement) bounds the worst-case cost.
+	MaxResourcesPerStatement = 10
+	// MaxPatternLen caps the length (in bytes) of a single action or
+	// resource pattern, bounding the per-pattern glob-match cost.
+	MaxPatternLen = 128
+)
+
 // Policy is a bucket policy document.
 type Policy struct {
 	Version   string      `json:"Version,omitempty"`
 	Statement []Statement `json:"Statement"`
+
+	compileOnce sync.Once // precompiles statement patterns to runes on first Evaluate
 }
 
 // Statement is a single statement of a policy.
@@ -44,6 +78,11 @@ type Statement struct {
 	NotPrincipal *Principal    `json:"NotPrincipal,omitempty"`
 	Action       StringOrSlice `json:"Action"`
 	Resource     StringOrSlice `json:"Resource"`
+
+	// precompiled by Policy.compile: action patterns are lower-cased for
+	// case-insensitive matching, resource patterns kept as-is.
+	actionRunes   [][]rune
+	resourceRunes [][]rune
 }
 
 // Principal is either "*" (all users) or {"S3RP": user names}.
@@ -100,6 +139,9 @@ func (s *StringOrSlice) UnmarshalJSON(data []byte) error {
 
 // Parse parses and validates a policy document.
 func Parse(text string) (*Policy, error) {
+	if len(text) > MaxPolicyBytes {
+		return nil, fmt.Errorf("policy is %d bytes, at most %d are allowed", len(text), MaxPolicyBytes)
+	}
 	var p Policy
 	if err := json.Unmarshal([]byte(text), &p); err != nil {
 		return nil, fmt.Errorf("malformed policy JSON: %w", err)
@@ -111,6 +153,9 @@ func Parse(text string) (*Policy, error) {
 	}
 	if len(p.Statement) == 0 {
 		return nil, fmt.Errorf("policy must contain at least one statement")
+	}
+	if len(p.Statement) > MaxStatements {
+		return nil, fmt.Errorf("policy has %d statements, at most %d are allowed", len(p.Statement), MaxStatements)
 	}
 	for i, st := range p.Statement {
 		name := st.Sid
@@ -130,6 +175,9 @@ func Parse(text string) (*Policy, error) {
 			if pr == nil {
 				continue
 			}
+			if len(pr.Users) > MaxPrincipalUsers {
+				return nil, fmt.Errorf("%s: %d principal users, at most %d are allowed", name, len(pr.Users), MaxPrincipalUsers)
+			}
 			for _, u := range pr.Users {
 				if !userNameRegexp.MatchString(u) {
 					return nil, fmt.Errorf("%s: invalid principal user name %q", name, u)
@@ -139,6 +187,9 @@ func Parse(text string) (*Policy, error) {
 		if len(st.Action) == 0 {
 			return nil, fmt.Errorf("%s: at least one action is required", name)
 		}
+		if len(st.Action) > MaxActionsPerStatement {
+			return nil, fmt.Errorf("%s: %d actions, at most %d are allowed", name, len(st.Action), MaxActionsPerStatement)
+		}
 		for _, a := range st.Action {
 			if err := validateAction(a); err != nil {
 				return nil, fmt.Errorf("%s: %w", name, err)
@@ -146,6 +197,14 @@ func Parse(text string) (*Policy, error) {
 		}
 		if len(st.Resource) == 0 {
 			return nil, fmt.Errorf("%s: at least one resource is required", name)
+		}
+		if len(st.Resource) > MaxResourcesPerStatement {
+			return nil, fmt.Errorf("%s: %d resources, at most %d are allowed", name, len(st.Resource), MaxResourcesPerStatement)
+		}
+		for _, res := range st.Resource {
+			if len(res) > MaxPatternLen {
+				return nil, fmt.Errorf("%s: resource pattern too long (%d bytes, max %d)", name, len(res), MaxPatternLen)
+			}
 		}
 	}
 	return &p, nil
@@ -157,6 +216,9 @@ func validateAction(a string) error {
 	if !strings.HasPrefix(strings.ToLower(a), "s3:") {
 		return fmt.Errorf("action %q must start with s3:", a)
 	}
+	if len(a) > MaxPatternLen {
+		return fmt.Errorf("action pattern too long (%d bytes, max %d)", len(a), MaxPatternLen)
+	}
 	return nil
 }
 
@@ -165,12 +227,17 @@ func validateAction(a string) error {
 // nil or empty policy allows every action (the default: allow s3:*).
 type UserPolicy struct {
 	Statements []ActionStatement `yaml:"policy" json:"policy"`
+
+	compileOnce sync.Once // precompiles action patterns to runes on first Allows
 }
 
 // ActionStatement is one allow/deny rule of a UserPolicy.
 type ActionStatement struct {
 	Effect string   `yaml:"effect" json:"effect"`
 	Action []string `yaml:"action" json:"action"`
+
+	// precompiled by UserPolicy.compile: lower-cased action patterns.
+	actionRunes [][]rune
 }
 
 // Allows reports whether the user may perform action. With no statements it
@@ -181,10 +248,13 @@ func (up *UserPolicy) Allows(action string) bool {
 	if up == nil || len(up.Statements) == 0 {
 		return true
 	}
-	action = strings.ToLower(action)
+	up.compileOnce.Do(up.compile)
+	// Convert the action to runes once; every pattern is matched against it.
+	actionRunes := []rune(strings.ToLower(action))
 	allowed := false
-	for _, st := range up.Statements {
-		if !matchAnyFold(st.Action, action) {
+	for i := range up.Statements {
+		st := &up.Statements[i]
+		if !matchAnyRunes(st.actionRunes, actionRunes) {
 			continue
 		}
 		// Only the two well-known effects have meaning; anything else is
@@ -199,10 +269,21 @@ func (up *UserPolicy) Allows(action string) bool {
 	return allowed
 }
 
+// compile precomputes the rune form of every action pattern so Allows does
+// not reconvert them on each request.
+func (up *UserPolicy) compile() {
+	for i := range up.Statements {
+		up.Statements[i].actionRunes = lowerPatternRunes(up.Statements[i].Action)
+	}
+}
+
 // ValidateUserPolicy checks a user policy's effects and actions.
 func ValidateUserPolicy(up *UserPolicy) error {
 	if up == nil {
 		return nil
+	}
+	if len(up.Statements) > MaxStatements {
+		return fmt.Errorf("policy has %d statements, at most %d are allowed", len(up.Statements), MaxStatements)
 	}
 	for i, st := range up.Statements {
 		if st.Effect != "Allow" && st.Effect != "Deny" {
@@ -210,6 +291,9 @@ func ValidateUserPolicy(up *UserPolicy) error {
 		}
 		if len(st.Action) == 0 {
 			return fmt.Errorf("statement[%d]: at least one action is required", i)
+		}
+		if len(st.Action) > MaxActionsPerStatement {
+			return fmt.Errorf("statement[%d]: %d actions, at most %d are allowed", i, len(st.Action), MaxActionsPerStatement)
 		}
 		for _, a := range st.Action {
 			if err := validateAction(a); err != nil {
@@ -227,16 +311,22 @@ func (p *Policy) Evaluate(principal, action, resource string) Effect {
 	// AWS treats the Action element as case-insensitive; comparing it
 	// case-sensitively would let a mis-cased Deny silently fail open. The
 	// Resource is an object key and stays case-sensitive.
-	action = strings.ToLower(action)
+	p.compileOnce.Do(p.compile)
+	// Convert the action and resource to runes once, up front, rather than
+	// on every Match call: with the same value reused across every statement
+	// and pattern, this is the dominant cost for a large policy or a long key.
+	actionRunes := []rune(strings.ToLower(action))
+	resourceRunes := []rune(resource)
 	result := None
-	for _, st := range p.Statement {
+	for i := range p.Statement {
+		st := &p.Statement[i]
 		if !st.matchPrincipal(principal) {
 			continue
 		}
-		if !matchAnyFold(st.Action, action) {
+		if !matchAnyRunes(st.actionRunes, actionRunes) {
 			continue
 		}
-		if !matchAny(st.Resource, resource) {
+		if !matchAnyRunes(st.resourceRunes, resourceRunes) {
 			continue
 		}
 		if st.Effect == "Deny" {
@@ -247,6 +337,65 @@ func (p *Policy) Evaluate(principal, action, resource string) Effect {
 	return result
 }
 
+// DenyEvaluator answers whether a resource is denied for a principal/action
+// pair that has already been matched. It is built once per request (via
+// DenyEvaluatorFor) so that a per-object operation like DeleteObjects does
+// not re-match principal and action for every key — only the resource, which
+// is the only part that varies per object.
+type DenyEvaluator struct {
+	// resource patterns of every Deny statement whose principal and action
+	// matched; a resource is denied iff it matches any of them.
+	denyResources [][]rune
+}
+
+// DenyEvaluatorFor pre-matches principal and action and returns an evaluator
+// over the resource alone. Only Deny statements matter: bucket-policy Allow
+// statements are inert (the baseline already allows), so a matching Deny is
+// the only thing that can restrict access.
+func (p *Policy) DenyEvaluatorFor(principal, action string) DenyEvaluator {
+	p.compileOnce.Do(p.compile)
+	actionRunes := []rune(strings.ToLower(action))
+	var e DenyEvaluator
+	for i := range p.Statement {
+		st := &p.Statement[i]
+		if st.Effect != "Deny" {
+			continue
+		}
+		if !st.matchPrincipal(principal) {
+			continue
+		}
+		if !matchAnyRunes(st.actionRunes, actionRunes) {
+			continue
+		}
+		e.denyResources = append(e.denyResources, st.resourceRunes...)
+	}
+	return e
+}
+
+// AlwaysAllows reports that no Deny statement matched the principal/action,
+// so every resource is allowed and the per-object check can be skipped.
+func (e DenyEvaluator) AlwaysAllows() bool {
+	return len(e.denyResources) == 0
+}
+
+// Denies reports whether the resource is denied.
+func (e DenyEvaluator) Denies(resource string) bool {
+	if len(e.denyResources) == 0 {
+		return false
+	}
+	return matchAnyRunes(e.denyResources, []rune(resource))
+}
+
+// compile precomputes the rune form of every action and resource pattern so
+// Evaluate does not reconvert them on each request. Action patterns are
+// lower-cased for AWS-style case-insensitive matching.
+func (p *Policy) compile() {
+	for i := range p.Statement {
+		p.Statement[i].actionRunes = lowerPatternRunes(p.Statement[i].Action)
+		p.Statement[i].resourceRunes = patternRunes(p.Statement[i].Resource)
+	}
+}
+
 func (st *Statement) matchPrincipal(principal string) bool {
 	if st.Principal != nil {
 		return st.Principal.All || slices.Contains(st.Principal.Users, principal)
@@ -255,24 +404,34 @@ func (st *Statement) matchPrincipal(principal string) bool {
 	return !slices.Contains(st.NotPrincipal.Users, principal)
 }
 
-func matchAny(patterns []string, value string) bool {
+// matchAnyRunes reports whether value matches any of the precompiled rune
+// patterns.
+func matchAnyRunes(patterns [][]rune, value []rune) bool {
 	for _, p := range patterns {
-		if Match(p, value) {
+		if matchRunes(p, value) {
 			return true
 		}
 	}
 	return false
 }
 
-// matchAnyFold matches value (already lower-cased) against patterns
-// case-insensitively, used for AWS-style case-insensitive actions.
-func matchAnyFold(patterns []string, value string) bool {
-	for _, p := range patterns {
-		if Match(strings.ToLower(p), value) {
-			return true
-		}
+// patternRunes converts patterns to their rune form as-is.
+func patternRunes(patterns []string) [][]rune {
+	out := make([][]rune, len(patterns))
+	for i, p := range patterns {
+		out[i] = []rune(p)
 	}
-	return false
+	return out
+}
+
+// lowerPatternRunes converts patterns to lower-cased rune form, for
+// case-insensitive action matching.
+func lowerPatternRunes(patterns []string) [][]rune {
+	out := make([][]rune, len(patterns))
+	for i, p := range patterns {
+		out[i] = []rune(strings.ToLower(p))
+	}
+	return out
 }
 
 // Match matches value against a pattern where "*" matches any sequence of
@@ -280,8 +439,13 @@ func matchAnyFold(patterns []string, value string) bool {
 // AWS policies. Both wildcards operate on runes, and there is no escaping:
 // a literal "*"/"?" in a key cannot be matched literally, matching AWS.
 func Match(pattern, value string) bool {
-	pat := []rune(pattern)
-	val := []rune(value)
+	return matchRunes([]rune(pattern), []rune(value))
+}
+
+// matchRunes is the rune-based core of Match. Callers that reuse the same
+// value against many patterns convert it once and call this directly, so the
+// value conversion is not repeated per pattern.
+func matchRunes(pat, val []rune) bool {
 	var p, v int
 	// last position where a '*' was seen, and the value index it started at,
 	// so we can backtrack and let the '*' consume one more character

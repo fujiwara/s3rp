@@ -71,6 +71,9 @@ func (s *Store) GetKey(ctx context.Context, accessKeyID string) (*store.Key, err
 		User:            row.UserName,
 	}
 	if row.UserPolicy != "" {
+		if len(row.UserPolicy) > policy.MaxPolicyBytes {
+			return nil, fmt.Errorf("user %s: policy is %d bytes, at most %d are allowed", row.UserName, len(row.UserPolicy), policy.MaxPolicyBytes)
+		}
 		var up policy.UserPolicy
 		if err := json.Unmarshal([]byte(row.UserPolicy), &up); err != nil {
 			return nil, fmt.Errorf("user %s: malformed policy: %w", row.UserName, err)
