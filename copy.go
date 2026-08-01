@@ -56,7 +56,8 @@ func (app *S3RP) resolveCopySource(r *http.Request, vr *verifiedRequest, dst *bu
 	return copySource, nil
 }
 
-func (app *S3RP) copyObject(w http.ResponseWriter, r *http.Request, rt *bucketRT, key string, vr *verifiedRequest) error {
+func (app *S3RP) copyObject(c *opCtx) error {
+	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
 	copySource, s3err := app.resolveCopySource(r, vr, rt)
 	if s3err != nil {
 		return s3err
@@ -122,7 +123,8 @@ func (app *S3RP) copyObject(w http.ResponseWriter, r *http.Request, rt *bucketRT
 	return writeXML(w, result)
 }
 
-func (app *S3RP) uploadPartCopy(w http.ResponseWriter, r *http.Request, rt *bucketRT, key string, vr *verifiedRequest) error {
+func (app *S3RP) uploadPartCopy(c *opCtx) error {
+	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
 	copySource, s3err := app.resolveCopySource(r, vr, rt)
 	if s3err != nil {
 		return s3err

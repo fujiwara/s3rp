@@ -17,7 +17,8 @@ import (
 
 const objectLockTimeFormat = "2006-01-02T15:04:05.000Z"
 
-func (app *S3RP) getObjectLockConfiguration(w http.ResponseWriter, r *http.Request, rt *bucketRT) error {
+func (app *S3RP) getObjectLockConfiguration(c *opCtx) error {
+	w, r, rt := c.w, c.r, c.rt
 	out, err := rt.client.GetObjectLockConfiguration(r.Context(), &s3.GetObjectLockConfigurationInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 	})
@@ -43,7 +44,8 @@ func (app *S3RP) getObjectLockConfiguration(w http.ResponseWriter, r *http.Reque
 	return writeXML(w, result)
 }
 
-func (app *S3RP) putObjectLockConfiguration(w http.ResponseWriter, r *http.Request, rt *bucketRT, vr *verifiedRequest) error {
+func (app *S3RP) putObjectLockConfiguration(c *opCtx) error {
+	w, r, rt, vr := c.w, c.r, c.rt, c.vr
 	var req ObjectLockConfiguration
 	if err := readXMLBody(r, vr, &req); err != nil {
 		return err
@@ -78,7 +80,8 @@ func (app *S3RP) putObjectLockConfiguration(w http.ResponseWriter, r *http.Reque
 	return nil
 }
 
-func (app *S3RP) getObjectRetention(w http.ResponseWriter, r *http.Request, rt *bucketRT, key string) error {
+func (app *S3RP) getObjectRetention(c *opCtx) error {
+	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.GetObjectRetentionInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
@@ -100,7 +103,8 @@ func (app *S3RP) getObjectRetention(w http.ResponseWriter, r *http.Request, rt *
 	return writeXML(w, result)
 }
 
-func (app *S3RP) putObjectRetention(w http.ResponseWriter, r *http.Request, rt *bucketRT, key string, vr *verifiedRequest) error {
+func (app *S3RP) putObjectRetention(c *opCtx) error {
+	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
 	var req ObjectLockRetention
 	if err := readXMLBody(r, vr, &req); err != nil {
 		return err
@@ -133,7 +137,8 @@ func (app *S3RP) putObjectRetention(w http.ResponseWriter, r *http.Request, rt *
 	return nil
 }
 
-func (app *S3RP) getObjectLegalHold(w http.ResponseWriter, r *http.Request, rt *bucketRT, key string) error {
+func (app *S3RP) getObjectLegalHold(c *opCtx) error {
+	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.GetObjectLegalHoldInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
@@ -152,7 +157,8 @@ func (app *S3RP) getObjectLegalHold(w http.ResponseWriter, r *http.Request, rt *
 	return writeXML(w, result)
 }
 
-func (app *S3RP) putObjectLegalHold(w http.ResponseWriter, r *http.Request, rt *bucketRT, key string, vr *verifiedRequest) error {
+func (app *S3RP) putObjectLegalHold(c *opCtx) error {
+	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
 	var req ObjectLockLegalHold
 	if err := readXMLBody(r, vr, &req); err != nil {
 		return err

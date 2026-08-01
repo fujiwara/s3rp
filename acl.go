@@ -47,11 +47,13 @@ func ownerFullControlPolicy(owner string) *AccessControlPolicy {
 	return policy
 }
 
-func (app *S3RP) getBucketACL(w http.ResponseWriter, vr *verifiedRequest) error {
+func (app *S3RP) getBucketACL(c *opCtx) error {
+	w, vr := c.w, c.vr
 	return writeXML(w, ownerFullControlPolicy(vr.Tenant))
 }
 
-func (app *S3RP) getObjectACL(w http.ResponseWriter, r *http.Request, rt *bucketRT, key string, vr *verifiedRequest) error {
+func (app *S3RP) getObjectACL(c *opCtx) error {
+	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
 	// verify the object exists so that a missing key still errors
 	in := &s3.HeadObjectInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),

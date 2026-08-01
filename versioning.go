@@ -11,7 +11,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
-func (app *S3RP) getBucketVersioning(w http.ResponseWriter, r *http.Request, rt *bucketRT) error {
+func (app *S3RP) getBucketVersioning(c *opCtx) error {
+	w, r, rt := c.w, c.r, c.rt
 	in := &s3.GetBucketVersioningInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 	}
@@ -25,7 +26,8 @@ func (app *S3RP) getBucketVersioning(w http.ResponseWriter, r *http.Request, rt 
 	})
 }
 
-func (app *S3RP) putBucketVersioning(w http.ResponseWriter, r *http.Request, rt *bucketRT, vr *verifiedRequest) error {
+func (app *S3RP) putBucketVersioning(c *opCtx) error {
+	w, r, rt, vr := c.w, c.r, c.rt, c.vr
 	body, _, s3err := requestBody(r, vr)
 	if s3err != nil {
 		return s3err
@@ -58,7 +60,8 @@ func (app *S3RP) putBucketVersioning(w http.ResponseWriter, r *http.Request, rt 
 	return nil
 }
 
-func (app *S3RP) listObjectVersions(w http.ResponseWriter, r *http.Request, rt *bucketRT) error {
+func (app *S3RP) listObjectVersions(c *opCtx) error {
+	w, r, rt := c.w, c.r, c.rt
 	query := r.URL.Query()
 	in := &s3.ListObjectVersionsInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),

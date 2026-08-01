@@ -25,7 +25,8 @@ func (app *S3RP) authorize(vr *verifiedRequest, b *store.Bucket, action, resourc
 }
 
 // getBucketPolicy returns the raw bucket policy JSON.
-func (app *S3RP) getBucketPolicy(w http.ResponseWriter, rt *bucketRT) error {
+func (app *S3RP) getBucketPolicy(c *opCtx) error {
+	w, rt := c.w, c.rt
 	if rt.cfg.PolicyText == "" {
 		return newS3Error(http.StatusNotFound, "NoSuchBucketPolicy",
 			"The bucket policy does not exist")

@@ -10,7 +10,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
-func (app *S3RP) getObjectTagging(w http.ResponseWriter, r *http.Request, rt *bucketRT, key string) error {
+func (app *S3RP) getObjectTagging(c *opCtx) error {
+	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.GetObjectTaggingInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
@@ -35,7 +36,8 @@ func (app *S3RP) getObjectTagging(w http.ResponseWriter, r *http.Request, rt *bu
 	return writeXML(w, result)
 }
 
-func (app *S3RP) putObjectTagging(w http.ResponseWriter, r *http.Request, rt *bucketRT, key string, vr *verifiedRequest) error {
+func (app *S3RP) putObjectTagging(c *opCtx) error {
+	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
 	body, _, s3err := requestBody(r, vr)
 	if s3err != nil {
 		return s3err
@@ -75,7 +77,8 @@ func (app *S3RP) putObjectTagging(w http.ResponseWriter, r *http.Request, rt *bu
 	return nil
 }
 
-func (app *S3RP) deleteObjectTagging(w http.ResponseWriter, r *http.Request, rt *bucketRT, key string) error {
+func (app *S3RP) deleteObjectTagging(c *opCtx) error {
+	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.DeleteObjectTaggingInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
