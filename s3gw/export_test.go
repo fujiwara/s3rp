@@ -1,11 +1,13 @@
 package s3gw
 
 import (
+	"context"
 	"io"
 	"net/http"
 
 	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/sigv4"
+	"github.com/fujiwara/s3rp/store"
 )
 
 var RedactQuery = redactQuery
@@ -25,3 +27,13 @@ func (g *Gateway) VerifyRequest(r *http.Request) (*VerifiedRequest, *s3err.Error
 	}
 	return vr.Verified, nil
 }
+
+func (g *Gateway) SetNewClient(f func(ctx context.Context, b *store.Backend) (BackendClient, error)) {
+	g.newClient = f
+}
+
+func (g *Gateway) BackendClientFor(ctx context.Context, b *store.Backend) (BackendClient, error) {
+	return g.backendClient(ctx, b)
+}
+
+func (g *Gateway) ClientCacheLen() int { return g.clients.Len() }
