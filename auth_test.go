@@ -225,20 +225,20 @@ func TestVerifyRequest(t *testing.T) {
 			} else {
 				app.SetNow(func() time.Time { return now })
 			}
-			vr, s3err := app.VerifyRequest(tc.request(t))
+			vr, s3e := app.VerifyRequest(tc.request(t))
 			if tc.wantCode == "" {
-				if s3err != nil {
-					t.Fatalf("expect success, got %v", s3err)
+				if s3e != nil {
+					t.Fatalf("expect success, got %v", s3e)
 				}
 				if vr.AccessKeyID != testAccessKeyID {
 					t.Errorf("expect access key %s, got %s", testAccessKeyID, vr.AccessKeyID)
 				}
 			} else {
-				if s3err == nil {
+				if s3e == nil {
 					t.Fatal("expect error, got success")
 				}
-				if s3err.Code != tc.wantCode {
-					t.Errorf("expect code %s, got %s (%s)", tc.wantCode, s3err.Code, s3err.Message)
+				if s3e.Code != tc.wantCode {
+					t.Errorf("expect code %s, got %s (%s)", tc.wantCode, s3e.Code, s3e.Message)
 				}
 			}
 		})

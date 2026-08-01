@@ -2,6 +2,7 @@ package s3rp
 
 import (
 	"errors"
+	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/s3xml"
 	"net/http"
 
@@ -21,7 +22,7 @@ func (app *S3RP) handlePreflight(w http.ResponseWriter, r *http.Request) error {
 	origin := r.Header.Get("Origin")
 	method := r.Header.Get("Access-Control-Request-Method")
 	if origin == "" || method == "" {
-		return newS3Error(http.StatusBadRequest, "BadRequest",
+		return s3err.New(http.StatusBadRequest, "BadRequest",
 			"Insufficient information. Origin request header needed.")
 	}
 	bucket, _, err := splitPath(r.URL.EscapedPath())
@@ -33,7 +34,7 @@ func (app *S3RP) handlePreflight(w http.ResponseWriter, r *http.Request) error {
 		if errors.Is(err, store.ErrNotFound) {
 			return corsNotAllowed()
 		}
-		return newS3Error(http.StatusInternalServerError, "InternalError", "bucket lookup failed")
+		return s3err.New(http.StatusInternalServerError, "InternalError", "bucket lookup failed")
 	}
 	if !cors.AllowPreflight(w, r, b.CORS) {
 		return corsNotAllowed()
@@ -41,8 +42,8 @@ func (app *S3RP) handlePreflight(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func corsNotAllowed() *S3Error {
-	return newS3Error(http.StatusForbidden, "AccessForbidden",
+func corsNotAllowed() *s3err.Error {
+	return s3err.New(http.StatusForbidden, "AccessForbidden",
 		"CORSResponse: This CORS request is not allowed.")
 }
 
@@ -50,7 +51,7 @@ func corsNotAllowed() *S3Error {
 func (app *S3RP) getBucketCors(c *opCtx) error {
 	w, rt := c.w, c.rt
 	if len(rt.cfg.CORS) == 0 {
-		return newS3Error(http.StatusNotFound, "NoSuchCORSConfiguration",
+		return s3err.New(http.StatusNotFound, "NoSuchCORSConfiguration",
 			"The CORS configuration does not exist")
 	}
 	result := &s3xml.CORSConfiguration{XMLNS: s3xml.Namespace}

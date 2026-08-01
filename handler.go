@@ -3,6 +3,7 @@ package s3rp
 import (
 	"errors"
 	"github.com/fujiwara/s3rp/cors"
+	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/store"
 	"log/slog"
 	"net/http"
@@ -51,18 +52,18 @@ func (w *statusWriter) WriteHeader(status int) {
 func (app *S3RP) wrapHandler(h handlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		requestID := newRequestID()
+		requestID := s3err.NewRequestID()
 		w.Header().Set("x-amz-request-id", requestID)
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		err := h(sw, r)
 		if err != nil {
-			var s3err *S3Error
-			if !errors.As(err, &s3err) {
+			var s3e *s3err.Error
+			if !errors.As(err, &s3e) {
 				slog.ErrorContext(r.Context(), "internal error", "error", err, "request_id", requestID)
-				s3err = newS3Error(http.StatusInternalServerError, "InternalError",
+				s3e = s3err.New(http.StatusInternalServerError, "InternalError",
 					"We encountered an internal error. Please try again.")
 			}
-			writeS3Error(sw, r, s3err, requestID)
+			s3err.Write(sw, r, s3e, requestID)
 		}
 		slog.InfoContext(r.Context(), "request",
 			"remote", r.RemoteAddr,
@@ -109,18 +110,18 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	if r.Method == http.MethodOptions {
 		return app.handlePreflight(w, r)
 	}
-	vr, s3err := app.verifyRequest(r)
-	if s3err != nil {
-		return s3err
+	vr, s3e := app.verifyRequest(r)
+	if s3e != nil {
+		return s3e
 	}
 	bucket, key, err := splitPath(r.URL.EscapedPath())
 	if err != nil {
-		return newS3Error(http.StatusBadRequest, "InvalidURI", "Couldn't parse the specified URI.")
+		return s3err.New(http.StatusBadRequest, "InvalidURI", "Couldn't parse the specified URI.")
 	}
 
 	if bucket == "" {
 		if r.Method != http.MethodGet {
-			return newS3Error(http.StatusMethodNotAllowed, "MethodNotAllowed",
+			return s3err.New(http.StatusMethodNotAllowed, "MethodNotAllowed",
 				"The specified method is not allowed against this resource.")
 		}
 		return app.listBuckets(w, r, vr)
@@ -129,15 +130,15 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	b, err := app.store.GetBucket(r.Context(), vr.Tenant, bucket)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return errAccessDenied()
+			return s3err.AccessDenied()
 		}
 		slog.ErrorContext(r.Context(), "failed to look up bucket", "error", err)
-		return newS3Error(http.StatusInternalServerError, "InternalError", "bucket lookup failed")
+		return s3err.New(http.StatusInternalServerError, "InternalError", "bucket lookup failed")
 	}
 	client, err := app.backendClient(r.Context(), b.Backend)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to build backend client", "error", err)
-		return newS3Error(http.StatusInternalServerError, "InternalError", "backend client failed")
+		return s3err.New(http.StatusInternalServerError, "InternalError", "backend client failed")
 	}
 	rt := &bucketRT{cfg: b, client: client}
 	cors.SetHeaders(w, r, b.CORS)
@@ -163,7 +164,7 @@ type opCtx struct {
 
 // authorize evaluates the bucket policy for the operation's resource
 // (the bucket, or bucket/key for object operations).
-func (c *opCtx) authorize(action string) *S3Error {
+func (c *opCtx) authorize(action string) *s3err.Error {
 	resource := c.rt.cfg.Name
 	if c.key != "" {
 		resource += "/" + c.key
@@ -213,13 +214,13 @@ func (c *opCtx) dispatch(routes []route) error {
 		}
 		return rt.handle(c.app, c)
 	}
-	return errNotImplemented("this operation")
+	return s3err.NotImplemented("this operation")
 }
 
 func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt *bucketRT, vr *verifiedRequest, query url.Values) error {
 	routes, ok := bucketRoutes[r.Method]
 	if !ok {
-		return errNotImplemented("this bucket operation")
+		return s3err.NotImplemented("this bucket operation")
 	}
 	return (&opCtx{app: app, w: w, r: r, rt: rt, vr: vr, query: query}).dispatch(routes)
 }
@@ -227,7 +228,7 @@ func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt 
 func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt *bucketRT, vr *verifiedRequest, query url.Values, key string) error {
 	routes, ok := objectRoutes[r.Method]
 	if !ok {
-		return newS3Error(http.StatusMethodNotAllowed, "MethodNotAllowed",
+		return s3err.New(http.StatusMethodNotAllowed, "MethodNotAllowed",
 			"The specified method is not allowed against this resource.")
 	}
 	return (&opCtx{app: app, w: w, r: r, rt: rt, vr: vr, query: query, key: key}).dispatch(routes)
@@ -244,7 +245,7 @@ func hasUploadPart(q url.Values) bool { return q.Has(qpUploadID) || q.Has(qpPart
 // notImplemented returns a route whose handler always fails with the given
 // NotImplemented message (used for operations defined only in the store).
 func notImplemented(match func(url.Values) bool, what string) route {
-	return route{match: match, handle: func(*S3RP, *opCtx) error { return errNotImplemented(what) }}
+	return route{match: match, handle: func(*S3RP, *opCtx) error { return s3err.NotImplemented(what) }}
 }
 
 func rejectACL(*S3RP, *opCtx) error { return errACLNotSupported() }
@@ -350,7 +351,7 @@ func newParamSet(names ...string) paramSet {
 // the set. Unknown subresources are rejected loudly (501) rather than
 // silently ignored, so that clients using unsupported operations fail
 // clearly.
-func (p paramSet) check(query url.Values) *S3Error {
+func (p paramSet) check(query url.Values) *s3err.Error {
 	for k := range query {
 		if k == "x-id" {
 			// an aws-sdk internal operation hint, not a subresource
@@ -361,7 +362,7 @@ func (p paramSet) check(query url.Values) *S3Error {
 			continue
 		}
 		if !p[k] {
-			return errNotImplemented("query parameter " + k)
+			return s3err.NotImplemented("query parameter " + k)
 		}
 	}
 	return nil

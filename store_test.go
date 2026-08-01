@@ -3,6 +3,7 @@ package s3rp_test
 import (
 	"database/sql"
 	"errors"
+	"github.com/fujiwara/s3rp/cors"
 	"sort"
 	"strings"
 	"testing"
@@ -169,7 +170,7 @@ func TestRDBStoreReadOnly(t *testing.T) {
 func TestRDBStorePolicyAndCORS(t *testing.T) {
 	cfg := loadTestConfig(t)
 	cfg.Tenants[0].Buckets[0].Policy = batchReadOnlyPolicyFor("photos")
-	cfg.Tenants[0].Buckets[0].CORS = []*store.CORSRule{
+	cfg.Tenants[0].Buckets[0].CORS = []*cors.Rule{
 		{
 			AllowedOrigins: []string{"https://app.example.com"},
 			AllowedMethods: []string{"GET"},

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/xml"
 	"github.com/fujiwara/s3rp/checksum"
+	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/s3xml"
 	"github.com/fujiwara/s3rp/sigv4"
 	"hash"
@@ -61,7 +62,7 @@ func (app *S3RP) getObject(c *opCtx) error {
 	}
 	out, err := rt.client.GetObject(r.Context(), in)
 	if err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	defer out.Body.Close()
 
@@ -125,7 +126,7 @@ func (app *S3RP) headObject(c *opCtx) error {
 	}
 	out, err := rt.client.HeadObject(r.Context(), in)
 	if err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	setObjectHeaders(w.Header(), objectHeaderValues{
 		ContentType:        out.ContentType,
@@ -162,9 +163,9 @@ func (app *S3RP) putObject(c *opCtx) error {
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
 	}
-	body, length, s3err := requestBody(r, vr)
-	if s3err != nil {
-		return s3err
+	body, length, s3e := requestBody(r, vr)
+	if s3e != nil {
+		return s3e
 	}
 	in.Body = body
 	in.ContentLength = aws.Int64(length)
@@ -218,7 +219,7 @@ func (app *S3RP) putObject(c *opCtx) error {
 
 	out, err := rt.client.PutObject(r.Context(), in)
 	if err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	if out.ETag != nil {
 		w.Header().Set("ETag", *out.ETag)
@@ -251,7 +252,7 @@ func (app *S3RP) deleteObject(c *opCtx) error {
 	}
 	out, err := rt.client.DeleteObject(r.Context(), in)
 	if err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	if out.VersionId != nil {
 		w.Header().Set("x-amz-version-id", *out.VersionId)
@@ -278,7 +279,7 @@ func (app *S3RP) listObjectsV2(c *opCtx) error {
 	if v := query.Get("max-keys"); v != "" {
 		maxKeys, err := strconv.ParseInt(v, 10, 32)
 		if err != nil {
-			return newS3Error(http.StatusBadRequest, "InvalidArgument",
+			return s3err.New(http.StatusBadRequest, "InvalidArgument",
 				"Argument max-keys must be an integer.")
 		}
 		in.MaxKeys = aws.Int32(int32(maxKeys))
@@ -297,7 +298,7 @@ func (app *S3RP) listObjectsV2(c *opCtx) error {
 	}
 	out, err := rt.client.ListObjectsV2(r.Context(), in)
 	if err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	result := &s3xml.ListBucketResult{
 		XMLNS: s3xml.Namespace,
@@ -389,7 +390,7 @@ func (app *S3RP) listObjectsV1(c *opCtx) error {
 	if v := query.Get("max-keys"); v != "" {
 		maxKeys, err := strconv.ParseInt(v, 10, 32)
 		if err != nil {
-			return newS3Error(http.StatusBadRequest, "InvalidArgument",
+			return s3err.New(http.StatusBadRequest, "InvalidArgument",
 				"Argument max-keys must be an integer.")
 		}
 		in.MaxKeys = aws.Int32(int32(maxKeys))
@@ -399,7 +400,7 @@ func (app *S3RP) listObjectsV1(c *opCtx) error {
 	}
 	out, err := rt.client.ListObjects(r.Context(), in)
 	if err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	result := &s3xml.ListBucketResultV1{
 		XMLNS: s3xml.Namespace,
@@ -448,21 +449,21 @@ func (app *S3RP) getBucketLocation(c *opCtx) error {
 
 func (app *S3RP) deleteObjects(c *opCtx) error {
 	w, r, rt, vr := c.w, c.r, c.rt, c.vr
-	body, _, s3err := requestBody(r, vr)
-	if s3err != nil {
-		return s3err
+	body, _, s3e := requestBody(r, vr)
+	if s3e != nil {
+		return s3e
 	}
 	data, err := io.ReadAll(io.LimitReader(body, maxXMLBodySize))
 	if err != nil {
-		return newS3Error(http.StatusBadRequest, "InvalidRequest", "failed to read request body")
+		return s3err.New(http.StatusBadRequest, "InvalidRequest", "failed to read request body")
 	}
 	var req s3xml.DeleteRequest
 	if err := xml.Unmarshal(data, &req); err != nil {
-		return newS3Error(http.StatusBadRequest, "MalformedXML",
+		return s3err.New(http.StatusBadRequest, "MalformedXML",
 			"The XML you provided was not well-formed or did not validate against our published schema.")
 	}
 	if len(req.Objects) == 0 || len(req.Objects) > 1000 {
-		return newS3Error(http.StatusBadRequest, "MalformedXML",
+		return s3err.New(http.StatusBadRequest, "MalformedXML",
 			"The XML you provided was not well-formed or did not validate against our published schema.")
 	}
 	// the policy is evaluated per object, like AWS: denied keys are reported
@@ -485,9 +486,9 @@ func (app *S3RP) deleteObjects(c *opCtx) error {
 		if checkPerObject {
 			resource := rt.cfg.Name + "/" + o.Key
 			if delAuth.denies(resource) || (bypass && bypassAuth.denies(resource)) {
-				s3err := errAccessDenied()
+				s3e := s3err.AccessDenied()
 				result.Errors = append(result.Errors, s3xml.DeleteError{
-					Key: o.Key, VersionID: o.VersionID, Code: s3err.Code, Message: s3err.Message,
+					Key: o.Key, VersionID: o.VersionID, Code: s3e.Code, Message: s3e.Message,
 				})
 				continue
 			}
@@ -513,7 +514,7 @@ func (app *S3RP) deleteObjects(c *opCtx) error {
 	}
 	out, err := rt.client.DeleteObjects(r.Context(), in)
 	if err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	for _, d := range out.Deleted {
 		deleted := s3xml.DeletedObject{}
@@ -556,7 +557,7 @@ func (app *S3RP) headBucket(c *opCtx) error {
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 	}
 	if _, err := rt.client.HeadBucket(r.Context(), in); err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	w.WriteHeader(http.StatusOK)
 	return nil
@@ -566,7 +567,7 @@ func (app *S3RP) listBuckets(w http.ResponseWriter, r *http.Request, vr *verifie
 	names, err := app.store.ListBucketNames(r.Context(), vr.Tenant)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to list buckets", "error", err)
-		return newS3Error(http.StatusInternalServerError, "InternalError", "bucket lookup failed")
+		return s3err.New(http.StatusInternalServerError, "InternalError", "bucket lookup failed")
 	}
 	sort.Strings(names)
 	result := &s3xml.ListAllMyBucketsResult{
@@ -585,23 +586,23 @@ func (app *S3RP) listBuckets(w http.ResponseWriter, r *http.Request, vr *verifie
 
 // requestBody returns the payload reader and its decoded length,
 // decoding aws-chunked framing when the request declares it.
-func requestBody(r *http.Request, vr *verifiedRequest) (io.Reader, int64, *S3Error) {
+func requestBody(r *http.Request, vr *verifiedRequest) (io.Reader, int64, *s3err.Error) {
 	switch {
 	case sigv4.IsStreaming(vr.PayloadHash):
 		decodedLength := r.Header.Get("x-amz-decoded-content-length")
 		if decodedLength == "" {
-			return nil, 0, newS3Error(http.StatusLengthRequired, "MissingContentLength",
+			return nil, 0, s3err.New(http.StatusLengthRequired, "MissingContentLength",
 				"You must provide the x-amz-decoded-content-length HTTP header.")
 		}
 		length, err := strconv.ParseInt(decodedLength, 10, 64)
 		if err != nil || length < 0 {
-			return nil, 0, newS3Error(http.StatusBadRequest, "InvalidRequest",
+			return nil, 0, s3err.New(http.StatusBadRequest, "InvalidRequest",
 				"Invalid x-amz-decoded-content-length header")
 		}
 		return sigv4.NewChunkedReader(r.Body, vr.Verified, checksum.TrailerAlgorithm(r.Header)), length, nil
 	default:
 		if r.ContentLength < 0 {
-			return nil, 0, newS3Error(http.StatusLengthRequired, "MissingContentLength",
+			return nil, 0, s3err.New(http.StatusLengthRequired, "MissingContentLength",
 				"You must provide the Content-Length HTTP header.")
 		}
 		// When the client signed a concrete payload hash (not UNSIGNED-PAYLOAD),
@@ -659,7 +660,7 @@ func (v *payloadVerifier) Read(p []byte) (int, error) {
 		v.done = true
 		got := hex.EncodeToString(v.h.Sum(nil))
 		if subtle.ConstantTimeCompare([]byte(got), []byte(v.want)) != 1 {
-			return 0, errContentSHA256Mismatch()
+			return 0, s3err.ContentSHA256Mismatch()
 		}
 	}
 	return n, err

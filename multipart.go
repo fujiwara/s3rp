@@ -3,6 +3,7 @@ package s3rp
 import (
 	"encoding/xml"
 	"github.com/fujiwara/s3rp/checksum"
+	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/s3xml"
 	"io"
 	"net/http"
@@ -63,7 +64,7 @@ func (app *S3RP) createMultipartUpload(c *opCtx) error {
 	}
 	out, err := rt.client.CreateMultipartUpload(r.Context(), in)
 	if err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	if out.ChecksumAlgorithm != "" {
 		w.Header().Set("x-amz-checksum-algorithm", string(out.ChecksumAlgorithm))
@@ -84,7 +85,7 @@ func (app *S3RP) uploadPart(c *opCtx) error {
 	query := r.URL.Query()
 	partNumber, err := strconv.ParseInt(query.Get("partNumber"), 10, 32)
 	if err != nil {
-		return newS3Error(http.StatusBadRequest, "InvalidArgument",
+		return s3err.New(http.StatusBadRequest, "InvalidArgument",
 			"Argument partNumber must be an integer.")
 	}
 	in := &s3.UploadPartInput{
@@ -93,9 +94,9 @@ func (app *S3RP) uploadPart(c *opCtx) error {
 		UploadId:   aws.String(query.Get("uploadId")),
 		PartNumber: aws.Int32(int32(partNumber)),
 	}
-	body, length, s3err := requestBody(r, vr)
-	if s3err != nil {
-		return s3err
+	body, length, s3e := requestBody(r, vr)
+	if s3e != nil {
+		return s3e
 	}
 	in.Body = body
 	in.ContentLength = aws.Int64(length)
@@ -113,7 +114,7 @@ func (app *S3RP) uploadPart(c *opCtx) error {
 	}
 	out, err := rt.client.UploadPart(r.Context(), in)
 	if err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	if out.ETag != nil {
 		w.Header().Set("ETag", *out.ETag)
@@ -131,21 +132,21 @@ func (app *S3RP) uploadPart(c *opCtx) error {
 
 func (app *S3RP) completeMultipartUpload(c *opCtx) error {
 	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
-	body, _, s3err := requestBody(r, vr)
-	if s3err != nil {
-		return s3err
+	body, _, s3e := requestBody(r, vr)
+	if s3e != nil {
+		return s3e
 	}
 	data, err := io.ReadAll(io.LimitReader(body, maxXMLBodySize))
 	if err != nil {
-		return newS3Error(http.StatusBadRequest, "InvalidRequest", "failed to read request body")
+		return s3err.New(http.StatusBadRequest, "InvalidRequest", "failed to read request body")
 	}
 	var req s3xml.CompleteMultipartUploadRequest
 	if err := xml.Unmarshal(data, &req); err != nil {
-		return newS3Error(http.StatusBadRequest, "MalformedXML",
+		return s3err.New(http.StatusBadRequest, "MalformedXML",
 			"The XML you provided was not well-formed or did not validate against our published schema.")
 	}
 	if len(req.Parts) == 0 {
-		return newS3Error(http.StatusBadRequest, "InvalidRequest",
+		return s3err.New(http.StatusBadRequest, "InvalidRequest",
 			"You must specify at least one part")
 	}
 	parts := make([]types.CompletedPart, 0, len(req.Parts))
@@ -188,7 +189,7 @@ func (app *S3RP) completeMultipartUpload(c *opCtx) error {
 	}
 	out, err := rt.client.CompleteMultipartUpload(r.Context(), in)
 	if err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	scheme := "http"
 	if r.TLS != nil {
@@ -225,7 +226,7 @@ func (app *S3RP) abortMultipartUpload(c *opCtx) error {
 		UploadId: aws.String(r.URL.Query().Get("uploadId")),
 	}
 	if _, err := rt.client.AbortMultipartUpload(r.Context(), in); err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	w.WriteHeader(http.StatusNoContent)
 	return nil
@@ -242,7 +243,7 @@ func (app *S3RP) listParts(c *opCtx) error {
 	if v := query.Get("max-parts"); v != "" {
 		maxParts, err := strconv.ParseInt(v, 10, 32)
 		if err != nil {
-			return newS3Error(http.StatusBadRequest, "InvalidArgument",
+			return s3err.New(http.StatusBadRequest, "InvalidArgument",
 				"Argument max-parts must be an integer.")
 		}
 		in.MaxParts = aws.Int32(int32(maxParts))
@@ -252,7 +253,7 @@ func (app *S3RP) listParts(c *opCtx) error {
 	}
 	out, err := rt.client.ListParts(r.Context(), in)
 	if err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	result := &s3xml.ListPartsResult{
 		XMLNS:        s3xml.Namespace,
@@ -313,7 +314,7 @@ func (app *S3RP) listMultipartUploads(c *opCtx) error {
 	if v := query.Get("max-uploads"); v != "" {
 		maxUploads, err := strconv.ParseInt(v, 10, 32)
 		if err != nil {
-			return newS3Error(http.StatusBadRequest, "InvalidArgument",
+			return s3err.New(http.StatusBadRequest, "InvalidArgument",
 				"Argument max-uploads must be an integer.")
 		}
 		in.MaxUploads = aws.Int32(int32(maxUploads))
@@ -323,7 +324,7 @@ func (app *S3RP) listMultipartUploads(c *opCtx) error {
 	}
 	out, err := rt.client.ListMultipartUploads(r.Context(), in)
 	if err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	result := &s3xml.ListMultipartUploadsResult{
 		XMLNS:  s3xml.Namespace,

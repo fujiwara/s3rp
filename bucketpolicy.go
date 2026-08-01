@@ -1,6 +1,7 @@
 package s3rp
 
 import (
+	"github.com/fujiwara/s3rp/s3err"
 	"net/http"
 
 	"github.com/fujiwara/s3rp/policy"
@@ -14,14 +15,14 @@ import (
 // tenant's buckets; an explicit Deny in the bucket policy restricts it.
 // Allow statements are accepted but have no effect yet — they will become
 // meaningful with anonymous and cross-tenant access.
-func (app *S3RP) authorize(vr *verifiedRequest, b *store.Bucket, action, resource string) *S3Error {
+func (app *S3RP) authorize(vr *verifiedRequest, b *store.Bucket, action, resource string) *s3err.Error {
 	// the user's identity policy gates the action first (default allow all);
 	// then the bucket policy may add a resource-specific Deny.
 	if !vr.UserPolicy.Allows(action) {
-		return errAccessDenied()
+		return s3err.AccessDenied()
 	}
 	if b.Policy != nil && b.Policy.Evaluate(vr.User, action, resource) == policy.Deny {
-		return errAccessDenied()
+		return s3err.AccessDenied()
 	}
 	return nil
 }
@@ -64,7 +65,7 @@ func (a perObjectAuthorizer) allowsEverything() bool {
 func (app *S3RP) getBucketPolicy(c *opCtx) error {
 	w, rt := c.w, c.rt
 	if rt.cfg.PolicyText == "" {
-		return newS3Error(http.StatusNotFound, "NoSuchBucketPolicy",
+		return s3err.New(http.StatusNotFound, "NoSuchBucketPolicy",
 			"The bucket policy does not exist")
 	}
 	w.Header().Set("Content-Type", "application/json")

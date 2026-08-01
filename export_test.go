@@ -2,6 +2,7 @@ package s3rp
 
 import (
 	"context"
+	"github.com/fujiwara/s3rp/s3err"
 	"io"
 	"net/http"
 	"time"
@@ -9,12 +10,7 @@ import (
 	"github.com/fujiwara/s3rp/sigv4"
 )
 
-var (
-	FromSDKError = fromSDKError
-	NewS3Error   = newS3Error
-	WriteS3Error = writeS3Error
-	RedactQuery  = redactQuery
-)
+var RedactQuery = redactQuery
 
 func NewPayloadVerifier(r io.Reader, want string, length int64) io.Reader {
 	return newPayloadVerifier(r, want, length)
@@ -24,7 +20,7 @@ func NewPayloadVerifier(r io.Reader, want string, length int64) io.Reader {
 // this service attaches to it is not needed by the tests that build one.
 type VerifiedRequest = sigv4.Verified
 
-func (app *S3RP) VerifyRequest(r *http.Request) (*VerifiedRequest, *S3Error) {
+func (app *S3RP) VerifyRequest(r *http.Request) (*VerifiedRequest, *s3err.Error) {
 	vr, err := app.verifyRequest(r)
 	if err != nil {
 		return nil, err

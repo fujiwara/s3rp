@@ -9,6 +9,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"github.com/fujiwara/s3rp/cors"
 	"strings"
 
 	"github.com/fujiwara/s3rp"
@@ -118,7 +119,7 @@ func marshalBackend(b *store.Backend) (string, error) {
 	return string(data), err
 }
 
-func marshalCORS(rules []*store.CORSRule) (string, error) {
+func marshalCORS(rules []*cors.Rule) (string, error) {
 	if len(rules) == 0 {
 		return "", nil
 	}

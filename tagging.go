@@ -2,6 +2,7 @@ package s3rp
 
 import (
 	"encoding/xml"
+	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/s3xml"
 	"io"
 	"net/http"
@@ -22,7 +23,7 @@ func (app *S3RP) getObjectTagging(c *opCtx) error {
 	}
 	out, err := rt.client.GetObjectTagging(r.Context(), in)
 	if err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	if out.VersionId != nil {
 		w.Header().Set("x-amz-version-id", *out.VersionId)
@@ -39,17 +40,17 @@ func (app *S3RP) getObjectTagging(c *opCtx) error {
 
 func (app *S3RP) putObjectTagging(c *opCtx) error {
 	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
-	body, _, s3err := requestBody(r, vr)
-	if s3err != nil {
-		return s3err
+	body, _, s3e := requestBody(r, vr)
+	if s3e != nil {
+		return s3e
 	}
 	data, err := io.ReadAll(io.LimitReader(body, maxXMLBodySize))
 	if err != nil {
-		return newS3Error(http.StatusBadRequest, "InvalidRequest", "failed to read request body")
+		return s3err.New(http.StatusBadRequest, "InvalidRequest", "failed to read request body")
 	}
 	var req s3xml.Tagging
 	if err := xml.Unmarshal(data, &req); err != nil {
-		return newS3Error(http.StatusBadRequest, "MalformedXML",
+		return s3err.New(http.StatusBadRequest, "MalformedXML",
 			"The XML you provided was not well-formed or did not validate against our published schema.")
 	}
 	tags := make([]types.Tag, 0, len(req.TagSet.Tags))
@@ -69,7 +70,7 @@ func (app *S3RP) putObjectTagging(c *opCtx) error {
 	}
 	out, err := rt.client.PutObjectTagging(r.Context(), in)
 	if err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	if out.VersionId != nil {
 		w.Header().Set("x-amz-version-id", *out.VersionId)
@@ -89,7 +90,7 @@ func (app *S3RP) deleteObjectTagging(c *opCtx) error {
 	}
 	out, err := rt.client.DeleteObjectTagging(r.Context(), in)
 	if err != nil {
-		return fromSDKError(err, r.URL.Path)
+		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	if out.VersionId != nil {
 		w.Header().Set("x-amz-version-id", *out.VersionId)

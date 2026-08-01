@@ -2,6 +2,7 @@ package s3rp
 
 import (
 	"fmt"
+	"github.com/fujiwara/s3rp/cors"
 	"net/url"
 	"os"
 	"regexp"
@@ -67,10 +68,10 @@ type UserConfig struct {
 }
 
 type BucketConfig struct {
-	Name    string            `yaml:"name" json:"name"`
-	Backend *BackendConfig    `yaml:"backend" json:"backend"`
-	Policy  string            `yaml:"policy,omitempty" json:"policy,omitempty"` // bucket policy JSON text
-	CORS    []*store.CORSRule `yaml:"cors,omitempty" json:"cors,omitempty"`
+	Name    string         `yaml:"name" json:"name"`
+	Backend *BackendConfig `yaml:"backend" json:"backend"`
+	Policy  string         `yaml:"policy,omitempty" json:"policy,omitempty"` // bucket policy JSON text
+	CORS    []*cors.Rule   `yaml:"cors,omitempty" json:"cors,omitempty"`
 }
 
 type KeyConfig struct {
