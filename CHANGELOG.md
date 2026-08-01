@@ -1,5 +1,32 @@
 # Changelog
 
+## [v0.0.2](https://github.com/fujiwara/s3rp/compare/v0.0.1...v0.0.2) - 2026-08-01
+
+- Lead the README with the design rationale by @fujiwara in https://github.com/fujiwara/s3rp/pull/25
+- Add Object Lock support by @fujiwara in https://github.com/fujiwara/s3rp/pull/27
+- Name subresource query keys as constants by @fujiwara in https://github.com/fujiwara/s3rp/pull/28
+- Make request dispatch table-driven by @fujiwara in https://github.com/fujiwara/s3rp/pull/29
+- Match policy actions case-insensitively by @fujiwara in https://github.com/fujiwara/s3rp/pull/30
+- Broaden policy and presigned-URL test coverage by @fujiwara in https://github.com/fujiwara/s3rp/pull/31
+- Support the "?" single-character wildcard in policies by @fujiwara in https://github.com/fujiwara/s3rp/pull/32
+- Add per-user operation policies by @fujiwara in https://github.com/fujiwara/s3rp/pull/33
+- Bound and optimize policy authorization by @fujiwara in https://github.com/fujiwara/s3rp/pull/34
+- Address codex review: integrity, isolation, and hardening fixes by @fujiwara in https://github.com/fujiwara/s3rp/pull/35
+- Follow-up review fixes: hot-path cost, unused skip, fail-open hash check by @fujiwara in https://github.com/fujiwara/s3rp/pull/36
+- Resolve optional backend fields in every store by @fujiwara in https://github.com/fujiwara/s3rp/pull/38
+- Give each access key its own SigV4 signer by @fujiwara in https://github.com/fujiwara/s3rp/pull/37
+- Extract checksum/ and s3err/ as reusable packages by @fujiwara in https://github.com/fujiwara/s3rp/pull/39
+- Extract SigV4 verification into sigv4/ by @fujiwara in https://github.com/fujiwara/s3rp/pull/40
+- Extract CORS evaluation into cors/, and fix allowed_headers wildcards by @fujiwara in https://github.com/fujiwara/s3rp/pull/41
+- Extract the S3 XML wire types into s3xml/ by @fujiwara in https://github.com/fujiwara/s3rp/pull/42
+- Reference the extracted packages directly instead of aliasing by @fujiwara in https://github.com/fujiwara/s3rp/pull/43
+- Keep the cause of a failure for the log by @fujiwara in https://github.com/fujiwara/s3rp/pull/44
+- Let a service intervene in each operation by @fujiwara in https://github.com/fujiwara/s3rp/pull/45
+- Move the S3 API into s3gw/ by @fujiwara in https://github.com/fujiwara/s3rp/pull/46
+- Document building a service on the gateway by @fujiwara in https://github.com/fujiwara/s3rp/pull/47
+- Report requests to an observer instead of logging them by @fujiwara in https://github.com/fujiwara/s3rp/pull/48
+- Document what a TLS terminator in front must not do by @fujiwara in https://github.com/fujiwara/s3rp/pull/49
+
 ## [v0.0.1](https://github.com/fujiwara/s3rp/commits/v0.0.1) - 2026-07-31
 
 - Make backend endpoint and credentials optional by @fujiwara in https://github.com/fujiwara/s3rp/pull/5
