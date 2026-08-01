@@ -67,6 +67,7 @@ Two settings are load-bearing for non-AWS backends; removing either breaks PutOb
   - Ceph RGW (`ceph` profile, heavyweight): `docker compose up -d --wait ceph`, endpoint `http://127.0.0.1:7480`. **Use 127.0.0.1, never localhost** — RGW resolves Host names not matching `rgw dns name` as virtual-hosted bucket names. Keep the image on a non-EOL Ceph release (currently Squid; Reef is EOL).
   - **Never use MinIO** — its OSS edition is effectively unmaintained.
 - CI runs unit tests (go 1.25/1.26, `-race`) and the integration suite as a backend matrix (versitygw / ceph, `fail-fast: false`).
+- Policy evaluation is on the hot path of every request (per object for DeleteObjects), so it is performance-sensitive. `policy/bench_test.go` measures the worst case the caps allow (adversarial patterns, `BenchmarkEvaluate` / `BenchmarkAllows` / `BenchmarkDeleteObjects`). When changing anything under `policy/` or the authorization path (`bucketpolicy.go`, the DeleteObjects loop), **always run `go test ./policy -bench . -benchmem` and confirm no unintended regression** (watch both ns/op and allocs/op — an alloc jump usually means the pattern precompilation or the DeleteObjects de-amplification was defeated).
 
 ## Conventions
 
