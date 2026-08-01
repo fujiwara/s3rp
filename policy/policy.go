@@ -38,6 +38,13 @@ var userNameRegexp = regexp.MustCompile(`^[a-z][a-z0-9_-]+$`)
 // authorization's work bounded to a small constant. They are far larger
 // than any real policy needs and are checked at parse/validate time.
 const (
+	// MaxPolicyBytes caps the raw size of a policy document, checked before
+	// parsing so an oversized document is rejected without being unmarshaled
+	// into memory. Matches the AWS bucket-policy size limit (20 KB).
+	MaxPolicyBytes = 20 * 1024
+	// MaxPrincipalUsers caps the user names in one statement's Principal or
+	// NotPrincipal, bounding the per-statement principal-match cost.
+	MaxPrincipalUsers = 100
 	// MaxStatements caps the statements in one policy document.
 	MaxStatements = 20
 	// MaxActionsPerStatement caps the Action entries in one statement.
@@ -126,6 +133,9 @@ func (s *StringOrSlice) UnmarshalJSON(data []byte) error {
 
 // Parse parses and validates a policy document.
 func Parse(text string) (*Policy, error) {
+	if len(text) > MaxPolicyBytes {
+		return nil, fmt.Errorf("policy is %d bytes, at most %d are allowed", len(text), MaxPolicyBytes)
+	}
 	var p Policy
 	if err := json.Unmarshal([]byte(text), &p); err != nil {
 		return nil, fmt.Errorf("malformed policy JSON: %w", err)
@@ -158,6 +168,9 @@ func Parse(text string) (*Policy, error) {
 		for _, pr := range []*Principal{st.Principal, st.NotPrincipal} {
 			if pr == nil {
 				continue
+			}
+			if len(pr.Users) > MaxPrincipalUsers {
+				return nil, fmt.Errorf("%s: %d principal users, at most %d are allowed", name, len(pr.Users), MaxPrincipalUsers)
 			}
 			for _, u := range pr.Users {
 				if !userNameRegexp.MatchString(u) {

@@ -499,9 +499,19 @@ func TestPolicyLimits(t *testing.T) {
 	for i := range tooManyStmts {
 		tooManyStmts[i] = `{"Effect":"Deny","Principal":"*","Action":"s3:GetObject","Resource":"b/*"}`
 	}
+	// a valid statement padded past the byte cap with whitespace
+	oversizeText := `{"Statement":[{"Effect":"Deny","Principal":"*","Action":"s3:GetObject","Resource":"b/*"}]}` +
+		strings.Repeat(" ", policy.MaxPolicyBytes)
+	tooManyPrincipals := make([]string, policy.MaxPrincipalUsers+1)
+	for i := range tooManyPrincipals {
+		tooManyPrincipals[i] = `"user"`
+	}
+
 	bucketCases := []struct {
 		name, text, errStr string
 	}{
+		{"policy too large", oversizeText, "at most"},
+		{"too many principal users", `{"Statement":[{"Effect":"Deny","Principal":{"S3RP":[` + strings.Join(tooManyPrincipals, ",") + `]},"Action":"s3:GetObject","Resource":"b/*"}]}`, "principal users"},
 		{"too many statements", `{"Statement":[` + strings.Join(tooManyStmts, ",") + `]}`, "at most"},
 		{"too many actions", `{"Statement":[{"Effect":"Deny","Principal":"*","Action":[` + repeatQuoted(`"s3:GetObject"`, policy.MaxActionsPerStatement+1) + `],"Resource":"b/*"}]}`, "at most"},
 		{"too many resources", `{"Statement":[{"Effect":"Deny","Principal":"*","Action":"s3:GetObject","Resource":[` + repeatQuoted(`"b/*"`, policy.MaxResourcesPerStatement+1) + `]}]}`, "at most"},
