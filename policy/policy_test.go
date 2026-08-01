@@ -113,6 +113,22 @@ func TestParse(t *testing.T) {
 			`{"Statement": [{"Effect": "Deny", "Principal": "*", "Action": "s3:GetObject", "Resource": []}]}`,
 			"at least one resource",
 		},
+		{
+			"empty action array",
+			`{"Statement": [{"Effect": "Deny", "Principal": "*", "Action": [], "Resource": "b"}]}`,
+			"at least one action",
+		},
+		{
+			"unsupported version",
+			`{"Version": "2010-05-08", "Statement": [{"Effect": "Deny", "Principal": "*", "Action": "s3:GetObject", "Resource": "b"}]}`,
+			"unsupported policy version",
+		},
+		{
+			// the wildcard principal is the string "*", not a user named "*"
+			"wildcard user in principal array",
+			`{"Statement": [{"Effect": "Deny", "Principal": {"S3RP": ["*"]}, "Action": "s3:GetObject", "Resource": "b"}]}`,
+			"invalid principal user name",
+		},
 	}
 	for _, tc := range errCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -230,6 +246,80 @@ func TestEvaluateActionWildcard(t *testing.T) {
 	}
 	if got := p.Evaluate("batch2", "s3:GetObject", "b/k"); got != policy.Deny {
 		t.Errorf("expect Deny for s3:*, got %v", got)
+	}
+}
+
+// TestEvaluateActionMiddleWildcard covers wildcards in the middle of an
+// action pattern (e.g. s3:*Object*), not just a trailing s3:Get*.
+func TestEvaluateActionMiddleWildcard(t *testing.T) {
+	p, err := policy.Parse(`{
+		"Statement": [
+			{"Effect": "Deny", "Principal": {"S3RP": ["user1"]}, "Action": ["s3:*Object*", "s3:*Multipart*"], "Resource": "b/*"}
+		]
+	}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deny := []string{"s3:GetObject", "s3:PutObjectTagging", "s3:ListMultipartUploadParts"}
+	for _, a := range deny {
+		if got := p.Evaluate("user1", a, "b/k"); got != policy.Deny {
+			t.Errorf("Evaluate(%q) = %v, want Deny", a, got)
+		}
+	}
+	if got := p.Evaluate("user1", "s3:ListBucket", "b/k"); got != policy.None {
+		t.Errorf("s3:ListBucket should not match, got %v", got)
+	}
+}
+
+// TestEvaluateResourceWildcard covers resource patterns: multi-segment
+// wildcards, prefix wildcards, and bucket-only vs object patterns.
+func TestEvaluateResourceWildcard(t *testing.T) {
+	p, err := policy.Parse(`{
+		"Statement": [
+			{"Effect": "Deny", "Principal": {"S3RP": ["user1"]}, "Action": "s3:GetObject",
+			 "Resource": ["b/*/*", "b/2026-*"]}
+		]
+	}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		resource string
+		want     policy.Effect
+	}{
+		{"b/a/x", policy.Deny},             // b/*/*
+		{"b/deep/nested/key", policy.Deny}, // * spans /
+		{"b/a", policy.None},               // b/*/* needs two segments, b/2026-* no
+		{"b/2026-01", policy.Deny},         // b/2026-* prefix wildcard, single segment
+		{"b/2025-01", policy.None},         // wrong prefix, single segment
+	}
+	for _, tc := range cases {
+		if got := p.Evaluate("user1", "s3:GetObject", tc.resource); got != tc.want {
+			t.Errorf("Evaluate(resource=%q) = %v, want %v", tc.resource, got, tc.want)
+		}
+	}
+}
+
+// TestEvaluateLiteralDotSegments locks in that dot segments in object keys
+// are matched literally: S3 keys are opaque strings, so "photos/public/*"
+// does not grant access to a key literally named "photos/private.txt", and
+// a key containing ".." is a distinct object, not a traversal.
+func TestEvaluateLiteralDotSegments(t *testing.T) {
+	p, err := policy.Parse(`{
+		"Statement": [
+			{"Effect": "Allow", "Principal": {"S3RP": ["user1"]}, "Action": "s3:GetObject", "Resource": "photos/public/*"}
+		]
+	}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the ".." key matches the prefix literally (it is not collapsed)
+	if got := p.Evaluate("user1", "s3:GetObject", "photos/public/../private.txt"); got != policy.Allow {
+		t.Errorf("literal .. under the prefix should match, got %v", got)
+	}
+	// a sibling key outside the prefix is not matched
+	if got := p.Evaluate("user1", "s3:GetObject", "photos/private.txt"); got != policy.None {
+		t.Errorf("key outside the prefix must not match, got %v", got)
 	}
 }
 

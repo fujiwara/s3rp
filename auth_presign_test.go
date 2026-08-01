@@ -3,6 +3,7 @@ package s3rp_test
 import (
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -178,4 +179,35 @@ func TestPresignedErrors(t *testing.T) {
 			t.Errorf("expect 403 SignatureDoesNotMatch, got %d: %s", status, body)
 		}
 	})
+
+	// X-Amz-Expires is validated before the signature: it must be a
+	// positive integer of at most 604800 seconds (one week).
+	expiresCases := []struct{ name, value string }{
+		{"non-numeric expires", "abc"},
+		{"negative expires", "-1"},
+		{"zero expires", "0"},
+		{"over one week expires", "604801"},
+	}
+	for _, tc := range expiresCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, u := newProxyAndURL(t, testAccessKeyID, testSecretAccessKey, time.Minute)
+			u = replaceQueryParam(u, "X-Amz-Expires", tc.value)
+			status, body := get(t, u)
+			if status != http.StatusBadRequest || !strings.Contains(body, "AuthorizationQueryParametersError") {
+				t.Errorf("expect 400 AuthorizationQueryParametersError, got %d: %s", status, body)
+			}
+		})
+	}
+}
+
+// replaceQueryParam rewrites a single query parameter's value in a URL.
+func replaceQueryParam(rawURL, key, value string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		panic(err)
+	}
+	q := u.Query()
+	q.Set(key, value)
+	u.RawQuery = q.Encode()
+	return u.String()
 }
