@@ -13,17 +13,15 @@ import (
 
 	"github.com/fujiwara/s3rp/store"
 	"github.com/fujiwara/s3rp/store/rdb"
-
-	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 )
 
 // S3RP is an S3 API reverse proxy that verifies SigV4 signatures with
 // front-side access keys and forwards operations to per-bucket backends.
 type S3RP struct {
-	cfg    *Config
-	store  store.Store
-	signer *v4.Signer
-	now    func() time.Time
+	cfg     *Config
+	store   store.Store
+	signers *signerCache
+	now     func() time.Time
 
 	newClient func(ctx context.Context, b *BackendConfig) (BackendClient, error)
 	clients   map[clientCacheKey]BackendClient
@@ -76,11 +74,9 @@ func New(ctx context.Context, cfg *Config) (*S3RP, error) {
 // bucket definitions.
 func NewWithStore(_ context.Context, cfg *Config, store store.Store) (*S3RP, error) {
 	return &S3RP{
-		cfg:   cfg,
-		store: store,
-		signer: v4.NewSigner(func(o *v4.SignerOptions) {
-			o.DisableURIPathEscaping = true // S3 mode
-		}),
+		cfg:       cfg,
+		store:     store,
+		signers:   newSignerCache(),
 		now:       time.Now,
 		newClient: newBackendClient,
 		clients:   make(map[clientCacheKey]BackendClient),
