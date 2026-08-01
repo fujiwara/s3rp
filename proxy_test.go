@@ -20,10 +20,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
 	"github.com/fujiwara/s3rp"
+	"github.com/fujiwara/s3rp/sigv4"
 	"github.com/google/go-cmp/cmp"
 )
 
-// stubBackend implements s3rp.BackendClient recording inputs and returning
+// stubBackend implements s3gw.BackendClient recording inputs and returning
 // canned outputs.
 type stubBackend struct {
 	getIn   *s3.GetObjectInput
@@ -251,7 +252,7 @@ func newTestProxy(t *testing.T, stub *stubBackend) (*s3.Client, *httptest.Server
 func newTestProxyWithApp(t *testing.T, stub *stubBackend) (*s3.Client, *httptest.Server, *s3rp.S3RP) {
 	t.Helper()
 	app := newTestApp(t)
-	app.SetBackend("testbucket", stub)
+	mustSetBackend(t, app, "testbucket", stub)
 	ts := httptest.NewServer(app.Handler())
 	t.Cleanup(ts.Close)
 	cfg, err := awsconfig.LoadDefaultConfig(t.Context(),
@@ -381,7 +382,7 @@ func TestProxyPutObjectDefaultChecksum(t *testing.T) {
 		putOut: &s3.PutObjectOutput{ETag: aws.String(`"put-etag"`)},
 	}
 	app := newTestApp(t)
-	app.SetBackend("testbucket", stub)
+	mustSetBackend(t, app, "testbucket", stub)
 	ts := httptest.NewServer(app.Handler())
 	t.Cleanup(ts.Close)
 	cfg, err := awsconfig.LoadDefaultConfig(t.Context(),
@@ -771,7 +772,7 @@ func TestProxyRawChunkedPut(t *testing.T) {
 		putOut: &s3.PutObjectOutput{ETag: aws.String(`"chunked-etag"`)},
 	}
 	app := newTestApp(t)
-	app.SetBackend("testbucket", stub)
+	mustSetBackend(t, app, "testbucket", stub)
 	ts := httptest.NewServer(app.Handler())
 	t.Cleanup(ts.Close)
 
@@ -793,7 +794,7 @@ func TestProxyRawChunkedPut(t *testing.T) {
 	auth := req.Header.Get("Authorization")
 	_, sig, _ := strings.Cut(auth, "Signature=")
 
-	vr := &s3rp.VerifiedRequest{
+	vr := &sigv4.Verified{
 		SecretAccessKey: testSecretAccessKey,
 		Signature:       sig,
 		SigningTime:     signTime,

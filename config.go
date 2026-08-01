@@ -2,11 +2,12 @@ package s3rp
 
 import (
 	"fmt"
-	"github.com/fujiwara/s3rp/cors"
 	"net/url"
 	"os"
 	"regexp"
 	"strings"
+
+	"github.com/fujiwara/s3rp/cors"
 
 	"github.com/fujiwara/s3rp/policy"
 	"github.com/fujiwara/s3rp/store"

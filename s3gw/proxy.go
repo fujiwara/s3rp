@@ -1,4 +1,4 @@
-package s3rp
+package s3gw
 
 import (
 	"crypto/sha256"
@@ -24,7 +24,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
-func (app *S3RP) getObject(c *opCtx) error {
+func (g *Gateway) getObject(c *opCtx) error {
 	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.GetObjectInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
@@ -109,7 +109,7 @@ func (app *S3RP) getObject(c *opCtx) error {
 	return nil
 }
 
-func (app *S3RP) headObject(c *opCtx) error {
+func (g *Gateway) headObject(c *opCtx) error {
 	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.HeadObjectInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
@@ -158,7 +158,7 @@ func (app *S3RP) headObject(c *opCtx) error {
 	return nil
 }
 
-func (app *S3RP) putObject(c *opCtx) error {
+func (g *Gateway) putObject(c *opCtx) error {
 	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
 	in := &s3.PutObjectInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
@@ -239,7 +239,7 @@ func (app *S3RP) putObject(c *opCtx) error {
 	return nil
 }
 
-func (app *S3RP) deleteObject(c *opCtx) error {
+func (g *Gateway) deleteObject(c *opCtx) error {
 	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.DeleteObjectInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
@@ -265,7 +265,7 @@ func (app *S3RP) deleteObject(c *opCtx) error {
 	return nil
 }
 
-func (app *S3RP) listObjectsV2(c *opCtx) error {
+func (g *Gateway) listObjectsV2(c *opCtx) error {
 	w, r, rt := c.w, c.r, c.rt
 	query := r.URL.Query()
 	in := &s3.ListObjectsV2Input{
@@ -373,7 +373,7 @@ func objectsFromSDK(objects []types.Object) []s3xml.Object {
 	return result
 }
 
-func (app *S3RP) listObjectsV1(c *opCtx) error {
+func (g *Gateway) listObjectsV1(c *opCtx) error {
 	w, r, rt := c.w, c.r, c.rt
 	query := r.URL.Query()
 	in := &s3.ListObjectsInput{
@@ -438,7 +438,7 @@ func (app *S3RP) listObjectsV1(c *opCtx) error {
 }
 
 // getBucketLocation answers from the config without calling the backend.
-func (app *S3RP) getBucketLocation(c *opCtx) error {
+func (g *Gateway) getBucketLocation(c *opCtx) error {
 	w, rt := c.w, c.rt
 	region := rt.cfg.Backend.Region
 	if region == "us-east-1" {
@@ -448,7 +448,7 @@ func (app *S3RP) getBucketLocation(c *opCtx) error {
 	return s3xml.Write(w, &s3xml.LocationConstraint{XMLNS: s3xml.Namespace, Value: region})
 }
 
-func (app *S3RP) deleteObjects(c *opCtx) error {
+func (g *Gateway) deleteObjects(c *opCtx) error {
 	w, r, rt, vr := c.w, c.r, c.rt, c.vr
 	body, _, s3e := requestBody(r, vr)
 	if s3e != nil {
@@ -473,10 +473,10 @@ func (app *S3RP) deleteObjects(c *opCtx) error {
 	// policy's matching Deny statements) are resolved once here so that only
 	// the resource is tested per key rather than the whole policy per object.
 	bypass := bypassGovernanceRetention(r)
-	delAuth := app.perObjectAuthorizer(vr, rt.cfg, "s3:DeleteObject")
+	delAuth := g.perObjectAuthorizer(vr, rt.cfg, "s3:DeleteObject")
 	var bypassAuth perObjectAuthorizer
 	if bypass {
-		bypassAuth = app.perObjectAuthorizer(vr, rt.cfg, "s3:BypassGovernanceRetention")
+		bypassAuth = g.perObjectAuthorizer(vr, rt.cfg, "s3:BypassGovernanceRetention")
 	}
 	// when nothing can deny any key, the per-object check (and building its
 	// resource string) is skipped entirely
@@ -552,7 +552,7 @@ func (app *S3RP) deleteObjects(c *opCtx) error {
 	return s3xml.Write(w, result)
 }
 
-func (app *S3RP) headBucket(c *opCtx) error {
+func (g *Gateway) headBucket(c *opCtx) error {
 	w, r, rt := c.w, c.r, c.rt
 	in := &s3.HeadBucketInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
@@ -564,8 +564,8 @@ func (app *S3RP) headBucket(c *opCtx) error {
 	return nil
 }
 
-func (app *S3RP) listBuckets(w http.ResponseWriter, r *http.Request, vr *verifiedRequest) error {
-	names, err := app.store.ListBucketNames(r.Context(), vr.Tenant)
+func (g *Gateway) listBuckets(w http.ResponseWriter, r *http.Request, vr *verifiedRequest) error {
+	names, err := g.store.ListBucketNames(r.Context(), vr.Tenant)
 	if err != nil {
 		return s3err.Internal(err, "bucket lookup failed")
 	}

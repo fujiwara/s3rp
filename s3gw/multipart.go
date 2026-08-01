@@ -1,15 +1,16 @@
-package s3rp
+package s3gw
 
 import (
 	"encoding/xml"
-	"github.com/fujiwara/s3rp/checksum"
-	"github.com/fujiwara/s3rp/s3err"
-	"github.com/fujiwara/s3rp/s3xml"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/fujiwara/s3rp/checksum"
+	"github.com/fujiwara/s3rp/s3err"
+	"github.com/fujiwara/s3rp/s3xml"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -20,7 +21,7 @@ import (
 // DeleteObjects); the maximum entries of both fit well within this.
 const maxXMLBodySize = 16 << 20
 
-func (app *S3RP) createMultipartUpload(c *opCtx) error {
+func (g *Gateway) createMultipartUpload(c *opCtx) error {
 	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.CreateMultipartUploadInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
@@ -80,7 +81,7 @@ func (app *S3RP) createMultipartUpload(c *opCtx) error {
 	})
 }
 
-func (app *S3RP) uploadPart(c *opCtx) error {
+func (g *Gateway) uploadPart(c *opCtx) error {
 	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
 	query := r.URL.Query()
 	partNumber, err := strconv.ParseInt(query.Get("partNumber"), 10, 32)
@@ -130,7 +131,7 @@ func (app *S3RP) uploadPart(c *opCtx) error {
 	return nil
 }
 
-func (app *S3RP) completeMultipartUpload(c *opCtx) error {
+func (g *Gateway) completeMultipartUpload(c *opCtx) error {
 	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
 	body, _, s3e := requestBody(r, vr)
 	if s3e != nil {
@@ -218,7 +219,7 @@ func (app *S3RP) completeMultipartUpload(c *opCtx) error {
 	})
 }
 
-func (app *S3RP) abortMultipartUpload(c *opCtx) error {
+func (g *Gateway) abortMultipartUpload(c *opCtx) error {
 	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.AbortMultipartUploadInput{
 		Bucket:   aws.String(rt.cfg.Backend.Bucket),
@@ -232,7 +233,7 @@ func (app *S3RP) abortMultipartUpload(c *opCtx) error {
 	return nil
 }
 
-func (app *S3RP) listParts(c *opCtx) error {
+func (g *Gateway) listParts(c *opCtx) error {
 	w, r, rt, key := c.w, c.r, c.rt, c.key
 	query := r.URL.Query()
 	in := &s3.ListPartsInput{
@@ -293,7 +294,7 @@ func (app *S3RP) listParts(c *opCtx) error {
 	return s3xml.Write(w, result)
 }
 
-func (app *S3RP) listMultipartUploads(c *opCtx) error {
+func (g *Gateway) listMultipartUploads(c *opCtx) error {
 	w, r, rt := c.w, c.r, c.rt
 	query := r.URL.Query()
 	in := &s3.ListMultipartUploadsInput{

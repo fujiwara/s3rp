@@ -66,8 +66,8 @@ func newUserPolicyProxy(t *testing.T, stub *stubBackend) map[string]*s3.Client {
 	if err != nil {
 		t.Fatal(err)
 	}
-	app.SetBackend("data", stub)
-	app.SetBackend("noget", stub)
+	mustSetBackend(t, app, "data", stub)
+	mustSetBackend(t, app, "noget", stub)
 	ts := httptest.NewServer(app.Handler())
 	t.Cleanup(ts.Close)
 

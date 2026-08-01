@@ -1,8 +1,10 @@
-package s3rp
+package s3gw
 
 import (
 	"context"
 	"fmt"
+
+	"github.com/fujiwara/s3rp/store"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
@@ -44,7 +46,7 @@ type BackendClient interface {
 	PutObjectLegalHold(ctx context.Context, in *s3.PutObjectLegalHoldInput, optFns ...func(*s3.Options)) (*s3.PutObjectLegalHoldOutput, error)
 }
 
-func newBackendClient(ctx context.Context, b *BackendConfig) (BackendClient, error) {
+func newBackendClient(ctx context.Context, b *store.Backend) (BackendClient, error) {
 	optFns := []func(*awsconfig.LoadOptions) error{
 		awsconfig.WithRegion(b.Region),
 	}

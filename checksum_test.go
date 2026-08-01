@@ -48,7 +48,7 @@ func TestProxyPutObjectTrailerChecksum(t *testing.T) {
 		putOut: &s3.PutObjectOutput{ETag: aws.String(`"e"`)},
 	}
 	app := newTestApp(t)
-	app.SetBackend("testbucket", stub)
+	mustSetBackend(t, app, "testbucket", stub)
 	ts := newTestServerForApp(t, app)
 	// default RequestChecksumCalculation (WhenSupported) computes a checksum
 	client := newS3Client(t, ts.URL, testAccessKeyID, testSecretAccessKey)

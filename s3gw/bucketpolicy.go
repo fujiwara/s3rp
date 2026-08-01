@@ -1,8 +1,9 @@
-package s3rp
+package s3gw
 
 import (
-	"github.com/fujiwara/s3rp/s3err"
 	"net/http"
+
+	"github.com/fujiwara/s3rp/s3err"
 
 	"github.com/fujiwara/s3rp/policy"
 	"github.com/fujiwara/s3rp/store"
@@ -15,7 +16,7 @@ import (
 // tenant's buckets; an explicit Deny in the bucket policy restricts it.
 // Allow statements are accepted but have no effect yet — they will become
 // meaningful with anonymous and cross-tenant access.
-func (app *S3RP) authorize(vr *verifiedRequest, b *store.Bucket, action, resource string) *s3err.Error {
+func (g *Gateway) authorize(vr *verifiedRequest, b *store.Bucket, action, resource string) *s3err.Error {
 	// the user's identity policy gates the action first (default allow all);
 	// then the bucket policy may add a resource-specific Deny.
 	if !vr.UserPolicy.Allows(action) {
@@ -39,7 +40,7 @@ type perObjectAuthorizer struct {
 
 // perObjectAuthorizer builds the authorizer for one action, running the
 // resource-independent checks a single time.
-func (app *S3RP) perObjectAuthorizer(vr *verifiedRequest, b *store.Bucket, action string) perObjectAuthorizer {
+func (g *Gateway) perObjectAuthorizer(vr *verifiedRequest, b *store.Bucket, action string) perObjectAuthorizer {
 	if !vr.UserPolicy.Allows(action) {
 		return perObjectAuthorizer{denyAll: true}
 	}
@@ -62,7 +63,7 @@ func (a perObjectAuthorizer) allowsEverything() bool {
 }
 
 // getBucketPolicy returns the raw bucket policy JSON.
-func (app *S3RP) getBucketPolicy(c *opCtx) error {
+func (g *Gateway) getBucketPolicy(c *opCtx) error {
 	w, rt := c.w, c.rt
 	if rt.cfg.PolicyText == "" {
 		return s3err.New(http.StatusNotFound, "NoSuchBucketPolicy",

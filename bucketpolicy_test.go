@@ -97,7 +97,7 @@ func newPolicyTestProxy(t *testing.T, stub *stubBackend) map[string]*s3.Client {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"policied", "frozen", "locked", "free"} {
-		app.SetBackend(name, stub)
+		mustSetBackend(t, app, name, stub)
 	}
 	ts := httptest.NewServer(app.Handler())
 	t.Cleanup(ts.Close)

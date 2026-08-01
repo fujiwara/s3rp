@@ -103,7 +103,7 @@ func TestPresignedErrors(t *testing.T) {
 	newProxyAndURL := func(t *testing.T, akid, secret string, expires time.Duration) (*s3rp.S3RP, string) {
 		t.Helper()
 		app := newTestApp(t)
-		app.SetBackend("testbucket", &stubBackend{
+		mustSetBackend(t, app, "testbucket", &stubBackend{
 			getOut: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("x"))},
 		})
 		ts := newTestServerForApp(t, app)

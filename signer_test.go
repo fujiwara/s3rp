@@ -60,7 +60,7 @@ func newMultiKeyApp(tb testing.TB) *s3rp.S3RP {
 	if err != nil {
 		tb.Fatal(err)
 	}
-	app.SetBackend("data", concurrentStub{&stubBackend{}})
+	mustSetBackend(tb, app, "data", concurrentStub{&stubBackend{}})
 	app.SetNow(func() time.Time { return signerTestTime })
 	return app
 }

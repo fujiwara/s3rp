@@ -1,4 +1,4 @@
-package s3rp
+package s3gw
 
 import (
 	"context"
@@ -53,15 +53,15 @@ type Authorizer interface {
 type Interceptor func(ctx context.Context, op *Op, next func() error) error
 
 // SetAuthorizer installs the authorizer consulted for every operation.
-func (app *S3RP) SetAuthorizer(a Authorizer) { app.authorizer = a }
+func (g *Gateway) SetAuthorizer(a Authorizer) { g.authorizer = a }
 
 // Use appends an interceptor. The first one added is the outermost.
-func (app *S3RP) Use(i Interceptor) { app.interceptors = append(app.interceptors, i) }
+func (g *Gateway) Use(i Interceptor) { g.interceptors = append(g.interceptors, i) }
 
 // runOp applies the hooks around one operation.
-func (app *S3RP) runOp(ctx context.Context, op *Op, c *opCtx, run func() error) error {
-	if app.authorizer != nil {
-		if err := app.authorizer.Authorize(ctx, op); err != nil {
+func (g *Gateway) runOp(ctx context.Context, op *Op, c *opCtx, run func() error) error {
+	if g.authorizer != nil {
+		if err := g.authorizer.Authorize(ctx, op); err != nil {
 			return err
 		}
 	}
@@ -72,8 +72,8 @@ func (app *S3RP) runOp(ctx context.Context, op *Op, c *opCtx, run func() error) 
 		op.BytesIn, op.BytesOut = c.transferred()
 		return err
 	}
-	for i := len(app.interceptors) - 1; i >= 0; i-- {
-		next = wrapInterceptor(app.interceptors[i], ctx, op, next)
+	for i := len(g.interceptors) - 1; i >= 0; i-- {
+		next = wrapInterceptor(g.interceptors[i], ctx, op, next)
 	}
 	return next()
 }
