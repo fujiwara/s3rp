@@ -287,6 +287,50 @@ func TestImportRejectsOversizeUserPolicy(t *testing.T) {
 	}
 }
 
+// TestRDBStoreBackendDefaults verifies that a backend row missing the
+// optional columns still yields a fully resolved backend. use_path_style is
+// omitempty, so a row written by another tool can legitimately lack it, and
+// the client builder used to dereference it unconditionally.
+func TestRDBStoreBackendDefaults(t *testing.T) {
+	dsn := buildTestDB(t, loadTestConfig(t))
+	sqldb, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqldb.Close()
+	// only the required fields, as a minimal external writer would store them
+	if _, err := sqldb.ExecContext(t.Context(),
+		`UPDATE buckets SET backend = ? WHERE name = 'photos'`,
+		`{"endpoint":"http://backend.example.com:7480","access_key_id":"k","secret_access_key":"s"}`,
+	); err != nil {
+		t.Fatal(err)
+	}
+	sqldb.Close()
+
+	st, err := rdb.Open(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	b, err := st.GetBucketByName(t.Context(), "photos")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.Backend.UsePathStyle == nil {
+		t.Fatal("use_path_style must be resolved, not left nil")
+	}
+	if !*b.Backend.UsePathStyle {
+		t.Error("a backend with an explicit endpoint defaults to path-style")
+	}
+	if b.Backend.Region != s3rp.DefaultRegion {
+		t.Errorf("region should default to %s, got %q", s3rp.DefaultRegion, b.Backend.Region)
+	}
+	// the backend bucket defaults to the front bucket name
+	if b.Backend.Bucket != "photos" {
+		t.Errorf("backend bucket should default to the front name, got %q", b.Backend.Bucket)
+	}
+}
+
 // TestRDBStoreProxyE2E runs the proxy with the sqlite-backed store and a
 // real SDK client end to end.
 func TestRDBStoreProxyE2E(t *testing.T) {

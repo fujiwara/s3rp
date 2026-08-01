@@ -61,7 +61,9 @@ func newBackendClient(ctx context.Context, b *BackendConfig) (BackendClient, err
 		if b.Endpoint != "" {
 			o.BaseEndpoint = aws.String(b.Endpoint)
 		} // otherwise the SDK resolves the AWS S3 endpoint from the region
-		o.UsePathStyle = *b.UsePathStyle
+		// nil-safe: a Store is expected to have applied Backend.SetDefaults,
+		// but never panic in the request path if one did not
+		o.UsePathStyle = b.UsePathStyle != nil && *b.UsePathStyle
 		// the request body from the client is not seekable, so the SDK
 		// cannot compute a payload hash over plain http endpoints
 		o.APIOptions = append(o.APIOptions, v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware)

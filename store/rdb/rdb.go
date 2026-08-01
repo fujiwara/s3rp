@@ -135,6 +135,10 @@ func bucketFromRow(tenant, name, backendJSON, policyText, corsJSON string) (*sto
 	if err := json.Unmarshal([]byte(backendJSON), b.Backend); err != nil {
 		return nil, fmt.Errorf("bucket %s: malformed backend definition: %w", name, err)
 	}
+	// the optional columns may be absent in a row written by another tool, so
+	// resolve them here rather than handing a half-populated backend to the
+	// client builder
+	b.Backend.SetDefaults(name)
 	if policyText != "" {
 		p, err := policy.Parse(policyText)
 		if err != nil {
