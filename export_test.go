@@ -11,6 +11,7 @@ var (
 	FromSDKError = fromSDKError
 	NewS3Error   = newS3Error
 	WriteS3Error = writeS3Error
+	RedactQuery  = redactQuery
 )
 
 type VerifiedRequest = verifiedRequest

@@ -12,6 +12,20 @@ import (
 
 type handlerFunc func(w http.ResponseWriter, r *http.Request) error
 
+// redactQuery renders the query string for logging with credential-bearing
+// presigned parameters masked. A presigned URL's signature (and session
+// token) are bearer credentials until expiry, so they must not land in
+// request logs.
+func redactQuery(q url.Values) string {
+	for k := range q {
+		switch strings.ToLower(k) {
+		case "x-amz-signature", "x-amz-security-token":
+			q[k] = []string{"REDACTED"}
+		}
+	}
+	return q.Encode()
+}
+
 // Handler returns the http.Handler of the proxy.
 //
 // A single catch-all route is used instead of ServeMux patterns because the
@@ -53,7 +67,7 @@ func (app *S3RP) wrapHandler(h handlerFunc) http.HandlerFunc {
 			"remote", r.RemoteAddr,
 			"method", r.Method,
 			"path", r.URL.Path,
-			"query", r.URL.RawQuery,
+			"query", redactQuery(r.URL.Query()),
 			"status", sw.status,
 			"duration", time.Since(start).String(),
 			"request_id", requestID,
