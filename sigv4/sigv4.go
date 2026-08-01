@@ -14,7 +14,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/fujiwara/s3rp/s3err"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -124,8 +123,7 @@ func lookupSecret(r *http.Request, lookup SecretLookup, accessKeyID string) (str
 		if errors.Is(err, ErrUnknownKey) {
 			return "", s3err.InvalidAccessKeyID()
 		}
-		slog.ErrorContext(r.Context(), "failed to look up access key", "error", err)
-		return "", s3err.New(http.StatusInternalServerError, "InternalError", "key lookup failed")
+		return "", s3err.Internal(err, "key lookup failed")
 	}
 	return secret, nil
 }
@@ -226,22 +224,20 @@ func (v *Verifier) verifyHeaderRequest(r *http.Request, lookup SecretLookup) (*V
 	}
 	signer := v.signers.get(auth.AccessKeyID)
 	if err := signer.SignHTTP(r.Context(), creds, clone, payloadHash, auth.Service, auth.Region, t); err != nil {
-		slog.ErrorContext(r.Context(), "failed to sign request for verification", "error", err)
-		return nil, s3err.New(http.StatusInternalServerError, "InternalError", "signing failed")
+		return nil, s3err.Internal(err, "signing failed")
 	}
 	signed, err := parseAuthorizationHeader(clone.Header.Get("Authorization"))
 	if err != nil {
-		slog.ErrorContext(r.Context(), "failed to parse re-signed authorization header", "error", err)
-		return nil, s3err.New(http.StatusInternalServerError, "InternalError", "signing failed")
+		return nil, s3err.Internal(err, "signing failed")
 	}
 	sigOK := subtle.ConstantTimeCompare([]byte(signed.Signature), []byte(auth.Signature)) == 1
 	headersOK := strings.Join(signed.SignedHeaders, ";") == strings.Join(auth.SignedHeaders, ";")
 	if !sigOK || !headersOK {
-		slog.DebugContext(r.Context(), "signature mismatch",
-			"client_signed_headers", strings.Join(auth.SignedHeaders, ";"),
-			"resigned_headers", strings.Join(signed.SignedHeaders, ";"),
-		)
-		return nil, s3err.SignatureDoesNotMatch()
+		// which side differs is the first thing anyone debugging a mismatch
+		// wants, and it is safe to record: no secret is involved
+		return nil, s3err.SignatureDoesNotMatch().WithCause(fmt.Errorf(
+			"signature mismatch: client signed headers %q, re-signed %q",
+			strings.Join(auth.SignedHeaders, ";"), strings.Join(signed.SignedHeaders, ";")))
 	}
 	return &Verified{
 		AccessKeyID:     auth.AccessKeyID,
@@ -337,24 +333,20 @@ func (v *Verifier) verifyPresignedRequest(r *http.Request, lookup SecretLookup) 
 	creds := aws.Credentials{AccessKeyID: akid, SecretAccessKey: secret}
 	signedURI, _, err := v.signers.get(akid).PresignHTTP(r.Context(), creds, clone, payloadHash, service, region, t)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "failed to presign request for verification", "error", err)
-		return nil, s3err.New(http.StatusInternalServerError, "InternalError", "signing failed")
+		return nil, s3err.Internal(err, "signing failed")
 	}
 	signedURL, err := url.Parse(signedURI)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "failed to parse re-presigned URL", "error", err)
-		return nil, s3err.New(http.StatusInternalServerError, "InternalError", "signing failed")
+		return nil, s3err.Internal(err, "signing failed")
 	}
 	signedQuery := signedURL.Query()
 	sigOK := subtle.ConstantTimeCompare(
 		[]byte(signedQuery.Get("X-Amz-Signature")), []byte(query.Get("X-Amz-Signature"))) == 1
 	headersOK := signedQuery.Get("X-Amz-SignedHeaders") == query.Get("X-Amz-SignedHeaders")
 	if !sigOK || !headersOK {
-		slog.DebugContext(r.Context(), "presigned signature mismatch",
-			"client_signed_headers", query.Get("X-Amz-SignedHeaders"),
-			"resigned_headers", signedQuery.Get("X-Amz-SignedHeaders"),
-		)
-		return nil, s3err.SignatureDoesNotMatch()
+		return nil, s3err.SignatureDoesNotMatch().WithCause(fmt.Errorf(
+			"presigned signature mismatch: client signed headers %q, re-signed %q",
+			query.Get("X-Amz-SignedHeaders"), signedQuery.Get("X-Amz-SignedHeaders")))
 	}
 	promoteHoistedQueryParams(r)
 	return &Verified{

@@ -27,11 +27,24 @@ type Error struct {
 	RequestID string   `xml:"RequestId,omitempty"`
 
 	status int
+	// cause is what actually went wrong. It is deliberately unexported and
+	// absent from the XML above: it may name backend endpoints, buckets or
+	// credentials-adjacent detail, so it belongs in the operator's log and
+	// never in a response. Log it once where the request ends, keyed by the
+	// request id the client is given, rather than at each failure site.
+	cause error
 }
 
 func (e *Error) Error() string {
+	if e.cause != nil {
+		return fmt.Sprintf("%s: %s: %v", e.Code, e.Message, e.cause)
+	}
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }
+
+// Unwrap returns the underlying cause, if any, so callers can inspect it with
+// errors.Is and errors.As.
+func (e *Error) Unwrap() error { return e.cause }
 
 func (e *Error) Status() int {
 	return e.status
@@ -39,6 +52,24 @@ func (e *Error) Status() int {
 
 func New(status int, code, message string) *Error {
 	return &Error{status: status, Code: code, Message: message}
+}
+
+// WithCause records what went wrong behind this error. The cause is never
+// rendered to the client.
+func (e *Error) WithCause(err error) *Error {
+	e.cause = err
+	return e
+}
+
+// Internal is the error for a failure the client can do nothing about: it
+// keeps the cause for the log and tells the client only that something broke.
+func Internal(cause error, what string) *Error {
+	return &Error{
+		status:  http.StatusInternalServerError,
+		Code:    "InternalError",
+		Message: what,
+		cause:   cause,
+	}
 }
 
 var (
@@ -89,6 +120,9 @@ func FromSDKError(err error, resource string) *Error {
 		Code:     "InternalError",
 		Message:  "We encountered an internal error. Please try again.",
 		Resource: resource,
+		// keep what the SDK reported: a transport failure carries no API
+		// error code, so without this the reason would be lost entirely
+		cause: err,
 	}
 	hasStatus := false
 	var respErr *awshttp.ResponseError

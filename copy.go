@@ -2,13 +2,14 @@ package s3rp
 
 import (
 	"errors"
-	"github.com/fujiwara/s3rp/s3err"
-	"github.com/fujiwara/s3rp/s3xml"
-	"github.com/fujiwara/s3rp/store"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/fujiwara/s3rp/s3err"
+	"github.com/fujiwara/s3rp/s3xml"
+	"github.com/fujiwara/s3rp/store"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -41,7 +42,7 @@ func (app *S3RP) resolveCopySource(r *http.Request, vr *verifiedRequest, dst *bu
 		if errors.Is(err, store.ErrNotFound) {
 			return "", s3err.AccessDenied()
 		}
-		return "", s3err.New(http.StatusInternalServerError, "InternalError", "bucket lookup failed")
+		return "", s3err.Internal(err, "bucket lookup failed")
 	}
 	// reading the copy source needs s3:GetObject on the source bucket
 	if s3e := app.authorize(vr, src, "s3:GetObject", src.Name+"/"+srcKey); s3e != nil {

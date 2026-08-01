@@ -2,9 +2,10 @@ package s3rp
 
 import (
 	"errors"
+	"net/http"
+
 	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/s3xml"
-	"net/http"
 
 	"github.com/fujiwara/s3rp/cors"
 	"github.com/fujiwara/s3rp/store"
@@ -34,7 +35,7 @@ func (app *S3RP) handlePreflight(w http.ResponseWriter, r *http.Request) error {
 		if errors.Is(err, store.ErrNotFound) {
 			return corsNotAllowed()
 		}
-		return s3err.New(http.StatusInternalServerError, "InternalError", "bucket lookup failed")
+		return s3err.Internal(err, "bucket lookup failed")
 	}
 	if !cors.AllowPreflight(w, r, b.CORS) {
 		return corsNotAllowed()
