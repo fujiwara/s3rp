@@ -59,8 +59,9 @@ type TenantConfig struct {
 // UserConfig defines a user of a tenant. The user name is the stable
 // identity (e.g. for policy principals); access keys rotate under it.
 type UserConfig struct {
-	Name string       `yaml:"name" json:"name"`
-	Keys []*KeyConfig `yaml:"keys" json:"keys"`
+	Name   string                   `yaml:"name" json:"name"`
+	Keys   []*KeyConfig             `yaml:"keys" json:"keys"`
+	Policy []policy.ActionStatement `yaml:"policy,omitempty" json:"policy,omitempty"`
 }
 
 type BucketConfig struct {
@@ -173,6 +174,11 @@ func (c *Config) Validate() error {
 					return fmt.Errorf("duplicate access_key_id %q", k.AccessKeyID)
 				}
 				keyIDs[k.AccessKeyID] = true
+			}
+			if len(u.Policy) > 0 {
+				if err := policy.ValidateUserPolicy(&policy.UserPolicy{Statements: u.Policy}); err != nil {
+					return fmt.Errorf("tenant %s: user %s: invalid policy: %w", t.Name, u.Name, err)
+				}
 			}
 		}
 

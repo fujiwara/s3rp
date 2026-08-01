@@ -45,12 +45,17 @@ func NewConfigStore(cfg *Config) store.Store {
 		}
 		s.tenants[t.Name] = buckets
 		for _, u := range t.Users {
+			var up *policy.UserPolicy
+			if len(u.Policy) > 0 {
+				up = &policy.UserPolicy{Statements: u.Policy}
+			}
 			for _, k := range u.Keys {
 				s.keys[k.AccessKeyID] = &store.Key{
 					AccessKeyID:     k.AccessKeyID,
 					SecretAccessKey: k.SecretAccessKey,
 					Tenant:          t.Name,
 					User:            u.Name,
+					Policy:          up,
 				}
 			}
 		}

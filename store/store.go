@@ -40,6 +40,8 @@ type Key struct {
 	SecretAccessKey Password
 	Tenant          string
 	User            string
+	// Policy is the user's identity policy (nil = allow all operations).
+	Policy *policy.UserPolicy
 }
 
 // Bucket is a front-side bucket and its backend definition.

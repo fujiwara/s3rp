@@ -66,7 +66,7 @@ Flags:
 
 The config file is YAML. Environment variables in the file are expanded (`${VAR}` or `$VAR`).
 
-A tenant owns one or more buckets and users. A user is the stable identity within a tenant (name: `[a-z][a-z0-9_-]+`); access keys are issued per user and rotate under it — add a new key, switch clients, then remove the old one. Every key of a tenant can access all of the tenant's buckets, unless restricted by a [bucket policy](#bucket-policies).
+A tenant owns one or more buckets and users. A user is the stable identity within a tenant (name: `[a-z][a-z0-9_-]+`); access keys are issued per user and rotate under it — add a new key, switch clients, then remove the old one. Every key of a tenant can access all of the tenant's buckets, unless restricted by a [bucket policy](#bucket-policies) or a [user policy](#user-policies).
 
 ```yaml
 listen: ":8080"
@@ -238,6 +238,34 @@ Principal forms:
 - `NotPrincipal` (exclusive with `Principal`) — everyone except the listed users. `Deny` + `NotPrincipal` expresses "only these users may ..." so that newly added users are denied by default.
 
 Limitations: policies only cover users of the owning tenant; versioned operations use the same action names as unversioned ones (no `s3:GetObjectVersion` distinction). DeleteObjects is evaluated per object: denied keys are reported in the `Error` entries of the response. Copying evaluates `s3:GetObject` on the source and `s3:PutObject` on the destination.
+
+### User policies
+
+Where a bucket policy attaches to a bucket and names principals, a user policy attaches to a user and only looks at the operation. It is a lightweight identity policy: a list of `Allow` / `Deny` statements over `s3:*` actions (with the same `*` / `?` wildcards, case-insensitive), with no resource — it decides which operations that user may perform at all, before the bucket policy is consulted.
+
+```yaml
+tenants:
+  - name: acme
+    users:
+      - name: readonly
+        keys:
+          - { access_key_id: ..., secret_access_key: ... }
+        policy:
+          - effect: Allow
+            action: [s3:Get*, s3:List*, s3:HeadObject, s3:HeadBucket]
+          - effect: Deny
+            action: [s3:GetObjectAcl]
+      - name: admin          # no policy = allow s3:* (full access)
+        keys:
+          - { access_key_id: ..., secret_access_key: ... }
+```
+
+Evaluation is IAM-style and independent of the bucket policy's baseline-allow model:
+
+- **No policy** (the default) means allow `s3:*` — the current full-access behavior is preserved.
+- **With a policy**, only actions matching an `Allow` are permitted; anything unmatched is an implicit deny. A matching `Deny` takes precedence over any `Allow`. So `Allow [s3:Get*, s3:List*]` limits the user to reads.
+
+A request must pass **both** layers: the user policy must allow the action **and** the bucket policy must not `Deny` it. Either denial returns `403 AccessDenied`. The check sits at the same single authorization chokepoint as bucket policies, so it covers every operation uniformly (including per-object DeleteObjects entries and the source/destination actions of a copy).
 
 ### CORS
 

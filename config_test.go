@@ -286,6 +286,40 @@ store:
 		errStr: "unknown store driver",
 	},
 	{
+		name: "invalid user policy effect",
+		yaml: `
+tenants:
+  - name: foo
+    users:
+      - name: user1
+        keys: [{access_key_id: k, secret_access_key: s}]
+        policy:
+          - effect: Maybe
+            action: [s3:GetObject]
+    buckets:
+      - name: bucket1
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
+`,
+		errStr: "effect must be Allow or Deny",
+	},
+	{
+		name: "non-s3 action in user policy",
+		yaml: `
+tenants:
+  - name: foo
+    users:
+      - name: user1
+        keys: [{access_key_id: k, secret_access_key: s}]
+        policy:
+          - effect: Allow
+            action: [iam:PassRole]
+    buckets:
+      - name: bucket1
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
+`,
+		errStr: "must start with s3:",
+	},
+	{
 		name: "credentials not set together",
 		yaml: `
 tenants:

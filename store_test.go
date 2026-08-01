@@ -28,13 +28,23 @@ func storeContract(t *testing.T, st store.Store) {
 		if key.Tenant != "acme" || key.User != "app1" || key.SecretAccessKey.String() != "frontsecret001" {
 			t.Errorf("unexpected key %+v", key)
 		}
-		// a key of another user of the same tenant
+		// app1 has no user policy (default allow all)
+		if key.Policy != nil {
+			t.Errorf("expect no policy for app1, got %+v", key.Policy)
+		}
+		// a key of another user of the same tenant, carrying a user policy
 		key2, err := st.GetKey(ctx, "S3RPKEY003")
 		if err != nil {
 			t.Fatal(err)
 		}
 		if key2.Tenant != "acme" || key2.User != "batch" {
 			t.Errorf("unexpected key %+v", key2)
+		}
+		if key2.Policy == nil || key2.Policy.Allows("s3:PutObject") {
+			t.Errorf("batch policy should deny PutObject: %+v", key2.Policy)
+		}
+		if !key2.Policy.Allows("s3:GetObject") || key2.Policy.Allows("s3:GetObjectAcl") {
+			t.Errorf("batch policy Get*/deny GetObjectAcl mismatch: %+v", key2.Policy)
 		}
 		if _, err := st.GetKey(ctx, "NOSUCHKEY"); !errors.Is(err, store.ErrNotFound) {
 			t.Errorf("expect ErrNotFound, got %v", err)

@@ -388,6 +388,81 @@ func TestEvaluateQuestionWildcard(t *testing.T) {
 	}
 }
 
+func TestUserPolicyAllows(t *testing.T) {
+	// nil and empty policies allow everything (the default)
+	if !(*policy.UserPolicy)(nil).Allows("s3:DeleteObject") {
+		t.Error("nil policy must allow all")
+	}
+	if !(&policy.UserPolicy{}).Allows("s3:DeleteObject") {
+		t.Error("empty policy must allow all")
+	}
+
+	up := &policy.UserPolicy{Statements: []policy.ActionStatement{
+		{Effect: "Allow", Action: []string{"s3:Get*", "s3:List*", "s3:HeadObject"}},
+		{Effect: "Deny", Action: []string{"s3:GetObjectAcl"}},
+	}}
+	cases := []struct {
+		action string
+		want   bool
+	}{
+		{"s3:GetObject", true},     // Allow s3:Get*
+		{"s3:ListBucket", true},    // Allow s3:List*
+		{"s3:HeadObject", true},    // exact allow
+		{"s3:PutObject", false},    // not allowed -> implicit deny
+		{"s3:DeleteObject", false}, // not allowed
+		{"s3:GetObjectAcl", false}, // Allow s3:Get* but explicit Deny wins
+		{"S3:getobject", true},     // case-insensitive
+	}
+	for _, tc := range cases {
+		if got := up.Allows(tc.action); got != tc.want {
+			t.Errorf("Allows(%q) = %v, want %v", tc.action, got, tc.want)
+		}
+	}
+}
+
+// TestUserPolicyDenyOnly documents that a policy with only Deny statements
+// denies everything else (no Allow -> implicit deny), matching AWS.
+func TestUserPolicyDenyOnly(t *testing.T) {
+	up := &policy.UserPolicy{Statements: []policy.ActionStatement{
+		{Effect: "Deny", Action: []string{"s3:DeleteObject"}},
+	}}
+	if up.Allows("s3:GetObject") {
+		t.Error("a Deny-only policy implicitly denies unmatched actions")
+	}
+	if up.Allows("s3:DeleteObject") {
+		t.Error("explicitly denied action must be denied")
+	}
+}
+
+func TestValidateUserPolicy(t *testing.T) {
+	if err := policy.ValidateUserPolicy(nil); err != nil {
+		t.Errorf("nil policy is valid: %v", err)
+	}
+	valid := &policy.UserPolicy{Statements: []policy.ActionStatement{
+		{Effect: "Allow", Action: []string{"s3:Get*"}},
+	}}
+	if err := policy.ValidateUserPolicy(valid); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	errCases := []struct {
+		name   string
+		up     *policy.UserPolicy
+		errStr string
+	}{
+		{"bad effect", &policy.UserPolicy{Statements: []policy.ActionStatement{{Effect: "Maybe", Action: []string{"s3:Get*"}}}}, "effect must be Allow or Deny"},
+		{"empty action", &policy.UserPolicy{Statements: []policy.ActionStatement{{Effect: "Allow"}}}, "at least one action"},
+		{"non-s3 action", &policy.UserPolicy{Statements: []policy.ActionStatement{{Effect: "Allow", Action: []string{"iam:PassRole"}}}}, "must start with s3:"},
+	}
+	for _, tc := range errCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := policy.ValidateUserPolicy(tc.up)
+			if err == nil || !strings.Contains(err.Error(), tc.errStr) {
+				t.Errorf("expect error containing %q, got %v", tc.errStr, err)
+			}
+		})
+	}
+}
+
 // TestEvaluateActionCaseInsensitive verifies that actions match regardless
 // of case (as in AWS), so a mis-cased Deny cannot silently fail open, while
 // resources stay case-sensitive.

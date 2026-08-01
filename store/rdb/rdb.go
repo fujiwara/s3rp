@@ -64,12 +64,20 @@ func (s *Store) GetKey(ctx context.Context, accessKeyID string) (*store.Key, err
 		}
 		return nil, fmt.Errorf("failed to get key: %w", err)
 	}
-	return &store.Key{
+	key := &store.Key{
 		AccessKeyID:     row.AccessKeyID,
 		SecretAccessKey: store.Password(row.SecretAccessKey),
 		Tenant:          row.TenantName,
 		User:            row.UserName,
-	}, nil
+	}
+	if row.UserPolicy != "" {
+		var up policy.UserPolicy
+		if err := json.Unmarshal([]byte(row.UserPolicy), &up); err != nil {
+			return nil, fmt.Errorf("user %s: malformed policy: %w", row.UserName, err)
+		}
+		key.Policy = &up
+	}
+	return key, nil
 }
 
 func (s *Store) GetBucket(ctx context.Context, tenant, bucket string) (*store.Bucket, error) {

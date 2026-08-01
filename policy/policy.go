@@ -140,9 +140,8 @@ func Parse(text string) (*Policy, error) {
 			return nil, fmt.Errorf("%s: at least one action is required", name)
 		}
 		for _, a := range st.Action {
-			// the action prefix is case-insensitive, matching evaluation
-			if !strings.HasPrefix(strings.ToLower(a), "s3:") {
-				return nil, fmt.Errorf("%s: action %q must start with s3:", name, a)
+			if err := validateAction(a); err != nil {
+				return nil, fmt.Errorf("%s: %w", name, err)
 			}
 		}
 		if len(st.Resource) == 0 {
@@ -150,6 +149,71 @@ func Parse(text string) (*Policy, error) {
 		}
 	}
 	return &p, nil
+}
+
+// validateAction checks an action element. The s3: prefix is
+// case-insensitive, matching evaluation.
+func validateAction(a string) error {
+	if !strings.HasPrefix(strings.ToLower(a), "s3:") {
+		return fmt.Errorf("action %q must start with s3:", a)
+	}
+	return nil
+}
+
+// UserPolicy is a resource-agnostic identity policy attached to a user: it
+// grants or denies operations by action pattern, ignoring the resource. A
+// nil or empty policy allows every action (the default: allow s3:*).
+type UserPolicy struct {
+	Statements []ActionStatement `yaml:"policy" json:"policy"`
+}
+
+// ActionStatement is one allow/deny rule of a UserPolicy.
+type ActionStatement struct {
+	Effect string   `yaml:"effect" json:"effect"`
+	Action []string `yaml:"action" json:"action"`
+}
+
+// Allows reports whether the user may perform action. With no statements it
+// allows everything; otherwise the action must match an Allow and no Deny
+// (Deny takes precedence, unmatched actions are implicitly denied), as in
+// an AWS identity policy.
+func (up *UserPolicy) Allows(action string) bool {
+	if up == nil || len(up.Statements) == 0 {
+		return true
+	}
+	action = strings.ToLower(action)
+	allowed := false
+	for _, st := range up.Statements {
+		if !matchAnyFold(st.Action, action) {
+			continue
+		}
+		if st.Effect == "Deny" {
+			return false
+		}
+		allowed = true
+	}
+	return allowed
+}
+
+// ValidateUserPolicy checks a user policy's effects and actions.
+func ValidateUserPolicy(up *UserPolicy) error {
+	if up == nil {
+		return nil
+	}
+	for i, st := range up.Statements {
+		if st.Effect != "Allow" && st.Effect != "Deny" {
+			return fmt.Errorf("statement[%d]: effect must be Allow or Deny", i)
+		}
+		if len(st.Action) == 0 {
+			return fmt.Errorf("statement[%d]: at least one action is required", i)
+		}
+		for _, a := range st.Action {
+			if err := validateAction(a); err != nil {
+				return fmt.Errorf("statement[%d]: %w", i, err)
+			}
+		}
+	}
+	return nil
 }
 
 // Evaluate evaluates the policy for a principal (user name) performing an
