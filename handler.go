@@ -134,340 +134,189 @@ func (app *S3RP) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	return app.handleObjectRequest(w, r, rt, vr, query, key)
 }
 
+// opCtx carries everything a routed operation needs. key is "" for
+// bucket-level operations.
+type opCtx struct {
+	app   *S3RP
+	w     http.ResponseWriter
+	r     *http.Request
+	rt    *bucketRT
+	vr    *verifiedRequest
+	query url.Values
+	key   string
+}
+
+// authorize evaluates the bucket policy for the operation's resource
+// (the bucket, or bucket/key for object operations).
+func (c *opCtx) authorize(action string) *S3Error {
+	resource := c.rt.cfg.Name
+	if c.key != "" {
+		resource += "/" + c.key
+	}
+	return c.app.authorize(c.vr, c.rt.cfg, action, resource)
+}
+
+// route selects one operation by a query discriminator and describes the
+// checks to run before its handler. handle is a method value of *S3RP, so
+// the route table reads as a plain "discriminator -> handler" mapping.
+type route struct {
+	match  func(url.Values) bool // selects this route (nil = always, the fallback)
+	params paramSet              // allowed query parameters (nil = skip the check)
+	aclHdr bool                  // reject unsupported canned ACL headers first
+	bypass bool                  // also require s3:BypassGovernanceRetention when the bypass header is set
+	action string                // s3:* action to authorize ("" = handler authorizes itself)
+	handle func(*S3RP, *opCtx) error
+}
+
+// dispatch runs the first matching route's checks and handler, in the
+// order: parameter check, canned-ACL header, bypass authorization,
+// action authorization, handler.
+func (c *opCtx) dispatch(routes []route) error {
+	for _, rt := range routes {
+		if rt.match != nil && !rt.match(c.query) {
+			continue
+		}
+		if rt.params != nil {
+			if err := rt.params.check(c.query); err != nil {
+				return err
+			}
+		}
+		if rt.aclHdr {
+			if err := checkACLHeader(c.r); err != nil {
+				return err
+			}
+		}
+		if rt.bypass && bypassGovernanceRetention(c.r) {
+			if err := c.authorize("s3:BypassGovernanceRetention"); err != nil {
+				return err
+			}
+		}
+		if rt.action != "" {
+			if err := c.authorize(rt.action); err != nil {
+				return err
+			}
+		}
+		return rt.handle(c.app, c)
+	}
+	return errNotImplemented("this operation")
+}
+
 func (app *S3RP) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt *bucketRT, vr *verifiedRequest, query url.Values) error {
-	// the resource of bucket-level operations is the bucket itself
-	authorize := func(action string) *S3Error {
-		return app.authorize(vr, rt.cfg, action, rt.cfg.Name)
-	}
-	switch r.Method {
-	case http.MethodGet:
-		switch {
-		case query.Has(subUploads):
-			if err := listMultipartUploadsParams.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:ListBucketMultipartUploads"); err != nil {
-				return err
-			}
-			return app.listMultipartUploads(w, r, rt)
-		case query.Has(subLocation):
-			if err := locationOnlyParams.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:GetBucketLocation"); err != nil {
-				return err
-			}
-			return app.getBucketLocation(w, rt)
-		case query.Has(subACL):
-			if err := aclOnlyParams.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:GetBucketAcl"); err != nil {
-				return err
-			}
-			return app.getBucketACL(w, vr)
-		case query.Has(subPolicy):
-			if err := policyOnlyParams.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:GetBucketPolicy"); err != nil {
-				return err
-			}
-			return app.getBucketPolicy(w, rt)
-		case query.Has(subCORS):
-			if err := corsOnlyParams.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:GetBucketCORS"); err != nil {
-				return err
-			}
-			return app.getBucketCors(w, rt)
-		case query.Has(subObjectLock):
-			if err := objectLockOnlyParams.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:GetBucketObjectLockConfiguration"); err != nil {
-				return err
-			}
-			return app.getObjectLockConfiguration(w, r, rt)
-		case query.Has(subVersioning):
-			if err := versioningOnlyParams.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:GetBucketVersioning"); err != nil {
-				return err
-			}
-			return app.getBucketVersioning(w, r, rt)
-		case query.Has(subVersions):
-			if err := listObjectVersionsParams.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:ListBucket"); err != nil {
-				return err
-			}
-			return app.listObjectVersions(w, r, rt)
-		case query.Get(qpListType) == "2":
-			if err := listObjectsV2Params.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:ListBucket"); err != nil {
-				return err
-			}
-			return app.listObjectsV2(w, r, rt)
-		default:
-			if err := listObjectsV1Params.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:ListBucket"); err != nil {
-				return err
-			}
-			return app.listObjectsV1(w, r, rt)
-		}
-	case http.MethodHead:
-		if err := authorize("s3:ListBucket"); err != nil {
-			return err
-		}
-		return app.headBucket(w, r, rt)
-	case http.MethodPut:
-		if query.Has(subVersioning) {
-			if err := versioningOnlyParams.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:PutBucketVersioning"); err != nil {
-				return err
-			}
-			return app.putBucketVersioning(w, r, rt, vr)
-		}
-		if query.Has(subObjectLock) {
-			if err := objectLockOnlyParams.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:PutBucketObjectLockConfiguration"); err != nil {
-				return err
-			}
-			return app.putObjectLockConfiguration(w, r, rt, vr)
-		}
-		if query.Has(subACL) {
-			return errACLNotSupported()
-		}
-		if query.Has(subPolicy) {
-			// bucket policies are defined in the config (or a future
-			// control plane), not via the S3 API
-			return errNotImplemented("PutBucketPolicy")
-		}
-		if query.Has(subCORS) {
-			return errNotImplemented("PutBucketCors")
-		}
-		return errNotImplemented("this bucket operation")
-	case http.MethodDelete:
-		if query.Has(subPolicy) {
-			return errNotImplemented("DeleteBucketPolicy")
-		}
-		if query.Has(subCORS) {
-			return errNotImplemented("DeleteBucketCors")
-		}
-		return errNotImplemented("this bucket operation")
-	case http.MethodPost:
-		if query.Has(subDelete) {
-			if err := deleteOnlyParams.check(query); err != nil {
-				return err
-			}
-			// s3:DeleteObject is evaluated per object inside
-			return app.deleteObjects(w, r, rt, vr)
-		}
-		return errNotImplemented("this bucket operation")
-	default:
+	routes, ok := bucketRoutes[r.Method]
+	if !ok {
 		return errNotImplemented("this bucket operation")
 	}
+	return (&opCtx{app: app, w: w, r: r, rt: rt, vr: vr, query: query}).dispatch(routes)
 }
 
 func (app *S3RP) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt *bucketRT, vr *verifiedRequest, query url.Values, key string) error {
-	authorize := func(action string) *S3Error {
-		return app.authorize(vr, rt.cfg, action, rt.cfg.Name+"/"+key)
-	}
-	switch r.Method {
-	case http.MethodGet:
-		if query.Has(qpUploadID) {
-			if err := listPartsParams.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:ListMultipartUploadParts"); err != nil {
-				return err
-			}
-			return app.listParts(w, r, rt, key)
-		}
-		if query.Has(subTagging) {
-			if err := taggingParams.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:GetObjectTagging"); err != nil {
-				return err
-			}
-			return app.getObjectTagging(w, r, rt, key)
-		}
-		if query.Has(subACL) {
-			if err := aclParams.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:GetObjectAcl"); err != nil {
-				return err
-			}
-			return app.getObjectACL(w, r, rt, key, vr)
-		}
-		if query.Has(subRetention) {
-			if err := retentionParams.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:GetObjectRetention"); err != nil {
-				return err
-			}
-			return app.getObjectRetention(w, r, rt, key)
-		}
-		if query.Has(subLegalHold) {
-			if err := legalHoldParams.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:GetObjectLegalHold"); err != nil {
-				return err
-			}
-			return app.getObjectLegalHold(w, r, rt, key)
-		}
-		if err := getObjectParams.check(query); err != nil {
-			return err
-		}
-		if err := authorize("s3:GetObject"); err != nil {
-			return err
-		}
-		return app.getObject(w, r, rt, key)
-	case http.MethodHead:
-		if err := versionIDOnlyParams.check(query); err != nil {
-			return err
-		}
-		if err := authorize("s3:GetObject"); err != nil {
-			return err
-		}
-		return app.headObject(w, r, rt, key)
-	case http.MethodPut:
-		if query.Has(subTagging) {
-			if err := taggingParams.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:PutObjectTagging"); err != nil {
-				return err
-			}
-			return app.putObjectTagging(w, r, rt, key, vr)
-		}
-		if query.Has(subACL) {
-			return errACLNotSupported()
-		}
-		if query.Has(subRetention) {
-			if err := retentionParams.check(query); err != nil {
-				return err
-			}
-			if bypassGovernanceRetention(r) {
-				if err := authorize("s3:BypassGovernanceRetention"); err != nil {
-					return err
-				}
-			}
-			if err := authorize("s3:PutObjectRetention"); err != nil {
-				return err
-			}
-			return app.putObjectRetention(w, r, rt, key, vr)
-		}
-		if query.Has(subLegalHold) {
-			if err := legalHoldParams.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:PutObjectLegalHold"); err != nil {
-				return err
-			}
-			return app.putObjectLegalHold(w, r, rt, key, vr)
-		}
-		hasCopySource := r.Header.Get("x-amz-copy-source") != ""
-		if query.Has(qpUploadID) || query.Has(qpPartNumber) {
-			if err := uploadPartParams.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:PutObject"); err != nil {
-				return err
-			}
-			if hasCopySource {
-				return app.uploadPartCopy(w, r, rt, key, vr)
-			}
-			return app.uploadPart(w, r, rt, key, vr)
-		}
-		if err := noParams.check(query); err != nil {
-			return err
-		}
-		if err := checkACLHeader(r); err != nil {
-			return err
-		}
-		if err := authorize("s3:PutObject"); err != nil {
-			return err
-		}
-		if hasCopySource {
-			return app.copyObject(w, r, rt, key, vr)
-		}
-		return app.putObject(w, r, rt, key, vr)
-	case http.MethodDelete:
-		if query.Has(qpUploadID) {
-			if err := uploadIDOnlyParams.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:AbortMultipartUpload"); err != nil {
-				return err
-			}
-			return app.abortMultipartUpload(w, r, rt, key)
-		}
-		if query.Has(subTagging) {
-			if err := taggingParams.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:DeleteObjectTagging"); err != nil {
-				return err
-			}
-			return app.deleteObjectTagging(w, r, rt, key)
-		}
-		if err := versionIDOnlyParams.check(query); err != nil {
-			return err
-		}
-		if bypassGovernanceRetention(r) {
-			if err := authorize("s3:BypassGovernanceRetention"); err != nil {
-				return err
-			}
-		}
-		if err := authorize("s3:DeleteObject"); err != nil {
-			return err
-		}
-		return app.deleteObject(w, r, rt, key)
-	case http.MethodPost:
-		switch {
-		case query.Has(subUploads):
-			if err := uploadsOnlyParams.check(query); err != nil {
-				return err
-			}
-			if err := checkACLHeader(r); err != nil {
-				return err
-			}
-			if err := authorize("s3:PutObject"); err != nil {
-				return err
-			}
-			return app.createMultipartUpload(w, r, rt, key)
-		case query.Has(qpUploadID):
-			if err := uploadIDOnlyParams.check(query); err != nil {
-				return err
-			}
-			if err := authorize("s3:PutObject"); err != nil {
-				return err
-			}
-			return app.completeMultipartUpload(w, r, rt, key, vr)
-		default:
-			return errNotImplemented("this operation")
-		}
-	default:
+	routes, ok := objectRoutes[r.Method]
+	if !ok {
 		return newS3Error(http.StatusMethodNotAllowed, "MethodNotAllowed",
 			"The specified method is not allowed against this resource.")
 	}
+	return (&opCtx{app: app, w: w, r: r, rt: rt, vr: vr, query: query, key: key}).dispatch(routes)
+}
+
+func has(key string) func(url.Values) bool {
+	return func(q url.Values) bool { return q.Has(key) }
+}
+
+func hasListTypeV2(q url.Values) bool { return q.Get(qpListType) == "2" }
+
+func hasUploadPart(q url.Values) bool { return q.Has(qpUploadID) || q.Has(qpPartNumber) }
+
+// notImplemented returns a route whose handler always fails with the given
+// NotImplemented message (used for operations defined only in the store).
+func notImplemented(match func(url.Values) bool, what string) route {
+	return route{match: match, handle: func(*S3RP, *opCtx) error { return errNotImplemented(what) }}
+}
+
+func rejectACL(*S3RP, *opCtx) error { return errACLNotSupported() }
+
+// putObjectOrCopy and uploadPartOrCopy pick the copy variant when the
+// request carries an x-amz-copy-source header.
+func (app *S3RP) putObjectOrCopy(c *opCtx) error {
+	if c.r.Header.Get("x-amz-copy-source") != "" {
+		return app.copyObject(c)
+	}
+	return app.putObject(c)
+}
+
+func (app *S3RP) uploadPartOrCopy(c *opCtx) error {
+	if c.r.Header.Get("x-amz-copy-source") != "" {
+		return app.uploadPartCopy(c)
+	}
+	return app.uploadPart(c)
+}
+
+var bucketRoutes = map[string][]route{
+	http.MethodGet: {
+		{match: has(subUploads), params: listMultipartUploadsParams, action: "s3:ListBucketMultipartUploads", handle: (*S3RP).listMultipartUploads},
+		{match: has(subLocation), params: locationOnlyParams, action: "s3:GetBucketLocation", handle: (*S3RP).getBucketLocation},
+		{match: has(subACL), params: aclOnlyParams, action: "s3:GetBucketAcl", handle: (*S3RP).getBucketACL},
+		{match: has(subPolicy), params: policyOnlyParams, action: "s3:GetBucketPolicy", handle: (*S3RP).getBucketPolicy},
+		{match: has(subCORS), params: corsOnlyParams, action: "s3:GetBucketCORS", handle: (*S3RP).getBucketCors},
+		{match: has(subObjectLock), params: objectLockOnlyParams, action: "s3:GetBucketObjectLockConfiguration", handle: (*S3RP).getObjectLockConfiguration},
+		{match: has(subVersioning), params: versioningOnlyParams, action: "s3:GetBucketVersioning", handle: (*S3RP).getBucketVersioning},
+		{match: has(subVersions), params: listObjectVersionsParams, action: "s3:ListBucket", handle: (*S3RP).listObjectVersions},
+		{match: hasListTypeV2, params: listObjectsV2Params, action: "s3:ListBucket", handle: (*S3RP).listObjectsV2},
+		{params: listObjectsV1Params, action: "s3:ListBucket", handle: (*S3RP).listObjectsV1},
+	},
+	http.MethodHead: {
+		{action: "s3:ListBucket", handle: (*S3RP).headBucket},
+	},
+	http.MethodPut: {
+		{match: has(subVersioning), params: versioningOnlyParams, action: "s3:PutBucketVersioning", handle: (*S3RP).putBucketVersioning},
+		{match: has(subObjectLock), params: objectLockOnlyParams, action: "s3:PutBucketObjectLockConfiguration", handle: (*S3RP).putObjectLockConfiguration},
+		{match: has(subACL), handle: rejectACL},
+		// bucket policies and CORS rules are defined in the store, not via the S3 API
+		notImplemented(has(subPolicy), "PutBucketPolicy"),
+		notImplemented(has(subCORS), "PutBucketCors"),
+		notImplemented(nil, "this bucket operation"),
+	},
+	http.MethodDelete: {
+		notImplemented(has(subPolicy), "DeleteBucketPolicy"),
+		notImplemented(has(subCORS), "DeleteBucketCors"),
+		notImplemented(nil, "this bucket operation"),
+	},
+	http.MethodPost: {
+		// s3:DeleteObject is evaluated per object inside deleteObjects
+		{match: has(subDelete), params: deleteOnlyParams, handle: (*S3RP).deleteObjects},
+		notImplemented(nil, "this bucket operation"),
+	},
+}
+
+var objectRoutes = map[string][]route{
+	http.MethodGet: {
+		{match: has(qpUploadID), params: listPartsParams, action: "s3:ListMultipartUploadParts", handle: (*S3RP).listParts},
+		{match: has(subTagging), params: taggingParams, action: "s3:GetObjectTagging", handle: (*S3RP).getObjectTagging},
+		{match: has(subACL), params: aclParams, action: "s3:GetObjectAcl", handle: (*S3RP).getObjectACL},
+		{match: has(subRetention), params: retentionParams, action: "s3:GetObjectRetention", handle: (*S3RP).getObjectRetention},
+		{match: has(subLegalHold), params: legalHoldParams, action: "s3:GetObjectLegalHold", handle: (*S3RP).getObjectLegalHold},
+		{params: getObjectParams, action: "s3:GetObject", handle: (*S3RP).getObject},
+	},
+	http.MethodHead: {
+		{params: versionIDOnlyParams, action: "s3:GetObject", handle: (*S3RP).headObject},
+	},
+	http.MethodPut: {
+		{match: has(subTagging), params: taggingParams, action: "s3:PutObjectTagging", handle: (*S3RP).putObjectTagging},
+		{match: has(subACL), handle: rejectACL},
+		{match: has(subRetention), params: retentionParams, bypass: true, action: "s3:PutObjectRetention", handle: (*S3RP).putObjectRetention},
+		{match: has(subLegalHold), params: legalHoldParams, action: "s3:PutObjectLegalHold", handle: (*S3RP).putObjectLegalHold},
+		{match: hasUploadPart, params: uploadPartParams, action: "s3:PutObject", handle: (*S3RP).uploadPartOrCopy},
+		{params: noParams, aclHdr: true, action: "s3:PutObject", handle: (*S3RP).putObjectOrCopy},
+	},
+	http.MethodDelete: {
+		{match: has(qpUploadID), params: uploadIDOnlyParams, action: "s3:AbortMultipartUpload", handle: (*S3RP).abortMultipartUpload},
+		{match: has(subTagging), params: taggingParams, action: "s3:DeleteObjectTagging", handle: (*S3RP).deleteObjectTagging},
+		{params: versionIDOnlyParams, bypass: true, action: "s3:DeleteObject", handle: (*S3RP).deleteObject},
+	},
+	http.MethodPost: {
+		{match: has(subUploads), params: uploadsOnlyParams, aclHdr: true, action: "s3:PutObject", handle: (*S3RP).createMultipartUpload},
+		{match: has(qpUploadID), params: uploadIDOnlyParams, action: "s3:PutObject", handle: (*S3RP).completeMultipartUpload},
+		notImplemented(nil, "this operation"),
+	},
 }
 
 // paramSet is the set of query parameters an operation accepts.

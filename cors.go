@@ -121,7 +121,8 @@ func setCORSHeaders(w http.ResponseWriter, r *http.Request, b *store.Bucket) {
 }
 
 // getBucketCors returns the CORS configuration of the bucket as XML.
-func (app *S3RP) getBucketCors(w http.ResponseWriter, rt *bucketRT) error {
+func (app *S3RP) getBucketCors(c *opCtx) error {
+	w, rt := c.w, c.rt
 	if len(rt.cfg.CORS) == 0 {
 		return newS3Error(http.StatusNotFound, "NoSuchCORSConfiguration",
 			"The CORS configuration does not exist")

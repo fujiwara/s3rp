@@ -16,7 +16,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
-func (app *S3RP) getObject(w http.ResponseWriter, r *http.Request, rt *bucketRT, key string) error {
+func (app *S3RP) getObject(c *opCtx) error {
+	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.GetObjectInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
@@ -100,7 +101,8 @@ func (app *S3RP) getObject(w http.ResponseWriter, r *http.Request, rt *bucketRT,
 	return nil
 }
 
-func (app *S3RP) headObject(w http.ResponseWriter, r *http.Request, rt *bucketRT, key string) error {
+func (app *S3RP) headObject(c *opCtx) error {
+	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.HeadObjectInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
@@ -148,7 +150,8 @@ func (app *S3RP) headObject(w http.ResponseWriter, r *http.Request, rt *bucketRT
 	return nil
 }
 
-func (app *S3RP) putObject(w http.ResponseWriter, r *http.Request, rt *bucketRT, key string, vr *verifiedRequest) error {
+func (app *S3RP) putObject(c *opCtx) error {
+	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
 	in := &s3.PutObjectInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
@@ -228,7 +231,8 @@ func (app *S3RP) putObject(w http.ResponseWriter, r *http.Request, rt *bucketRT,
 	return nil
 }
 
-func (app *S3RP) deleteObject(w http.ResponseWriter, r *http.Request, rt *bucketRT, key string) error {
+func (app *S3RP) deleteObject(c *opCtx) error {
+	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.DeleteObjectInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
@@ -253,7 +257,8 @@ func (app *S3RP) deleteObject(w http.ResponseWriter, r *http.Request, rt *bucket
 	return nil
 }
 
-func (app *S3RP) listObjectsV2(w http.ResponseWriter, r *http.Request, rt *bucketRT) error {
+func (app *S3RP) listObjectsV2(c *opCtx) error {
+	w, r, rt := c.w, c.r, c.rt
 	query := r.URL.Query()
 	in := &s3.ListObjectsV2Input{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
@@ -360,7 +365,8 @@ func objectsFromSDK(objects []types.Object) []Object {
 	return result
 }
 
-func (app *S3RP) listObjectsV1(w http.ResponseWriter, r *http.Request, rt *bucketRT) error {
+func (app *S3RP) listObjectsV1(c *opCtx) error {
+	w, r, rt := c.w, c.r, c.rt
 	query := r.URL.Query()
 	in := &s3.ListObjectsInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
@@ -424,7 +430,8 @@ func (app *S3RP) listObjectsV1(w http.ResponseWriter, r *http.Request, rt *bucke
 }
 
 // getBucketLocation answers from the config without calling the backend.
-func (app *S3RP) getBucketLocation(w http.ResponseWriter, rt *bucketRT) error {
+func (app *S3RP) getBucketLocation(c *opCtx) error {
+	w, rt := c.w, c.rt
 	region := rt.cfg.Backend.Region
 	if region == "us-east-1" {
 		// S3 convention: us-east-1 is represented as an empty value
@@ -433,7 +440,8 @@ func (app *S3RP) getBucketLocation(w http.ResponseWriter, rt *bucketRT) error {
 	return writeXML(w, &LocationConstraint{XMLNS: s3XMLNS, Value: region})
 }
 
-func (app *S3RP) deleteObjects(w http.ResponseWriter, r *http.Request, rt *bucketRT, vr *verifiedRequest) error {
+func (app *S3RP) deleteObjects(c *opCtx) error {
+	w, r, rt, vr := c.w, c.r, c.rt, c.vr
 	body, _, s3err := requestBody(r, vr)
 	if s3err != nil {
 		return s3err
@@ -530,7 +538,8 @@ func (app *S3RP) deleteObjects(w http.ResponseWriter, r *http.Request, rt *bucke
 	return writeXML(w, result)
 }
 
-func (app *S3RP) headBucket(w http.ResponseWriter, r *http.Request, rt *bucketRT) error {
+func (app *S3RP) headBucket(c *opCtx) error {
+	w, r, rt := c.w, c.r, c.rt
 	in := &s3.HeadBucketInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 	}

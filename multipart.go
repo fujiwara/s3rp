@@ -17,7 +17,8 @@ import (
 // DeleteObjects); the maximum entries of both fit well within this.
 const maxXMLBodySize = 16 << 20
 
-func (app *S3RP) createMultipartUpload(w http.ResponseWriter, r *http.Request, rt *bucketRT, key string) error {
+func (app *S3RP) createMultipartUpload(c *opCtx) error {
+	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.CreateMultipartUploadInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
@@ -76,7 +77,8 @@ func (app *S3RP) createMultipartUpload(w http.ResponseWriter, r *http.Request, r
 	})
 }
 
-func (app *S3RP) uploadPart(w http.ResponseWriter, r *http.Request, rt *bucketRT, key string, vr *verifiedRequest) error {
+func (app *S3RP) uploadPart(c *opCtx) error {
+	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
 	query := r.URL.Query()
 	partNumber, err := strconv.ParseInt(query.Get("partNumber"), 10, 32)
 	if err != nil {
@@ -125,7 +127,8 @@ func (app *S3RP) uploadPart(w http.ResponseWriter, r *http.Request, rt *bucketRT
 	return nil
 }
 
-func (app *S3RP) completeMultipartUpload(w http.ResponseWriter, r *http.Request, rt *bucketRT, key string, vr *verifiedRequest) error {
+func (app *S3RP) completeMultipartUpload(c *opCtx) error {
+	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
 	body, _, s3err := requestBody(r, vr)
 	if s3err != nil {
 		return s3err
@@ -212,7 +215,8 @@ func (app *S3RP) completeMultipartUpload(w http.ResponseWriter, r *http.Request,
 	})
 }
 
-func (app *S3RP) abortMultipartUpload(w http.ResponseWriter, r *http.Request, rt *bucketRT, key string) error {
+func (app *S3RP) abortMultipartUpload(c *opCtx) error {
+	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.AbortMultipartUploadInput{
 		Bucket:   aws.String(rt.cfg.Backend.Bucket),
 		Key:      aws.String(key),
@@ -225,7 +229,8 @@ func (app *S3RP) abortMultipartUpload(w http.ResponseWriter, r *http.Request, rt
 	return nil
 }
 
-func (app *S3RP) listParts(w http.ResponseWriter, r *http.Request, rt *bucketRT, key string) error {
+func (app *S3RP) listParts(c *opCtx) error {
+	w, r, rt, key := c.w, c.r, c.rt, c.key
 	query := r.URL.Query()
 	in := &s3.ListPartsInput{
 		Bucket:   aws.String(rt.cfg.Backend.Bucket),
@@ -285,7 +290,8 @@ func (app *S3RP) listParts(w http.ResponseWriter, r *http.Request, rt *bucketRT,
 	return writeXML(w, result)
 }
 
-func (app *S3RP) listMultipartUploads(w http.ResponseWriter, r *http.Request, rt *bucketRT) error {
+func (app *S3RP) listMultipartUploads(c *opCtx) error {
+	w, r, rt := c.w, c.r, c.rt
 	query := r.URL.Query()
 	in := &s3.ListMultipartUploadsInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
