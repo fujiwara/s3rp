@@ -208,7 +208,7 @@ Whether a checksum is actually stored and returned depends on the backend (versi
 
 A bucket may carry an AWS-style policy document, written as JSON text in the config (`buckets[].policy`) or the database. GetBucketPolicy returns it; PutBucketPolicy / DeleteBucketPolicy are not supported (policies are defined in the store, not via the S3 API).
 
-Two simplifications against AWS: principals are plain user names of the tenant under the `S3RP` key (no ARNs), and resources are plain `"bucket"` / `"bucket/prefix*"` strings (no ARNs). `*` in Action / Resource matches any characters including `/`. As in AWS, `Action` matching is case-insensitive (so a mis-cased `Deny` cannot silently fail open), while `Resource` matching is case-sensitive since object keys are.
+Two simplifications against AWS: principals are plain user names of the tenant under the `S3RP` key (no ARNs), and resources are plain `"bucket"` / `"bucket/prefix*"` strings (no ARNs). Action and Resource support the AWS wildcards `*` (any run of characters, including `/`) and `?` (exactly one character). As in AWS, `Action` matching is case-insensitive (so a mis-cased `Deny` cannot silently fail open), while `Resource` matching is case-sensitive since object keys are.
 
 ```yaml
 buckets:

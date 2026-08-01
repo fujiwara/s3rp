@@ -4,7 +4,8 @@
 // Statement / Effect / Principal / Action / Resource), with two
 // simplifications: principals are plain user names (no ARNs) under the
 // "S3RP" key, and resources are plain "bucket" or "bucket/prefix*" strings
-// (no ARNs).
+// (no ARNs). Action and Resource support the AWS wildcards "*" (any run of
+// characters) and "?" (a single character).
 package policy
 
 import (
@@ -207,22 +208,34 @@ func matchAnyFold(patterns []string, value string) bool {
 }
 
 // Match matches value against a pattern where "*" matches any sequence of
-// characters, including "/" (as in AWS policies).
+// characters (including "/") and "?" matches exactly one character, as in
+// AWS policies. Both wildcards operate on runes, and there is no escaping:
+// a literal "*"/"?" in a key cannot be matched literally, matching AWS.
 func Match(pattern, value string) bool {
-	segments := strings.Split(pattern, "*")
-	if len(segments) == 1 {
-		return pattern == value
-	}
-	if !strings.HasPrefix(value, segments[0]) {
-		return false
-	}
-	value = value[len(segments[0]):]
-	for _, seg := range segments[1 : len(segments)-1] {
-		i := strings.Index(value, seg)
-		if i < 0 {
+	pat := []rune(pattern)
+	val := []rune(value)
+	var p, v int
+	// last position where a '*' was seen, and the value index it started at,
+	// so we can backtrack and let the '*' consume one more character
+	star, starV := -1, 0
+	for v < len(val) {
+		switch {
+		case p < len(pat) && (pat[p] == '?' || pat[p] == val[v]):
+			p++
+			v++
+		case p < len(pat) && pat[p] == '*':
+			star, starV = p, v
+			p++
+		case star >= 0:
+			p = star + 1
+			starV++
+			v = starV
+		default:
 			return false
 		}
-		value = value[i+len(seg):]
 	}
-	return strings.HasSuffix(value, segments[len(segments)-1])
+	for p < len(pat) && pat[p] == '*' {
+		p++
+	}
+	return p == len(pat)
 }

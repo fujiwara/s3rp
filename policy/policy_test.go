@@ -323,6 +323,71 @@ func TestEvaluateLiteralDotSegments(t *testing.T) {
 	}
 }
 
+// TestMatchWildcards exercises the Match function directly for both the
+// "*" (any run) and "?" (single character) wildcards, including
+// combinations and rune handling.
+func TestMatchWildcards(t *testing.T) {
+	cases := []struct {
+		pattern, value string
+		want           bool
+	}{
+		// exact and star
+		{"s3:GetObject", "s3:GetObject", true},
+		{"s3:GetObject", "s3:PutObject", false},
+		{"s3:Get*", "s3:GetObject", true},
+		{"s3:*Object*", "s3:PutObjectTagging", true},
+		{"b/*", "b/deep/nested/key", true}, // star spans /
+		{"b/*/*", "b/a/x", true},
+		{"b/*/*", "b/a", false},
+		// single-character ?
+		{"s3:Get?bject", "s3:GetObject", true},   // ? matches O
+		{"s3:Get??bject", "s3:GetObject", false}, // two ? overshoot
+		{"s3:Get?", "s3:Get1", true},
+		{"s3:Get?", "s3:Get12", false},
+		{"a?c", "abc", true},
+		{"a?c", "ac", false}, // ? requires exactly one char
+		{"a?c", "a/c", true}, // ? matches any char, including /
+		// combinations
+		{"foo/???/bar", "foo/qux/bar", true},
+		{"foo/???/bar", "foo/quxx/bar", false},
+		{"pre*mid?end", "preXXXmidYend", true},
+		{"pre*mid?end", "preXXXmidend", false},
+		// no escaping: a literal ? in the value needs a ? or * in the pattern
+		{"a?c", "a?c", true},
+		{"abc", "a?c", false},
+		// rune-aware: ? matches one multibyte rune
+		{"a?c", "aあc", true},
+	}
+	for _, tc := range cases {
+		if got := policy.Match(tc.pattern, tc.value); got != tc.want {
+			t.Errorf("Match(%q, %q) = %v, want %v", tc.pattern, tc.value, got, tc.want)
+		}
+	}
+}
+
+// TestEvaluateQuestionWildcard verifies "?" works through policy evaluation,
+// so a Deny using it does not silently fail open.
+func TestEvaluateQuestionWildcard(t *testing.T) {
+	p, err := policy.Parse(`{
+		"Statement": [
+			{"Effect": "Deny", "Principal": {"S3RP": ["batch"]}, "Action": "s3:???Object", "Resource": "b/log-????"}
+		]
+	}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := p.Evaluate("batch", "s3:PutObject", "b/log-2026"); got != policy.Deny {
+		t.Errorf("expect Deny, got %v", got)
+	}
+	if got := p.Evaluate("batch", "s3:GetObject", "b/log-2026"); got != policy.Deny {
+		t.Errorf("expect Deny (s3:???Object matches Get), got %v", got)
+	}
+	// resource with the wrong length does not match the ???? pattern
+	if got := p.Evaluate("batch", "s3:PutObject", "b/log-12345"); got != policy.None {
+		t.Errorf("expect None (log-???? needs 4 chars), got %v", got)
+	}
+}
+
 // TestEvaluateActionCaseInsensitive verifies that actions match regardless
 // of case (as in AWS), so a mis-cased Deny cannot silently fail open, while
 // resources stay case-sensitive.
