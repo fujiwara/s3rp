@@ -2,6 +2,7 @@ package s3rp
 
 import (
 	"encoding/xml"
+	"github.com/fujiwara/s3rp/checksum"
 	"io"
 	"net/http"
 	"net/url"
@@ -100,13 +101,13 @@ func (app *S3RP) uploadPart(c *opCtx) error {
 	if v := r.Header.Get("Content-MD5"); v != "" {
 		in.ContentMD5 = aws.String(v)
 	}
-	cs := checksumsFromHeaders(r.Header)
+	cs := checksum.FromHeaders(r.Header)
 	in.ChecksumCRC32 = cs.CRC32
 	in.ChecksumCRC32C = cs.CRC32C
 	in.ChecksumCRC64NVME = cs.CRC64NVME
 	in.ChecksumSHA1 = cs.SHA1
 	in.ChecksumSHA256 = cs.SHA256
-	if alg := trailerChecksumAlgorithm(r.Header); alg != "" {
+	if alg := checksum.TrailerAlgorithm(r.Header); alg != "" {
 		in.ChecksumAlgorithm = types.ChecksumAlgorithm(strings.ToUpper(alg))
 	}
 	out, err := rt.client.UploadPart(r.Context(), in)
@@ -116,7 +117,7 @@ func (app *S3RP) uploadPart(c *opCtx) error {
 	if out.ETag != nil {
 		w.Header().Set("ETag", *out.ETag)
 	}
-	setChecksumHeaders(w.Header(), checksums{
+	checksum.SetHeaders(w.Header(), checksum.Values{
 		CRC32:     out.ChecksumCRC32,
 		CRC32C:    out.ChecksumCRC32C,
 		CRC64NVME: out.ChecksumCRC64NVME,
@@ -173,7 +174,7 @@ func (app *S3RP) completeMultipartUpload(c *opCtx) error {
 	if v := r.Header.Get("x-amz-checksum-type"); v != "" {
 		in.ChecksumType = types.ChecksumType(strings.ToUpper(v))
 	}
-	cs := checksumsFromHeaders(r.Header)
+	cs := checksum.FromHeaders(r.Header)
 	in.ChecksumCRC32 = cs.CRC32
 	in.ChecksumCRC32C = cs.CRC32C
 	in.ChecksumCRC64NVME = cs.CRC64NVME
