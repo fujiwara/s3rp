@@ -369,6 +369,17 @@ type BucketEntry struct {
 	CreationDate string `xml:"CreationDate"`
 }
 
+// PostResponse is the body of a browser-based POST upload response when the
+// form requests success_action_status 201.
+type PostResponse struct {
+	XMLName  xml.Name `xml:"PostResponse"`
+	XMLNS    string   `xml:"xmlns,attr,omitempty"`
+	Location string   `xml:"Location"`
+	Bucket   string   `xml:"Bucket"`
+	Key      string   `xml:"Key"`
+	ETag     string   `xml:"ETag"`
+}
+
 // Write renders v as an S3 XML response body with a 200 status.
 func Write(w http.ResponseWriter, v any) error {
 	b, err := xml.Marshal(v)

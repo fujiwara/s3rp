@@ -298,8 +298,8 @@ var presignAuthParams = []string{
 
 // verifyPresignedRequest authenticates a request signed via query string
 // parameters (a presigned URL) by re-presigning a clone of it and comparing
-// the signatures.
-// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
+// the signatures. Specified in "Authenticating Requests: Using Query
+// Parameters (AWS Signature Version 4)" in the S3 API reference.
 func (v *Verifier) verifyPresignedRequest(r *http.Request, lookup SecretLookup) (*Verified, *s3err.Error) {
 	query := r.URL.Query()
 	queryParamsError := func(msg string) *s3err.Error {

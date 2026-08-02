@@ -15,8 +15,9 @@ import (
 	"github.com/fujiwara/s3rp/sigv4"
 )
 
-// Known-answer test vector from the AWS documentation.
-// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-streaming.html
+// Known-answer test vector from the AWS documentation ("Signature
+// Calculations for the Authorization Header: Transferring Payload in
+// Multiple Chunks" in the S3 API reference).
 func awsDocsVerifiedRequest() *sigv4.Verified {
 	return &sigv4.Verified{
 		AccessKeyID:     "AKIAIOSFODNN7EXAMPLE",

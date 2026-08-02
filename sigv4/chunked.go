@@ -18,7 +18,9 @@ import (
 
 // aws-chunked content encoding:
 // <hex-size>[;chunk-signature=<64 hex>]\r\n<data>\r\n ... 0[;chunk-signature=...]\r\n[trailers]\r\n
-// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-streaming.html
+// Specified in "Signature Calculations for the Authorization Header:
+// Transferring Payload in Multiple Chunks (Chunked Upload)" in the S3 API
+// reference (cited by title: AWS's deep links to it rot).
 
 var emptySHA256 = sha256.Sum256(nil)
 

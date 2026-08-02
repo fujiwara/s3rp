@@ -145,6 +145,19 @@ func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	if r.Method == http.MethodOptions {
 		return g.handlePreflight(w, r)
 	}
+	// browser-based POST uploads carry their authentication in the form
+	// fields, not in a header or the query
+	if r.Method == http.MethodPost && isMultipartForm(r) {
+		bucket, key, err := splitPath(r.URL.EscapedPath())
+		if err != nil {
+			return s3err.New(http.StatusBadRequest, "InvalidURI", "Couldn't parse the specified URI.")
+		}
+		if bucket != "" && key == "" {
+			return g.handlePostObject(w, r, bucket)
+		}
+		// a multipart POST to any other path is not a browser upload; let
+		// the normal flow reject it
+	}
 	vr, s3e := g.verifyRequest(r)
 	if s3e != nil {
 		return s3e
