@@ -264,15 +264,21 @@ func TestProxyListObjectsV2(t *testing.T) {
 }
 
 func TestProxyHeadBucket(t *testing.T) {
-	stub := &stubBackend{hbOut: &s3.HeadBucketOutput{}}
+	// the backend's region must not reach the client: x-amz-bucket-region
+	// reports the gateway's region (us-east-1 when unpinned)
+	stub := &stubBackend{hbOut: &s3.HeadBucketOutput{BucketRegion: aws.String("backend-region-1")}}
 	client, _ := newTestProxy(t, stub)
-	if _, err := client.HeadBucket(t.Context(), &s3.HeadBucketInput{
+	out, err := client.HeadBucket(t.Context(), &s3.HeadBucketInput{
 		Bucket: aws.String("testbucket"),
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
 	if aws.ToString(stub.hbIn.Bucket) != "backend-testbucket" {
 		t.Errorf("expect backend-testbucket, got %s", aws.ToString(stub.hbIn.Bucket))
+	}
+	if aws.ToString(out.BucketRegion) != "us-east-1" {
+		t.Errorf("expect us-east-1, got %s", aws.ToString(out.BucketRegion))
 	}
 }
 

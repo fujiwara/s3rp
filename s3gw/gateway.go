@@ -32,6 +32,11 @@ type Gateway struct {
 	store    store.Store
 	verifier *sigv4.Verifier
 
+	// region is the SetRegion value: the signing region this endpoint
+	// accepts and the region it reports to clients. The backend's region is
+	// backend identity and is never exposed.
+	region string
+
 	authorizer   Authorizer
 	interceptors []Interceptor
 	observer     Observer

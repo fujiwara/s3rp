@@ -445,15 +445,26 @@ func (g *Gateway) listObjectsV1(c *opCtx) error {
 	return s3xml.Write(w, result)
 }
 
-// getBucketLocation answers from the config without calling the backend.
+// frontRegion is the region this endpoint reports to clients: the SetRegion
+// value, us-east-1 when unset. Never the backend's region — that is backend
+// identity, and a client honoring the reported region would re-sign with it
+// and be refused by a pinned verifier.
+func (g *Gateway) frontRegion() string {
+	if g.region != "" {
+		return g.region
+	}
+	return "us-east-1"
+}
+
+// getBucketLocation answers with the gateway's own region, without calling
+// the backend.
 func (g *Gateway) getBucketLocation(c *opCtx) error {
-	w, rt := c.w, c.rt
-	region := rt.cfg.Backend.Region
+	region := g.frontRegion()
 	if region == "us-east-1" {
 		// S3 convention: us-east-1 is represented as an empty value
 		region = ""
 	}
-	return s3xml.Write(w, &s3xml.LocationConstraint{XMLNS: s3xml.Namespace, Value: region})
+	return s3xml.Write(c.w, &s3xml.LocationConstraint{XMLNS: s3xml.Namespace, Value: region})
 }
 
 func (g *Gateway) deleteObjects(c *opCtx) error {
@@ -568,6 +579,9 @@ func (g *Gateway) headBucket(c *opCtx) error {
 	if _, err := rt.client.HeadBucket(r.Context(), in); err != nil {
 		return s3err.FromSDKError(err, r.URL.Path)
 	}
+	// the region discovery header AWS recommends over GetBucketLocation;
+	// always a concrete name, us-east-1 included
+	w.Header().Set("x-amz-bucket-region", g.frontRegion())
 	w.WriteHeader(http.StatusOK)
 	return nil
 }

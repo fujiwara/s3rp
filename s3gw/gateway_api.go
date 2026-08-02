@@ -86,8 +86,13 @@ func (g *Gateway) SignerCacheStats() CacheStats {
 func (g *Gateway) SetSignerCacheSize(n int) { g.verifier.SetSignerCacheSize(n) }
 
 // SetRegion pins the signing region this endpoint accepts; unset, any region
-// verifies. See sigv4.Verifier.SetRegion.
-func (g *Gateway) SetRegion(region string) { g.verifier.SetRegion(region) }
+// verifies. See sigv4.Verifier.SetRegion. The same value is what
+// GetBucketLocation and HeadBucket report to clients (us-east-1 when unset) —
+// the backend's region is backend identity and is never exposed.
+func (g *Gateway) SetRegion(region string) {
+	g.region = region
+	g.verifier.SetRegion(region)
+}
 
 // SetNow replaces the clock used for signature expiry and clock-skew checks.
 func (g *Gateway) SetNow(f func() time.Time) { g.verifier.Now = f }

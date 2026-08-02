@@ -165,10 +165,15 @@ func TestIntegration(t *testing.T) {
 		}
 	})
 	t.Run("HeadBucket", func(t *testing.T) {
-		if _, err := client.HeadBucket(t.Context(), &s3.HeadBucketInput{
+		out, err := client.HeadBucket(t.Context(), &s3.HeadBucketInput{
 			Bucket: aws.String("it-bucket"),
-		}); err != nil {
+		})
+		if err != nil {
 			t.Fatal(err)
+		}
+		// the gateway's region (us-east-1 when not pinned), never the backend's
+		if aws.ToString(out.BucketRegion) != "us-east-1" {
+			t.Errorf("unexpected bucket region %v", out.BucketRegion)
 		}
 	})
 	t.Run("ListBuckets", func(t *testing.T) {
@@ -341,7 +346,9 @@ func TestIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if out.LocationConstraint != "" { // us-east-1 is empty
+		// the gateway's region: us-east-1 when not pinned, which S3
+		// represents as an empty value
+		if out.LocationConstraint != "" {
 			t.Errorf("unexpected location %v", out.LocationConstraint)
 		}
 	})

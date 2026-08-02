@@ -73,7 +73,9 @@ func newTestGateway(t *testing.T) *s3gw.Gateway {
 			"testbucket": {
 				Tenant: "testtenant", Name: "testbucket",
 				Backend: &store.Backend{
-					Endpoint: "http://backend.invalid", Region: "us-east-1",
+					// a region no client should ever see: responses
+					// report the gateway's region, never the backend's
+					Endpoint: "http://backend.invalid", Region: "backend-region-1",
 					Bucket: "backend-testbucket", AccessKeyID: "bk", SecretAccessKey: "bs",
 					UsePathStyle: &pathStyle,
 				},
