@@ -102,6 +102,65 @@ var wellKnownErrorStatus = map[string]int{
 	"InvalidRange":       http.StatusRequestedRangeNotSatisfiable,
 }
 
+// canonicalMessage gives each S3 error code the message Amazon S3 uses for
+// it. A backend's own message is never passed on to the client: it is
+// written by software the tenant does not know about and may name what the
+// proxy exists to hide — Amazon S3's authorization failures, for one, quote
+// the caller's IAM ARN and the real bucket ARN, which here are the
+// operator's. The backend's wording is kept as the cause, so it reaches the
+// operator's log and only there. Canonical messages also make the surface
+// uniform: for one missing key, versitygw says "The specified key does not
+// exist." and Ceph RGW says "NoSuchKey".
+var canonicalMessage = map[string]string{
+	"AccessDenied":                    "Access Denied",
+	"AccountProblem":                  "There is a problem with your account that prevents the operation from completing successfully.",
+	"BadDigest":                       "The Content-MD5 or checksum value that you specified did not match what the server received.",
+	"BucketAlreadyExists":             "The requested bucket name is not available.",
+	"BucketAlreadyOwnedByYou":         "The bucket that you tried to create already exists, and you own it.",
+	"BucketNotEmpty":                  "The bucket that you tried to delete is not empty.",
+	"EntityTooLarge":                  "Your proposed upload exceeds the maximum allowed size.",
+	"EntityTooSmall":                  "Your proposed upload is smaller than the minimum allowed size.",
+	"InternalError":                   "We encountered an internal error. Please try again.",
+	"InvalidArgument":                 "Invalid Argument",
+	"InvalidBucketName":               "The specified bucket is not valid.",
+	"InvalidDigest":                   "The Content-MD5 or checksum value that you specified is not valid.",
+	"InvalidObjectState":              "The operation is not valid for the current state of the object.",
+	"InvalidPart":                     "One or more of the specified parts could not be found.",
+	"InvalidPartOrder":                "The list of parts was not in ascending order. Parts list must be specified in order by part number.",
+	"InvalidRange":                    "The requested range is not satisfiable.",
+	"InvalidRequest":                  "Invalid Request",
+	"InvalidToken":                    "The provided token is malformed or otherwise invalid.",
+	"MalformedXML":                    "The XML that you provided was not well formed or did not validate against our published schema.",
+	"MethodNotAllowed":                "The specified method is not allowed against this resource.",
+	"MissingContentLength":            "You must provide the Content-Length HTTP header.",
+	"NoSuchBucket":                    "The specified bucket does not exist.",
+	"NoSuchBucketPolicy":              "The bucket policy does not exist.",
+	"NoSuchCORSConfiguration":         "The CORS configuration does not exist.",
+	"NoSuchKey":                       "The specified key does not exist.",
+	"NoSuchLifecycleConfiguration":    "The lifecycle configuration does not exist.",
+	"NoSuchUpload":                    "The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed.",
+	"NoSuchVersion":                   "The version ID specified in the request does not match an existing version.",
+	"NotFound":                        "Not Found",
+	"NotImplemented":                  "A header that you provided implies functionality that is not implemented.",
+	"ObjectLockConfigurationNotFound": "Object Lock configuration does not exist for this bucket.",
+	"PreconditionFailed":              "At least one of the preconditions that you specified did not hold.",
+	"RequestTimeout":                  "Your socket connection to the server was not read from or written to within the timeout period.",
+	"ServiceUnavailable":              "Service is unable to handle request.",
+	"SlowDown":                        "Please reduce your request rate.",
+	"TooManyBuckets":                  "You have attempted to create more buckets than allowed.",
+}
+
+// messageFor returns what the client is told for an error code. An
+// unrecognized code (a backend extension, or a newer S3 error than this
+// table) is reported as the code itself, which is what the code already
+// falls back to when a backend sends no message at all.
+func messageFor(code string) string {
+	if msg, ok := canonicalMessage[code]; ok {
+		return msg
+	}
+	return code
+}
+
 // FromSDKError converts an error returned by the aws-sdk-go-v2 S3 client
 // into an Error, preserving the backend's error code and HTTP status
 // where possible.
@@ -134,10 +193,9 @@ func FromSDKError(err error, resource string) *Error {
 	if errors.As(err, &apiErr) {
 		code := apiErr.ErrorCode()
 		s3err.Code = code
-		s3err.Message = apiErr.ErrorMessage()
-		if s3err.Message == "" {
-			s3err.Message = code
-		}
+		// the backend's own wording stays in the cause (set above), which
+		// only the observer sees; the client gets the canonical message
+		s3err.Message = messageFor(code)
 		if !hasStatus {
 			if status, ok := wellKnownErrorStatus[code]; ok {
 				s3err.status = status
