@@ -79,6 +79,7 @@ tenants:
             secret_access_key: ${ACME_BATCH_SECRET_001}
     buckets:                         # buckets owned by this tenant
       - name: photos                 # bucket name on the front side
+        created_at: 2026-01-15T09:00:00Z # reported by ListBuckets (optional; default 1970-01-01)
         backend:
           endpoint: http://ceph.internal:7480
           region: us-east-1          # default "us-east-1"
@@ -161,6 +162,12 @@ Because operations are reconstructed rather than forwarded, each one is implemen
 Other operations return a `NotImplemented` error.
 
 CopyObject and UploadPartCopy work between buckets served by the same backend (same endpoint, region and credentials); copying across different backends returns `NotImplemented`. The copy source bucket must belong to the requester's tenant.
+
+GetBucketLocation and HeadBucket (the `x-amz-bucket-region` header) report the gateway's own region — the value pinned with `SetRegion`, `us-east-1` when unset — never the backend's region, which stays hidden like the backend bucket name and endpoint.
+
+Wherever a response exposes an `Owner` or `Initiator` — object and version listings, multipart listings, ACLs, ListBuckets — it is the requesting tenant, never the backend account the proxy uses.
+
+ListBuckets answers from the store without calling any backend: the bucket names are the front names, and each `CreationDate` is the store's `created_at` for the bucket (the Unix epoch when the store does not track one).
 
 The `versionId` query parameter is passed through on GetObject, HeadObject, DeleteObject, GetObjectAcl and the object tagging operations. Versioning requires a backend that supports it.
 
@@ -401,7 +408,9 @@ func (d *definitions) GetBucket(ctx context.Context, tenant, bucket string) (*st
 // CORS preflights. Bucket names are globally unique for this reason.
 func (d *definitions) GetBucketByName(ctx context.Context, bucket string) (*store.Bucket, error) { /* … */ }
 
-func (d *definitions) ListBucketNames(ctx context.Context, tenant string) ([]string, error) { /* … */ }
+// ListBuckets returns light entries (name and creation date) so a listing
+// does not have to materialize full definitions, credentials included.
+func (d *definitions) ListBuckets(ctx context.Context, tenant string) ([]store.BucketEntry, error) { /* … */ }
 
 // tenantPlan is what the store loads alongside a bucket; the gateway hands
 // it back untouched on Op.BucketMetadata.
@@ -469,7 +478,7 @@ func main() {
 
 - Unauthenticated requests are not free. `GetKey` runs **before** signature verification — the secret is what verifies — so a well-formed `Authorization` header with a bogus access key still costs one store lookup, and a valid key with a bad signature costs the HMAC chain too. A store should negative-cache unknown key ids (weighing the TTL against how soon a freshly issued key must start working), and rate limiting belongs **outside** `Handler()`, in a wrapping handler or the fronting proxy: the `Authorizer` runs only after verification and the policies, which is too late for DoS economics.
 - That same wrapping layer is where a health-check endpoint and a request body cap (`http.MaxBytesReader`) go. To the gateway every path is S3 — `GET /` is an authenticated ListBuckets — and it deliberately caps nothing itself, for the same reason it sets no read or write timeouts.
-- The signing region of a request is taken from its credential scope, so by default **any region verifies** — the signature commits to the region either way, and a front endpoint has no inherent region. A multi-region deployment should pin each endpoint with `SetRegion`: not for signature integrity, but so a client pointed at the wrong regional endpoint fails fast with AWS's own error (`AuthorizationHeaderMalformed`, naming the expected region) instead of silently being served cross-region, and so a leaked derived signing key stays scoped to its region as SigV4 intends.
+- The signing region of a request is taken from its credential scope, so by default **any region verifies** — the signature commits to the region either way, and a front endpoint has no inherent region. A multi-region deployment should pin each endpoint with `SetRegion`: not for signature integrity, but so a client pointed at the wrong regional endpoint fails fast with AWS's own error (`AuthorizationHeaderMalformed`, naming the expected region) instead of silently being served cross-region, and so a leaked derived signing key stays scoped to its region as SigV4 intends. The pinned region is also what GetBucketLocation and HeadBucket report, keeping region discovery consistent with what the verifier accepts.
 
 *Backend clients and the gateway's caches*
 

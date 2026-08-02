@@ -18,6 +18,11 @@ import (
 	"github.com/fujiwara/s3rp"
 )
 
+const (
+	testAccessKeyID     = "S3RPTESTKEY001"
+	testSecretAccessKey = "testsecret001"
+)
+
 // Integration test against a real S3-compatible backend (versitygw).
 // Run: docker compose up -d && S3RP_TEST_BACKEND_ENDPOINT=http://localhost:7070 go test ./...
 func TestIntegration(t *testing.T) {
@@ -165,10 +170,15 @@ func TestIntegration(t *testing.T) {
 		}
 	})
 	t.Run("HeadBucket", func(t *testing.T) {
-		if _, err := client.HeadBucket(t.Context(), &s3.HeadBucketInput{
+		out, err := client.HeadBucket(t.Context(), &s3.HeadBucketInput{
 			Bucket: aws.String("it-bucket"),
-		}); err != nil {
+		})
+		if err != nil {
 			t.Fatal(err)
+		}
+		// the gateway's region (us-east-1 when not pinned), never the backend's
+		if aws.ToString(out.BucketRegion) != "us-east-1" {
+			t.Errorf("unexpected bucket region %v", out.BucketRegion)
 		}
 	})
 	t.Run("ListBuckets", func(t *testing.T) {
@@ -333,6 +343,10 @@ func TestIntegration(t *testing.T) {
 		if len(out.Contents) == 0 {
 			t.Error("expect some contents")
 		}
+		// V1 always carries an Owner: the tenant, never the backend account
+		if o := out.Contents[0].Owner; o == nil || aws.ToString(o.ID) != "it-tenant" {
+			t.Errorf("expect it-tenant owner, got %v", o)
+		}
 	})
 	t.Run("GetBucketLocation", func(t *testing.T) {
 		out, err := client.GetBucketLocation(t.Context(), &s3.GetBucketLocationInput{
@@ -341,7 +355,9 @@ func TestIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if out.LocationConstraint != "" { // us-east-1 is empty
+		// the gateway's region: us-east-1 when not pinned, which S3
+		// represents as an empty value
+		if out.LocationConstraint != "" {
 			t.Errorf("unexpected location %v", out.LocationConstraint)
 		}
 	})

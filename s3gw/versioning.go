@@ -127,9 +127,13 @@ func (g *Gateway) listObjectVersions(c *opCtx) error {
 	if out.IsTruncated != nil {
 		result.IsTruncated = *out.IsTruncated
 	}
+	// AWS always carries an Owner on versions and delete markers; the
+	// tenant, never the backend's account
+	owner := tenantOwner(c.vr.Tenant)
 	for _, v := range out.Versions {
 		version := s3xml.ObjectVersion{
 			StorageClass: string(v.StorageClass),
+			Owner:        owner,
 		}
 		if v.Key != nil {
 			version.Key = *v.Key
@@ -152,7 +156,7 @@ func (g *Gateway) listObjectVersions(c *opCtx) error {
 		result.Versions = append(result.Versions, version)
 	}
 	for _, d := range out.DeleteMarkers {
-		marker := s3xml.DeleteMarkerEntry{}
+		marker := s3xml.DeleteMarkerEntry{Owner: owner}
 		if d.Key != nil {
 			marker.Key = *d.Key
 		}

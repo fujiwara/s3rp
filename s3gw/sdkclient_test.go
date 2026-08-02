@@ -40,8 +40,15 @@ func newTestProxyWithGateway(t *testing.T, stub *stubBackend) (*s3.Client, *http
 // checksum settings.
 func newS3Client(t *testing.T, endpoint, key, secret string) *s3.Client {
 	t.Helper()
+	return newS3ClientRegion(t, endpoint, key, secret, "us-east-1")
+}
+
+// newS3ClientRegion is newS3Client with an explicit signing region, for tests
+// that pin the gateway region.
+func newS3ClientRegion(t *testing.T, endpoint, key, secret, region string) *s3.Client {
+	t.Helper()
 	cfg, err := awsconfig.LoadDefaultConfig(t.Context(),
-		awsconfig.WithRegion("us-east-1"),
+		awsconfig.WithRegion(region),
 		awsconfig.WithCredentialsProvider(
 			credentials.NewStaticCredentialsProvider(key, secret, ""),
 		),

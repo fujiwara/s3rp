@@ -25,6 +25,8 @@ func TestProxyListObjectsV1(t *testing.T) {
 					Size:         aws.Int64(10),
 					ETag:         aws.String(`"etag-a"`),
 					LastModified: aws.Time(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
+					// the backend account; it must never reach the client
+					Owner: &types.Owner{ID: aws.String("backend-account"), DisplayName: aws.String("backend-account")},
 				},
 			},
 		},
@@ -50,10 +52,16 @@ func TestProxyListObjectsV1(t *testing.T) {
 	if aws.ToString(stub.listV1In.Bucket) != "backend-testbucket" {
 		t.Errorf("expect backend-testbucket, got %s", aws.ToString(stub.listV1In.Bucket))
 	}
+	// V1 always carries an Owner: the tenant, never the backend account
+	if out.Contents[0].Owner == nil || aws.ToString(out.Contents[0].Owner.ID) != "testtenant" {
+		t.Errorf("expect testtenant owner, got %v", out.Contents[0].Owner)
+	}
 }
 
 func TestProxyGetBucketLocation(t *testing.T) {
-	// newTestApp uses the default region us-east-1, represented as empty
+	// the gateway's own region is reported, never the backend's (the
+	// fixture backend is in backend-region-1); unpinned it is us-east-1,
+	// represented as empty by S3 convention
 	client, _ := newTestProxy(t, &stubBackend{})
 	out, err := client.GetBucketLocation(t.Context(), &s3.GetBucketLocationInput{
 		Bucket: aws.String("testbucket"),
@@ -63,6 +71,25 @@ func TestProxyGetBucketLocation(t *testing.T) {
 	}
 	if out.LocationConstraint != "" {
 		t.Errorf("expect empty location, got %s", out.LocationConstraint)
+	}
+}
+
+func TestProxyGetBucketLocationPinnedRegion(t *testing.T) {
+	gw := newTestGateway(t)
+	gw.SetRegion("ap-northeast-1")
+	if err := gw.SetBackend("testbucket", &stubBackend{}); err != nil {
+		t.Fatal(err)
+	}
+	ts := newTestServer(t, gw)
+	client := newS3ClientRegion(t, ts, testAccessKeyID, testSecretAccessKey, "ap-northeast-1")
+	out, err := client.GetBucketLocation(t.Context(), &s3.GetBucketLocationInput{
+		Bucket: aws.String("testbucket"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.LocationConstraint != "ap-northeast-1" {
+		t.Errorf("expect ap-northeast-1, got %s", out.LocationConstraint)
 	}
 }
 
@@ -311,6 +338,13 @@ func TestProxyListObjectVersions(t *testing.T) {
 	}
 	if aws.ToString(stub.listVerIn.Prefix) != "v" {
 		t.Errorf("unexpected prefix %v", stub.listVerIn.Prefix)
+	}
+	// versions and delete markers carry the tenant as Owner
+	if out.Versions[0].Owner == nil || aws.ToString(out.Versions[0].Owner.ID) != "testtenant" {
+		t.Errorf("expect testtenant owner, got %v", out.Versions[0].Owner)
+	}
+	if out.DeleteMarkers[0].Owner == nil || aws.ToString(out.DeleteMarkers[0].Owner.ID) != "testtenant" {
+		t.Errorf("expect testtenant owner, got %v", out.DeleteMarkers[0].Owner)
 	}
 }
 

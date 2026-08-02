@@ -18,7 +18,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
+	"github.com/fujiwara/s3rp/s3gw"
 	"github.com/fujiwara/s3rp/sigv4"
+	"github.com/fujiwara/s3rp/store"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -216,6 +218,8 @@ func TestProxyListObjectsV2(t *testing.T) {
 					Size:         aws.Int64(10),
 					ETag:         aws.String(`"etag-a"`),
 					LastModified: aws.Time(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
+					// the backend account; it must never reach the client
+					Owner: &types.Owner{ID: aws.String("backend-account"), DisplayName: aws.String("backend-account")},
 				},
 				{
 					Key:          aws.String("dir/b.txt"),
@@ -261,18 +265,40 @@ func TestProxyListObjectsV2(t *testing.T) {
 	if aws.ToString(stub.listIn.Prefix) != "dir/" {
 		t.Errorf("unexpected prefix %v", stub.listIn.Prefix)
 	}
+	// without fetch-owner no Owner is present, backend-reported or otherwise
+	if out.Contents[0].Owner != nil {
+		t.Errorf("expect no owner, got %v", out.Contents[0].Owner)
+	}
+	// with fetch-owner the Owner is the tenant, never the backend account
+	out, err = client.ListObjectsV2(t.Context(), &s3.ListObjectsV2Input{
+		Bucket:     aws.String("testbucket"),
+		FetchOwner: aws.Bool(true),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Contents) == 0 || out.Contents[0].Owner == nil ||
+		aws.ToString(out.Contents[0].Owner.ID) != "testtenant" {
+		t.Errorf("expect testtenant owner, got %v", out.Contents[0].Owner)
+	}
 }
 
 func TestProxyHeadBucket(t *testing.T) {
-	stub := &stubBackend{hbOut: &s3.HeadBucketOutput{}}
+	// the backend's region must not reach the client: x-amz-bucket-region
+	// reports the gateway's region (us-east-1 when unpinned)
+	stub := &stubBackend{hbOut: &s3.HeadBucketOutput{BucketRegion: aws.String("backend-region-1")}}
 	client, _ := newTestProxy(t, stub)
-	if _, err := client.HeadBucket(t.Context(), &s3.HeadBucketInput{
+	out, err := client.HeadBucket(t.Context(), &s3.HeadBucketInput{
 		Bucket: aws.String("testbucket"),
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
 	if aws.ToString(stub.hbIn.Bucket) != "backend-testbucket" {
 		t.Errorf("expect backend-testbucket, got %s", aws.ToString(stub.hbIn.Bucket))
+	}
+	if aws.ToString(out.BucketRegion) != "us-east-1" {
+		t.Errorf("expect us-east-1, got %s", aws.ToString(out.BucketRegion))
 	}
 }
 
@@ -291,6 +317,36 @@ func TestProxyListBuckets(t *testing.T) {
 	// the owner is the tenant name
 	if aws.ToString(out.Owner.ID) != "testtenant" {
 		t.Errorf("expect owner testtenant, got %s", aws.ToString(out.Owner.ID))
+	}
+	// the creation date comes from the store's BucketEntry
+	if want := time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC); !aws.ToTime(out.Buckets[0].CreationDate).Equal(want) {
+		t.Errorf("expect %v, got %v", want, out.Buckets[0].CreationDate)
+	}
+}
+
+func TestProxyListBucketsNoCreatedAt(t *testing.T) {
+	// a store that does not track creation reports the Unix epoch
+	gw := s3gw.New(memStore{
+		keys: map[string]*store.Key{
+			testAccessKeyID: {
+				AccessKeyID: testAccessKeyID, SecretAccessKey: testSecretAccessKey,
+				Tenant: "testtenant", User: "testuser",
+			},
+		},
+		buckets: map[string]*store.Bucket{
+			"nodate": {Tenant: "testtenant", Name: "nodate", Backend: &store.Backend{}},
+		},
+	})
+	client, _, _ := newSDKClientFor(t, gw)
+	out, err := client.ListBuckets(t.Context(), &s3.ListBucketsInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Buckets) != 1 {
+		t.Fatalf("expect 1 bucket, got %d", len(out.Buckets))
+	}
+	if !aws.ToTime(out.Buckets[0].CreationDate).Equal(time.Unix(0, 0)) {
+		t.Errorf("expect the Unix epoch, got %v", out.Buckets[0].CreationDate)
 	}
 }
 
@@ -447,6 +503,13 @@ func TestProxyMultipartUpload(t *testing.T) {
 	if aws.ToString(parts.Bucket) != "testbucket" {
 		t.Errorf("expect testbucket, got %s", aws.ToString(parts.Bucket))
 	}
+	// Owner and Initiator are the tenant, never the backend account
+	if parts.Owner == nil || aws.ToString(parts.Owner.ID) != "testtenant" {
+		t.Errorf("expect testtenant owner, got %v", parts.Owner)
+	}
+	if parts.Initiator == nil || aws.ToString(parts.Initiator.ID) != "testtenant" {
+		t.Errorf("expect testtenant initiator, got %v", parts.Initiator)
+	}
 
 	complete, err := client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
 		Bucket:          aws.String("testbucket"),
@@ -513,6 +576,13 @@ func TestProxyListMultipartUploads(t *testing.T) {
 	}
 	if aws.ToString(stub.listMPUIn.Prefix) != "a" {
 		t.Errorf("unexpected prefix %v", stub.listMPUIn.Prefix)
+	}
+	// Owner and Initiator are the tenant, never the backend account
+	if out.Uploads[0].Owner == nil || aws.ToString(out.Uploads[0].Owner.ID) != "testtenant" {
+		t.Errorf("expect testtenant owner, got %v", out.Uploads[0].Owner)
+	}
+	if out.Uploads[0].Initiator == nil || aws.ToString(out.Uploads[0].Initiator.ID) != "testtenant" {
+		t.Errorf("expect testtenant initiator, got %v", out.Uploads[0].Initiator)
 	}
 }
 

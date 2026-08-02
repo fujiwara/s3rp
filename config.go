@@ -6,6 +6,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/fujiwara/s3rp/cors"
 
@@ -58,6 +59,8 @@ type BucketConfig struct {
 	Backend *BackendConfig `yaml:"backend" json:"backend"`
 	Policy  string         `yaml:"policy,omitempty" json:"policy,omitempty"` // bucket policy JSON text
 	CORS    []*cors.Rule   `yaml:"cors,omitempty" json:"cors,omitempty"`
+	// CreatedAt is reported by ListBuckets (unset = the Unix epoch).
+	CreatedAt time.Time `yaml:"created_at,omitzero" json:"created_at,omitzero"`
 }
 
 type KeyConfig struct {
