@@ -480,7 +480,21 @@ func main() {
 *Hooks and metering*
 
 - `store.Bucket.Metadata` and `store.Key.Metadata` are opaque to the gateway and come back on `Op` (`BucketMetadata` / `KeyMetadata`), so the hooks get what the store's lookups already loaded — a quota, a suspension flag — without querying it again. They are excluded from `Op`'s JSON on purpose: whether that data belongs in a log is your decision. A store that shares definitions across requests must make the values safe for concurrent reads.
-- An interceptor brackets **one inbound request**, and its timeline is: it is invoked once verification, routing, the policies and the `Authorizer` have all passed — the backend has not been contacted yet, which is why returning without calling `next` refuses the request. `next()` then runs the operation itself: the call to the backend (including any retries the SDK makes internally) **and** the writing of the response to the client, streaming included. So by the time `next` returns, the response has been sent and `op.BytesIn`/`BytesOut` are final — metering is simply code placed after `next` returns.
+- Interceptors bracket **one inbound request** and nest like middleware: the first `Use` is the outermost layer, and `next()` runs everything inside it — down to the handler, which both calls the backend and writes the response to the client. With `gw.Use(A); gw.Use(B)`:
+
+  ```
+  verification → routing → policies → Authorizer
+    A, before its next()
+      B, before its next()
+        handler: backend call (incl. SDK-internal retries),
+                 response streamed to the client
+        ...op.BytesIn / op.BytesOut are final from here on
+      B, after its next()
+    A, after its next()
+  observer (RequestInfo, exactly once)
+  ```
+
+  Returning without calling `next` refuses the request — nothing inside runs, the backend is never contacted. An error returned by an inner layer is the outer layer's `next()` result, and whatever the outermost returns decides what the client is told. The byte counts are set at the innermost point, so metering is code placed after `next` in **any** layer and the counts are identical; a *duration* measured in A includes B, though, as in any middleware stack.
 - A client that retries sends a **new request**, which is verified, authorized and metered on its own. That is what the server served; whether a retry should count toward a quota or an invoice is the application's decision, not the gateway's.
 - `Op.BytesIn` / `BytesOut` count bytes on the wire, so an `aws-chunked` upload includes its framing. They measure transfer, not storage: a quota over bytes at rest needs the backend's inventory (deletes, overwrites and versions carry no sizes through the hooks).
 
