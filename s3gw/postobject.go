@@ -95,6 +95,7 @@ var postFieldMapped = map[string]bool{
 	hdrSSE: true, hdrSSEKMSKeyID: true,
 	"x-amz-algorithm": true, "x-amz-credential": true,
 	"x-amz-date": true, "x-amz-signature": true, "policy": true,
+	"x-amz-security-token": true,
 }
 
 func checkPostFields(fields map[string]string) *s3err.Error {
@@ -121,9 +122,6 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, bucke
 		return s3e
 	}
 	defer file.Close()
-	if _, ok := fields["x-amz-security-token"]; ok {
-		return s3err.New(http.StatusBadRequest, "InvalidArgument", "temporary security credentials are not supported")
-	}
 	// x-ignore-* fields are exempt from policy conditions by convention and
 	// are not forwarded
 	for k := range fields {

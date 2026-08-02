@@ -24,11 +24,11 @@ const (
 
 var testTime = time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
 
-func lookup(_ context.Context, accessKeyID string) (string, error) {
+func lookup(_ context.Context, accessKeyID string) (sigv4.Credential, error) {
 	if accessKeyID != testAccessKeyID {
-		return "", sigv4.ErrUnknownKey
+		return sigv4.Credential{}, sigv4.ErrUnknownKey
 	}
-	return testSecret, nil
+	return sigv4.Credential{SecretAccessKey: testSecret}, nil
 }
 
 // signedRequest builds a server-side request signed like a real S3 client.
@@ -121,7 +121,9 @@ func TestVerifyRejects(t *testing.T) {
 // key, since that would tell a client its credentials are wrong when the
 // service is merely broken
 func TestVerifyLookupFailure(t *testing.T) {
-	failing := func(context.Context, string) (string, error) { return "", errors.New("database is down") }
+	failing := func(context.Context, string) (sigv4.Credential, error) {
+		return sigv4.Credential{}, errors.New("database is down")
+	}
 	_, err := newVerifier().Verify(signedRequest(t, testSecret), failing)
 	if err == nil {
 		t.Fatal("expect an error")

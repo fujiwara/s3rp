@@ -30,11 +30,11 @@ const (
 
 var awsExampleTime = time.Date(2015, 12, 29, 0, 0, 1, 0, time.UTC)
 
-func awsExampleLookup(_ context.Context, akid string) (string, error) {
+func awsExampleLookup(_ context.Context, akid string) (sigv4.Credential, error) {
 	if akid != awsExampleAccessKeyID {
-		return "", sigv4.ErrUnknownKey
+		return sigv4.Credential{}, sigv4.ErrUnknownKey
 	}
-	return awsExampleSecret, nil
+	return sigv4.Credential{SecretAccessKey: awsExampleSecret}, nil
 }
 
 // awsExampleFields is the example form, as the gateway hands it to

@@ -41,6 +41,13 @@ type Key struct {
 	SecretAccessKey Password
 	Tenant          string
 	User            string
+	// SessionToken marks a temporary credential (empty = long-lived key):
+	// a request signed with this key must present exactly this token.
+	// Expiry is the Store's business — an expired key is simply not
+	// returned by GetKey — and issuance is the control plane's; the
+	// issuance response must not be returned before the key is visible to
+	// the store the gateways read, or the first use races the write.
+	SessionToken string
 	// Policy is the user's identity policy (nil = allow all operations).
 	Policy *policy.UserPolicy
 
