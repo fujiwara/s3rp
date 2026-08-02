@@ -33,5 +33,9 @@ func (g *Gateway) SetClientCacheSize(n int) {
 // signature verification. See sigv4.Verifier.SetSignerCacheSize.
 func (g *Gateway) SetSignerCacheSize(n int) { g.verifier.SetSignerCacheSize(n) }
 
+// SetRegion pins the signing region this endpoint accepts; unset, any region
+// verifies. See sigv4.Verifier.SetRegion.
+func (g *Gateway) SetRegion(region string) { g.verifier.SetRegion(region) }
+
 // SetNow replaces the clock used for signature expiry and clock-skew checks.
 func (g *Gateway) SetNow(f func() time.Time) { g.verifier.Now = f }
