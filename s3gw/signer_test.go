@@ -1,103 +1,74 @@
-package s3rp_test
+package s3gw_test
 
 import (
-	"bytes"
-	"context"
 	"fmt"
-	"io"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/fujiwara/s3rp"
+	"github.com/fujiwara/s3rp/s3gw"
+	"github.com/fujiwara/s3rp/store"
 )
 
 // The proxy verifies with a different access key on nearly every request, so
 // these cover the per-key signer cache: many keys must all verify correctly
 // (including when two keys land in the same cache slot), and a wrong secret
-// must still be rejected.
+// must still be rejected. They run against the bare gateway — no observer,
+// no root-package assembly — so what they measure is the gateway itself.
 
 const signerTestKeys = 32
 
 var signerTestTime = time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
 
-func newMultiKeyApp(tb testing.TB) *s3rp.S3RP {
+func newMultiKeyGateway(tb testing.TB) *s3gw.Gateway {
 	tb.Helper()
-	users := make([]*s3rp.UserConfig, signerTestKeys)
-	for i := range users {
-		users[i] = &s3rp.UserConfig{
-			Name: fmt.Sprintf("user%02d", i),
-			Keys: []*s3rp.KeyConfig{{
-				AccessKeyID:     fmt.Sprintf("KEY%02d", i),
-				SecretAccessKey: s3rp.Password(fmt.Sprintf("secret%02d", i)),
-			}},
+	pathStyle := true
+	keys := make(map[string]*store.Key, signerTestKeys)
+	for i := range signerTestKeys {
+		akid := fmt.Sprintf("KEY%02d", i)
+		keys[akid] = &store.Key{
+			AccessKeyID:     akid,
+			SecretAccessKey: store.Password(fmt.Sprintf("secret%02d", i)),
+			Tenant:          "acme",
+			User:            fmt.Sprintf("user%02d", i),
 		}
 	}
-	cfg := &s3rp.Config{Tenants: []*s3rp.TenantConfig{{
-		Name:  "acme",
-		Users: users,
-		Buckets: []*s3rp.BucketConfig{{
-			Name: "data",
-			Backend: &s3rp.BackendConfig{
-				Endpoint: "http://backend.invalid", Bucket: "backend-data",
-				AccessKeyID: "bk", SecretAccessKey: "bs",
+	gw := s3gw.New(memStore{
+		keys: keys,
+		buckets: map[string]*store.Bucket{
+			"data": {
+				Tenant: "acme", Name: "data",
+				Backend: &store.Backend{
+					Endpoint: "http://backend.invalid", Region: "us-east-1",
+					Bucket: "backend-data", AccessKeyID: "bk", SecretAccessKey: "bs",
+					UsePathStyle: &pathStyle,
+				},
 			},
-		}},
-	}}}
-	cfg.SetDefaults()
-	if err := cfg.Validate(); err != nil {
+		},
+	})
+	// stubGet builds a fresh body per call, so it is safe for the
+	// concurrent cases
+	if err := gw.SetBackend("data", stubGet{body: "x"}); err != nil {
 		tb.Fatal(err)
 	}
-	app, err := s3rp.NewWithStore(context.Background(), cfg, s3rp.NewConfigStore(cfg))
-	if err != nil {
-		tb.Fatal(err)
-	}
-	mustSetBackend(tb, app, "data", concurrentStub{&stubBackend{}})
-	app.SetNow(func() time.Time { return signerTestTime })
-	return app
-}
-
-// concurrentStub is a backend safe for concurrent requests: it records nothing
-// and hands each caller its own body, unlike stubBackend which is written for
-// single-threaded assertions.
-type concurrentStub struct{ *stubBackend }
-
-func (concurrentStub) GetObject(context.Context, *s3.GetObjectInput, ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
-	return &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("x"))}, nil
+	gw.SetNow(func() time.Time { return signerTestTime })
+	return gw
 }
 
 // signedGetFor builds a request signed by key i, or by a wrong secret.
 func signedGetFor(tb testing.TB, i int, secret string) *http.Request {
 	tb.Helper()
-	const payloadHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-	const url = "http://s3.example.com/data/some/key.txt"
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		tb.Fatal(err)
-	}
-	req.Header.Set("X-Amz-Content-Sha256", payloadHash)
-	signer := v4.NewSigner(func(o *v4.SignerOptions) { o.DisableURIPathEscaping = true })
 	creds := aws.Credentials{AccessKeyID: fmt.Sprintf("KEY%02d", i), SecretAccessKey: secret}
-	if err := signer.SignHTTP(context.Background(), creds, req, payloadHash, "s3", "us-east-1", signerTestTime); err != nil {
-		tb.Fatal(err)
-	}
-	sr := httptest.NewRequest("GET", url, bytes.NewReader(nil))
-	sr.Header = req.Header
-	sr.Host = req.Host
-	return sr
+	return signedRequest(tb, "GET", "http://s3.example.com/data/some/key.txt",
+		nil, emptyPayloadHash, signerTestTime, creds, nil)
 }
 
 func TestSignerCacheManyKeys(t *testing.T) {
-	app := newMultiKeyApp(t)
-	h := app.Handler()
+	h := newMultiKeyGateway(t).Handler()
 
 	// every key verifies, repeatedly (so cached signers are reused) and
 	// concurrently (so slot installation races are exercised under -race)
@@ -137,13 +108,13 @@ func TestSignerCacheManyKeys(t *testing.T) {
 // re-derives the signing key per request and serializes verification — the
 // many-keys parallel case then runs *slower* than serial. Both diversity
 // cases should stay close to their single-key counterpart.
+//
+// The manykeys allocs jitter run to run: 32 keys land in one of 512 slots by
+// maphash seed luck, a pair collides in roughly six runs out of ten, and a
+// collided pair rebuilds its signers on every alternation. That is the
+// displacement the signer cache stats report as Evictions.
 func BenchmarkVerifyKeyDiversity(b *testing.B) {
-	old := slog.Default()
-	slog.SetDefault(slog.New(slog.NewJSONHandler(io.Discard, nil)))
-	b.Cleanup(func() { slog.SetDefault(old) })
-
-	app := newMultiKeyApp(b)
-	h := app.Handler()
+	h := newMultiKeyGateway(b).Handler()
 	reqs := make([]*http.Request, signerTestKeys)
 	for i := range reqs {
 		reqs[i] = signedGetFor(b, i, fmt.Sprintf("secret%02d", i))

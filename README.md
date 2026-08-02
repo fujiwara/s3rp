@@ -499,7 +499,7 @@ Signature verification and policy evaluation run on every request, so when chang
 
 ```console
 $ go test ./policy -bench . -benchmem     # policy evaluation, incl. the worst case the size caps allow
-$ go test . -bench VerifyKeyDiversity -benchmem   # SigV4 verification across many access keys
+$ go test ./s3gw -bench VerifyKeyDiversity -benchmem   # SigV4 verification across many access keys
 ```
 
 The integration test suite runs against a real S3-compatible backend, selected by environment variables. Two backends are provided in `compose.yml`:
