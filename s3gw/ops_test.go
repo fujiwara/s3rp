@@ -1,20 +1,16 @@
-package s3rp_test
+package s3gw_test
 
 import (
 	"errors"
 	"io"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
-	"github.com/fujiwara/s3rp"
 )
 
 func TestProxyListObjectsV1(t *testing.T) {
@@ -182,75 +178,16 @@ func TestProxyPutObjectWithTaggingHeader(t *testing.T) {
 // TestProxyTenantIsolation verifies that a key of one tenant cannot access
 // another tenant's bucket, and that ListBuckets only shows the own tenant.
 func TestProxyTenantIsolation(t *testing.T) {
-	cfg := &s3rp.Config{
-		Tenants: []*s3rp.TenantConfig{
-			{
-				Name: "tenant-a",
-				Users: []*s3rp.UserConfig{
-					{
-						Name: "usera",
-						Keys: []*s3rp.KeyConfig{
-							{AccessKeyID: "TENANTAKEY", SecretAccessKey: "tenantasecret"},
-						},
-					},
-				},
-				Buckets: []*s3rp.BucketConfig{
-					{
-						Name: "bucket-a",
-						Backend: &s3rp.BackendConfig{
-							Endpoint: "http://backend.invalid", AccessKeyID: "bk", SecretAccessKey: "bs",
-						},
-					},
-				},
-			},
-			{
-				Name: "tenant-b",
-				Users: []*s3rp.UserConfig{
-					{
-						Name: "userb",
-						Keys: []*s3rp.KeyConfig{
-							{AccessKeyID: "TENANTBKEY", SecretAccessKey: "tenantbsecret"},
-						},
-					},
-				},
-				Buckets: []*s3rp.BucketConfig{
-					{
-						Name: "bucket-b",
-						Backend: &s3rp.BackendConfig{
-							Endpoint: "http://backend.invalid", AccessKeyID: "bk", SecretAccessKey: "bs",
-						},
-					},
-				},
-			},
-		},
-	}
-	cfg.SetDefaults()
-	if err := cfg.Validate(); err != nil {
-		t.Fatal(err)
-	}
-	app, err := s3rp.New(t.Context(), cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
 	stub := &stubBackend{
 		getOut: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("x"))},
 	}
-	mustSetBackend(t, app, "bucket-a", stub)
-	mustSetBackend(t, app, "bucket-b", stub)
-	ts := newTestServerForApp(t, app)
-	awscfg, err := awsconfig.LoadDefaultConfig(t.Context(),
-		awsconfig.WithRegion("us-east-1"),
-		awsconfig.WithCredentialsProvider(
-			credentials.NewStaticCredentialsProvider("TENANTAKEY", "tenantasecret", ""),
-		),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	clientA := s3.NewFromConfig(awscfg, func(o *s3.Options) {
-		o.BaseEndpoint = aws.String(ts.URL)
-		o.UsePathStyle = true
-	})
+	usersA := []userSpec{{name: "usera", keyID: "TENANTAKEY", secret: "tenantasecret"}}
+	usersB := []userSpec{{name: "userb", keyID: "TENANTBKEY", secret: "tenantbsecret"}}
+	m := buildStore(t, "tenant-a", usersA, []bucketSpec{{name: "bucket-a"}})
+	m.addTenant(t, "tenant-b", usersB, []bucketSpec{{name: "bucket-b"}})
+	gw := gatewayFor(t, m, stub)
+	ts := newTestServer(t, gw)
+	clientA := newS3Client(t, ts, "TENANTAKEY", "tenantasecret")
 
 	// own bucket is accessible
 	out, err := clientA.GetObject(t.Context(), &s3.GetObjectInput{
@@ -417,52 +354,6 @@ func TestProxyVersionID(t *testing.T) {
 // same backend and one on a different backend.
 func newCopyTestProxy(t *testing.T) (*s3.Client, *stubBackend) {
 	t.Helper()
-	sameBackend := func(name string) *s3rp.BucketConfig {
-		return &s3rp.BucketConfig{
-			Name: name,
-			Backend: &s3rp.BackendConfig{
-				Endpoint:        "http://backend.invalid",
-				Bucket:          "backend-" + name,
-				AccessKeyID:     "backendkey",
-				SecretAccessKey: "backendsecret",
-			},
-		}
-	}
-	cfg := &s3rp.Config{
-		Tenants: []*s3rp.TenantConfig{
-			{
-				Name: "copytenant",
-				Users: []*s3rp.UserConfig{
-					{
-						Name: "copyuser",
-						Keys: []*s3rp.KeyConfig{
-							{AccessKeyID: testAccessKeyID, SecretAccessKey: testSecretAccessKey},
-						},
-					},
-				},
-				Buckets: []*s3rp.BucketConfig{
-					sameBackend("srcbucket"),
-					sameBackend("dstbucket"),
-					{
-						Name: "remotebucket",
-						Backend: &s3rp.BackendConfig{
-							Endpoint:        "http://other-backend.invalid",
-							AccessKeyID:     "otherkey",
-							SecretAccessKey: "othersecret",
-						},
-					},
-				},
-			},
-		},
-	}
-	cfg.SetDefaults()
-	if err := cfg.Validate(); err != nil {
-		t.Fatal(err)
-	}
-	app, err := s3rp.New(t.Context(), cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
 	stub := &stubBackend{
 		copyOut: &s3.CopyObjectOutput{
 			CopyObjectResult: &types.CopyObjectResult{
@@ -476,24 +367,15 @@ func newCopyTestProxy(t *testing.T) (*s3.Client, *stubBackend) {
 			},
 		},
 	}
-	for _, name := range []string{"srcbucket", "dstbucket", "remotebucket"} {
-		mustSetBackend(t, app, name, stub)
-	}
-	ts := httptest.NewServer(app.Handler())
-	t.Cleanup(ts.Close)
-	awscfg, err := awsconfig.LoadDefaultConfig(t.Context(),
-		awsconfig.WithRegion("us-east-1"),
-		awsconfig.WithCredentialsProvider(
-			credentials.NewStaticCredentialsProvider(testAccessKeyID, testSecretAccessKey, ""),
-		),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	client := s3.NewFromConfig(awscfg, func(o *s3.Options) {
-		o.BaseEndpoint = aws.String(ts.URL)
-		o.UsePathStyle = true
-	})
+	users := []userSpec{{name: "copyuser", keyID: testAccessKeyID, secret: testSecretAccessKey}}
+	gw := gatewayFor(t, buildStore(t, "copytenant", users, []bucketSpec{
+		{name: "srcbucket"},
+		{name: "dstbucket"},
+		// deliberately on another backend: copying across backends must fail
+		{name: "remotebucket", endpoint: "http://other-backend.invalid"},
+	}), stub)
+	ts := newTestServer(t, gw)
+	client := newS3Client(t, ts, testAccessKeyID, testSecretAccessKey)
 	return client, stub
 }
 

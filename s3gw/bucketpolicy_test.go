@@ -1,20 +1,16 @@
-package s3rp_test
+package s3gw_test
 
 import (
 	"encoding/json"
 	"errors"
 	"io"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
-	"github.com/fujiwara/s3rp"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -59,70 +55,18 @@ const onlyAdminWritesPolicy = `{
 // (admin / batch) and three buckets carrying different policies.
 func newPolicyTestProxy(t *testing.T, stub *stubBackend) map[string]*s3.Client {
 	t.Helper()
-	bucket := func(name, policy string) *s3rp.BucketConfig {
-		return &s3rp.BucketConfig{
-			Name: name,
-			Backend: &s3rp.BackendConfig{
-				Endpoint:        "http://backend.invalid",
-				Bucket:          "backend-" + name,
-				AccessKeyID:     "bk",
-				SecretAccessKey: "bs",
-			},
-			Policy: policy,
-		}
+	users := []userSpec{
+		{name: "admin", keyID: "ADMINKEY", secret: "adminsecret"},
+		{name: "batch", keyID: "BATCHKEY", secret: "batchsecret"},
 	}
-	cfg := &s3rp.Config{
-		Tenants: []*s3rp.TenantConfig{
-			{
-				Name: "poltenant",
-				Users: []*s3rp.UserConfig{
-					{Name: "admin", Keys: []*s3rp.KeyConfig{{AccessKeyID: "ADMINKEY", SecretAccessKey: "adminsecret"}}},
-					{Name: "batch", Keys: []*s3rp.KeyConfig{{AccessKeyID: "BATCHKEY", SecretAccessKey: "batchsecret"}}},
-				},
-				Buckets: []*s3rp.BucketConfig{
-					bucket("policied", batchReadOnlyPolicy),
-					bucket("frozen", everyoneReadOnlyPolicy),
-					bucket("locked", onlyAdminWritesPolicy),
-					bucket("free", ""),
-				},
-			},
-		},
+	buckets := []bucketSpec{
+		{name: "policied", policyText: batchReadOnlyPolicy},
+		{name: "frozen", policyText: everyoneReadOnlyPolicy},
+		{name: "locked", policyText: onlyAdminWritesPolicy},
+		{name: "free"},
 	}
-	cfg.SetDefaults()
-	if err := cfg.Validate(); err != nil {
-		t.Fatal(err)
-	}
-	app, err := s3rp.New(t.Context(), cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"policied", "frozen", "locked", "free"} {
-		mustSetBackend(t, app, name, stub)
-	}
-	ts := httptest.NewServer(app.Handler())
-	t.Cleanup(ts.Close)
-
-	clients := make(map[string]*s3.Client, 2)
-	for user, creds := range map[string][2]string{
-		"admin": {"ADMINKEY", "adminsecret"},
-		"batch": {"BATCHKEY", "batchsecret"},
-	} {
-		awscfg, err := awsconfig.LoadDefaultConfig(t.Context(),
-			awsconfig.WithRegion("us-east-1"),
-			awsconfig.WithCredentialsProvider(
-				credentials.NewStaticCredentialsProvider(creds[0], creds[1], ""),
-			),
-		)
-		if err != nil {
-			t.Fatal(err)
-		}
-		clients[user] = s3.NewFromConfig(awscfg, func(o *s3.Options) {
-			o.BaseEndpoint = aws.String(ts.URL)
-			o.UsePathStyle = true
-			o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
-		})
-	}
-	return clients
+	gw := gatewayFor(t, buildStore(t, "poltenant", users, buckets), stub)
+	return clientsFor(t, gw, users)
 }
 
 func expectAccessDenied(t *testing.T, err error) {

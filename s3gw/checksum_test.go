@@ -1,4 +1,4 @@
-package s3rp_test
+package s3gw_test
 
 import (
 	"io"
@@ -47,11 +47,8 @@ func TestProxyPutObjectTrailerChecksum(t *testing.T) {
 	stub := &stubBackend{
 		putOut: &s3.PutObjectOutput{ETag: aws.String(`"e"`)},
 	}
-	app := newTestApp(t)
-	mustSetBackend(t, app, "testbucket", stub)
-	ts := newTestServerForApp(t, app)
-	// default RequestChecksumCalculation (WhenSupported) computes a checksum
-	client := newS3Client(t, ts.URL, testAccessKeyID, testSecretAccessKey)
+	// the SDK's own checksum settings compute a trailer checksum
+	client := newTestProxyDefaultChecksums(t, stub)
 	content := strings.Repeat("trailer checksum content ", 100)
 	if _, err := client.PutObject(t.Context(), &s3.PutObjectInput{
 		Bucket: aws.String("testbucket"),
