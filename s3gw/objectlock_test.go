@@ -1,4 +1,4 @@
-package s3rp_test
+package s3gw_test
 
 import (
 	"strings"

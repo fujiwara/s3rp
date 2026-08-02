@@ -1,4 +1,4 @@
-package s3rp_test
+package s3gw_test
 
 import (
 	"context"
@@ -31,7 +31,7 @@ func (b *blocker) Authorize(_ context.Context, op *s3gw.Op) error {
 
 func TestAuthorizerCanRefuse(t *testing.T) {
 	stub := &stubBackend{getOut: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("x"))}}
-	client, _, app := newTestProxyWithApp(t, stub)
+	client, _, app := newTestProxyWithGateway(t, stub)
 
 	// the quota this service enforces is not expressible as a policy
 	// a retryable status would have the client send the request again, and
@@ -71,7 +71,7 @@ func TestInterceptorMeters(t *testing.T) {
 		getOut: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader(body))},
 		putOut: &s3.PutObjectOutput{ETag: aws.String(`"e"`)},
 	}
-	client, _, app := newTestProxyWithApp(t, stub)
+	client, _, app := newTestProxyWithGateway(t, stub)
 
 	var recorded []s3gw.Op
 	app.Use(func(ctx context.Context, op *s3gw.Op, next func() error) error {
@@ -113,7 +113,7 @@ func TestInterceptorMeters(t *testing.T) {
 
 func TestInterceptorCanRefuseWithoutRunning(t *testing.T) {
 	stub := &stubBackend{getOut: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("x"))}}
-	client, _, app := newTestProxyWithApp(t, stub)
+	client, _, app := newTestProxyWithGateway(t, stub)
 	app.Use(func(ctx context.Context, op *s3gw.Op, next func() error) error {
 		return s3err.New(http.StatusForbidden, "AccessDenied", "draining")
 	})
