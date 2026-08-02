@@ -18,6 +18,11 @@ import (
 	"github.com/fujiwara/s3rp"
 )
 
+const (
+	testAccessKeyID     = "S3RPTESTKEY001"
+	testSecretAccessKey = "testsecret001"
+)
+
 // Integration test against a real S3-compatible backend (versitygw).
 // Run: docker compose up -d && S3RP_TEST_BACKEND_ENDPOINT=http://localhost:7070 go test ./...
 func TestIntegration(t *testing.T) {
