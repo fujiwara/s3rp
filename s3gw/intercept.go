@@ -36,6 +36,16 @@ type Op struct {
 	// too. They are filled in by the time an Interceptor's next returns.
 	BytesIn  int64 `json:"bytes_in"`
 	BytesOut int64 `json:"bytes_out"`
+
+	// BucketMetadata and KeyMetadata carry the store.Bucket.Metadata and
+	// store.Key.Metadata the Store attached to the definitions this request
+	// resolved, so hooks get the data the store already loaded — a quota, a
+	// suspension flag — without a second lookup. The gateway passes them
+	// through untouched. They are excluded from JSON on purpose: Op is
+	// emitted as-is by observers, and whether this data belongs in a log is
+	// the service's decision, not the gateway's.
+	BucketMetadata any `json:"-"`
+	KeyMetadata    any `json:"-"`
 }
 
 // Authorizer is consulted for every operation, after the bucket and user

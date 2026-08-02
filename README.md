@@ -396,6 +396,10 @@ func (d *definitions) GetBucket(ctx context.Context, tenant, bucket string) (*st
 			Bucket:      "acme-photos-a1b2", // the real name, never shown to the client
 			AccessKeyID: "…", SecretAccessKey: "…",
 		},
+		// Metadata is opaque to the gateway and comes back on Op in your
+		// hooks — attach what this lookup already loaded instead of
+		// querying it again there. store.Key has the same field.
+		Metadata: &tenantPlan{quotaBytes: 1 << 40},
 	}, nil
 }
 
@@ -405,11 +409,16 @@ func (d *definitions) GetBucketByName(ctx context.Context, bucket string) (*stor
 
 func (d *definitions) ListBucketNames(ctx context.Context, tenant string) ([]string, error) { /* … */ }
 
+// tenantPlan is what the store loads alongside a bucket; the gateway hands
+// it back untouched on Op.BucketMetadata.
+type tenantPlan struct{ quotaBytes int64 }
+
 // quota refuses what a bucket policy cannot express.
 type quota struct{}
 
 func (quota) Authorize(ctx context.Context, op *s3gw.Op) error {
-	if op.Action == "s3:PutObject" && overQuota(op.Tenant) {
+	plan, _ := op.BucketMetadata.(*tenantPlan) // attached by GetBucket above
+	if op.Action == "s3:PutObject" && plan != nil && usedBytes(op.Tenant) > plan.quotaBytes {
 		// any error refuses the request; an *s3err.Error chooses what the
 		// client is told, and the backend is never reached
 		return s3err.New(http.StatusForbidden, "QuotaExceeded", "Quota exceeded")
@@ -455,6 +464,8 @@ func main() {
 **Things worth knowing before you build on it**
 
 - Definitions are read on **every request** and nothing is cached: `GetKey` on each authentication, `GetBucket` on each bucket resolution. Caching is your store's business — it knows when a key is revoked, which the gateway cannot.
+- If your store does cache, keep the parsed `*policy.Policy` / `*policy.UserPolicy` around, not the policy JSON: the compiled match patterns live on the policy object (built lazily on its first evaluation, safe to share across concurrent requests), so a store that re-parses the text per request silently repeats that work every time. A cache keyed by the policy text invalidates itself — a changed policy is a different key.
+- `store.Bucket.Metadata` and `store.Key.Metadata` are opaque to the gateway and come back on `Op` (`BucketMetadata` / `KeyMetadata`), so the hooks get what the store's lookups already loaded — a quota, a suspension flag — without querying it again. They are excluded from `Op`'s JSON on purpose: whether that data belongs in a log is your decision. A store that shares definitions across requests must make the values safe for concurrent reads.
 - What the gateway does cache is derived from definitions, never a definition itself, and is bounded: backend **clients** (one per distinct endpoint/credentials, LRU, default 128 — `SetClientCacheSize`) and one SigV4 **signer** per access key (default 512 slots — `SetSignerCacheSize`). Size them to the number of distinct backends and of access keys active at once; an evicted entry is rebuilt on its next request, so undersizing costs latency, not correctness.
 - An interceptor wraps **one inbound request**: it runs after routing and the policy checks, around the handler, so the call to the backend — including any retries the SDK makes internally — happens inside `next`. Metering is therefore straightforward: record once `next` returns, and the counts are what was actually read from and written to the client.
 - A client that retries sends a **new request**, which is verified, authorized and metered on its own. That is what the server served; whether a retry should count toward a quota or an invoice is the application's decision, not the gateway's.

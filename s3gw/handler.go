@@ -249,12 +249,14 @@ func (c *opCtx) dispatch(routes []route) error {
 			}
 		}
 		op := &Op{
-			Method: c.r.Method,
-			Action: rt.action,
-			Tenant: c.vr.Tenant,
-			User:   c.vr.User,
-			Bucket: c.rt.cfg.Name,
-			Key:    c.key,
+			Method:         c.r.Method,
+			Action:         rt.action,
+			Tenant:         c.vr.Tenant,
+			User:           c.vr.User,
+			Bucket:         c.rt.cfg.Name,
+			Key:            c.key,
+			BucketMetadata: c.rt.cfg.Metadata,
+			KeyMetadata:    c.vr.KeyMetadata,
 		}
 		if info := recordOf(c.r.Context()); info != nil {
 			info.Op = op
