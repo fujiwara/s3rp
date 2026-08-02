@@ -24,7 +24,8 @@ import (
 
 var emptySHA256 = sha256.Sum256(nil)
 
-// deriveSigningKey derives the SigV4 signing key for the scope of vr.
+// deriveSigningKey derives the SigV4 signing key for a credential scope.
+// Shared with the POST policy verifier, which signs with the same key.
 func deriveSigningKey(secret string, date, region string) []byte {
 	k := hmacSHA256([]byte("AWS4"+secret), []byte(date))
 	k = hmacSHA256(k, []byte(region))

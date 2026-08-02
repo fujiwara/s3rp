@@ -750,8 +750,6 @@ func setObjectHeaders(h http.Header, v objectHeaderValues) {
 	}
 }
 
-// contentEncodingWithoutAWSChunked strips the aws-chunked token from a
-// Content-Encoding header value.
 func contentEncodingWithoutAWSChunked(v string) string {
 	if v == "" {
 		return ""
@@ -765,7 +763,6 @@ func contentEncodingWithoutAWSChunked(v string) string {
 	return strings.Join(encodings, ", ")
 }
 
-// metadataFromHeaders extracts x-amz-meta-* headers.
 func metadataFromHeaders(h http.Header) map[string]string {
 	md := make(map[string]string)
 	for k, vs := range h {

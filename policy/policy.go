@@ -427,8 +427,6 @@ func (st *Statement) matchPrincipal(principal string) bool {
 	return !slices.Contains(st.NotPrincipal.Users, principal)
 }
 
-// matchAnyRunes reports whether value matches any of the precompiled rune
-// patterns.
 func matchAnyRunes(patterns [][]rune, value []rune) bool {
 	for _, p := range patterns {
 		if matchRunes(p, value) {
@@ -438,7 +436,6 @@ func matchAnyRunes(patterns [][]rune, value []rune) bool {
 	return false
 }
 
-// patternRunes converts patterns to their rune form as-is.
 func patternRunes(patterns []string) [][]rune {
 	out := make([][]rune, len(patterns))
 	for i, p := range patterns {

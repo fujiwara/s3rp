@@ -181,13 +181,11 @@ func (g *Gateway) putObjectLegalHold(c *opCtx) error {
 	return nil
 }
 
-// bypassGovernanceRetention reports whether the request asks to bypass
-// governance-mode retention.
 func bypassGovernanceRetention(r *http.Request) bool {
 	return r.Header.Get("x-amz-bypass-governance-retention") == "true"
 }
 
-// applyObjectLockInput copies the object-lock upload headers onto a
+// applyObjectLockHeaders copies the object-lock upload headers onto a
 // PutObject/CreateMultipartUpload-style input via the provided setters.
 func applyObjectLockHeaders(r *http.Request, mode *types.ObjectLockMode, retainUntil **time.Time, legalHold *types.ObjectLockLegalHoldStatus) {
 	if v := r.Header.Get("x-amz-object-lock-mode"); v != "" {
