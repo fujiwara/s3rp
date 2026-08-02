@@ -267,3 +267,20 @@ func TestVerifyRequest(t *testing.T) {
 		})
 	}
 }
+
+// TestGatewaySetRegion checks the wiring only; the behavior itself is the
+// sigv4 package's and is tested there.
+func TestGatewaySetRegion(t *testing.T) {
+	g := newTestGateway(t)
+	g.SetRegion("eu-west-1")
+	// signedRequest signs for us-east-1
+	req := signedRequest(t, "GET", "http://s3.example.com/testbucket/a.txt",
+		nil, emptyPayloadHash, time.Now(), testCreds(), nil)
+	_, s3e := g.VerifyRequest(req)
+	if s3e == nil {
+		t.Fatal("expect the pinned region to refuse a us-east-1 signature")
+	}
+	if s3e.Code != "AuthorizationHeaderMalformed" {
+		t.Errorf("expect AuthorizationHeaderMalformed, got %s (%s)", s3e.Code, s3e.Message)
+	}
+}

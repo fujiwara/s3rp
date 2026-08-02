@@ -103,6 +103,7 @@ type Verifier struct {
 	Now func() time.Time
 
 	signers *signerCache
+	region  string
 }
 
 // NewVerifier returns a Verifier ready for concurrent use.
@@ -119,6 +120,20 @@ func NewVerifier() *Verifier {
 // concurrent verification, and cached signers are discarded.
 func (v *Verifier) SetSignerCacheSize(n int) {
 	v.signers = newSignerCache(n)
+}
+
+// SetRegion pins the signing region this endpoint accepts: a request whose
+// credential scope names any other region is refused with the same error
+// Amazon S3 gives (AuthorizationHeaderMalformed / the presigned equivalent,
+// naming the expected region). Unset (the default), any region verifies —
+// the signature commits to the region either way, so pinning adds no
+// integrity; what it buys a multi-region deployment is failing fast on
+// clients pointed at the wrong regional endpoint, and restoring the blast
+// radius of SigV4's (date, region, service)-scoped derived keys. Call before
+// serving requests: like Now, it is not synchronized with concurrent
+// verification.
+func (v *Verifier) SetRegion(region string) {
+	v.region = region
 }
 
 func (v *Verifier) now() time.Time {
@@ -193,6 +208,12 @@ func (v *Verifier) verifyHeaderRequest(r *http.Request, lookup SecretLookup) (*V
 	if auth.Service != "s3" {
 		return nil, s3err.New(http.StatusBadRequest, "AuthorizationHeaderMalformed",
 			"The authorization header is malformed; incorrect service.")
+	}
+	if v.region != "" && auth.Region != v.region {
+		// AWS's exact wording: clients recognize it, and it tells the
+		// operator of a misdirected client what to fix
+		return nil, s3err.New(http.StatusBadRequest, "AuthorizationHeaderMalformed",
+			fmt.Sprintf("The authorization header is malformed; the region '%s' is wrong; expecting '%s'", auth.Region, v.region))
 	}
 	secret, s3e := lookupSecret(r, lookup, auth.AccessKeyID)
 	if s3e != nil {
@@ -294,6 +315,10 @@ func (v *Verifier) verifyPresignedRequest(r *http.Request, lookup SecretLookup) 
 	akid, scopeDate, region, service := credElems[0], credElems[1], credElems[2], credElems[3]
 	if service != "s3" {
 		return nil, queryParamsError("Error parsing the X-Amz-Credential parameter; incorrect service")
+	}
+	if v.region != "" && region != v.region {
+		return nil, queryParamsError(fmt.Sprintf(
+			"Error parsing the X-Amz-Credential parameter; the region '%s' is wrong; expecting '%s'", region, v.region))
 	}
 	signedHeaders := strings.Split(query.Get("X-Amz-SignedHeaders"), ";")
 	if len(signedHeaders) == 0 || signedHeaders[0] == "" {
