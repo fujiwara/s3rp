@@ -265,9 +265,13 @@ func (g *Gateway) postPutObject(c *opCtx, fields map[string]string, file *multip
 	}
 	if body.n < pp.MinLength {
 		// the size is only known now; undo the write rather than keep an
-		// object the policy did not permit
+		// object the policy did not permit. On a versioned bucket the
+		// version id targets the exact version just written — a plain
+		// delete would only add a delete marker on top of it.
 		rt.client.DeleteObject(r.Context(), &s3.DeleteObjectInput{
-			Bucket: aws.String(rt.cfg.Backend.Bucket), Key: aws.String(key),
+			Bucket:    aws.String(rt.cfg.Backend.Bucket),
+			Key:       aws.String(key),
+			VersionId: out.VersionId,
 		})
 		return s3err.New(http.StatusBadRequest, "EntityTooSmall",
 			"Your proposed upload is smaller than the minimum allowed size")
@@ -304,6 +308,7 @@ func (g *Gateway) postPutObject(c *opCtx, fields map[string]string, file *multip
 		w.WriteHeader(http.StatusOK)
 	case "201":
 		body, err := xml.Marshal(&s3xml.PostResponse{
+			XMLNS:    s3xml.Namespace,
 			Location: location, Bucket: rt.cfg.Name, Key: key, ETag: etag,
 		})
 		if err != nil {

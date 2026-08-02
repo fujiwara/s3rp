@@ -39,7 +39,10 @@ func (s *stubPost) PutObject(_ context.Context, in *s3.PutObjectInput, _ ...func
 		return nil, err
 	}
 	s.putBody = b
-	return &s3.PutObjectOutput{ETag: aws.String(`"post-etag"`)}, nil
+	return &s3.PutObjectOutput{
+		ETag:      aws.String(`"post-etag"`),
+		VersionId: aws.String("v1"),
+	}, nil
 }
 
 func (s *stubPost) DeleteObject(_ context.Context, in *s3.DeleteObjectInput, _ ...func(*s3.Options)) (*s3.DeleteObjectOutput, error) {
@@ -151,7 +154,7 @@ func TestPostObject(t *testing.T) {
 	}
 	body := w.Body.String()
 	// the response names the front bucket and the substituted key
-	for _, want := range []string{"<Bucket>testbucket</Bucket>", "<Key>user/hello.txt</Key>", "post-etag"} {
+	for _, want := range []string{`<PostResponse xmlns="`, "<Bucket>testbucket</Bucket>", "<Key>user/hello.txt</Key>", "post-etag"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("expect %s in the 201 body: %s", want, body)
 		}
@@ -277,7 +280,12 @@ func TestPostObjectContentLengthRange(t *testing.T) {
 			t.Errorf("expect EntityTooSmall, got %d: %s", w.Code, w.Body.String())
 		}
 		if stub.delIn == nil || aws.ToString(stub.delIn.Key) != "a.txt" {
-			t.Error("expect the undersized object to be deleted from the backend")
+			t.Fatal("expect the undersized object to be deleted from the backend")
+		}
+		// on a versioned bucket, the exact version just written must go —
+		// a plain delete would only add a delete marker on top of it
+		if aws.ToString(stub.delIn.VersionId) != "v1" {
+			t.Errorf("expect the delete to target the written version, got %v", stub.delIn.VersionId)
 		}
 	})
 }

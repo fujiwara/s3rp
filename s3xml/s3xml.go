@@ -373,6 +373,7 @@ type BucketEntry struct {
 // form requests success_action_status 201.
 type PostResponse struct {
 	XMLName  xml.Name `xml:"PostResponse"`
+	XMLNS    string   `xml:"xmlns,attr,omitempty"`
 	Location string   `xml:"Location"`
 	Bucket   string   `xml:"Bucket"`
 	Key      string   `xml:"Key"`
