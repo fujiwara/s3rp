@@ -83,7 +83,7 @@ func newTestGateway(t *testing.T) *s3gw.Gateway {
 }
 
 // signedRequest builds a server-side request signed like a real S3 client.
-func signedRequest(t *testing.T, method, target string, body []byte, payloadHash string, signTime time.Time, creds aws.Credentials, mod func(r *http.Request)) *http.Request {
+func signedRequest(t testing.TB, method, target string, body []byte, payloadHash string, signTime time.Time, creds aws.Credentials, mod func(r *http.Request)) *http.Request {
 	t.Helper()
 	var reader io.Reader
 	if body != nil {
