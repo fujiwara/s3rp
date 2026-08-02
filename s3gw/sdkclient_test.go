@@ -36,6 +36,33 @@ func newTestProxyWithGateway(t *testing.T, stub *stubBackend) (*s3.Client, *http
 	return newSDKClientFor(t, gw)
 }
 
+// newS3Client returns an SDK client for an endpoint, with the SDK's own
+// checksum settings.
+func newS3Client(t *testing.T, endpoint, key, secret string) *s3.Client {
+	t.Helper()
+	cfg, err := awsconfig.LoadDefaultConfig(t.Context(),
+		awsconfig.WithRegion("us-east-1"),
+		awsconfig.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(key, secret, ""),
+		),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(endpoint)
+		o.UsePathStyle = true
+	})
+}
+
+// newTestServer serves gw for the duration of the test and returns its URL.
+func newTestServer(t *testing.T, gw *s3gw.Gateway) string {
+	t.Helper()
+	ts := httptest.NewServer(gw.Handler())
+	t.Cleanup(ts.Close)
+	return ts.URL
+}
+
 // newSDKClientFor serves gw and returns an SDK client configured for it.
 func newSDKClientFor(t *testing.T, gw *s3gw.Gateway) (*s3.Client, *httptest.Server, *s3gw.Gateway) {
 	t.Helper()

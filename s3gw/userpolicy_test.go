@@ -1,18 +1,14 @@
-package s3rp_test
+package s3gw_test
 
 import (
 	"errors"
 	"io"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
-	"github.com/fujiwara/s3rp"
 	"github.com/fujiwara/s3rp/policy"
 )
 
@@ -21,75 +17,21 @@ import (
 // GetObject, to exercise the user-policy / bucket-policy combination.
 func newUserPolicyProxy(t *testing.T, stub *stubBackend) map[string]*s3.Client {
 	t.Helper()
-	cfg := &s3rp.Config{
-		Tenants: []*s3rp.TenantConfig{
-			{
-				Name: "acme",
-				Users: []*s3rp.UserConfig{
-					{
-						Name: "readonly",
-						Keys: []*s3rp.KeyConfig{{AccessKeyID: "ROKEY", SecretAccessKey: "rosecret"}},
-						Policy: []policy.ActionStatement{
-							{Effect: "Allow", Action: []string{"s3:Get*", "s3:List*", "s3:HeadObject", "s3:HeadBucket"}},
-						},
-					},
-					{
-						Name: "admin",
-						Keys: []*s3rp.KeyConfig{{AccessKeyID: "ADMINKEY", SecretAccessKey: "adminsecret"}},
-					},
-				},
-				Buckets: []*s3rp.BucketConfig{
-					{
-						Name: "data",
-						Backend: &s3rp.BackendConfig{
-							Endpoint: "http://backend.invalid", Bucket: "backend-data",
-							AccessKeyID: "bk", SecretAccessKey: "bs",
-						},
-					},
-					{
-						Name: "noget",
-						Backend: &s3rp.BackendConfig{
-							Endpoint: "http://backend.invalid", Bucket: "backend-noget",
-							AccessKeyID: "bk", SecretAccessKey: "bs",
-						},
-						Policy: `{"Statement":[{"Effect":"Deny","Principal":"*","Action":"s3:GetObject","Resource":"noget/*"}]}`,
-					},
-				},
+	users := []userSpec{
+		{
+			name: "readonly", keyID: "ROKEY", secret: "rosecret",
+			policy: []policy.ActionStatement{
+				{Effect: "Allow", Action: []string{"s3:Get*", "s3:List*", "s3:HeadObject", "s3:HeadBucket"}},
 			},
 		},
+		{name: "admin", keyID: "ADMINKEY", secret: "adminsecret"},
 	}
-	cfg.SetDefaults()
-	if err := cfg.Validate(); err != nil {
-		t.Fatal(err)
+	buckets := []bucketSpec{
+		{name: "data"},
+		{name: "noget", policyText: `{"Statement":[{"Effect":"Deny","Principal":"*","Action":"s3:GetObject","Resource":"noget/*"}]}`},
 	}
-	app, err := s3rp.New(t.Context(), cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	mustSetBackend(t, app, "data", stub)
-	mustSetBackend(t, app, "noget", stub)
-	ts := httptest.NewServer(app.Handler())
-	t.Cleanup(ts.Close)
-
-	clients := map[string]*s3.Client{}
-	for user, creds := range map[string][2]string{
-		"readonly": {"ROKEY", "rosecret"},
-		"admin":    {"ADMINKEY", "adminsecret"},
-	} {
-		awscfg, err := awsconfig.LoadDefaultConfig(t.Context(),
-			awsconfig.WithRegion("us-east-1"),
-			awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(creds[0], creds[1], "")),
-		)
-		if err != nil {
-			t.Fatal(err)
-		}
-		clients[user] = s3.NewFromConfig(awscfg, func(o *s3.Options) {
-			o.BaseEndpoint = aws.String(ts.URL)
-			o.UsePathStyle = true
-			o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
-		})
-	}
-	return clients
+	gw := gatewayFor(t, buildStore(t, "acme", users, buckets), stub)
+	return clientsFor(t, gw, users)
 }
 
 func expectDenied(t *testing.T, err error) {

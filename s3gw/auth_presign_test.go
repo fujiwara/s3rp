@@ -1,4 +1,4 @@
-package s3rp_test
+package s3gw_test
 
 import (
 	"io"
@@ -12,7 +12,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/fujiwara/s3rp"
+	"github.com/fujiwara/s3rp/s3gw"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -100,13 +100,15 @@ func TestPresignedPutObject(t *testing.T) {
 }
 
 func TestPresignedErrors(t *testing.T) {
-	newProxyAndURL := func(t *testing.T, akid, secret string, expires time.Duration) (*s3rp.S3RP, string) {
+	newProxyAndURL := func(t *testing.T, akid, secret string, expires time.Duration) (*s3gw.Gateway, string) {
 		t.Helper()
-		app := newTestApp(t)
-		mustSetBackend(t, app, "testbucket", &stubBackend{
+		gw := newTestGateway(t)
+		if err := gw.SetBackend("testbucket", &stubBackend{
 			getOut: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("x"))},
-		})
-		ts := newTestServerForApp(t, app)
+		}); err != nil {
+			t.Fatal(err)
+		}
+		ts := newTestServer(t, gw)
 		cfg, err := awsconfig.LoadDefaultConfig(t.Context(),
 			awsconfig.WithRegion("us-east-1"),
 			awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(akid, secret, "")),
@@ -115,7 +117,7 @@ func TestPresignedErrors(t *testing.T) {
 			t.Fatal(err)
 		}
 		client := s3.NewFromConfig(cfg, func(o *s3.Options) {
-			o.BaseEndpoint = aws.String(ts.URL)
+			o.BaseEndpoint = aws.String(ts)
 			o.UsePathStyle = true
 		})
 		req, err := s3.NewPresignClient(client).PresignGetObject(t.Context(), &s3.GetObjectInput{
@@ -127,7 +129,7 @@ func TestPresignedErrors(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return app, req.URL
+		return gw, req.URL
 	}
 
 	get := func(t *testing.T, url string) (int, string) {

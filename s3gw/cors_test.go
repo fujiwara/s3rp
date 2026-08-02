@@ -1,73 +1,44 @@
-package s3rp_test
+package s3gw_test
 
 import (
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/fujiwara/s3rp/cors"
+	"github.com/fujiwara/s3rp/s3gw"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/fujiwara/s3rp"
 	"github.com/google/go-cmp/cmp"
 )
 
 // newCORSTestProxy builds a proxy with a CORS-enabled bucket and a plain one.
-func newCORSTestProxy(t *testing.T) (*httptest.Server, *s3rp.S3RP) {
+func newCORSTestProxy(t *testing.T) (string, *s3gw.Gateway) {
 	t.Helper()
-	cfg := &s3rp.Config{
-		Tenants: []*s3rp.TenantConfig{
-			{
-				Name: "corstenant",
-				Users: []*s3rp.UserConfig{
-					{Name: "app1", Keys: []*s3rp.KeyConfig{{AccessKeyID: testAccessKeyID, SecretAccessKey: testSecretAccessKey}}},
-				},
-				Buckets: []*s3rp.BucketConfig{
-					{
-						Name: "webbucket",
-						Backend: &s3rp.BackendConfig{
-							Endpoint: "http://backend.invalid", AccessKeyID: "bk", SecretAccessKey: "bs",
-						},
-						CORS: []*cors.Rule{
-							{
-								AllowedOrigins: []string{"https://app.example.com", "https://*.preview.example.com"},
-								AllowedMethods: []string{"GET", "PUT"},
-								AllowedHeaders: []string{"*"},
-								ExposeHeaders:  []string{"ETag"},
-								MaxAgeSeconds:  3600,
-							},
-						},
-					},
-					{
-						Name: "plainbucket",
-						Backend: &s3rp.BackendConfig{
-							Endpoint: "http://backend.invalid", AccessKeyID: "bk", SecretAccessKey: "bs",
-						},
-					},
+	users := []userSpec{{name: "app1", keyID: testAccessKeyID, secret: testSecretAccessKey}}
+	buckets := []bucketSpec{
+		{
+			name: "webbucket",
+			cors: []*cors.Rule{
+				{
+					AllowedOrigins: []string{"https://app.example.com", "https://*.preview.example.com"},
+					AllowedMethods: []string{"GET", "PUT"},
+					AllowedHeaders: []string{"*"},
+					ExposeHeaders:  []string{"ETag"},
+					MaxAgeSeconds:  3600,
 				},
 			},
 		},
-	}
-	cfg.SetDefaults()
-	if err := cfg.Validate(); err != nil {
-		t.Fatal(err)
-	}
-	app, err := s3rp.New(t.Context(), cfg)
-	if err != nil {
-		t.Fatal(err)
+		{name: "plainbucket"},
 	}
 	stub := &stubBackend{
 		getOut: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("x")), ETag: aws.String(`"e"`)},
 		putOut: &s3.PutObjectOutput{ETag: aws.String(`"e"`)},
 	}
-	mustSetBackend(t, app, "webbucket", stub)
-	mustSetBackend(t, app, "plainbucket", stub)
-	ts := httptest.NewServer(app.Handler())
-	t.Cleanup(ts.Close)
-	return ts, app
+	gw := gatewayFor(t, buildStore(t, "corstenant", users, buckets), stub)
+	return newTestServer(t, gw), gw
 }
 
 func preflight(t *testing.T, url, origin, method, headers string) *http.Response {
@@ -93,7 +64,7 @@ func TestCORSPreflight(t *testing.T) {
 	ts, _ := newCORSTestProxy(t)
 
 	t.Run("allowed origin and method", func(t *testing.T) {
-		resp := preflight(t, ts.URL+"/webbucket/key.txt", "https://app.example.com", "PUT", "content-type, x-amz-date")
+		resp := preflight(t, ts+"/webbucket/key.txt", "https://app.example.com", "PUT", "content-type, x-amz-date")
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("expect 200, got %d", resp.StatusCode)
 		}
@@ -113,7 +84,7 @@ func TestCORSPreflight(t *testing.T) {
 		}
 	})
 	t.Run("wildcard origin pattern", func(t *testing.T) {
-		resp := preflight(t, ts.URL+"/webbucket/key.txt", "https://pr-42.preview.example.com", "GET", "")
+		resp := preflight(t, ts+"/webbucket/key.txt", "https://pr-42.preview.example.com", "GET", "")
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("expect 200, got %d", resp.StatusCode)
 		}
@@ -122,31 +93,31 @@ func TestCORSPreflight(t *testing.T) {
 		}
 	})
 	t.Run("origin not allowed", func(t *testing.T) {
-		resp := preflight(t, ts.URL+"/webbucket/key.txt", "https://evil.example.net", "GET", "")
+		resp := preflight(t, ts+"/webbucket/key.txt", "https://evil.example.net", "GET", "")
 		if resp.StatusCode != http.StatusForbidden {
 			t.Errorf("expect 403, got %d", resp.StatusCode)
 		}
 	})
 	t.Run("method not allowed", func(t *testing.T) {
-		resp := preflight(t, ts.URL+"/webbucket/key.txt", "https://app.example.com", "DELETE", "")
+		resp := preflight(t, ts+"/webbucket/key.txt", "https://app.example.com", "DELETE", "")
 		if resp.StatusCode != http.StatusForbidden {
 			t.Errorf("expect 403, got %d", resp.StatusCode)
 		}
 	})
 	t.Run("bucket without cors", func(t *testing.T) {
-		resp := preflight(t, ts.URL+"/plainbucket/key.txt", "https://app.example.com", "GET", "")
+		resp := preflight(t, ts+"/plainbucket/key.txt", "https://app.example.com", "GET", "")
 		if resp.StatusCode != http.StatusForbidden {
 			t.Errorf("expect 403, got %d", resp.StatusCode)
 		}
 	})
 	t.Run("unknown bucket", func(t *testing.T) {
-		resp := preflight(t, ts.URL+"/nosuchbucket/key.txt", "https://app.example.com", "GET", "")
+		resp := preflight(t, ts+"/nosuchbucket/key.txt", "https://app.example.com", "GET", "")
 		if resp.StatusCode != http.StatusForbidden {
 			t.Errorf("expect 403, got %d", resp.StatusCode)
 		}
 	})
 	t.Run("missing origin", func(t *testing.T) {
-		req, _ := http.NewRequestWithContext(t.Context(), http.MethodOptions, ts.URL+"/webbucket/key.txt", nil)
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodOptions, ts+"/webbucket/key.txt", nil)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)
@@ -162,7 +133,7 @@ func TestCORSPreflight(t *testing.T) {
 // with an Origin header must carry CORS headers on the actual response.
 func TestCORSActualRequest(t *testing.T) {
 	ts, _ := newCORSTestProxy(t)
-	client := newS3Client(t, ts.URL, testAccessKeyID, testSecretAccessKey)
+	client := newS3Client(t, ts, testAccessKeyID, testSecretAccessKey)
 	presigner := s3.NewPresignClient(client)
 
 	req, err := presigner.PresignGetObject(t.Context(), &s3.GetObjectInput{
@@ -207,7 +178,7 @@ func TestCORSActualRequest(t *testing.T) {
 
 func TestGetBucketCors(t *testing.T) {
 	ts, _ := newCORSTestProxy(t)
-	client := newS3Client(t, ts.URL, testAccessKeyID, testSecretAccessKey)
+	client := newS3Client(t, ts, testAccessKeyID, testSecretAccessKey)
 	out, err := client.GetBucketCors(t.Context(), &s3.GetBucketCorsInput{
 		Bucket: aws.String("webbucket"),
 	})
