@@ -24,6 +24,52 @@ jobs:
         run: |
           go test -race ./...
 
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26'
+
+      # Each package is measured by its own tests, not the whole tree's, so
+      # the number answers "how well is this package tested" — which is what
+      # matters for the packages meant to be reusable on their own.
+      - name: Test with coverage
+        run: |
+          go test -covermode=atomic -coverprofile=cover.out ./... | tee test.out
+
+      - name: Report
+        run: |
+          {
+            echo "| package | coverage |"
+            echo "| --- | ---: |"
+            awk '/coverage:/ {
+              pkg = ""; cov = ""
+              for (i = 1; i <= NF; i++) {
+                if ($i ~ /^github\.com\/fujiwara\/s3rp/) pkg = $i
+                if ($i == "coverage:") cov = $(i + 1)
+              }
+              if (pkg == "") next
+              if ($1 != "ok") cov = "no tests"
+              sub("github.com/fujiwara/s3rp/?", "", pkg)
+              if (pkg == "") pkg = "(root)"
+              printf "| %s | %s |\n", pkg, cov
+            }' test.out
+            echo
+            go tool cover -func=cover.out | awk '$1 == "total:" {print "**total: " $NF "**"}'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the profile
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage
+          path: cover.out
+
   integration:
     name: Integration (${{ matrix.backend }})
     runs-on: ubuntu-latest
