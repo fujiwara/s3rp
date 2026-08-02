@@ -24,14 +24,14 @@ func TestChunkedReaderFinalChunkVerifiedEagerly(t *testing.T) {
 	body[term-1] = 'b'
 
 	t.Run("read to EOF", func(t *testing.T) {
-		r := sigv4.NewChunkedReader(bytes.NewReader(append([]byte(nil), body...)), vr, "")
+		r := sigv4.NewChunkedReader(bytes.NewReader(append([]byte(nil), body...)), vr, "", 1<<30)
 		if _, err := io.ReadAll(r); err == nil {
 			t.Error("expect error for tampered final chunk")
 		}
 	})
 
 	t.Run("read exactly decoded length then stop", func(t *testing.T) {
-		r := sigv4.NewChunkedReader(bytes.NewReader(append([]byte(nil), body...)), vr, "")
+		r := sigv4.NewChunkedReader(bytes.NewReader(append([]byte(nil), body...)), vr, "", 1<<30)
 		buf := make([]byte, 1)
 		var got int
 		var readErr error
