@@ -56,3 +56,31 @@ func (g *Gateway) verifyRequest(r *http.Request) (*verifiedRequest, *s3err.Error
 		KeyMetadata: key.Metadata,
 	}, nil
 }
+
+// verifyPostRequest authenticates a browser-based POST upload from its form
+// fields and resolves the identity behind the access key, exactly as
+// verifyRequest does for header and presigned authentication.
+func (g *Gateway) verifyPostRequest(r *http.Request, fields map[string]string) (*verifiedRequest, *sigv4.PostPolicy, *s3err.Error) {
+	var key *store.Key
+	verified, pp, s3e := g.verifier.VerifyPost(r, fields, func(ctx context.Context, accessKeyID string) (string, error) {
+		k, err := g.store.GetKey(ctx, accessKeyID)
+		if err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return "", sigv4.ErrUnknownKey
+			}
+			return "", err
+		}
+		key = k
+		return k.SecretAccessKey.String(), nil
+	})
+	if s3e != nil {
+		return nil, nil, s3e
+	}
+	return &verifiedRequest{
+		Verified:    verified,
+		Tenant:      key.Tenant,
+		User:        key.User,
+		UserPolicy:  key.Policy,
+		KeyMetadata: key.Metadata,
+	}, pp, nil
+}
