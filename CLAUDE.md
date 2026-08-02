@@ -61,6 +61,8 @@ Two settings are load-bearing for non-AWS backends; removing either breaks PutOb
 - `v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware`: the request body is unseekable, so the SDK cannot compute a payload hash over plain http.
 - `RequestChecksumCalculationWhenRequired` (+ response equivalent): SDK-default CRC32 trailer checksums re-introduce aws-chunked encoding, which S3-compatible backends may reject.
 
+`Gateway.SetClientOptions` lets a service contribute `s3.Options` per backend (Retryer, instrumented HTTPClient, timeouts); its options are applied **after** the settings above so the defaults stay unless deliberately overridden. The hook must be set before serving and be deterministic per backend — clients are cached by backend identity and a cached client is reused without consulting it.
+
 ## Routing (handler.go)
 
 - A single catch-all route with manual dispatch; `http.ServeMux` patterns are unusable (path cleaning + 301 redirects break S3 keys and signatures).
