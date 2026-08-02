@@ -43,6 +43,15 @@ type Key struct {
 	User            string
 	// Policy is the user's identity policy (nil = allow all operations).
 	Policy *policy.UserPolicy
+
+	// Metadata is an opaque value a Store implementation may attach when it
+	// builds the key — data it already had in hand, such as a suspension
+	// flag or a rate-limit tier loaded with the same query. The gateway
+	// never interprets it; it is handed back on Op for the Authorizer and
+	// Interceptors installed by the same service. A Store that shares keys
+	// across requests must make the value safe for concurrent reads —
+	// immutable, or synchronized internally.
+	Metadata any
 }
 
 // Bucket is a front-side bucket and its backend definition.
@@ -59,6 +68,15 @@ type Bucket struct {
 
 	// CORS is the CORS configuration of the bucket (nil if none).
 	CORS []*cors.Rule
+
+	// Metadata is an opaque value a Store implementation may attach when it
+	// builds the bucket — data it already had in hand, such as quota or
+	// plan information loaded with the same query. The gateway never
+	// interprets it; it is handed back on Op for the Authorizer and
+	// Interceptors installed by the same service. A Store that shares
+	// buckets across requests must make the value safe for concurrent
+	// reads — immutable, or synchronized internally.
+	Metadata any
 }
 
 // DefaultRegion is used when a backend definition omits the region.

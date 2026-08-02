@@ -22,6 +22,9 @@ type verifiedRequest struct {
 	Tenant     string
 	User       string
 	UserPolicy *policy.UserPolicy
+	// KeyMetadata is store.Key.Metadata, carried along so dispatch can hand
+	// it to the hooks on Op.
+	KeyMetadata any
 }
 
 // verifyRequest authenticates an incoming request, either by the
@@ -46,9 +49,10 @@ func (g *Gateway) verifyRequest(r *http.Request) (*verifiedRequest, *s3err.Error
 		return nil, s3e
 	}
 	return &verifiedRequest{
-		Verified:   verified,
-		Tenant:     key.Tenant,
-		User:       key.User,
-		UserPolicy: key.Policy,
+		Verified:    verified,
+		Tenant:      key.Tenant,
+		User:        key.User,
+		UserPolicy:  key.Policy,
+		KeyMetadata: key.Metadata,
 	}, nil
 }
