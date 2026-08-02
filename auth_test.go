@@ -10,7 +10,6 @@ import (
 const (
 	testAccessKeyID     = "S3RPTESTKEY001"
 	testSecretAccessKey = "testsecret001"
-	emptyPayloadHash    = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 )
 
 func newTestApp(t *testing.T) *s3rp.S3RP {

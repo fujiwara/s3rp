@@ -1,7 +1,7 @@
 // Package store defines the read-only contract for tenant, key and bucket
-// definitions used by s3rp. The default implementation reads the static
-// YAML config (see the parent package); a future implementation may read
-// from an RDBMS.
+// definitions used by s3rp. The bundled implementation reads the static
+// YAML config (see the parent package); a service built on the gateway
+// implements this interface against its own definition storage.
 package store
 
 import (

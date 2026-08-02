@@ -272,37 +272,6 @@ tenants:
 		errStr: "unsupported cors method",
 	},
 	{
-		name: "sqlite driver without dsn",
-		yaml: `
-store:
-  driver: sqlite
-`,
-		errStr: "store.dsn is required",
-	},
-	{
-		name: "sqlite driver with tenants",
-		yaml: `
-store:
-  driver: sqlite
-  dsn: s3rp.db
-tenants:
-  - name: foo
-    users: [{name: user1, keys: [{access_key_id: k, secret_access_key: s}]}]
-    buckets:
-      - name: bucket1
-        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
-`,
-		errStr: "tenants must not be defined",
-	},
-	{
-		name: "unknown store driver",
-		yaml: `
-store:
-  driver: postgres
-`,
-		errStr: "unknown store driver",
-	},
-	{
 		name: "invalid user policy effect",
 		yaml: `
 tenants:
