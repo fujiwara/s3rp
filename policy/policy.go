@@ -6,6 +6,10 @@
 // "S3RP" key, and resources are plain "bucket" or "bucket/prefix*" strings
 // (no ARNs). Action and Resource support the AWS wildcards "*" (any run of
 // characters) and "?" (a single character).
+//
+// Those two syntax choices are the default Dialect; a service can accept a
+// different principal key or ARN-prefixed resources by parsing with its own
+// Dialect. The internal form — and evaluation — is the same either way.
 package policy
 
 import (
@@ -137,25 +141,27 @@ func (s *StringOrSlice) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Parse parses and validates a policy document.
+// Parse parses and validates a policy document in the default dialect
+// (principals under the "S3RP" key, resources as plain paths). A service
+// whose tenants write a different surface syntax parses with a Dialect.
 func Parse(text string) (*Policy, error) {
-	if len(text) > MaxPolicyBytes {
-		return nil, fmt.Errorf("policy is %d bytes, at most %d are allowed", len(text), MaxPolicyBytes)
-	}
-	var p Policy
-	if err := json.Unmarshal([]byte(text), &p); err != nil {
-		return nil, fmt.Errorf("malformed policy JSON: %w", err)
-	}
+	var d Dialect
+	return d.Parse(text)
+}
+
+// validate checks the document structure and the caps. It runs on the
+// normalized (dialect-independent) form.
+func (p *Policy) validate() error {
 	// Version is optional, but if present it must be a recognized value
 	// (AWS accepts only these two); a typo would otherwise pass silently.
 	if p.Version != "" && p.Version != "2012-10-17" && p.Version != "2008-10-17" {
-		return nil, fmt.Errorf("unsupported policy version %q", p.Version)
+		return fmt.Errorf("unsupported policy version %q", p.Version)
 	}
 	if len(p.Statement) == 0 {
-		return nil, fmt.Errorf("policy must contain at least one statement")
+		return fmt.Errorf("policy must contain at least one statement")
 	}
 	if len(p.Statement) > MaxStatements {
-		return nil, fmt.Errorf("policy has %d statements, at most %d are allowed", len(p.Statement), MaxStatements)
+		return fmt.Errorf("policy has %d statements, at most %d are allowed", len(p.Statement), MaxStatements)
 	}
 	for i, st := range p.Statement {
 		name := st.Sid
@@ -163,51 +169,51 @@ func Parse(text string) (*Policy, error) {
 			name = fmt.Sprintf("statement[%d]", i)
 		}
 		if st.Effect != "Allow" && st.Effect != "Deny" {
-			return nil, fmt.Errorf("%s: effect must be Allow or Deny", name)
+			return fmt.Errorf("%s: effect must be Allow or Deny", name)
 		}
 		if (st.Principal == nil) == (st.NotPrincipal == nil) {
-			return nil, fmt.Errorf("%s: exactly one of Principal or NotPrincipal is required", name)
+			return fmt.Errorf("%s: exactly one of Principal or NotPrincipal is required", name)
 		}
 		if st.NotPrincipal != nil && st.NotPrincipal.All {
-			return nil, fmt.Errorf("%s: NotPrincipal %q matches nobody", name, "*")
+			return fmt.Errorf("%s: NotPrincipal %q matches nobody", name, "*")
 		}
 		for _, pr := range []*Principal{st.Principal, st.NotPrincipal} {
 			if pr == nil {
 				continue
 			}
 			if len(pr.Users) > MaxPrincipalUsers {
-				return nil, fmt.Errorf("%s: %d principal users, at most %d are allowed", name, len(pr.Users), MaxPrincipalUsers)
+				return fmt.Errorf("%s: %d principal users, at most %d are allowed", name, len(pr.Users), MaxPrincipalUsers)
 			}
 			for _, u := range pr.Users {
 				if !userNameRegexp.MatchString(u) {
-					return nil, fmt.Errorf("%s: invalid principal user name %q", name, u)
+					return fmt.Errorf("%s: invalid principal user name %q", name, u)
 				}
 			}
 		}
 		if len(st.Action) == 0 {
-			return nil, fmt.Errorf("%s: at least one action is required", name)
+			return fmt.Errorf("%s: at least one action is required", name)
 		}
 		if len(st.Action) > MaxActionsPerStatement {
-			return nil, fmt.Errorf("%s: %d actions, at most %d are allowed", name, len(st.Action), MaxActionsPerStatement)
+			return fmt.Errorf("%s: %d actions, at most %d are allowed", name, len(st.Action), MaxActionsPerStatement)
 		}
 		for _, a := range st.Action {
 			if err := validateAction(a); err != nil {
-				return nil, fmt.Errorf("%s: %w", name, err)
+				return fmt.Errorf("%s: %w", name, err)
 			}
 		}
 		if len(st.Resource) == 0 {
-			return nil, fmt.Errorf("%s: at least one resource is required", name)
+			return fmt.Errorf("%s: at least one resource is required", name)
 		}
 		if len(st.Resource) > MaxResourcesPerStatement {
-			return nil, fmt.Errorf("%s: %d resources, at most %d are allowed", name, len(st.Resource), MaxResourcesPerStatement)
+			return fmt.Errorf("%s: %d resources, at most %d are allowed", name, len(st.Resource), MaxResourcesPerStatement)
 		}
 		for _, res := range st.Resource {
 			if len(res) > MaxPatternLen {
-				return nil, fmt.Errorf("%s: resource pattern too long (%d bytes, max %d)", name, len(res), MaxPatternLen)
+				return fmt.Errorf("%s: resource pattern too long (%d bytes, max %d)", name, len(res), MaxPatternLen)
 			}
 		}
 	}
-	return &p, nil
+	return nil
 }
 
 // validateAction checks an action element. The s3: prefix is

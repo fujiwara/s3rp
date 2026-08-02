@@ -60,9 +60,13 @@ type Bucket struct {
 	Name    string
 	Backend *Backend
 
-	// PolicyText is the raw bucket policy JSON (empty if none); Policy is
-	// its parsed form. Implementations store the text and parse it with
-	// policy.Parse.
+	// PolicyText is the bucket policy JSON as the tenant wrote it (empty
+	// if none); it is what GetBucketPolicy returns, verbatim. Policy is
+	// the parsed form the gateway evaluates. The two are deliberately
+	// independent — nothing requires Policy to be the parse of
+	// PolicyText — so a store whose tenants write a different policy
+	// dialect can keep the original text here and derive Policy from a
+	// translation.
 	PolicyText string
 	Policy     *policy.Policy
 
