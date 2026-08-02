@@ -16,6 +16,7 @@ import (
 	"github.com/fujiwara/s3rp/sigv4"
 	"github.com/fujiwara/s3rp/store"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
@@ -34,8 +35,9 @@ type Gateway struct {
 	interceptors []Interceptor
 	observer     Observer
 
-	newClient func(ctx context.Context, b *store.Backend) (BackendClient, error)
-	clients   *lru.Cache[clientCacheKey, BackendClient]
+	newClient     func(ctx context.Context, b *store.Backend) (BackendClient, error)
+	clientOptions func(b *store.Backend) []func(*s3.Options)
+	clients       *lru.Cache[clientCacheKey, BackendClient]
 }
 
 // defaultClientCacheSize bounds the backend client cache. Each client carries
@@ -74,12 +76,15 @@ func newClientCacheKey(b *store.Backend) clientCacheKey {
 // New returns a Gateway serving the definitions in st.
 func New(st store.Store) *Gateway {
 	clients, _ := lru.New[clientCacheKey, BackendClient](defaultClientCacheSize)
-	return &Gateway{
-		store:     st,
-		verifier:  sigv4.NewVerifier(),
-		newClient: newBackendClient,
-		clients:   clients,
+	g := &Gateway{
+		store:    st,
+		verifier: sigv4.NewVerifier(),
+		clients:  clients,
 	}
+	g.newClient = func(ctx context.Context, b *store.Backend) (BackendClient, error) {
+		return newBackendClient(ctx, b, g.clientOptions)
+	}
+	return g
 }
 
 // backendClient returns the backend client for a backend definition,

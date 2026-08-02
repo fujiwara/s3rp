@@ -46,7 +46,7 @@ type BackendClient interface {
 	PutObjectLegalHold(ctx context.Context, in *s3.PutObjectLegalHoldInput, optFns ...func(*s3.Options)) (*s3.PutObjectLegalHoldOutput, error)
 }
 
-func newBackendClient(ctx context.Context, b *store.Backend) (BackendClient, error) {
+func newBackendClient(ctx context.Context, b *store.Backend, clientOptions func(*store.Backend) []func(*s3.Options)) (BackendClient, error) {
 	optFns := []func(*awsconfig.LoadOptions) error{
 		awsconfig.WithRegion(b.Region),
 	}
@@ -58,6 +58,10 @@ func newBackendClient(ctx context.Context, b *store.Backend) (BackendClient, err
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, optFns...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load aws config: %w", err)
+	}
+	var extra []func(*s3.Options)
+	if clientOptions != nil {
+		extra = clientOptions(b)
 	}
 	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
 		if b.Endpoint != "" {
@@ -73,6 +77,11 @@ func newBackendClient(ctx context.Context, b *store.Backend) (BackendClient, err
 		// encoding, which some S3-compatible backends reject
 		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
 		o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
+		// the service's options come last, so they can adjust or knowingly
+		// override the defaults above
+		for _, fn := range extra {
+			fn(o)
+		}
 	})
 	return client, nil
 }
