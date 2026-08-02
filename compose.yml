@@ -23,6 +23,13 @@ services:
       CEPH_DEMO_ACCESS_KEY: backendkey
       CEPH_DEMO_SECRET_KEY: backendsecret
       RGW_FRONTEND_PORT: 7480
+      # SSE over plain http (RGW requires TLS for SSE by default), with the
+      # built-in "testing" KMS backend so SSE-KMS works without a real KMS.
+      # The key is the 32-byte example from the Ceph docs.
+      CEPH_ARGS: >-
+        --rgw_crypt_require_ssl=false
+        --rgw_crypt_s3_kms_backend=testing
+        --rgw_crypt_s3_kms_encryption_keys=testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://127.0.0.1:7480/"]
       interval: 5s

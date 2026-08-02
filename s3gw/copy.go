@@ -104,6 +104,9 @@ func (g *Gateway) copyObject(c *opCtx) error {
 			in.CopySourceIfUnmodifiedSince = aws.Time(t)
 		}
 	}
+	if s3e := applySSE(r.Header.Get, &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
+		return s3e
+	}
 	out, err := rt.client.CopyObject(r.Context(), in)
 	if err != nil {
 		return s3err.FromSDKError(err, r.URL.Path)
@@ -111,6 +114,7 @@ func (g *Gateway) copyObject(c *opCtx) error {
 	if out.VersionId != nil {
 		w.Header().Set("x-amz-version-id", *out.VersionId)
 	}
+	setSSEHeaders(w.Header(), out.ServerSideEncryption, out.SSEKMSKeyId)
 	if out.CopySourceVersionId != nil {
 		w.Header().Set("x-amz-copy-source-version-id", *out.CopySourceVersionId)
 	}
@@ -155,6 +159,7 @@ func (g *Gateway) uploadPartCopy(c *opCtx) error {
 	if out.CopySourceVersionId != nil {
 		w.Header().Set("x-amz-copy-source-version-id", *out.CopySourceVersionId)
 	}
+	setSSEHeaders(w.Header(), out.ServerSideEncryption, out.SSEKMSKeyId)
 	result := &s3xml.CopyPartResult{XMLNS: s3xml.Namespace}
 	if cr := out.CopyPartResult; cr != nil {
 		if cr.ETag != nil {

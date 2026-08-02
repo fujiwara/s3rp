@@ -28,6 +28,7 @@ import (
 type stubPost struct {
 	s3gw.BackendClient
 	putIn   *s3.PutObjectInput
+	putOut  *s3.PutObjectOutput // nil = a default output
 	putBody []byte
 	delIn   *s3.DeleteObjectInput
 }
@@ -39,6 +40,9 @@ func (s *stubPost) PutObject(_ context.Context, in *s3.PutObjectInput, _ ...func
 		return nil, err
 	}
 	s.putBody = b
+	if s.putOut != nil {
+		return s.putOut, nil
+	}
 	return &s3.PutObjectOutput{
 		ETag:      aws.String(`"post-etag"`),
 		VersionId: aws.String("v1"),
@@ -365,6 +369,16 @@ func TestPostObjectRefusals(t *testing.T) {
 			form: &postForm{
 				conditions: []string{},
 				fields:     [][2]string{},
+				filename:   "x", content: "data",
+			},
+			code: "InvalidArgument",
+		},
+		{
+			// refused before the hooks run, like the header path
+			name: "unsupported encryption method",
+			form: &postForm{
+				conditions: []string{`{"key": "a.txt"}`, `{"x-amz-server-side-encryption": "rot13"}`},
+				fields:     [][2]string{{"key", "a.txt"}, {"x-amz-server-side-encryption", "rot13"}},
 				filename:   "x", content: "data",
 			},
 			code: "InvalidArgument",

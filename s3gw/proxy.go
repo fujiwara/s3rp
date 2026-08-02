@@ -80,6 +80,8 @@ func (g *Gateway) getObject(c *opCtx) error {
 		Expires:            out.ExpiresString,
 		StorageClass:       string(out.StorageClass),
 		VersionID:          out.VersionId,
+		SSE:                out.ServerSideEncryption,
+		SSEKMSKeyID:        out.SSEKMSKeyId,
 		Metadata:           out.Metadata,
 	})
 	if out.AcceptRanges != nil {
@@ -141,6 +143,8 @@ func (g *Gateway) headObject(c *opCtx) error {
 		Expires:            out.ExpiresString,
 		StorageClass:       string(out.StorageClass),
 		VersionID:          out.VersionId,
+		SSE:                out.ServerSideEncryption,
+		SSEKMSKeyID:        out.SSEKMSKeyId,
 		Metadata:           out.Metadata,
 	})
 	if out.AcceptRanges != nil {
@@ -200,6 +204,9 @@ func (g *Gateway) putObject(c *opCtx) error {
 	if v := r.Header.Get("x-amz-tagging"); v != "" {
 		in.Tagging = aws.String(v)
 	}
+	if s3e := applySSE(r.Header.Get, &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
+		return s3e
+	}
 	applyObjectLockHeaders(r, &in.ObjectLockMode, &in.ObjectLockRetainUntilDate, &in.ObjectLockLegalHoldStatus)
 	if md := metadataFromHeaders(r.Header); len(md) > 0 {
 		in.Metadata = md
@@ -228,6 +235,7 @@ func (g *Gateway) putObject(c *opCtx) error {
 	if out.VersionId != nil {
 		w.Header().Set("x-amz-version-id", *out.VersionId)
 	}
+	setSSEHeaders(w.Header(), out.ServerSideEncryption, out.SSEKMSKeyId)
 	checksum.SetHeaders(w.Header(), checksum.Values{
 		CRC32:     out.ChecksumCRC32,
 		CRC32C:    out.ChecksumCRC32C,
@@ -697,6 +705,8 @@ type objectHeaderValues struct {
 	Expires            *string
 	StorageClass       string
 	VersionID          *string
+	SSE                types.ServerSideEncryption
+	SSEKMSKeyID        *string
 	Metadata           map[string]string
 }
 
@@ -734,6 +744,7 @@ func setObjectHeaders(h http.Header, v objectHeaderValues) {
 	if v.VersionID != nil {
 		h.Set("x-amz-version-id", *v.VersionID)
 	}
+	setSSEHeaders(h, v.SSE, v.SSEKMSKeyID)
 	for k, val := range v.Metadata {
 		h.Set("x-amz-meta-"+k, val)
 	}

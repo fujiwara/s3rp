@@ -63,6 +63,9 @@ func (g *Gateway) createMultipartUpload(c *opCtx) error {
 	if v := r.Header.Get("x-amz-checksum-type"); v != "" {
 		in.ChecksumType = types.ChecksumType(strings.ToUpper(v))
 	}
+	if s3e := applySSE(r.Header.Get, &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
+		return s3e
+	}
 	out, err := rt.client.CreateMultipartUpload(r.Context(), in)
 	if err != nil {
 		return s3err.FromSDKError(err, r.URL.Path)
@@ -73,6 +76,7 @@ func (g *Gateway) createMultipartUpload(c *opCtx) error {
 	if out.ChecksumType != "" {
 		w.Header().Set("x-amz-checksum-type", string(out.ChecksumType))
 	}
+	setSSEHeaders(w.Header(), out.ServerSideEncryption, out.SSEKMSKeyId)
 	return s3xml.Write(w, &s3xml.InitiateMultipartUploadResult{
 		XMLNS:    s3xml.Namespace,
 		Bucket:   rt.cfg.Name, // the front bucket name, not the backend one
@@ -120,6 +124,7 @@ func (g *Gateway) uploadPart(c *opCtx) error {
 	if out.ETag != nil {
 		w.Header().Set("ETag", *out.ETag)
 	}
+	setSSEHeaders(w.Header(), out.ServerSideEncryption, out.SSEKMSKeyId)
 	checksum.SetHeaders(w.Header(), checksum.Values{
 		CRC32:     out.ChecksumCRC32,
 		CRC32C:    out.ChecksumCRC32C,
@@ -204,6 +209,7 @@ func (g *Gateway) completeMultipartUpload(c *opCtx) error {
 	if out.VersionId != nil {
 		w.Header().Set("x-amz-version-id", *out.VersionId)
 	}
+	setSSEHeaders(w.Header(), out.ServerSideEncryption, out.SSEKMSKeyId)
 	return s3xml.Write(w, &s3xml.CompleteMultipartUploadResult{
 		XMLNS:             s3xml.Namespace,
 		Location:          location,

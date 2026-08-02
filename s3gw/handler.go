@@ -237,6 +237,16 @@ type route struct {
 // order: parameter check, canned-ACL header, bypass authorization,
 // action authorization, handler.
 func (c *opCtx) dispatch(routes []route) error {
+	// SSE-C would be silently dropped by every operation, which is a
+	// security expectation violated without a word — refuse it up front.
+	// SSE values are validated here too, before the hooks, so Op.SSE only
+	// ever carries a supported value.
+	if err := checkSSEC(c.r); err != nil {
+		return err
+	}
+	if err := checkSSE(c.r.Header.Get); err != nil {
+		return err
+	}
 	for _, rt := range routes {
 		if rt.match != nil && !rt.match(c.query) {
 			continue
@@ -268,6 +278,8 @@ func (c *opCtx) dispatch(routes []route) error {
 			User:           c.vr.User,
 			Bucket:         c.rt.cfg.Name,
 			Key:            c.key,
+			SSE:            c.r.Header.Get(hdrSSE),
+			SSEKMSKeyID:    c.r.Header.Get(hdrSSEKMSKeyID),
 			BucketMetadata: c.rt.cfg.Metadata,
 			KeyMetadata:    c.vr.KeyMetadata,
 		}
