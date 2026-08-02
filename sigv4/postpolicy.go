@@ -20,7 +20,8 @@ import (
 // with the file. The signature covers the base64 policy string, so
 // verification is a single HMAC with the scope-derived signing key; the
 // conditions of the policy then constrain what the form may contain.
-// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-UsingHTTPPOST.html
+// Specified in "Browser-Based Uploads Using POST (AWS Signature Version 4)"
+// in the S3 API reference (cited by title: AWS's deep links to it rot).
 
 const (
 	// maxPostPolicyBytes caps the decoded policy document, matching AWS's

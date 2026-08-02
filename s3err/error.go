@@ -17,8 +17,8 @@ import (
 	"github.com/aws/smithy-go"
 )
 
-// Error is an S3 API error response.
-// https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
+// Error is an S3 API error response, as specified in "Error responses" in
+// the S3 API reference.
 type Error struct {
 	XMLName   xml.Name `xml:"Error"`
 	Code      string   `xml:"Code"`

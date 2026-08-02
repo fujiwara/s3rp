@@ -16,10 +16,11 @@ import (
 )
 
 // The primary fixture is the worked example in the AWS documentation
-// ("Example: Browser-Based Upload using HTTP POST"), which publishes the
-// policy, its exact base64 form, the example credentials and the resulting
-// signature as a test suite for signature calculation code.
-// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-post-example.html
+// ("Example: Browser-Based Upload using HTTP POST (Using AWS Signature
+// Version 4)" in the S3 API reference — cited by title, AWS's deep links
+// rot), which publishes the policy, its exact base64 form, the example
+// credentials and the resulting signature as a test suite for signature
+// calculation code.
 const (
 	awsExampleAccessKeyID = "AKIAIOSFODNN7EXAMPLE"
 	awsExampleSecret      = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
