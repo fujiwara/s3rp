@@ -3,6 +3,7 @@ package sigv4
 import (
 	"hash/maphash"
 	"sync"
+	"sync/atomic"
 
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 )
@@ -31,6 +32,12 @@ const defaultSignerSlots = 512
 type signerCache struct {
 	seed  maphash.Seed
 	slots []signerSlot
+
+	// monotonic counters, atomics so the lock-free shape of the hot path
+	// is preserved (the reason this cache exists is avoiding a shared
+	// exclusive lock). displacements counts collisions replacing an
+	// occupant — this cache's analog of an eviction.
+	hits, misses, displacements atomic.Uint64
 }
 
 type signerSlot struct {
@@ -54,9 +61,11 @@ func (c *signerCache) get(accessKeyID string) *v4.Signer {
 	if slot.accessKeyID == accessKeyID {
 		signer := slot.signer
 		slot.mu.RUnlock()
+		c.hits.Add(1)
 		return signer
 	}
 	slot.mu.RUnlock()
+	c.misses.Add(1)
 
 	signer := newSigV4Signer()
 	slot.mu.Lock()
@@ -66,11 +75,56 @@ func (c *signerCache) get(accessKeyID string) *v4.Signer {
 	if slot.accessKeyID == accessKeyID {
 		signer = slot.signer
 	} else {
+		if slot.accessKeyID != "" {
+			c.displacements.Add(1)
+		}
 		slot.accessKeyID = accessKeyID
 		slot.signer = signer
 	}
 	slot.mu.Unlock()
 	return signer
+}
+
+// stats snapshots the cache counters and scans the slots for occupancy. The
+// scan takes each slot's read lock briefly; this runs at scrape frequency,
+// not on the request path.
+func (c *signerCache) stats() CacheStats {
+	s := CacheStats{
+		Hits:      c.hits.Load(),
+		Misses:    c.misses.Load(),
+		Evictions: c.displacements.Load(),
+		Capacity:  len(c.slots),
+	}
+	for i := range c.slots {
+		slot := &c.slots[i]
+		slot.mu.RLock()
+		if slot.accessKeyID != "" {
+			s.Len++
+		}
+		slot.mu.RUnlock()
+	}
+	return s
+}
+
+// CacheStats is a point-in-time snapshot of the signer cache, for sizing it
+// (SetSignerCacheSize). Counters are monotonic since the cache was created —
+// SetSignerCacheSize replaces the cache and resets them — and the fields are
+// read independently: approximately consistent, for monitoring, not
+// accounting. Evictions counts collision displacements; a high rate with Len
+// well under Capacity means hot keys colliding on a slot (more slots lower
+// the odds), while a high rate with Len near Capacity means the cache is
+// simply too small for the active key set.
+type CacheStats struct {
+	Hits      uint64 `json:"hits"`
+	Misses    uint64 `json:"misses"`
+	Evictions uint64 `json:"evictions"`
+	Len       int    `json:"len"`
+	Capacity  int    `json:"capacity"`
+}
+
+// SignerCacheStats snapshots the per-access-key signer cache.
+func (v *Verifier) SignerCacheStats() CacheStats {
+	return v.signers.stats()
 }
 
 func newSigV4Signer() *v4.Signer {

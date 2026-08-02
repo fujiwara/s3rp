@@ -12,6 +12,7 @@ package s3gw
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/fujiwara/s3rp/sigv4"
 	"github.com/fujiwara/s3rp/store"
@@ -38,6 +39,11 @@ type Gateway struct {
 	newClient     func(ctx context.Context, b *store.Backend) (BackendClient, error)
 	clientOptions func(b *store.Backend) []func(*s3.Options)
 	clients       *lru.Cache[clientCacheKey, BackendClient]
+
+	// client cache counters; the capacity is stored here because the LRU
+	// does not report its own bound
+	clientHits, clientMisses, clientEvictions atomic.Uint64
+	clientCacheCap                            atomic.Int64
 }
 
 // defaultClientCacheSize bounds the backend client cache. Each client carries
@@ -75,12 +81,13 @@ func newClientCacheKey(b *store.Backend) clientCacheKey {
 
 // New returns a Gateway serving the definitions in st.
 func New(st store.Store) *Gateway {
-	clients, _ := lru.New[clientCacheKey, BackendClient](defaultClientCacheSize)
 	g := &Gateway{
 		store:    st,
 		verifier: sigv4.NewVerifier(),
-		clients:  clients,
 	}
+	g.clients, _ = lru.NewWithEvict(defaultClientCacheSize,
+		func(clientCacheKey, BackendClient) { g.clientEvictions.Add(1) })
+	g.clientCacheCap.Store(defaultClientCacheSize)
 	g.newClient = func(ctx context.Context, b *store.Backend) (BackendClient, error) {
 		return newBackendClient(ctx, b, g.clientOptions)
 	}
@@ -93,8 +100,10 @@ func New(st store.Store) *Gateway {
 func (g *Gateway) backendClient(ctx context.Context, b *store.Backend) (BackendClient, error) {
 	key := newClientCacheKey(b)
 	if client, ok := g.clients.Get(key); ok {
+		g.clientHits.Add(1)
 		return client, nil
 	}
+	g.clientMisses.Add(1)
 	client, err := g.newClient(ctx, b)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build backend client: %w", err)
