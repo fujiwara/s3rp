@@ -11,7 +11,6 @@ import (
 
 	"github.com/fujiwara/s3rp/s3gw"
 	"github.com/fujiwara/s3rp/store"
-	"github.com/fujiwara/s3rp/store/rdb"
 )
 
 // S3RP is the service assembled from a config: it decides where definitions
@@ -22,19 +21,9 @@ type S3RP struct {
 	store store.Store
 }
 
-// New creates an S3RP from a config, selecting the definition store by the
-// store.driver setting.
+// New creates an S3RP from a config, serving the definitions it declares.
 func New(ctx context.Context, cfg *Config) (*S3RP, error) {
-	switch cfg.StoreDriver() {
-	case "sqlite":
-		st, err := rdb.Open(cfg.Store.DSN)
-		if err != nil {
-			return nil, err
-		}
-		return NewWithStore(ctx, cfg, st)
-	default:
-		return NewWithStore(ctx, cfg, NewConfigStore(cfg))
-	}
+	return NewWithStore(ctx, cfg, NewConfigStore(cfg))
 }
 
 // NewWithStore creates an S3RP using the given Store for tenant, key and
@@ -104,7 +93,7 @@ func Run(ctx context.Context) error {
 		return err
 	}
 	defer func() {
-		// e.g. the sqlite-backed store holds a database handle
+		// a store may hold external handles (e.g. a database connection)
 		if c, ok := app.store.(io.Closer); ok {
 			c.Close()
 		}

@@ -3,14 +3,14 @@
 s3rp is a multi-tenant S3 API gateway: an S3-compatible endpoint that authenticates tenants with their own access keys and forwards each operation to a per-bucket backend under the backend's own credentials.
 
 > [!WARNING]
-> This is a **proof of concept**. Its goal is to validate an architecture, not to be a product. **Do not use it for any other purpose.** It is not production-ready: definitions can live in a static YAML file or a sqlite database, the config/schema may change without notice, and no security review has been done.
+> This is a **proof of concept**. Its goal is to validate an architecture, not to be a product. **Do not use it for any other purpose.** It is not production-ready: definitions live in a static YAML file, the config may change without notice, and no security review has been done.
 
 ```
 S3 client --(SigV4, tenant keys)--> s3rp --(SigV4, backend keys)--> S3-compatible backend
                                       │
                             reads definitions from
                                       ▼
-                        store (YAML / sqlite), read-only
+                     store (YAML, or your own), read-only
 ```
 
 ## What this PoC validates
@@ -27,24 +27,18 @@ s3rp is not an object storage implementation — it stores no data itself. It ex
 
 The cost is that each operation is implemented explicitly; that trade-off, and its edge cases (SigV4 verification, aws-chunked decoding, checksum pass-through), are much of what this PoC exercises.
 
-**What is data plane vs. control plane?** This repo is the **data plane**: it only ever *reads* definitions (tenants, users, keys, buckets, policies), through a small read-only [`store.Store`](store/store.go) interface. All *writes* are deliberately out of scope — in a managed offering they belong to a separate control plane API (create tenants, issue/rotate keys, place buckets) with its own credentials and audit trail. The read/write split is enforced here so the boundary is real, not aspirational:
-
-- the proxy links only SELECT queries and opens the database read-only (`mode=ro`);
-- all writes go through a **separate `s3rp-admin` binary** (schema migration and importing definitions), so the proxy deployment contains no write code or write credentials.
-
-`s3rp-admin` is a stand-in for that future control plane, just enough to populate the store. Building the control plane itself (authn, quotas, billing, self-service) is conventional CRUD work with no architectural uncertainty, so it is intentionally left unimplemented.
+**What is data plane vs. control plane?** This repo is the **data plane**: it only ever *reads* definitions (tenants, users, keys, buckets, policies), through a small read-only [`store.Store`](store/store.go) interface. All *writes* are deliberately out of scope — in a managed offering they belong to a separate control plane API (create tenants, issue/rotate keys, place buckets) with its own credentials and audit trail. The interface having no write methods is what keeps that boundary real: a proxy deployment can be given credentials that cannot write, and building the control plane itself (authn, quotas, billing, self-service) is conventional CRUD work with no architectural uncertainty, so it is intentionally left unimplemented. The bundled YAML store is the PoC's stand-in; a real service brings [its own `store.Store`](#building-a-service-on-the-gateway) over its own definition storage.
 
 ## Install
 
 ### Binary
 
-Download the binaries (`s3rp` and `s3rp-admin`) from [Releases](https://github.com/fujiwara/s3rp/releases).
+Download the `s3rp` binary from [Releases](https://github.com/fujiwara/s3rp/releases).
 
 ### go install
 
 ```console
 $ go install github.com/fujiwara/s3rp/cmd/s3rp@latest
-$ go install github.com/fujiwara/s3rp/cmd/s3rp-admin@latest
 ```
 
 ## Usage
@@ -110,24 +104,7 @@ Notes:
 
 ### Definition store
 
-By default, tenants and buckets are defined directly in the YAML config as above. They can instead be read from a sqlite database:
-
-```yaml
-listen: ":8080"
-store:
-  driver: sqlite
-  dsn: s3rp.db
-# tenants: must not be present with the sqlite driver
-```
-
-The proxy always opens the database **read-only** (a `mode=` parameter in the DSN is rejected). All writes go through the separate `s3rp-admin` binary, so the proxy deployment carries no write code or credentials:
-
-```console
-$ s3rp-admin --dsn s3rp.db migrate                       # apply the schema (idempotent)
-$ s3rp-admin --dsn s3rp.db import --config tenants.yaml  # load a tenants-form YAML into the DB
-```
-
-The schema lives in `db/schema.sql`, shared by the read side (proxy) and write side (admin) via sqlc-generated packages.
+The `s3rp` binary reads its definitions from the YAML config as above. Any other source — a database, an API — is a [`store.Store` implementation you bring](#building-a-service-on-the-gateway) when embedding the gateway; the interface is read-only on purpose, definitions are written by your control plane, not through s3rp.
 
 ## Client usage
 
@@ -206,7 +183,7 @@ Whether a checksum is actually stored and returned depends on the backend (versi
 
 ### Bucket policies
 
-A bucket may carry an AWS-style policy document, written as JSON text in the config (`buckets[].policy`) or the database. GetBucketPolicy returns it; PutBucketPolicy / DeleteBucketPolicy are not supported (policies are defined in the store, not via the S3 API).
+A bucket may carry an AWS-style policy document, written as JSON text in the config (`buckets[].policy`). GetBucketPolicy returns it; PutBucketPolicy / DeleteBucketPolicy are not supported (policies are defined in the store, not via the S3 API).
 
 Two simplifications against AWS: principals are plain user names of the tenant under the `S3RP` key (no ARNs), and resources are plain `"bucket"` / `"bucket/prefix*"` strings (no ARNs). Action and Resource support the AWS wildcards `*` (any run of characters, including `/`) and `?` (exactly one character). As in AWS, `Action` matching is case-insensitive (so a mis-cased `Deny` cannot silently fail open), while `Resource` matching is case-sensitive since object keys are.
 
