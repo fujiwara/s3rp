@@ -102,11 +102,16 @@ func (v *Verifier) VerifyPost(r *http.Request, fields map[string]string, lookup 
 		return nil, nil, invalid("Bucket POST must contain a field named 'x-amz-signature'.")
 	}
 
-	secret, s3e := lookupSecret(r, lookup, akid)
+	cred, s3e := lookupSecret(r, lookup, akid)
 	if s3e != nil {
 		return nil, nil, s3e
 	}
-	key := deriveSigningKey(secret, scopeDate, region)
+	// the token is a form field like the rest of the auth; the policy's
+	// coverage rule additionally forces it into the signed conditions
+	if s3e := validateSessionToken(cred.SessionToken, fields["x-amz-security-token"]); s3e != nil {
+		return nil, nil, s3e
+	}
+	key := deriveSigningKey(cred.SecretAccessKey, scopeDate, region)
 	want := hex.EncodeToString(hmacSHA256(key, []byte(policyB64)))
 	if subtle.ConstantTimeCompare([]byte(want), []byte(sig)) != 1 {
 		return nil, nil, s3err.SignatureDoesNotMatch().WithCause(fmt.Errorf("post policy signature mismatch"))
@@ -132,7 +137,7 @@ func (v *Verifier) VerifyPost(r *http.Request, fields map[string]string, lookup 
 	}
 	return &Verified{
 		AccessKeyID:     akid,
-		SecretAccessKey: secret,
+		SecretAccessKey: cred.SecretAccessKey,
 		Signature:       sig,
 		SigningTime:     t,
 		Scope:           strings.Join([]string{scopeDate, region, service, "aws4_request"}, "/"),

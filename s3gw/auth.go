@@ -34,16 +34,19 @@ func (g *Gateway) verifyRequest(r *http.Request) (*verifiedRequest, *s3err.Error
 	// the store lookup that supplies the secret also yields the identity, so
 	// capture it here instead of looking the key up twice
 	var key *store.Key
-	verified, s3e := g.verifier.Verify(r, func(ctx context.Context, accessKeyID string) (string, error) {
+	verified, s3e := g.verifier.Verify(r, func(ctx context.Context, accessKeyID string) (sigv4.Credential, error) {
 		k, err := g.store.GetKey(ctx, accessKeyID)
 		if err != nil {
 			if errors.Is(err, store.ErrNotFound) {
-				return "", sigv4.ErrUnknownKey
+				return sigv4.Credential{}, sigv4.ErrUnknownKey
 			}
-			return "", err
+			return sigv4.Credential{}, err
 		}
 		key = k
-		return k.SecretAccessKey.String(), nil
+		return sigv4.Credential{
+			SecretAccessKey: k.SecretAccessKey.String(),
+			SessionToken:    k.SessionToken,
+		}, nil
 	})
 	if s3e != nil {
 		return nil, s3e
@@ -62,16 +65,19 @@ func (g *Gateway) verifyRequest(r *http.Request) (*verifiedRequest, *s3err.Error
 // verifyRequest does for header and presigned authentication.
 func (g *Gateway) verifyPostRequest(r *http.Request, fields map[string]string) (*verifiedRequest, *sigv4.PostPolicy, *s3err.Error) {
 	var key *store.Key
-	verified, pp, s3e := g.verifier.VerifyPost(r, fields, func(ctx context.Context, accessKeyID string) (string, error) {
+	verified, pp, s3e := g.verifier.VerifyPost(r, fields, func(ctx context.Context, accessKeyID string) (sigv4.Credential, error) {
 		k, err := g.store.GetKey(ctx, accessKeyID)
 		if err != nil {
 			if errors.Is(err, store.ErrNotFound) {
-				return "", sigv4.ErrUnknownKey
+				return sigv4.Credential{}, sigv4.ErrUnknownKey
 			}
-			return "", err
+			return sigv4.Credential{}, err
 		}
 		key = k
-		return k.SecretAccessKey.String(), nil
+		return sigv4.Credential{
+			SecretAccessKey: k.SecretAccessKey.String(),
+			SessionToken:    k.SessionToken,
+		}, nil
 	})
 	if s3e != nil {
 		return nil, nil, s3e

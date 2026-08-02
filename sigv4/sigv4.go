@@ -10,6 +10,7 @@ package sigv4
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/subtle"
 	"errors"
 	"fmt"
@@ -87,10 +88,22 @@ func parseAuthorizationHeader(v string) (*authHeader, error) {
 	return a, nil
 }
 
-// SecretLookup returns the secret access key for an access key id. Return
+// Credential is what a SecretLookup returns for an access key id.
+type Credential struct {
+	SecretAccessKey string
+	// SessionToken is set for a temporary credential and empty for a
+	// long-lived key. When set, the request must present exactly this
+	// token (header, presigned query, or POST form field); when empty, a
+	// request presenting a token is refused — a token on a long-lived key
+	// is client confusion, not something to drop silently. Expiry is the
+	// store's business: an expired key is simply not returned.
+	SessionToken string
+}
+
+// SecretLookup returns the credential for an access key id. Return
 // ErrUnknownKey when the id does not exist, so that the caller's client sees
 // InvalidAccessKeyId rather than an internal error.
-type SecretLookup func(ctx context.Context, accessKeyID string) (string, error)
+type SecretLookup func(ctx context.Context, accessKeyID string) (Credential, error)
 
 // ErrUnknownKey reports that an access key id does not exist.
 var ErrUnknownKey = errors.New("unknown access key id")
@@ -143,15 +156,36 @@ func (v *Verifier) now() time.Time {
 	return time.Now()
 }
 
-func lookupSecret(r *http.Request, lookup SecretLookup, accessKeyID string) (string, *s3err.Error) {
-	secret, err := lookup(r.Context(), accessKeyID)
+func lookupSecret(r *http.Request, lookup SecretLookup, accessKeyID string) (Credential, *s3err.Error) {
+	cred, err := lookup(r.Context(), accessKeyID)
 	if err != nil {
 		if errors.Is(err, ErrUnknownKey) {
-			return "", s3err.InvalidAccessKeyID()
+			return Credential{}, s3err.InvalidAccessKeyID()
 		}
-		return "", s3err.Internal(err, "key lookup failed")
+		return Credential{}, s3err.Internal(err, "key lookup failed")
 	}
-	return secret, nil
+	return cred, nil
+}
+
+// validateSessionToken enforces the token rules symmetrically: a temporary
+// credential must present exactly its token, a long-lived one must present
+// none.
+func validateSessionToken(expected, presented string) *s3err.Error {
+	if expected == "" && presented == "" {
+		return nil
+	}
+	// Compare digests, not the strings: ConstantTimeCompare returns
+	// immediately on a length mismatch, and tokens are variable-length, so
+	// comparing them directly would leak the token's length through timing.
+	// Hashing makes the comparison length-independent (and a one-sided
+	// empty value fails it, which is exactly the rule above).
+	e := sha256.Sum256([]byte(expected))
+	p := sha256.Sum256([]byte(presented))
+	if subtle.ConstantTimeCompare(e[:], p[:]) == 1 {
+		return nil
+	}
+	return s3err.New(http.StatusBadRequest, "InvalidToken",
+		"The provided token is malformed or otherwise invalid.")
 }
 
 // IsStreaming reports whether a payload hash denotes an aws-chunked body,
@@ -215,8 +249,11 @@ func (v *Verifier) verifyHeaderRequest(r *http.Request, lookup SecretLookup) (*V
 		return nil, s3err.New(http.StatusBadRequest, "AuthorizationHeaderMalformed",
 			fmt.Sprintf("The authorization header is malformed; the region '%s' is wrong; expecting '%s'", auth.Region, v.region))
 	}
-	secret, s3e := lookupSecret(r, lookup, auth.AccessKeyID)
+	cred, s3e := lookupSecret(r, lookup, auth.AccessKeyID)
 	if s3e != nil {
+		return nil, s3e
+	}
+	if s3e := validateSessionToken(cred.SessionToken, r.Header.Get("X-Amz-Security-Token")); s3e != nil {
 		return nil, s3e
 	}
 
@@ -252,7 +289,8 @@ func (v *Verifier) verifyHeaderRequest(r *http.Request, lookup SecretLookup) (*V
 	}
 	creds := aws.Credentials{
 		AccessKeyID:     auth.AccessKeyID,
-		SecretAccessKey: secret,
+		SecretAccessKey: cred.SecretAccessKey,
+		SessionToken:    cred.SessionToken,
 	}
 	signer := v.signers.get(auth.AccessKeyID)
 	if err := signer.SignHTTP(r.Context(), creds, clone, payloadHash, auth.Service, auth.Region, t); err != nil {
@@ -273,7 +311,7 @@ func (v *Verifier) verifyHeaderRequest(r *http.Request, lookup SecretLookup) (*V
 	}
 	return &Verified{
 		AccessKeyID:     auth.AccessKeyID,
-		SecretAccessKey: secret,
+		SecretAccessKey: cred.SecretAccessKey,
 		Signature:       auth.Signature,
 		SigningTime:     t,
 		Scope:           auth.scope(),
@@ -345,8 +383,11 @@ func (v *Verifier) verifyPresignedRequest(r *http.Request, lookup SecretLookup) 
 	if t.After(now.Add(maxClockSkew)) {
 		return nil, s3err.New(http.StatusForbidden, "AccessDenied", "Request is not valid yet")
 	}
-	secret, s3e := lookupSecret(r, lookup, akid)
+	cred, s3e := lookupSecret(r, lookup, akid)
 	if s3e != nil {
+		return nil, s3e
+	}
+	if s3e := validateSessionToken(cred.SessionToken, query.Get("X-Amz-Security-Token")); s3e != nil {
 		return nil, s3e
 	}
 
@@ -366,7 +407,9 @@ func (v *Verifier) verifyPresignedRequest(r *http.Request, lookup SecretLookup) 
 	if payloadHash == "" {
 		payloadHash = "UNSIGNED-PAYLOAD"
 	}
-	creds := aws.Credentials{AccessKeyID: akid, SecretAccessKey: secret}
+	// the token was stripped with the other auth params; the signer re-adds
+	// it to the query when the credentials carry one, as the client's did
+	creds := aws.Credentials{AccessKeyID: akid, SecretAccessKey: cred.SecretAccessKey, SessionToken: cred.SessionToken}
 	signedURI, _, err := v.signers.get(akid).PresignHTTP(r.Context(), creds, clone, payloadHash, service, region, t)
 	if err != nil {
 		return nil, s3err.Internal(err, "signing failed")
@@ -387,7 +430,7 @@ func (v *Verifier) verifyPresignedRequest(r *http.Request, lookup SecretLookup) 
 	promoteHoistedQueryParams(r)
 	return &Verified{
 		AccessKeyID:     akid,
-		SecretAccessKey: secret,
+		SecretAccessKey: cred.SecretAccessKey,
 		Signature:       query.Get("X-Amz-Signature"),
 		SigningTime:     t,
 		Scope:           strings.Join([]string{scopeDate, region, service, "aws4_request"}, "/"),
