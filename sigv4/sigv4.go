@@ -10,6 +10,7 @@ package sigv4
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/subtle"
 	"errors"
 	"fmt"
@@ -173,8 +174,14 @@ func validateSessionToken(expected, presented string) *s3err.Error {
 	if expected == "" && presented == "" {
 		return nil
 	}
-	if expected != "" && presented != "" &&
-		subtle.ConstantTimeCompare([]byte(expected), []byte(presented)) == 1 {
+	// Compare digests, not the strings: ConstantTimeCompare returns
+	// immediately on a length mismatch, and tokens are variable-length, so
+	// comparing them directly would leak the token's length through timing.
+	// Hashing makes the comparison length-independent (and a one-sided
+	// empty value fails it, which is exactly the rule above).
+	e := sha256.Sum256([]byte(expected))
+	p := sha256.Sum256([]byte(presented))
+	if subtle.ConstantTimeCompare(e[:], p[:]) == 1 {
 		return nil
 	}
 	return s3err.New(http.StatusBadRequest, "InvalidToken",
