@@ -18,7 +18,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
+	"github.com/fujiwara/s3rp/s3gw"
 	"github.com/fujiwara/s3rp/sigv4"
+	"github.com/fujiwara/s3rp/store"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -315,6 +317,36 @@ func TestProxyListBuckets(t *testing.T) {
 	// the owner is the tenant name
 	if aws.ToString(out.Owner.ID) != "testtenant" {
 		t.Errorf("expect owner testtenant, got %s", aws.ToString(out.Owner.ID))
+	}
+	// the creation date comes from the store's BucketEntry
+	if want := time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC); !aws.ToTime(out.Buckets[0].CreationDate).Equal(want) {
+		t.Errorf("expect %v, got %v", want, out.Buckets[0].CreationDate)
+	}
+}
+
+func TestProxyListBucketsNoCreatedAt(t *testing.T) {
+	// a store that does not track creation reports the Unix epoch
+	gw := s3gw.New(memStore{
+		keys: map[string]*store.Key{
+			testAccessKeyID: {
+				AccessKeyID: testAccessKeyID, SecretAccessKey: testSecretAccessKey,
+				Tenant: "testtenant", User: "testuser",
+			},
+		},
+		buckets: map[string]*store.Bucket{
+			"nodate": {Tenant: "testtenant", Name: "nodate", Backend: &store.Backend{}},
+		},
+	})
+	client, _, _ := newSDKClientFor(t, gw)
+	out, err := client.ListBuckets(t.Context(), &s3.ListBucketsInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Buckets) != 1 {
+		t.Fatalf("expect 1 bucket, got %d", len(out.Buckets))
+	}
+	if !aws.ToTime(out.Buckets[0].CreationDate).Equal(time.Unix(0, 0)) {
+		t.Errorf("expect the Unix epoch, got %v", out.Buckets[0].CreationDate)
 	}
 }
 

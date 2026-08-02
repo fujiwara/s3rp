@@ -595,20 +595,25 @@ func (g *Gateway) headBucket(c *opCtx) error {
 }
 
 func (g *Gateway) listBuckets(w http.ResponseWriter, r *http.Request, vr *verifiedRequest) error {
-	names, err := g.store.ListBucketNames(r.Context(), vr.Tenant)
+	entries, err := g.store.ListBuckets(r.Context(), vr.Tenant)
 	if err != nil {
 		return s3err.Internal(err, "bucket lookup failed")
 	}
-	sort.Strings(names)
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
 	result := &s3xml.ListAllMyBucketsResult{
 		XMLNS: s3xml.Namespace,
 		Owner: s3xml.Owner{ID: vr.Tenant, DisplayName: vr.Tenant},
 	}
-	for _, name := range names {
+	for _, e := range entries {
+		created := e.CreatedAt
+		if created.IsZero() {
+			// a definition may not track its creation; a fixed date beats
+			// inventing one
+			created = time.Unix(0, 0)
+		}
 		result.Buckets.Bucket = append(result.Buckets.Bucket, s3xml.BucketEntry{
-			Name: name,
-			// buckets are static definitions; expose a fixed date
-			CreationDate: s3xml.FormatTime(time.Unix(0, 0)),
+			Name:         e.Name,
+			CreationDate: s3xml.FormatTime(created),
 		})
 	}
 	return s3xml.Write(w, result)

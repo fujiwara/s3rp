@@ -79,6 +79,7 @@ tenants:
             secret_access_key: ${ACME_BATCH_SECRET_001}
     buckets:                         # buckets owned by this tenant
       - name: photos                 # bucket name on the front side
+        created_at: 2026-01-15T09:00:00Z # reported by ListBuckets (optional; default 1970-01-01)
         backend:
           endpoint: http://ceph.internal:7480
           region: us-east-1          # default "us-east-1"
@@ -165,6 +166,8 @@ CopyObject and UploadPartCopy work between buckets served by the same backend (s
 GetBucketLocation and HeadBucket (the `x-amz-bucket-region` header) report the gateway's own region — the value pinned with `SetRegion`, `us-east-1` when unset — never the backend's region, which stays hidden like the backend bucket name and endpoint.
 
 Wherever a response exposes an `Owner` or `Initiator` — object and version listings, multipart listings, ACLs, ListBuckets — it is the requesting tenant, never the backend account the proxy uses.
+
+ListBuckets answers from the store without calling any backend: the bucket names are the front names, and each `CreationDate` is the store's `created_at` for the bucket (the Unix epoch when the store does not track one).
 
 The `versionId` query parameter is passed through on GetObject, HeadObject, DeleteObject, GetObjectAcl and the object tagging operations. Versioning requires a backend that supports it.
 
@@ -405,7 +408,9 @@ func (d *definitions) GetBucket(ctx context.Context, tenant, bucket string) (*st
 // CORS preflights. Bucket names are globally unique for this reason.
 func (d *definitions) GetBucketByName(ctx context.Context, bucket string) (*store.Bucket, error) { /* … */ }
 
-func (d *definitions) ListBucketNames(ctx context.Context, tenant string) ([]string, error) { /* … */ }
+// ListBuckets returns light entries (name and creation date) so a listing
+// does not have to materialize full definitions, credentials included.
+func (d *definitions) ListBuckets(ctx context.Context, tenant string) ([]store.BucketEntry, error) { /* … */ }
 
 // tenantPlan is what the store loads alongside a bucket; the gateway hands
 // it back untouched on Op.BucketMetadata.

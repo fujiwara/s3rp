@@ -31,6 +31,7 @@ func NewConfigStore(cfg *Config) store.Store {
 				Backend:    b.Backend,
 				PolicyText: b.Policy,
 				CORS:       b.CORS,
+				CreatedAt:  b.CreatedAt,
 			}
 			if b.Policy != "" {
 				// the config is validated, so this cannot fail
@@ -84,14 +85,14 @@ func (s *configStore) GetBucketByName(ctx context.Context, bucket string) (*stor
 	return nil, store.ErrNotFound
 }
 
-func (s *configStore) ListBucketNames(ctx context.Context, tenant string) ([]string, error) {
+func (s *configStore) ListBuckets(ctx context.Context, tenant string) ([]store.BucketEntry, error) {
 	buckets, ok := s.tenants[tenant]
 	if !ok {
 		return nil, store.ErrNotFound
 	}
-	names := make([]string, 0, len(buckets))
-	for name := range buckets {
-		names = append(names, name)
+	entries := make([]store.BucketEntry, 0, len(buckets))
+	for _, b := range buckets {
+		entries = append(entries, store.BucketEntry{Name: b.Name, CreatedAt: b.CreatedAt})
 	}
-	return names, nil
+	return entries, nil
 }

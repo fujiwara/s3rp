@@ -4,6 +4,7 @@ import (
 	"errors"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/fujiwara/s3rp"
 	"github.com/fujiwara/s3rp/store"
@@ -75,16 +76,23 @@ func storeContract(t *testing.T, st store.Store) {
 			t.Errorf("expect ErrNotFound, got %v", err)
 		}
 	})
-	t.Run("ListBucketNames", func(t *testing.T) {
-		names, err := st.ListBucketNames(ctx, "acme")
+	t.Run("ListBuckets", func(t *testing.T) {
+		entries, err := st.ListBuckets(ctx, "acme")
 		if err != nil {
 			t.Fatal(err)
 		}
-		sort.Strings(names)
-		if len(names) != 2 || names[0] != "logs" || names[1] != "photos" {
-			t.Errorf("unexpected names %v", names)
+		sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+		if len(entries) != 2 || entries[0].Name != "logs" || entries[1].Name != "photos" {
+			t.Errorf("unexpected entries %v", entries)
 		}
-		if _, err := st.ListBucketNames(ctx, "nosuchtenant"); !errors.Is(err, store.ErrNotFound) {
+		// logs has no created_at (zero); photos carries the configured date
+		if !entries[0].CreatedAt.IsZero() {
+			t.Errorf("expect zero CreatedAt for logs, got %v", entries[0].CreatedAt)
+		}
+		if want := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC); !entries[1].CreatedAt.Equal(want) {
+			t.Errorf("expect %v for photos, got %v", want, entries[1].CreatedAt)
+		}
+		if _, err := st.ListBuckets(ctx, "nosuchtenant"); !errors.Is(err, store.ErrNotFound) {
 			t.Errorf("expect ErrNotFound, got %v", err)
 		}
 	})

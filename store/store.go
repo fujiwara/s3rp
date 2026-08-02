@@ -7,6 +7,7 @@ package store
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/fujiwara/s3rp/cors"
 	"github.com/fujiwara/s3rp/policy"
@@ -30,8 +31,19 @@ type Store interface {
 	// regardless of the tenant. Used for unauthenticated CORS preflight
 	// requests, which carry no tenant identity.
 	GetBucketByName(ctx context.Context, bucket string) (*Bucket, error)
-	// ListBucketNames returns the bucket names owned by the tenant.
-	ListBucketNames(ctx context.Context, tenant string) ([]string, error)
+	// ListBuckets returns the tenant's buckets as light entries — just what
+	// the ListBuckets response exposes — so an implementation does not have
+	// to materialize full definitions (backend credentials included) for a
+	// listing.
+	ListBuckets(ctx context.Context, tenant string) ([]BucketEntry, error)
+}
+
+// BucketEntry is one bucket of a ListBuckets result.
+type BucketEntry struct {
+	Name string
+	// CreatedAt is when the bucket was created. Zero = unknown; the
+	// gateway reports the Unix epoch then.
+	CreatedAt time.Time
 }
 
 // Key is a front-side access key. It belongs to exactly one user of a
@@ -66,6 +78,11 @@ type Bucket struct {
 	Tenant  string
 	Name    string
 	Backend *Backend
+
+	// CreatedAt is when the bucket was created (zero = unknown). ListBuckets
+	// reports it via BucketEntry; here it rides along for operations that may
+	// want it.
+	CreatedAt time.Time
 
 	// PolicyText is the bucket policy JSON as the tenant wrote it (empty
 	// if none); it is what GetBucketPolicy returns, verbatim. Policy is

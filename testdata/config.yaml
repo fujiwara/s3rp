@@ -19,6 +19,7 @@ tenants:
             action: [s3:GetObjectAcl]
     buckets:
       - name: photos
+        created_at: 2026-01-02T03:04:05Z
         backend:
           endpoint: http://backend.example.com:7480
           region: us-east-1

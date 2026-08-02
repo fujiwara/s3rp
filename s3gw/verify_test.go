@@ -49,14 +49,14 @@ func (m memStore) GetBucketByName(_ context.Context, name string) (*store.Bucket
 	return nil, store.ErrNotFound
 }
 
-func (m memStore) ListBucketNames(_ context.Context, tenant string) ([]string, error) {
-	var names []string
-	for n, b := range m.buckets {
+func (m memStore) ListBuckets(_ context.Context, tenant string) ([]store.BucketEntry, error) {
+	var entries []store.BucketEntry
+	for _, b := range m.buckets {
 		if b.Tenant == tenant {
-			names = append(names, n)
+			entries = append(entries, store.BucketEntry{Name: b.Name, CreatedAt: b.CreatedAt})
 		}
 	}
-	return names, nil
+	return entries, nil
 }
 
 func newTestGateway(t *testing.T) *s3gw.Gateway {
@@ -72,6 +72,7 @@ func newTestGateway(t *testing.T) *s3gw.Gateway {
 		buckets: map[string]*store.Bucket{
 			"testbucket": {
 				Tenant: "testtenant", Name: "testbucket",
+				CreatedAt: time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC),
 				Backend: &store.Backend{
 					// a region no client should ever see: responses
 					// report the gateway's region, never the backend's
