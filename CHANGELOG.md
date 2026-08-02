@@ -1,5 +1,25 @@
 # Changelog
 
+## [v0.0.3](https://github.com/fujiwara/s3rp/compare/v0.0.2...v0.0.3) - 2026-08-02
+
+- Bound the backend client cache with an LRU and make cache sizes adjustable by @fujiwara in https://github.com/fujiwara/s3rp/pull/50
+- Pass opaque store metadata through to the hooks on Op by @fujiwara in https://github.com/fujiwara/s3rp/pull/52
+- Remove the sqlite store implementation by @fujiwara in https://github.com/fujiwara/s3rp/pull/53
+- Add optional signing-region pinning to the verifier by @fujiwara in https://github.com/fujiwara/s3rp/pull/54
+- Let a service contribute s3.Options to backend clients by @fujiwara in https://github.com/fujiwara/s3rp/pull/55
+- Make the policy surface syntax a parse-time Dialect by @fujiwara in https://github.com/fujiwara/s3rp/pull/56
+- Support browser-based POST uploads (SigV4 POST policy) by @fujiwara in https://github.com/fujiwara/s3rp/pull/57
+- Pass SSE-S3/SSE-KMS through to the backend, refuse SSE-C loudly by @fujiwara in https://github.com/fujiwara/s3rp/pull/58
+- Document the production boundaries: lifecycle, quota, pre-auth cost by @fujiwara in https://github.com/fujiwara/s3rp/pull/59
+- Expose cache statistics for sizing the client and signer caches by @fujiwara in https://github.com/fujiwara/s3rp/pull/60
+- Accept temporary credentials (session tokens) by @fujiwara in https://github.com/fujiwara/s3rp/pull/61
+- Harden the aws-chunked decoder against three review findings by @fujiwara in https://github.com/fujiwara/s3rp/pull/62
+- Give the client canonical error messages, not the backend's by @fujiwara in https://github.com/fujiwara/s3rp/pull/63
+- Fix two stale comments, drop six that restate the code by @fujiwara in https://github.com/fujiwara/s3rp/pull/64
+- Move the gateway tests into s3gw by @fujiwara in https://github.com/fujiwara/s3rp/pull/65
+- Measure coverage in CI by @fujiwara in https://github.com/fujiwara/s3rp/pull/66
+- Test checksum and s3xml directly by @fujiwara in https://github.com/fujiwara/s3rp/pull/67
+
 ## [v0.0.2](https://github.com/fujiwara/s3rp/compare/v0.0.1...v0.0.2) - 2026-08-01
 
 - Lead the README with the design rationale by @fujiwara in https://github.com/fujiwara/s3rp/pull/25
