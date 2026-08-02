@@ -607,7 +607,7 @@ func requestBody(r *http.Request, vr *verifiedRequest) (io.Reader, int64, *s3err
 			return nil, 0, s3err.New(http.StatusBadRequest, "InvalidRequest",
 				"Invalid x-amz-decoded-content-length header")
 		}
-		return sigv4.NewChunkedReader(r.Body, vr.Verified, checksum.TrailerAlgorithm(r.Header)), length, nil
+		return sigv4.NewChunkedReader(r.Body, vr.Verified, checksum.TrailerAlgorithm(r.Header), length), length, nil
 	default:
 		if r.ContentLength < 0 {
 			return nil, 0, s3err.New(http.StatusLengthRequired, "MissingContentLength",

@@ -44,7 +44,7 @@ func awsDocsChunkedBody() []byte {
 }
 
 func TestChunkedReaderAWSDocsVector(t *testing.T) {
-	r := sigv4.NewChunkedReader(bytes.NewReader(awsDocsChunkedBody()), awsDocsVerifiedRequest(), "")
+	r := sigv4.NewChunkedReader(bytes.NewReader(awsDocsChunkedBody()), awsDocsVerifiedRequest(), "", 1<<30)
 	decoded, err := io.ReadAll(r)
 	if err != nil {
 		t.Fatal(err)
@@ -61,7 +61,7 @@ func TestChunkedReaderBadSignature(t *testing.T) {
 	body := awsDocsChunkedBody()
 	// corrupt the first chunk signature
 	corrupted := bytes.Replace(body, []byte("ad80c730"), []byte("deadbeef"), 1)
-	r := sigv4.NewChunkedReader(bytes.NewReader(corrupted), awsDocsVerifiedRequest(), "")
+	r := sigv4.NewChunkedReader(bytes.NewReader(corrupted), awsDocsVerifiedRequest(), "", 1<<30)
 	_, err := io.ReadAll(r)
 	if err == nil {
 		t.Fatal("expect error for bad chunk signature")
@@ -76,7 +76,7 @@ func TestChunkedReaderTamperedData(t *testing.T) {
 	// flip a payload byte without touching the signatures
 	i := bytes.IndexByte(body, 'a')
 	body[i] = 'b'
-	r := sigv4.NewChunkedReader(bytes.NewReader(body), awsDocsVerifiedRequest(), "")
+	r := sigv4.NewChunkedReader(bytes.NewReader(body), awsDocsVerifiedRequest(), "", 1<<30)
 	_, err := io.ReadAll(r)
 	if err == nil {
 		t.Fatal("expect error for tampered chunk data")
@@ -130,7 +130,7 @@ func TestChunkedReaderRoundTrip(t *testing.T) {
 		t.Run(fmt.Sprintf("chunk size %d", size), func(t *testing.T) {
 			data := []byte(strings.Repeat("0123456789abcdef", 100)) // 1600 bytes
 			encoded := encodeSignedChunks(t, vr, data, size)
-			r := sigv4.NewChunkedReader(bytes.NewReader(encoded), vr, "")
+			r := sigv4.NewChunkedReader(bytes.NewReader(encoded), vr, "", 1<<30)
 			decoded, err := io.ReadAll(r)
 			if err != nil {
 				t.Fatal(err)
@@ -154,7 +154,7 @@ func TestChunkedReaderUnsignedTrailer(t *testing.T) {
 	buf.WriteString("x-amz-checksum-crc32:AAAAAA==\r\n")
 	buf.WriteString("\r\n")
 	// no trailer algorithm declared: the (bogus) checksum is not verified
-	r := sigv4.NewChunkedReader(buf, vr, "")
+	r := sigv4.NewChunkedReader(buf, vr, "", 1<<30)
 	decoded, err := io.ReadAll(r)
 	if err != nil {
 		t.Fatal(err)
@@ -184,7 +184,7 @@ func TestChunkedReaderTrailerChecksum(t *testing.T) {
 
 	t.Run("valid checksum", func(t *testing.T) {
 		buf := encodeUnsignedTrailer(data, "x-amz-checksum-crc32", goodCRC32)
-		r := sigv4.NewChunkedReader(buf, vr, "crc32")
+		r := sigv4.NewChunkedReader(buf, vr, "crc32", 1<<30)
 		decoded, err := io.ReadAll(r)
 		if err != nil {
 			t.Fatal(err)
@@ -195,7 +195,7 @@ func TestChunkedReaderTrailerChecksum(t *testing.T) {
 	})
 	t.Run("checksum mismatch", func(t *testing.T) {
 		buf := encodeUnsignedTrailer(data, "x-amz-checksum-crc32", "AAAAAA==")
-		r := sigv4.NewChunkedReader(buf, vr, "crc32")
+		r := sigv4.NewChunkedReader(buf, vr, "crc32", 1<<30)
 		_, err := io.ReadAll(r)
 		if err == nil {
 			t.Fatal("expect error for checksum mismatch")
@@ -207,7 +207,7 @@ func TestChunkedReaderTrailerChecksum(t *testing.T) {
 	t.Run("sha256 roundtrip", func(t *testing.T) {
 		sum := sha256.Sum256(data)
 		buf := encodeUnsignedTrailer(data, "x-amz-checksum-sha256", base64.StdEncoding.EncodeToString(sum[:]))
-		r := sigv4.NewChunkedReader(buf, vr, "sha256")
+		r := sigv4.NewChunkedReader(buf, vr, "sha256", 1<<30)
 		if _, err := io.ReadAll(r); err != nil {
 			t.Fatal(err)
 		}

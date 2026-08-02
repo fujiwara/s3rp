@@ -54,24 +54,44 @@ type chunkedReader struct {
 	// checksum trailer verification (when the request declares one)
 	ckAlg  string
 	ckHash hash.Hash
+	ckSeen bool // the declared checksum trailer was present
 
 	remaining int64 // undelivered bytes of the current chunk
+	// undecoded is what the signed x-amz-decoded-content-length still
+	// allows. A chunk claiming more than this is refused at its header,
+	// before any of its bytes are handed out — otherwise a consumer that
+	// stops at the declared length (every SDK does, it bounds the body by
+	// Content-Length) would take bytes from a chunk whose signature is
+	// never reached, and therefore never checked.
+	undecoded int64
 	started   bool
 	eof       bool
 	err       error
 }
+
+// maxChunkLineLen bounds a chunk header or trailer line. Headers are about a
+// hundred bytes (hex size, "chunk-signature=" and 64 hex digits) and trailers
+// are HTTP header lines, so this is generous; without it a client could send
+// an unterminated line and make the reader buffer without limit — on a server
+// that deliberately sets no body read timeout.
+const maxChunkLineLen = 8 << 10
 
 // NewChunkedReader returns a reader that decodes an aws-chunked request body.
 // When vr's payload hash declares signed chunks, each chunk signature is
 // verified against the signature chain seeded by the request signature.
 // When trailerAlg names a checksum algorithm (from the x-amz-trailer
 // header), the trailer checksum is verified against the decoded payload.
-func NewChunkedReader(body io.Reader, vr *Verified, trailerAlg string) io.Reader {
+//
+// decodedLength is the signed x-amz-decoded-content-length: the decoded
+// stream may not exceed it, which is what keeps every delivered byte covered
+// by a verified chunk signature.
+func NewChunkedReader(body io.Reader, vr *Verified, trailerAlg string, decodedLength int64) io.Reader {
 	signed := vr.PayloadHash == streamingSHA256 || vr.PayloadHash == streamingSHA256T
 	cr := &chunkedReader{
-		r:       bufio.NewReader(body),
-		signed:  signed,
-		trailer: strings.HasSuffix(vr.PayloadHash, "-TRAILER"),
+		r:         bufio.NewReader(body),
+		signed:    signed,
+		trailer:   strings.HasSuffix(vr.PayloadHash, "-TRAILER"),
+		undecoded: decodedLength,
 	}
 	if signed {
 		cr.signingKey = deriveSigningKey(vr.SecretAccessKey, vr.SigningTime.Format("20060102"), vr.Region)
@@ -107,6 +127,15 @@ func (cr *chunkedReader) Read(p []byte) (int, error) {
 			return 0, cr.fail(err)
 		}
 		cr.started = true
+		// refuse a chunk that claims more than the signed decoded length
+		// still allows: its trailing bytes would never be read, so its
+		// signature would never be checked, yet its leading bytes would
+		// already have been delivered
+		if size > cr.undecoded {
+			return 0, cr.fail(fmt.Errorf(
+				"chunk size %d exceeds the remaining x-amz-decoded-content-length %d", size, cr.undecoded))
+		}
+		cr.undecoded -= size
 		if size == 0 {
 			if err := cr.verifyChunk(); err != nil {
 				return 0, cr.fail(err)
@@ -150,6 +179,16 @@ func (cr *chunkedReader) Read(p []byte) (int, error) {
 	return n, nil
 }
 
+// truncateForError bounds a client-controlled value quoted in an error, so
+// the cause handed to the observer cannot be inflated by the request.
+func truncateForError(s string) string {
+	const max = 64
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "..."
+}
+
 func (cr *chunkedReader) fail(err error) error {
 	cr.err = err
 	return err
@@ -164,13 +203,15 @@ func (cr *chunkedReader) readChunkHeader() (int64, error) {
 	sizeStr, ext, hasExt := strings.Cut(line, ";")
 	size, err := strconv.ParseInt(sizeStr, 16, 64)
 	if err != nil || size < 0 {
-		return 0, fmt.Errorf("malformed chunk size %q", sizeStr)
+		// truncate: the value is client-controlled and this reaches the
+		// observer as the cause
+		return 0, fmt.Errorf("malformed chunk size %q", truncateForError(sizeStr))
 	}
 	cr.chunkSig = ""
 	if hasExt {
 		name, value, _ := strings.Cut(ext, "=")
 		if name != "chunk-signature" {
-			return 0, fmt.Errorf("unknown chunk extension %q", name)
+			return 0, fmt.Errorf("unknown chunk extension %q", truncateForError(name))
 		}
 		cr.chunkSig = value
 	}
@@ -214,6 +255,13 @@ func (cr *chunkedReader) discardTrailers() error {
 	for {
 		line, err := cr.readLine()
 		if err == io.EOF || (err == nil && line == "") {
+			// a declared checksum that never arrived is a checksum not
+			// verified; accepting the upload would report integrity the
+			// client never proved
+			if cr.ckHash != nil && !cr.ckSeen {
+				return s3err.New(http.StatusBadRequest, "BadDigest",
+					fmt.Sprintf("The x-amz-checksum-%s trailer declared by x-amz-trailer is missing.", cr.ckAlg))
+			}
 			return nil
 		}
 		if err != nil {
@@ -231,6 +279,7 @@ func (cr *chunkedReader) discardTrailers() error {
 				return s3err.New(http.StatusBadRequest, "BadDigest",
 					fmt.Sprintf("The %s you specified did not match the calculated checksum.", strings.ToUpper(cr.ckAlg)))
 			}
+			cr.ckSeen = true
 		}
 	}
 }
@@ -246,10 +295,26 @@ func (cr *chunkedReader) readCRLF() error {
 	return nil
 }
 
+// readLine reads one CRLF-terminated framing line, bounded by
+// maxChunkLineLen so an unterminated line cannot grow the buffer without
+// limit. The bound is on the line, not on a single read, so a slow client
+// sending it in pieces is bounded too.
 func (cr *chunkedReader) readLine() (string, error) {
-	line, err := cr.r.ReadString('\n')
-	if err != nil && !(err == io.EOF && line != "") {
-		return "", err
+	var sb strings.Builder
+	for {
+		b, err := cr.r.ReadByte()
+		if err != nil {
+			if err == io.EOF && sb.Len() > 0 {
+				return strings.TrimRight(sb.String(), "\r\n"), nil
+			}
+			return "", err
+		}
+		if b == '\n' {
+			return strings.TrimRight(sb.String(), "\r\n"), nil
+		}
+		if sb.Len() >= maxChunkLineLen {
+			return "", fmt.Errorf("chunk framing line exceeds %d bytes", maxChunkLineLen)
+		}
+		sb.WriteByte(b)
 	}
-	return strings.TrimRight(line, "\r\n"), nil
 }
