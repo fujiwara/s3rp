@@ -373,6 +373,16 @@ func TestPostObjectRefusals(t *testing.T) {
 			},
 			code: "InvalidArgument",
 		},
+		{
+			// refused before the hooks run, like the header path
+			name: "unsupported encryption method",
+			form: &postForm{
+				conditions: []string{`{"key": "a.txt"}`, `{"x-amz-server-side-encryption": "rot13"}`},
+				fields:     [][2]string{{"key", "a.txt"}, {"x-amz-server-side-encryption", "rot13"}},
+				filename:   "x", content: "data",
+			},
+			code: "InvalidArgument",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

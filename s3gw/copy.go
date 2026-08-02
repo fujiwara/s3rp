@@ -159,6 +159,7 @@ func (g *Gateway) uploadPartCopy(c *opCtx) error {
 	if out.CopySourceVersionId != nil {
 		w.Header().Set("x-amz-copy-source-version-id", *out.CopySourceVersionId)
 	}
+	setSSEHeaders(w.Header(), out.ServerSideEncryption, out.SSEKMSKeyId)
 	result := &s3xml.CopyPartResult{XMLNS: s3xml.Namespace}
 	if cr := out.CopyPartResult; cr != nil {
 		if cr.ETag != nil {

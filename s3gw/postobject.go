@@ -111,6 +111,11 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, bucke
 	if err := (paramSet{}).check(r.URL.Query()); err != nil {
 		return err
 	}
+	// SSE-C headers are as meaningless on a POST upload as anywhere else,
+	// and just as dangerous to drop silently
+	if err := checkSSEC(r); err != nil {
+		return err
+	}
 	fields, file, filename, s3e := readPostForm(r)
 	if s3e != nil {
 		return s3e
@@ -169,6 +174,11 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, bucke
 		return errACLNotSupported()
 	}
 	if s3e := checkPostFields(fields); s3e != nil {
+		return s3e
+	}
+	// validated before the hooks run, so Op.SSE only ever carries a
+	// supported value
+	if s3e := checkSSE(func(name string) string { return fields[name] }); s3e != nil {
 		return s3e
 	}
 

@@ -1,6 +1,7 @@
 package s3gw_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/fujiwara/s3rp/s3gw"
 )
 
 // TestSSEHeaderValidation covers what the SDK cannot be made to send:
@@ -17,26 +19,38 @@ import (
 func TestSSEHeaderValidation(t *testing.T) {
 	cases := []struct {
 		name    string
+		method  string
 		headers map[string]string
 		code    string
 	}{
 		{
 			name:    "unsupported encryption method",
+			method:  "PUT",
 			headers: map[string]string{"x-amz-server-side-encryption": "aws:kms:dsse"},
 			code:    "InvalidArgument",
 		},
 		{
 			name:    "kms key id without aws:kms",
+			method:  "PUT",
 			headers: map[string]string{"x-amz-server-side-encryption-aws-kms-key-id": "some-key"},
 			code:    "InvalidArgument",
 		},
 		{
-			name: "kms key id with AES256",
+			name:   "kms key id with AES256",
+			method: "PUT",
 			headers: map[string]string{
 				"x-amz-server-side-encryption":                "AES256",
 				"x-amz-server-side-encryption-aws-kms-key-id": "some-key",
 			},
 			code: "InvalidArgument",
+		},
+		{
+			// the check runs in dispatch, so a bogus value is refused on
+			// any operation, not only uploads
+			name:    "unsupported method on GET",
+			method:  "GET",
+			headers: map[string]string{"x-amz-server-side-encryption": "rot13"},
+			code:    "InvalidArgument",
 		},
 	}
 	for _, tc := range cases {
@@ -46,8 +60,19 @@ func TestSSEHeaderValidation(t *testing.T) {
 			if err := gw.SetBackend("testbucket", stub); err != nil {
 				t.Fatal(err)
 			}
-			req := signedRequest(t, "PUT", "http://s3.example.com/testbucket/a.txt",
-				[]byte("x"), "UNSIGNED-PAYLOAD", time.Now(), testCreds(), func(r *http.Request) {
+			// the refusal happens before the hooks, so an Authorizer or
+			// Interceptor never sees an unsupported value on Op
+			var ops []*s3gw.Op
+			gw.Use(func(ctx context.Context, op *s3gw.Op, next func() error) error {
+				ops = append(ops, op)
+				return next()
+			})
+			var body []byte
+			if tc.method == "PUT" {
+				body = []byte("x")
+			}
+			req := signedRequest(t, tc.method, "http://s3.example.com/testbucket/a.txt",
+				body, "UNSIGNED-PAYLOAD", time.Now(), testCreds(), func(r *http.Request) {
 					for k, v := range tc.headers {
 						r.Header.Set(k, v)
 					}
@@ -59,6 +84,9 @@ func TestSSEHeaderValidation(t *testing.T) {
 			}
 			if stub.putIn != nil {
 				t.Error("a refused request must not reach the backend")
+			}
+			if len(ops) != 0 {
+				t.Errorf("the hooks must not see an unsupported SSE value, got %+v", ops)
 			}
 		})
 	}
