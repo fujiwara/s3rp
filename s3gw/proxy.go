@@ -340,7 +340,12 @@ func (g *Gateway) listObjectsV2(c *opCtx) error {
 	if out.IsTruncated != nil {
 		result.IsTruncated = *out.IsTruncated
 	}
-	result.Contents = objectsFromSDK(out.Contents)
+	// owner presence follows the request (fetch-owner), like AWS
+	var owner *s3xml.Owner
+	if in.FetchOwner != nil && *in.FetchOwner {
+		owner = tenantOwner(c.vr.Tenant)
+	}
+	result.Contents = objectsFromSDK(out.Contents, owner)
 	for _, cp := range out.CommonPrefixes {
 		if cp.Prefix != nil {
 			result.CommonPrefixes = append(result.CommonPrefixes, s3xml.CommonPrefix{Prefix: *cp.Prefix})
@@ -349,11 +354,22 @@ func (g *Gateway) listObjectsV2(c *opCtx) error {
 	return s3xml.Write(w, result)
 }
 
-func objectsFromSDK(objects []types.Object) []s3xml.Object {
+// tenantOwner is the Owner (and Initiator) the gateway reports wherever the
+// S3 API exposes one, matching the ACL stub and ListBuckets. The owner the
+// backend reports is the operator's backend account and never appears in a
+// response.
+func tenantOwner(tenant string) *s3xml.Owner {
+	return &s3xml.Owner{ID: tenant, DisplayName: tenant}
+}
+
+// objectsFromSDK converts listed objects for the response; owner (nil =
+// omitted) replaces whatever owner the backend reported.
+func objectsFromSDK(objects []types.Object, owner *s3xml.Owner) []s3xml.Object {
 	result := make([]s3xml.Object, 0, len(objects))
 	for _, obj := range objects {
 		o := s3xml.Object{
 			StorageClass: string(obj.StorageClass),
+			Owner:        owner,
 		}
 		if obj.Key != nil {
 			o.Key = *obj.Key
@@ -366,15 +382,6 @@ func objectsFromSDK(objects []types.Object) []s3xml.Object {
 		}
 		if obj.Size != nil {
 			o.Size = *obj.Size
-		}
-		if obj.Owner != nil {
-			o.Owner = &s3xml.Owner{}
-			if obj.Owner.ID != nil {
-				o.Owner.ID = *obj.Owner.ID
-			}
-			if obj.Owner.DisplayName != nil {
-				o.Owner.DisplayName = *obj.Owner.DisplayName
-			}
 		}
 		result = append(result, o)
 	}
@@ -436,7 +443,8 @@ func (g *Gateway) listObjectsV1(c *opCtx) error {
 	if out.IsTruncated != nil {
 		result.IsTruncated = *out.IsTruncated
 	}
-	result.Contents = objectsFromSDK(out.Contents)
+	// ListObjects (V1) always carries an Owner on AWS
+	result.Contents = objectsFromSDK(out.Contents, tenantOwner(c.vr.Tenant))
 	for _, cp := range out.CommonPrefixes {
 		if cp.Prefix != nil {
 			result.CommonPrefixes = append(result.CommonPrefixes, s3xml.CommonPrefix{Prefix: *cp.Prefix})

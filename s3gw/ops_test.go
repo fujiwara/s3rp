@@ -25,6 +25,8 @@ func TestProxyListObjectsV1(t *testing.T) {
 					Size:         aws.Int64(10),
 					ETag:         aws.String(`"etag-a"`),
 					LastModified: aws.Time(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
+					// the backend account; it must never reach the client
+					Owner: &types.Owner{ID: aws.String("backend-account"), DisplayName: aws.String("backend-account")},
 				},
 			},
 		},
@@ -49,6 +51,10 @@ func TestProxyListObjectsV1(t *testing.T) {
 	}
 	if aws.ToString(stub.listV1In.Bucket) != "backend-testbucket" {
 		t.Errorf("expect backend-testbucket, got %s", aws.ToString(stub.listV1In.Bucket))
+	}
+	// V1 always carries an Owner: the tenant, never the backend account
+	if out.Contents[0].Owner == nil || aws.ToString(out.Contents[0].Owner.ID) != "testtenant" {
+		t.Errorf("expect testtenant owner, got %v", out.Contents[0].Owner)
 	}
 }
 
@@ -332,6 +338,13 @@ func TestProxyListObjectVersions(t *testing.T) {
 	}
 	if aws.ToString(stub.listVerIn.Prefix) != "v" {
 		t.Errorf("unexpected prefix %v", stub.listVerIn.Prefix)
+	}
+	// versions and delete markers carry the tenant as Owner
+	if out.Versions[0].Owner == nil || aws.ToString(out.Versions[0].Owner.ID) != "testtenant" {
+		t.Errorf("expect testtenant owner, got %v", out.Versions[0].Owner)
+	}
+	if out.DeleteMarkers[0].Owner == nil || aws.ToString(out.DeleteMarkers[0].Owner.ID) != "testtenant" {
+		t.Errorf("expect testtenant owner, got %v", out.DeleteMarkers[0].Owner)
 	}
 }
 

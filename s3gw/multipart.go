@@ -262,12 +262,17 @@ func (g *Gateway) listParts(c *opCtx) error {
 	if err != nil {
 		return s3err.FromSDKError(err, r.URL.Path)
 	}
+	// Owner and Initiator are the tenant, as everywhere the API exposes an
+	// owner; the backend's account stays hidden
+	owner := tenantOwner(c.vr.Tenant)
 	result := &s3xml.ListPartsResult{
 		XMLNS:        s3xml.Namespace,
 		Bucket:       rt.cfg.Name,
 		Key:          key,
 		UploadID:     aws.ToString(in.UploadId),
 		StorageClass: string(out.StorageClass),
+		Owner:        owner,
+		Initiator:    owner,
 	}
 	if out.PartNumberMarker != nil {
 		result.PartNumberMarker = *out.PartNumberMarker
@@ -361,9 +366,12 @@ func (g *Gateway) listMultipartUploads(c *opCtx) error {
 	if out.IsTruncated != nil {
 		result.IsTruncated = *out.IsTruncated
 	}
+	owner := tenantOwner(c.vr.Tenant)
 	for _, u := range out.Uploads {
 		upload := s3xml.Upload{
 			StorageClass: string(u.StorageClass),
+			Owner:        owner,
+			Initiator:    owner,
 		}
 		if u.Key != nil {
 			upload.Key = *u.Key

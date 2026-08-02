@@ -216,6 +216,8 @@ func TestProxyListObjectsV2(t *testing.T) {
 					Size:         aws.Int64(10),
 					ETag:         aws.String(`"etag-a"`),
 					LastModified: aws.Time(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
+					// the backend account; it must never reach the client
+					Owner: &types.Owner{ID: aws.String("backend-account"), DisplayName: aws.String("backend-account")},
 				},
 				{
 					Key:          aws.String("dir/b.txt"),
@@ -260,6 +262,22 @@ func TestProxyListObjectsV2(t *testing.T) {
 	}
 	if aws.ToString(stub.listIn.Prefix) != "dir/" {
 		t.Errorf("unexpected prefix %v", stub.listIn.Prefix)
+	}
+	// without fetch-owner no Owner is present, backend-reported or otherwise
+	if out.Contents[0].Owner != nil {
+		t.Errorf("expect no owner, got %v", out.Contents[0].Owner)
+	}
+	// with fetch-owner the Owner is the tenant, never the backend account
+	out, err = client.ListObjectsV2(t.Context(), &s3.ListObjectsV2Input{
+		Bucket:     aws.String("testbucket"),
+		FetchOwner: aws.Bool(true),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Contents) == 0 || out.Contents[0].Owner == nil ||
+		aws.ToString(out.Contents[0].Owner.ID) != "testtenant" {
+		t.Errorf("expect testtenant owner, got %v", out.Contents[0].Owner)
 	}
 }
 
@@ -453,6 +471,13 @@ func TestProxyMultipartUpload(t *testing.T) {
 	if aws.ToString(parts.Bucket) != "testbucket" {
 		t.Errorf("expect testbucket, got %s", aws.ToString(parts.Bucket))
 	}
+	// Owner and Initiator are the tenant, never the backend account
+	if parts.Owner == nil || aws.ToString(parts.Owner.ID) != "testtenant" {
+		t.Errorf("expect testtenant owner, got %v", parts.Owner)
+	}
+	if parts.Initiator == nil || aws.ToString(parts.Initiator.ID) != "testtenant" {
+		t.Errorf("expect testtenant initiator, got %v", parts.Initiator)
+	}
 
 	complete, err := client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
 		Bucket:          aws.String("testbucket"),
@@ -519,6 +544,13 @@ func TestProxyListMultipartUploads(t *testing.T) {
 	}
 	if aws.ToString(stub.listMPUIn.Prefix) != "a" {
 		t.Errorf("unexpected prefix %v", stub.listMPUIn.Prefix)
+	}
+	// Owner and Initiator are the tenant, never the backend account
+	if out.Uploads[0].Owner == nil || aws.ToString(out.Uploads[0].Owner.ID) != "testtenant" {
+		t.Errorf("expect testtenant owner, got %v", out.Uploads[0].Owner)
+	}
+	if out.Uploads[0].Initiator == nil || aws.ToString(out.Uploads[0].Initiator.ID) != "testtenant" {
+		t.Errorf("expect testtenant initiator, got %v", out.Uploads[0].Initiator)
 	}
 }
 

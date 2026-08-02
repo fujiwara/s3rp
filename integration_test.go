@@ -343,6 +343,10 @@ func TestIntegration(t *testing.T) {
 		if len(out.Contents) == 0 {
 			t.Error("expect some contents")
 		}
+		// V1 always carries an Owner: the tenant, never the backend account
+		if o := out.Contents[0].Owner; o == nil || aws.ToString(o.ID) != "it-tenant" {
+			t.Errorf("expect it-tenant owner, got %v", o)
+		}
 	})
 	t.Run("GetBucketLocation", func(t *testing.T) {
 		out, err := client.GetBucketLocation(t.Context(), &s3.GetBucketLocationInput{
