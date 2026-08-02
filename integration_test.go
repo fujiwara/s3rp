@@ -579,6 +579,52 @@ func TestIntegration(t *testing.T) {
 			t.Error("expect a checksum on the GetObject response")
 		}
 	})
+	t.Run("SSEKMS", func(t *testing.T) {
+		// requires a backend with a KMS: the compose ceph service
+		// configures RGW's built-in "testing" backend with testkey-1
+		keyID := envOr("S3RP_TEST_SSE_KMS_KEY_ID", "testkey-1")
+		content := "sse-kms end-to-end content"
+		put, err := client.PutObject(t.Context(), &s3.PutObjectInput{
+			Bucket:               aws.String("it-bucket"),
+			Key:                  aws.String("dir/encrypted.txt"),
+			Body:                 strings.NewReader(content),
+			ServerSideEncryption: types.ServerSideEncryptionAwsKms,
+			SSEKMSKeyId:          aws.String(keyID),
+		})
+		if err != nil {
+			t.Skipf("backend does not support SSE-KMS: %v", err)
+		}
+		defer client.DeleteObject(t.Context(), &s3.DeleteObjectInput{
+			Bucket: aws.String("it-bucket"),
+			Key:    aws.String("dir/encrypted.txt"),
+		})
+		if put.ServerSideEncryption != types.ServerSideEncryptionAwsKms {
+			// e.g. a backend that silently ignores the request
+			t.Skipf("backend did not encrypt (got %q)", put.ServerSideEncryption)
+		}
+		out, err := client.GetObject(t.Context(), &s3.GetObjectInput{
+			Bucket: aws.String("it-bucket"),
+			Key:    aws.String("dir/encrypted.txt"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer out.Body.Close()
+		body, err := io.ReadAll(out.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(body) != content {
+			t.Errorf("content mismatch after decryption: %q", body)
+		}
+		if out.ServerSideEncryption != types.ServerSideEncryptionAwsKms {
+			t.Errorf("expect aws:kms on the download, got %q", out.ServerSideEncryption)
+		}
+		if aws.ToString(out.SSEKMSKeyId) != keyID {
+			t.Errorf("expect key id %q on the download, got %v", keyID, out.SSEKMSKeyId)
+		}
+	})
+
 	t.Run("ObjectLock", func(t *testing.T) {
 		// Object Lock requires a bucket created with it enabled on the
 		// backend; s3rp does not proxy CreateBucket, so make one directly.

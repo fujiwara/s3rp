@@ -30,6 +30,11 @@ type Op struct {
 	// deliberately not exposed: nothing outside the proxy should depend on it.
 	Bucket string `json:"bucket"`
 	Key    string `json:"key,omitempty"`
+	// SSEKMSKeyID is the KMS key id the request names, when it does. The
+	// gateway forwards it to the backend untouched; whether this identity
+	// may use this key is the service's decision, made in an Authorizer —
+	// nothing else in the request path knows which tenant owns which key.
+	SSEKMSKeyID string `json:"sse_kms_key_id,omitempty"`
 
 	// BytesIn and BytesOut count the request and response bodies as seen on
 	// the wire, so an upload sent with aws-chunked framing counts the frames

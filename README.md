@@ -182,6 +182,14 @@ Object Lock must be enabled when a bucket is created, and s3rp does not proxy Cr
 
 Whether a checksum is actually stored and returned depends on the backend (versitygw and Amazon S3 do; some Ceph RGW builds do not).
 
+### Server-side encryption
+
+SSE-S3 (`x-amz-server-side-encryption: AES256`) and SSE-KMS (`aws:kms` + `x-amz-server-side-encryption-aws-kms-key-id`) **pass through**: the backend performs the encryption, and its result headers are returned on uploads and downloads. The KMS key id is opaque to the gateway — it is whatever the backend's KMS resolves (for example Ceph RGW handing it to a Vault-compatible key service), so the key id namespace belongs to the service, not to the backend's infrastructure. The key id a request names is exposed as `Op.SSEKMSKeyID` to the [Authorizer](#building-a-service-on-the-gateway): whether a tenant may use a key is the service's decision — nothing else in the path knows which tenant owns which key, since the backend's KMS request carries no tenant identity.
+
+**SSE-C is refused** with `NotImplemented` rather than silently dropped: an ignored customer key would store the object without the encryption the client believes it requested, and later serve it back without the key.
+
+Backend notes for Ceph RGW: SSE requests require TLS toward RGW by default (`rgw_crypt_require_ssl`) — terminate or disable it deliberately; the compose file's ceph service configures the built-in `testing` KMS backend with a static key (`testkey-1`) so the integration suite can exercise SSE-KMS without a real KMS.
+
 ### Bucket policies
 
 A bucket may carry an AWS-style policy document, written as JSON text in the config (`buckets[].policy`). GetBucketPolicy returns it; PutBucketPolicy / DeleteBucketPolicy are not supported (policies are defined in the store, not via the S3 API).
@@ -286,7 +294,7 @@ http://localhost:8080/photos/foo.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&...
 
 - Conditions: exact match (`{"field": "value"}` / `["eq", "$field", "value"]`), `["starts-with", "$field", "prefix"]` and `["content-length-range", min, max]` (enforced while the file streams; an upload that ends up under the minimum is deleted from the backend and refused). Field names are case-insensitive; `${filename}` in the `key` field is substituted before conditions are evaluated, and the target bucket is checked as the `bucket` condition.
 - As on AWS, every form field must be covered by a condition (except `policy`, `x-amz-signature`, `x-ignore-*` and the file itself), the policy `expiration` is enforced, and form fields after the `file` part are ignored.
-- Supported fields: `key`, `Content-Type`, `Content-MD5`, `Cache-Control`, `Content-Disposition`, `Content-Encoding`, `Content-Language`, `Expires`, `x-amz-storage-class`, `x-amz-tagging`, `x-amz-meta-*`, `success_action_status` (200/201/204) and `success_action_redirect` (303 with `bucket`/`key`/`etag` appended). `acl` follows the same rule as everywhere else (ACLs are disabled); unsupported fields are refused with `NotImplemented` rather than silently dropped.
+- Supported fields: `key`, `Content-Type`, `Content-MD5`, `Cache-Control`, `Content-Disposition`, `Content-Encoding`, `Content-Language`, `Expires`, `x-amz-storage-class`, `x-amz-tagging`, `x-amz-meta-*`, `x-amz-server-side-encryption` (+ `-aws-kms-key-id`), `success_action_status` (200/201/204) and `success_action_redirect` (303 with `bucket`/`key`/`etag` appended). `acl` follows the same rule as everywhere else (ACLs are disabled); unsupported fields are refused with `NotImplemented` rather than silently dropped.
 
 ## Behind a TLS terminator
 

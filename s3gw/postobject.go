@@ -92,6 +92,7 @@ var postFieldMapped = map[string]bool{
 	"content-disposition": true, "content-encoding": true,
 	"content-language": true, "expires": true,
 	"x-amz-storage-class": true, "x-amz-tagging": true,
+	hdrSSE: true, hdrSSEKMSKeyID: true,
 	"x-amz-algorithm": true, "x-amz-credential": true,
 	"x-amz-date": true, "x-amz-signature": true, "policy": true,
 }
@@ -182,6 +183,7 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, bucke
 		User:           vr.User,
 		Bucket:         b.Name,
 		Key:            key,
+		SSEKMSKeyID:    fields[hdrSSEKMSKeyID],
 		BucketMetadata: b.Metadata,
 		KeyMetadata:    vr.KeyMetadata,
 	}
@@ -249,6 +251,10 @@ func (g *Gateway) postPutObject(c *opCtx, fields map[string]string, file *multip
 	if v := fields["x-amz-tagging"]; v != "" {
 		in.Tagging = aws.String(v)
 	}
+	if s3e := applySSE(func(name string) string { return fields[name] },
+		&in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
+		return s3e
+	}
 	md := make(map[string]string)
 	for name, v := range fields {
 		if meta, ok := strings.CutPrefix(name, "x-amz-meta-"); ok {
@@ -282,6 +288,7 @@ func (g *Gateway) postPutObject(c *opCtx, fields map[string]string, file *multip
 	if out.VersionId != nil {
 		w.Header().Set("x-amz-version-id", *out.VersionId)
 	}
+	setSSEHeaders(w.Header(), out.ServerSideEncryption, out.SSEKMSKeyId)
 	// the front URL of the object, never the backend's
 	scheme := "http"
 	if r.TLS != nil {
