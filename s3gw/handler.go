@@ -414,7 +414,6 @@ var objectRoutes = map[string][]route{
 // paramSet is the set of query parameters an operation accepts.
 type paramSet map[string]bool
 
-// newParamSet builds a paramSet from parameter names.
 func newParamSet(names ...string) paramSet {
 	p := make(paramSet, len(names))
 	for _, n := range names {

@@ -51,7 +51,6 @@ func (g *Gateway) perObjectAuthorizer(vr *verifiedRequest, b *store.Bucket, acti
 	return a
 }
 
-// denies reports whether the given resource is denied for this action.
 func (a perObjectAuthorizer) denies(resource string) bool {
 	return a.denyAll || a.eval.Denies(resource)
 }
