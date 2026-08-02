@@ -78,11 +78,11 @@ func TestProxySSEKMSPassThrough(t *testing.T) {
 	if len(ops) != 2 {
 		t.Fatalf("expect two ops, got %d", len(ops))
 	}
-	if ops[0].SSEKMSKeyID != "tenant-key-1" {
-		t.Errorf("expect the key id on the put op, got %q", ops[0].SSEKMSKeyID)
+	if ops[0].SSE != "aws:kms" || ops[0].SSEKMSKeyID != "tenant-key-1" {
+		t.Errorf("expect the encryption request on the put op, got %q %q", ops[0].SSE, ops[0].SSEKMSKeyID)
 	}
-	if ops[1].SSEKMSKeyID != "" {
-		t.Errorf("expect no key id on the get op, got %q", ops[1].SSEKMSKeyID)
+	if ops[1].SSE != "" || ops[1].SSEKMSKeyID != "" {
+		t.Errorf("expect no encryption request on the get op, got %q %q", ops[1].SSE, ops[1].SSEKMSKeyID)
 	}
 }
 

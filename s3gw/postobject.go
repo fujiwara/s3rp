@@ -183,6 +183,7 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, bucke
 		User:           vr.User,
 		Bucket:         b.Name,
 		Key:            key,
+		SSE:            fields[hdrSSE],
 		SSEKMSKeyID:    fields[hdrSSEKMSKeyID],
 		BucketMetadata: b.Metadata,
 		KeyMetadata:    vr.KeyMetadata,

@@ -273,6 +273,7 @@ func (c *opCtx) dispatch(routes []route) error {
 			User:           c.vr.User,
 			Bucket:         c.rt.cfg.Name,
 			Key:            c.key,
+			SSE:            c.r.Header.Get(hdrSSE),
 			SSEKMSKeyID:    c.r.Header.Get(hdrSSEKMSKeyID),
 			BucketMetadata: c.rt.cfg.Metadata,
 			KeyMetadata:    c.vr.KeyMetadata,

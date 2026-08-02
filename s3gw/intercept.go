@@ -30,10 +30,15 @@ type Op struct {
 	// deliberately not exposed: nothing outside the proxy should depend on it.
 	Bucket string `json:"bucket"`
 	Key    string `json:"key,omitempty"`
-	// SSEKMSKeyID is the KMS key id the request names, when it does. The
-	// gateway forwards it to the backend untouched; whether this identity
-	// may use this key is the service's decision, made in an Authorizer —
-	// nothing else in the request path knows which tenant owns which key.
+	// SSE is the server-side encryption the request asks for ("AES256" or
+	// "aws:kms", empty when none), and SSEKMSKeyID the KMS key id it
+	// names, when it does. The gateway forwards both to the backend
+	// untouched; whether this identity may use this key — or whether this
+	// bucket's backend supports encryption at all — is the service's
+	// decision, made in an Authorizer. Nothing else in the request path
+	// knows which tenant owns which key, and a backend that lacks SSE may
+	// ignore the request silently rather than refuse it.
+	SSE         string `json:"sse,omitempty"`
 	SSEKMSKeyID string `json:"sse_kms_key_id,omitempty"`
 
 	// BytesIn and BytesOut count the request and response bodies as seen on
