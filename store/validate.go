@@ -10,16 +10,21 @@ import (
 // implementation must enforce them where definitions are written (the
 // gateway does not re-check per request):
 //
-//   - A bucket name is an S3-style name. Path-style routing splits the
-//     request path on "/" and policy resources are "bucket/key" strings, so
-//     a name outside this shape (a "/", an empty label) would corrupt both.
+//   - A bucket name is an S3-style name, deliberately without ".": besides
+//     feeding path-style routing (the request path splits on "/") and
+//     "bucket/key" policy resources, a bucket name must stay usable as a
+//     single DNS label for virtual-hosted-style addressing, and a dotted
+//     name breaks there — "my.bucket.s3.example.com" is not covered by a
+//     "*.s3.example.com" wildcard certificate. AWS allows dots but
+//     documents the same breakage and recommends against them; refusing
+//     them outright costs nothing at creation time and removes the trap.
 //   - Tenant and user names share the charset of policy principals
 //     ("tenant/user" — see the policy package's principal validation, which
 //     this must stay in sync with). A name outside it could never be
 //     written in a Principal element: its grants and denials would be
 //     unexpressible, which is a dead end, not a choice.
 var (
-	bucketNameRegexp = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`)
+	bucketNameRegexp = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$`)
 	// tenant and user names deliberately share one charset: a principal is
 	// "tenant/user", so both halves must be writable in a policy.
 	principalPartRegexp = regexp.MustCompile(`^[a-z][a-z0-9_-]+$`)

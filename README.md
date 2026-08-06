@@ -60,7 +60,7 @@ Flags:
 
 The config file is YAML. Environment variables in the file are expanded (`${VAR}` or `$VAR`).
 
-A tenant owns one or more buckets and users. A user is the stable identity within a tenant (name: `[a-z][a-z0-9_-]+`); access keys are issued per user and rotate under it — add a new key, switch clients, then remove the old one. Every key of a tenant can access all of the tenant's buckets, unless restricted by a [bucket policy](#bucket-policies) or a [user policy](#user-policies); a bucket policy can also grant selected operations to another tenant's user ([cross-tenant access](#cross-tenant-access)). Two tenants may not map their buckets to the same physical backend bucket (endpoint + backend bucket name); this is rejected at startup to preserve tenant isolation.
+A tenant owns one or more buckets and users. Bucket names (`[a-z0-9-]`, 3–63 chars, globally unique) deliberately exclude `.`: a dotted name is not a single DNS label, so it would break virtual-hosted-style addressing under a wildcard TLS certificate. A user is the stable identity within a tenant (name: `[a-z][a-z0-9_-]+`); access keys are issued per user and rotate under it — add a new key, switch clients, then remove the old one. Every key of a tenant can access all of the tenant's buckets, unless restricted by a [bucket policy](#bucket-policies) or a [user policy](#user-policies); a bucket policy can also grant selected operations to another tenant's user ([cross-tenant access](#cross-tenant-access)). Two tenants may not map their buckets to the same physical backend bucket (endpoint + backend bucket name); this is rejected at startup to preserve tenant isolation.
 
 ```yaml
 listen: ":8080"

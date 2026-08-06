@@ -8,14 +8,17 @@ import (
 )
 
 func TestValidateBucketName(t *testing.T) {
-	valid := []string{"photos", "my-bucket", "my.bucket", "0abc", "abc0"}
+	valid := []string{"photos", "my-bucket", "0abc", "abc0"}
 	for _, name := range valid {
 		if err := store.ValidateBucketName(name); err != nil {
 			t.Errorf("bucket name %q must be valid: %v", name, err)
 		}
 	}
+	// "my.bucket" is rejected on purpose: a dotted name is not a single
+	// DNS label, which breaks virtual-hosted-style addressing under a
+	// wildcard certificate
 	invalid := []string{
-		"", "ab", "Photos", "-bucket", "bucket-", ".bucket",
+		"", "ab", "Photos", "-bucket", "bucket-", ".bucket", "my.bucket",
 		"my_bucket", "my/bucket", strings.Repeat("a", 64),
 	}
 	for _, name := range invalid {
