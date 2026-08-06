@@ -3,6 +3,7 @@ package cors_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/fujiwara/s3rp/cors"
@@ -169,5 +170,56 @@ func TestSetHeaders(t *testing.T) {
 	}
 	if got := do("https://evil.com", "GET"); len(got) != 0 {
 		t.Errorf("expect no headers for an unmatched origin, got %v", got)
+	}
+}
+
+func TestRuleValidate(t *testing.T) {
+	valid := &cors.Rule{
+		AllowedOrigins: []string{"https://app.example.com"},
+		AllowedMethods: []string{"GET", "PUT", "POST", "DELETE", "HEAD"},
+		MaxAgeSeconds:  3600,
+	}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid rule rejected: %v", err)
+	}
+
+	cases := []struct {
+		name   string
+		rule   *cors.Rule
+		errStr string
+	}{
+		{
+			"no origins",
+			&cors.Rule{AllowedMethods: []string{"GET"}},
+			"at least one allowed origin",
+		},
+		{
+			"no methods",
+			&cors.Rule{AllowedOrigins: []string{"*"}},
+			"at least one allowed method",
+		},
+		{
+			"unsupported method",
+			&cors.Rule{AllowedOrigins: []string{"*"}, AllowedMethods: []string{"PATCH"}},
+			"unsupported cors method",
+		},
+		{
+			"lower-cased method",
+			&cors.Rule{AllowedOrigins: []string{"*"}, AllowedMethods: []string{"get"}},
+			"unsupported cors method",
+		},
+		{
+			"negative max age",
+			&cors.Rule{AllowedOrigins: []string{"*"}, AllowedMethods: []string{"GET"}, MaxAgeSeconds: -1},
+			"must not be negative",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.rule.Validate()
+			if err == nil || !strings.Contains(err.Error(), tc.errStr) {
+				t.Errorf("expect error containing %q, got %v", tc.errStr, err)
+			}
+		})
 	}
 }
