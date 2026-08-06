@@ -19,10 +19,10 @@ const DefaultPrincipalKey = "S3RP"
 // parses with its own Dialect and keeps the original text in
 // store.Bucket.PolicyText, which is what GetBucketPolicy returns.
 type Dialect struct {
-	// PrincipalKey is the JSON key of the Principal object holding the user
-	// names (empty = DefaultPrincipalKey). The principal values stay plain
-	// user names in any dialect; mapping something else onto user names is
-	// the caller's business, before parsing.
+	// PrincipalKey is the JSON key of the Principal object holding the
+	// names (empty = DefaultPrincipalKey). The principal values stay
+	// "tenant/user" (or "tenant/*") names in any dialect; mapping something
+	// else onto them is the caller's business, before parsing.
 	PrincipalKey string
 	// ResourcePrefix, when set, is required on every Resource entry and
 	// stripped during parsing (e.g. "arn:aws:s3:::"), so resources are

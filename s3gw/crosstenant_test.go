@@ -40,7 +40,8 @@ const sharedBucketPolicy = `{
   ]
 }`
 
-// everyone in tenant-a may read; "*" must not widen across tenants
+// "*" is every authenticated user of any tenant: this bucket is readable
+// across tenants
 const openBucketPolicy = `{
   "Statement": [
     {"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "open/*"}
@@ -115,22 +116,38 @@ func TestCrossTenantInvisibleWithoutMention(t *testing.T) {
 	clients := newCrossTenantProxy(t, newPolicyStub())
 	ctx := t.Context()
 
-	// carol is not named by any policy: every bucket of tenant-a answers the
-	// same AccessDenied a nonexistent bucket does
-	for _, bucket := range []string{"shared", "open", "private", "nosuchbucket"} {
+	// carol is not covered by any grant: these buckets answer the same
+	// AccessDenied a nonexistent bucket does
+	for _, bucket := range []string{"shared", "private", "nosuchbucket"} {
 		_, err := clients["carol"].GetObject(ctx, &s3.GetObjectInput{
 			Bucket: aws.String(bucket), Key: aws.String("a.txt"),
 		})
 		expectAccessDenied(t, err)
 	}
-	// "Principal": "*" means the bucket's own tenant, never other tenants
+	// a bucket without a policy is unreachable across tenants
 	_, err := clients["bob"].GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String("open"), Key: aws.String("a.txt"),
+		Bucket: aws.String("private"), Key: aws.String("a.txt"),
 	})
 	expectAccessDenied(t, err)
-	// a bucket without a policy is unreachable across tenants
-	_, err = clients["bob"].GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String("private"), Key: aws.String("a.txt"),
+}
+
+func TestCrossTenantStarGrant(t *testing.T) {
+	clients := newCrossTenantProxy(t, newPolicyStub())
+	ctx := t.Context()
+
+	// "Principal": "*" grants every authenticated user, whatever the tenant
+	for _, user := range []string{"alice", "bob", "carol"} {
+		if out, err := clients[user].GetObject(ctx, &s3.GetObjectInput{
+			Bucket: aws.String("open"), Key: aws.String("a.txt"),
+		}); err != nil {
+			t.Errorf("%s must read the star-granted bucket: %v", user, err)
+		} else {
+			out.Body.Close()
+		}
+	}
+	// but only the granted action: writes stay cross-tenant denied
+	_, err := clients["bob"].PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String("open"), Key: aws.String("a.txt"), Body: strings.NewReader("x"),
 	})
 	expectAccessDenied(t, err)
 }

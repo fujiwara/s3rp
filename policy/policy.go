@@ -2,11 +2,12 @@
 //
 // The document structure follows the AWS policy language (Version /
 // Statement / Effect / Principal / Action / Resource), with two
-// simplifications: principals are plain user names (no ARNs) under the
-// "S3RP" key — "tenant/user" names another tenant's user, a plain name a
-// user of the bucket's own tenant — and resources are plain "bucket" or
-// "bucket/prefix*" strings (no ARNs). Action and Resource support the AWS
-// wildcards "*" (any run of characters) and "?" (a single character).
+// simplifications: principals are "tenant/user" names (no ARNs) under the
+// "S3RP" key — always tenant-qualified, with "tenant/*" naming every user
+// of a tenant and "*" every authenticated user of any tenant — and
+// resources are plain "bucket" or "bucket/prefix*" strings (no ARNs).
+// Action and Resource support the AWS wildcards "*" (any run of
+// characters) and "?" (a single character).
 //
 // Those two syntax choices are the default Dialect; a service can accept a
 // different principal key or ARN-prefixed resources by parsing with its own
@@ -17,7 +18,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"slices"
 	"strings"
 	"sync"
 )
@@ -34,10 +34,11 @@ const (
 	Deny
 )
 
-// principalRegexp accepts a plain user name ("alice", a user of the bucket's
-// own tenant) or a tenant-qualified one ("tenant-b/alice", another tenant's
-// user). Both parts use the user-name charset.
-var principalRegexp = regexp.MustCompile(`^([a-z][a-z0-9_-]+/)?[a-z][a-z0-9_-]+$`)
+// principalRegexp accepts a tenant-qualified user name ("tenant-a/alice")
+// or a tenant wildcard ("tenant-a/*", every user of the tenant). Both parts
+// use the user-name charset; there is no unqualified form — "*" (every
+// authenticated user) is the Principal "All" shape, not a list entry.
+var principalRegexp = regexp.MustCompile(`^[a-z][a-z0-9_-]+/([a-z][a-z0-9_-]+|\*)$`)
 
 // Structural limits on a policy document. Policies are tenant-authored, so
 // they are untrusted input, and authorization runs on every request (per
@@ -93,9 +94,9 @@ type Statement struct {
 	resourceRunes [][]rune
 }
 
-// Principal is either "*" (all users of the bucket's tenant) or
-// {"S3RP": user names}, where a name is plain ("alice", the bucket's own
-// tenant) or tenant-qualified ("tenant-b/alice", another tenant's user).
+// Principal is either "*" (every authenticated user, of any tenant) or
+// {"S3RP": names}, where a name is "tenant/user" (one user) or "tenant/*"
+// (every user of a tenant).
 type Principal struct {
 	All   bool
 	Users []string
@@ -183,6 +184,13 @@ func (p *Policy) validate() error {
 		if st.NotPrincipal != nil && st.NotPrincipal.All {
 			return fmt.Errorf("%s: NotPrincipal %q matches nobody", name, "*")
 		}
+		// NotPrincipal is everyone-except, so with Allow it would grant to
+		// every authenticated user of every tenant but the listed ones —
+		// a public-by-exclusion grant nobody writes on purpose (AWS
+		// discourages the combination for the same reason).
+		if st.NotPrincipal != nil && st.Effect != "Deny" {
+			return fmt.Errorf("%s: NotPrincipal is only allowed with Effect Deny", name)
+		}
 		for _, pr := range []*Principal{st.Principal, st.NotPrincipal} {
 			if pr == nil {
 				continue
@@ -192,7 +200,7 @@ func (p *Policy) validate() error {
 			}
 			for _, u := range pr.Users {
 				if !principalRegexp.MatchString(u) {
-					return fmt.Errorf("%s: invalid principal user name %q", name, u)
+					return fmt.Errorf("%s: invalid principal %q (must be %q or %q)", name, u, "tenant/user", "tenant/*")
 				}
 			}
 		}
@@ -333,10 +341,8 @@ func MarshalUserPolicy(up *UserPolicy) (string, error) {
 	return string(data), nil
 }
 
-// Evaluate evaluates the policy for a principal performing an action on a
-// resource ("bucket" or "bucket/key"). The principal is a plain user name
-// for the bucket's own tenant, or "tenant/user" for another tenant's user;
-// see matchPrincipal for how the two are matched. Deny takes precedence
+// Evaluate evaluates the policy for a principal ("tenant/user") performing
+// an action on a resource ("bucket" or "bucket/key"). Deny takes precedence
 // over Allow; None means no statement matched.
 func (p *Policy) Evaluate(principal, action, resource string) Effect {
 	// AWS treats the Action element as case-insensitive; comparing it
@@ -348,11 +354,10 @@ func (p *Policy) Evaluate(principal, action, resource string) Effect {
 	// and pattern, this is the dominant cost for a large policy or a long key.
 	actionRunes := []rune(strings.ToLower(action))
 	resourceRunes := []rune(resource)
-	qualified := qualifiedPrincipal(principal)
 	result := None
 	for i := range p.Statement {
 		st := &p.Statement[i]
-		if !st.matchPrincipal(principal, qualified) {
+		if !st.matchPrincipal(principal) {
 			continue
 		}
 		if !matchAnyRunes(st.actionRunes, actionRunes) {
@@ -389,14 +394,13 @@ type DenyEvaluator struct {
 func (p *Policy) DenyEvaluatorFor(principal, action string) DenyEvaluator {
 	p.compileOnce.Do(p.compile)
 	actionRunes := []rune(strings.ToLower(action))
-	qualified := qualifiedPrincipal(principal)
 	var e DenyEvaluator
 	for i := range p.Statement {
 		st := &p.Statement[i]
 		if st.Effect != "Deny" {
 			continue
 		}
-		if !st.matchPrincipal(principal, qualified) {
+		if !st.matchPrincipal(principal) {
 			continue
 		}
 		if !matchAnyRunes(st.actionRunes, actionRunes) {
@@ -423,14 +427,13 @@ type AllowEvaluator struct {
 func (p *Policy) AllowEvaluatorFor(principal, action string) AllowEvaluator {
 	p.compileOnce.Do(p.compile)
 	actionRunes := []rune(strings.ToLower(action))
-	qualified := qualifiedPrincipal(principal)
 	var e AllowEvaluator
 	for i := range p.Statement {
 		st := &p.Statement[i]
 		if st.Effect != "Allow" {
 			continue
 		}
-		if !st.matchPrincipal(principal, qualified) {
+		if !st.matchPrincipal(principal) {
 			continue
 		}
 		if !matchAnyRunes(st.actionRunes, actionRunes) {
@@ -462,15 +465,20 @@ func (e AllowEvaluator) AllowsRunes(resource []rune) bool {
 	return matchAnyRunes(e.allowResources, resource)
 }
 
-// MentionsPrincipal reports whether any Allow statement's Principal lists
-// the principal explicitly. It is the cross-tenant visibility gate: another
-// tenant's bucket is reachable only for principals its policy names, so
-// every other requester gets the same answer a nonexistent bucket produces
-// and bucket names cannot be probed across tenants.
+// MentionsPrincipal reports whether any Allow statement's Principal covers
+// the principal — an exact "tenant/user" listing, a "tenant/*" wildcard, or
+// "*" (which opens the bucket to every authenticated user). It is the
+// cross-tenant visibility gate: another tenant's bucket is reachable only
+// for principals its policy could grant something to, so every other
+// requester gets the same answer a nonexistent bucket produces and bucket
+// names cannot be probed across tenants.
 func (p *Policy) MentionsPrincipal(principal string) bool {
 	for i := range p.Statement {
 		st := &p.Statement[i]
-		if st.Effect == "Allow" && st.Principal != nil && slices.Contains(st.Principal.Users, principal) {
+		if st.Effect != "Allow" || st.Principal == nil {
+			continue
+		}
+		if st.Principal.All || matchAnyPrincipal(st.Principal.Users, principal) {
 			return true
 		}
 	}
@@ -508,35 +516,31 @@ func (p *Policy) compile() {
 	}
 }
 
-// matchPrincipal reports whether the statement applies to the principal.
-// qualified marks a tenant-qualified principal ("tenant/user" — another
-// tenant's user); callers compute it once per evaluation.
-//
-// A qualified principal is matched by an Allow statement only when its
-// Principal lists it explicitly: "*" and NotPrincipal widen a statement to
-// principals the author never named, and a grant must not widen across
-// tenants. Deny statements match broadly for the same safety reason — a
-// blanket "Deny *" must also catch cross-tenant principals the policy
-// allowed elsewhere.
-func (st *Statement) matchPrincipal(principal string, qualified bool) bool {
+// matchPrincipal reports whether the statement applies to the principal
+// (always "tenant/user"). "*" matches every authenticated user of every
+// tenant, for Allow and Deny alike; NotPrincipal (Deny-only, enforced at
+// validation) matches everyone except the listed names.
+func (st *Statement) matchPrincipal(principal string) bool {
 	if st.Principal != nil {
-		if st.Principal.All {
-			return !qualified || st.Effect == "Deny"
-		}
-		return slices.Contains(st.Principal.Users, principal)
+		return st.Principal.All || matchAnyPrincipal(st.Principal.Users, principal)
 	}
-	// NotPrincipal: matches everyone except the listed users
-	if qualified && st.Effect != "Deny" {
-		return false
-	}
-	return !slices.Contains(st.NotPrincipal.Users, principal)
+	return !matchAnyPrincipal(st.NotPrincipal.Users, principal)
 }
 
-// qualifiedPrincipal reports whether the principal is tenant-qualified
-// ("tenant/user"): another tenant's user, as opposed to a plain user name of
-// the bucket's own tenant.
-func qualifiedPrincipal(principal string) bool {
-	return strings.ContainsRune(principal, '/')
+// matchAnyPrincipal reports whether any entry names the principal: an exact
+// "tenant/user", or a "tenant/*" wildcard covering every user of the tenant.
+// The wildcard is only valid as the whole user part (validation enforces
+// it), so matching is a prefix test, not a glob.
+func matchAnyPrincipal(entries []string, principal string) bool {
+	for _, e := range entries {
+		if e == principal {
+			return true
+		}
+		if strings.HasSuffix(e, "/*") && strings.HasPrefix(principal, e[:len(e)-1]) {
+			return true
+		}
+	}
+	return false
 }
 
 func matchAnyRunes(patterns [][]rune, value []rune) bool {

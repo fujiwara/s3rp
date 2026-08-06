@@ -27,6 +27,13 @@ type verifiedRequest struct {
 	KeyMetadata any
 }
 
+// principal is the identity string bucket policies are evaluated with:
+// always the qualified "tenant/user" form, regardless of which tenant's
+// bucket the request targets.
+func (vr *verifiedRequest) principal() string {
+	return vr.Tenant + "/" + vr.User
+}
+
 // verifyRequest authenticates an incoming request, either by the
 // Authorization header or by presigned URL query parameters, and resolves the
 // identity behind the access key.

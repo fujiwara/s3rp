@@ -213,20 +213,6 @@ func (c *Config) Validate() error {
 							return fmt.Errorf("bucket %s: policy resource %q does not refer to this bucket", b.Name, res)
 						}
 					}
-					// own-tenant users must be written unqualified: a plain
-					// name is what evaluation matches for them, so a
-					// self-qualified principal would silently never match
-					for _, pr := range []*policy.Principal{st.Principal, st.NotPrincipal} {
-						if pr == nil {
-							continue
-						}
-						for _, u := range pr.Users {
-							if after, ok := strings.CutPrefix(u, t.Name+"/"); ok {
-								return fmt.Errorf("bucket %s: principal %q names its own tenant; write the plain user name %q",
-									b.Name, u, after)
-							}
-						}
-					}
 				}
 			}
 

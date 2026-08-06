@@ -201,7 +201,7 @@ Backend notes for Ceph RGW: SSE requests require TLS toward RGW by default (`rgw
 
 A bucket may carry an AWS-style policy document, written as JSON text in the config (`buckets[].policy`). GetBucketPolicy returns it; PutBucketPolicy / DeleteBucketPolicy are not supported (policies are defined in the store, not via the S3 API).
 
-Two simplifications against AWS: principals are plain user names under the `S3RP` key (no ARNs) — `"alice"` names a user of the bucket's own tenant, `"tenant-b/alice"` a user of another tenant — and resources are plain `"bucket"` / `"bucket/prefix*"` strings (no ARNs). Action and Resource support the AWS wildcards `*` (any run of characters, including `/`) and `?` (exactly one character). As in AWS, `Action` matching is case-insensitive (so a mis-cased `Deny` cannot silently fail open), while `Resource` matching is case-sensitive since object keys are.
+Two simplifications against AWS: principals are `"tenant/user"` names under the `S3RP` key — always tenant-qualified, the short form of an ARN's account/user pair — and resources are plain `"bucket"` / `"bucket/prefix*"` strings (no ARNs). Action and Resource support the AWS wildcards `*` (any run of characters, including `/`) and `?` (exactly one character). As in AWS, `Action` matching is case-insensitive (so a mis-cased `Deny` cannot silently fail open), while `Resource` matching is case-sensitive since object keys are.
 
 ```yaml
 buckets:
@@ -214,7 +214,7 @@ buckets:
           {
             "Sid": "BatchIsReadOnly",
             "Effect": "Deny",
-            "Principal": {"S3RP": ["batch"]},
+            "Principal": {"S3RP": ["acme/batch"]},
             "Action": ["s3:PutObject", "s3:DeleteObject"],
             "Resource": ["photos/*"]
           }
@@ -222,17 +222,18 @@ buckets:
       }
 ```
 
-Evaluation model: every user of a tenant has full access to the tenant's buckets by default, and explicit `Deny` statements restrict it. For the bucket's own users, `Allow` statements have no effect (everything is already allowed); they are what grants cross-tenant access (below).
+Evaluation model: every user of a tenant has full access to the tenant's own buckets by default, and explicit `Deny` statements restrict it. For the bucket's own users, `Allow` statements have no effect (everything is already allowed); they are what grants cross-tenant access (below).
 
 Principal forms:
 
-- `{"S3RP": ["name", ...]}` — the listed users: `"alice"` is a user of the bucket's own tenant, `"tenant-b/alice"` a user of another tenant. Writing the own tenant's users in qualified form is rejected at load time (evaluation matches them by their plain name).
-- `"*"` — all users **of the bucket's tenant**, including ones added later. It never reaches other tenants' users.
-- `NotPrincipal` (exclusive with `Principal`) — everyone except the listed users. `Deny` + `NotPrincipal` expresses "only these users may ..." so that newly added users are denied by default.
+- `{"S3RP": ["tenant/user", ...]}` — the listed users, always tenant-qualified (the bucket's own users included).
+- `{"S3RP": ["tenant/*", ...]}` — every user of the named tenant, including ones added later.
+- `"*"` — **every authenticated user of any tenant**. There is no anonymous access, so this means "anyone with valid credentials", not "public". An `Allow` with `"*"` opens the bucket to all tenants — write `"mytenant/*"` when you mean your own users.
+- `NotPrincipal` (exclusive with `Principal`, `Deny` only) — everyone except the listed names. `Deny` + `NotPrincipal` expresses "only these users may ..." so that newly added users — and every other tenant's users — are denied by default. `Allow` + `NotPrincipal` would be a grant to everyone-but, which never crosses anyone's mind on purpose; it is rejected at load time.
 
 #### Cross-tenant access
 
-A bucket policy may grant access to another tenant's user by listing its qualified principal:
+A bucket policy may grant access to another tenant's users — one by name, a whole tenant, or every authenticated user:
 
 ```json
 {
@@ -247,9 +248,9 @@ A bucket policy may grant access to another tenant's user by listing its qualifi
 }
 ```
 
-The baseline for a foreign requester is the opposite of the own-tenant one: **deny unless an `Allow` matches**, and `Deny` still wins over `Allow`. Grants never widen across tenants implicitly — an `Allow` reaches a foreign user only when its `Principal` lists the qualified name explicitly; `"*"` and `NotPrincipal`-based `Allow` statements do not. `Deny` statements match broadly, so a blanket `Deny` (`"*"`, or `NotPrincipal`) also catches cross-tenant principals granted elsewhere in the policy.
+The baseline for a foreign requester is the opposite of the own-tenant one: **deny unless an `Allow` matches**, and `Deny` still wins over `Allow`. Principal matching itself does not depend on who asks — the same statement forms (`tenant/user`, `tenant/*`, `"*"`) match the same principals under either baseline, so a blanket `Deny` also catches cross-tenant principals granted elsewhere in the policy.
 
-A bucket whose policy does not mention the requester answers with the same `403 AccessDenied` a nonexistent bucket produces, so bucket names cannot be probed across tenants. Responses expose the bucket-owning tenant as `Owner`, never the requester's. ListBuckets lists only the tenant's own buckets, as on AWS.
+A bucket whose policy grants the requester nothing answers with the same `403 AccessDenied` a nonexistent bucket produces, so bucket names cannot be probed across tenants (a bucket with an `Allow` for `"*"` is consequently visible to every authenticated user). Responses expose the bucket-owning tenant as `Owner`, never the requester's. ListBuckets lists only the tenant's own buckets, as on AWS.
 
 Copying across tenants works in one direction only:
 

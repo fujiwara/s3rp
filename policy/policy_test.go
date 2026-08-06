@@ -14,13 +14,13 @@ func TestParse(t *testing.T) {
 			"Statement": [
 				{
 					"Effect": "Deny",
-					"Principal": {"S3RP": "batch"},
+					"Principal": {"S3RP": "ta/batch"},
 					"Action": "s3:PutObject",
 					"Resource": "photos/*"
 				},
 				{
 					"Effect": "Deny",
-					"Principal": {"S3RP": ["batch", "app1"]},
+					"Principal": {"S3RP": ["ta/batch", "ta/app1"]},
 					"Action": ["s3:PutObject", "s3:DeleteObject"],
 					"Resource": ["photos", "photos/*"]
 				}
@@ -55,13 +55,13 @@ func TestParse(t *testing.T) {
 	t.Run("not principal", func(t *testing.T) {
 		p, err := policy.Parse(`{
 			"Statement": [
-				{"Effect": "Deny", "NotPrincipal": {"S3RP": ["admin"]}, "Action": "s3:PutObject", "Resource": "photos/*"}
+				{"Effect": "Deny", "NotPrincipal": {"S3RP": ["ta/admin"]}, "Action": "s3:PutObject", "Resource": "photos/*"}
 			]
 		}`)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if p.Statement[0].NotPrincipal == nil || p.Statement[0].NotPrincipal.Users[0] != "admin" {
+		if p.Statement[0].NotPrincipal == nil || p.Statement[0].NotPrincipal.Users[0] != "ta/admin" {
 			t.Errorf("unexpected NotPrincipal %+v", p.Statement[0].NotPrincipal)
 		}
 	})
@@ -94,9 +94,9 @@ func TestParse(t *testing.T) {
 			"matches nobody",
 		},
 		{
-			"invalid principal user name",
+			"invalid principal",
 			`{"Statement": [{"Effect": "Deny", "Principal": {"S3RP": ["Bad_User"]}, "Action": "s3:GetObject", "Resource": "b"}]}`,
-			"invalid principal user name",
+			"invalid principal",
 		},
 		{
 			"invalid principal shape",
@@ -127,7 +127,7 @@ func TestParse(t *testing.T) {
 			// the wildcard principal is the string "*", not a user named "*"
 			"wildcard user in principal array",
 			`{"Statement": [{"Effect": "Deny", "Principal": {"S3RP": ["*"]}, "Action": "s3:GetObject", "Resource": "b"}]}`,
-			"invalid principal user name",
+			"invalid principal",
 		},
 	}
 	for _, tc := range errCases {
@@ -149,9 +149,9 @@ func TestParse(t *testing.T) {
 func TestDenyEvaluator(t *testing.T) {
 	p, err := policy.Parse(`{
 		"Statement": [
-			{"Effect": "Deny", "Principal": {"S3RP": ["batch"]}, "Action": ["s3:DeleteObject", "s3:PutObject"], "Resource": ["photos/*", "photos/2026/*"]},
+			{"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": ["s3:DeleteObject", "s3:PutObject"], "Resource": ["photos/*", "photos/2026/*"]},
 			{"Effect": "Deny", "Principal": "*", "Action": "s3:DeleteObject", "Resource": "photos/archive/*"},
-			{"Effect": "Allow", "Principal": {"S3RP": ["batch"]}, "Action": "s3:GetObject", "Resource": "photos/*"}
+			{"Effect": "Allow", "Principal": {"S3RP": ["ta/batch"]}, "Action": "s3:GetObject", "Resource": "photos/*"}
 		]
 	}`)
 	if err != nil {
@@ -160,13 +160,13 @@ func TestDenyEvaluator(t *testing.T) {
 	cases := []struct {
 		principal, action, resource string
 	}{
-		{"batch", "s3:DeleteObject", "photos/a.jpg"},
-		{"batch", "s3:DeleteObject", "logs/a.jpg"},
-		{"batch", "s3:DeleteObject", "photos/archive/x"},
-		{"app1", "s3:DeleteObject", "photos/a.jpg"},
-		{"app1", "s3:DeleteObject", "photos/archive/x"},
-		{"batch", "s3:GetObject", "photos/a.jpg"}, // only an inert Allow matches
-		{"batch", "s3:PutObject", "photos/a.jpg"},
+		{"ta/batch", "s3:DeleteObject", "photos/a.jpg"},
+		{"ta/batch", "s3:DeleteObject", "logs/a.jpg"},
+		{"ta/batch", "s3:DeleteObject", "photos/archive/x"},
+		{"ta/app1", "s3:DeleteObject", "photos/a.jpg"},
+		{"ta/app1", "s3:DeleteObject", "photos/archive/x"},
+		{"ta/batch", "s3:GetObject", "photos/a.jpg"}, // only an inert Allow matches
+		{"ta/batch", "s3:PutObject", "photos/a.jpg"},
 	}
 	for _, tc := range cases {
 		want := p.Evaluate(tc.principal, tc.action, tc.resource) == policy.Deny
@@ -179,14 +179,14 @@ func TestDenyEvaluator(t *testing.T) {
 		}
 	}
 	// no Deny statement matches this action -> AlwaysAllows, per-object check skippable
-	if !p.DenyEvaluatorFor("batch", "s3:GetObject").AlwaysAllows() {
+	if !p.DenyEvaluatorFor("ta/batch", "s3:GetObject").AlwaysAllows() {
 		t.Error("expect AlwaysAllows when only an inert Allow matches")
 	}
-	if !p.DenyEvaluatorFor("app1", "s3:PutObject").AlwaysAllows() {
+	if !p.DenyEvaluatorFor("ta/app1", "s3:PutObject").AlwaysAllows() {
 		t.Error("expect AlwaysAllows when no statement matches the principal")
 	}
 	// a matching Deny is not AlwaysAllows
-	if p.DenyEvaluatorFor("batch", "s3:DeleteObject").AlwaysAllows() {
+	if p.DenyEvaluatorFor("ta/batch", "s3:DeleteObject").AlwaysAllows() {
 		t.Error("expect not AlwaysAllows when a Deny matches")
 	}
 }
@@ -197,7 +197,7 @@ func TestEvaluate(t *testing.T) {
 			{
 				"Sid": "BatchReadOnly",
 				"Effect": "Deny",
-				"Principal": {"S3RP": ["batch"]},
+				"Principal": {"S3RP": ["ta/batch"]},
 				"Action": ["s3:PutObject", "s3:DeleteObject"],
 				"Resource": ["photos/*"]
 			},
@@ -211,7 +211,7 @@ func TestEvaluate(t *testing.T) {
 			{
 				"Sid": "AllowIsNoOp",
 				"Effect": "Allow",
-				"Principal": {"S3RP": ["app1"]},
+				"Principal": {"S3RP": ["ta/app1"]},
 				"Action": "s3:GetObject",
 				"Resource": "photos/*"
 			}
@@ -225,15 +225,15 @@ func TestEvaluate(t *testing.T) {
 		principal, action, resource string
 		want                        policy.Effect
 	}{
-		{"batch denied put", "batch", "s3:PutObject", "photos/a.jpg", policy.Deny},
-		{"batch denied delete", "batch", "s3:DeleteObject", "photos/a.jpg", policy.Deny},
-		{"batch allowed get", "batch", "s3:GetObject", "photos/a.jpg", policy.None},
-		{"app1 put not denied", "app1", "s3:PutObject", "photos/a.jpg", policy.None},
-		{"everyone denied archive delete", "app1", "s3:DeleteObject", "photos/archive/x", policy.Deny},
+		{"batch denied put", "ta/batch", "s3:PutObject", "photos/a.jpg", policy.Deny},
+		{"batch denied delete", "ta/batch", "s3:DeleteObject", "photos/a.jpg", policy.Deny},
+		{"batch allowed get", "ta/batch", "s3:GetObject", "photos/a.jpg", policy.None},
+		{"app1 put not denied", "ta/app1", "s3:PutObject", "photos/a.jpg", policy.None},
+		{"everyone denied archive delete", "ta/app1", "s3:DeleteObject", "photos/archive/x", policy.Deny},
 		{"future user denied archive delete", "newuser", "s3:DeleteObject", "photos/archive/x", policy.Deny},
-		{"allow statement matches", "app1", "s3:GetObject", "photos/a.jpg", policy.Allow},
-		{"wildcard crosses slash", "batch", "s3:PutObject", "photos/deep/nested/key", policy.Deny},
-		{"bucket-level resource not matched by prefix", "batch", "s3:PutObject", "otherbucket/a", policy.None},
+		{"allow statement matches", "ta/app1", "s3:GetObject", "photos/a.jpg", policy.Allow},
+		{"wildcard crosses slash", "ta/batch", "s3:PutObject", "photos/deep/nested/key", policy.Deny},
+		{"bucket-level resource not matched by prefix", "ta/batch", "s3:PutObject", "otherbucket/a", policy.None},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -250,7 +250,7 @@ func TestEvaluateNotPrincipal(t *testing.T) {
 			{
 				"Sid": "OnlyAdminWrites",
 				"Effect": "Deny",
-				"NotPrincipal": {"S3RP": ["admin"]},
+				"NotPrincipal": {"S3RP": ["ta/admin"]},
 				"Action": ["s3:PutObject", "s3:DeleteObject"],
 				"Resource": ["photos", "photos/*"]
 			}
@@ -259,16 +259,16 @@ func TestEvaluateNotPrincipal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := p.Evaluate("admin", "s3:PutObject", "photos/a"); got != policy.None {
+	if got := p.Evaluate("ta/admin", "s3:PutObject", "photos/a"); got != policy.None {
 		t.Errorf("admin must not be denied, got %v", got)
 	}
 	// any other user, including ones added later, is denied
-	for _, u := range []string{"batch", "newuser"} {
+	for _, u := range []string{"ta/batch", "newuser"} {
 		if got := p.Evaluate(u, "s3:PutObject", "photos/a"); got != policy.Deny {
 			t.Errorf("%s must be denied, got %v", u, got)
 		}
 	}
-	if got := p.Evaluate("batch", "s3:GetObject", "photos/a"); got != policy.None {
+	if got := p.Evaluate("ta/batch", "s3:GetObject", "photos/a"); got != policy.None {
 		t.Errorf("read must not be denied, got %v", got)
 	}
 }
@@ -276,23 +276,23 @@ func TestEvaluateNotPrincipal(t *testing.T) {
 func TestEvaluateActionWildcard(t *testing.T) {
 	p, err := policy.Parse(`{
 		"Statement": [
-			{"Effect": "Deny", "Principal": {"S3RP": ["batch"]}, "Action": "s3:Put*", "Resource": "b/*"},
-			{"Effect": "Deny", "Principal": {"S3RP": ["batch2"]}, "Action": "s3:*", "Resource": "b/*"}
+			{"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": "s3:Put*", "Resource": "b/*"},
+			{"Effect": "Deny", "Principal": {"S3RP": ["ta/batch2"]}, "Action": "s3:*", "Resource": "b/*"}
 		]
 	}`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := p.Evaluate("batch", "s3:PutObject", "b/k"); got != policy.Deny {
+	if got := p.Evaluate("ta/batch", "s3:PutObject", "b/k"); got != policy.Deny {
 		t.Errorf("expect Deny for s3:Put*, got %v", got)
 	}
-	if got := p.Evaluate("batch", "s3:PutObjectTagging", "b/k"); got != policy.Deny {
+	if got := p.Evaluate("ta/batch", "s3:PutObjectTagging", "b/k"); got != policy.Deny {
 		t.Errorf("expect Deny for s3:Put*, got %v", got)
 	}
-	if got := p.Evaluate("batch", "s3:GetObject", "b/k"); got != policy.None {
+	if got := p.Evaluate("ta/batch", "s3:GetObject", "b/k"); got != policy.None {
 		t.Errorf("expect None for get, got %v", got)
 	}
-	if got := p.Evaluate("batch2", "s3:GetObject", "b/k"); got != policy.Deny {
+	if got := p.Evaluate("ta/batch2", "s3:GetObject", "b/k"); got != policy.Deny {
 		t.Errorf("expect Deny for s3:*, got %v", got)
 	}
 }
@@ -302,7 +302,7 @@ func TestEvaluateActionWildcard(t *testing.T) {
 func TestEvaluateActionMiddleWildcard(t *testing.T) {
 	p, err := policy.Parse(`{
 		"Statement": [
-			{"Effect": "Deny", "Principal": {"S3RP": ["user1"]}, "Action": ["s3:*Object*", "s3:*Multipart*"], "Resource": "b/*"}
+			{"Effect": "Deny", "Principal": {"S3RP": ["ta/user1"]}, "Action": ["s3:*Object*", "s3:*Multipart*"], "Resource": "b/*"}
 		]
 	}`)
 	if err != nil {
@@ -310,11 +310,11 @@ func TestEvaluateActionMiddleWildcard(t *testing.T) {
 	}
 	deny := []string{"s3:GetObject", "s3:PutObjectTagging", "s3:ListMultipartUploadParts"}
 	for _, a := range deny {
-		if got := p.Evaluate("user1", a, "b/k"); got != policy.Deny {
+		if got := p.Evaluate("ta/user1", a, "b/k"); got != policy.Deny {
 			t.Errorf("Evaluate(%q) = %v, want Deny", a, got)
 		}
 	}
-	if got := p.Evaluate("user1", "s3:ListBucket", "b/k"); got != policy.None {
+	if got := p.Evaluate("ta/user1", "s3:ListBucket", "b/k"); got != policy.None {
 		t.Errorf("s3:ListBucket should not match, got %v", got)
 	}
 }
@@ -324,7 +324,7 @@ func TestEvaluateActionMiddleWildcard(t *testing.T) {
 func TestEvaluateResourceWildcard(t *testing.T) {
 	p, err := policy.Parse(`{
 		"Statement": [
-			{"Effect": "Deny", "Principal": {"S3RP": ["user1"]}, "Action": "s3:GetObject",
+			{"Effect": "Deny", "Principal": {"S3RP": ["ta/user1"]}, "Action": "s3:GetObject",
 			 "Resource": ["b/*/*", "b/2026-*"]}
 		]
 	}`)
@@ -342,7 +342,7 @@ func TestEvaluateResourceWildcard(t *testing.T) {
 		{"b/2025-01", policy.None},         // wrong prefix, single segment
 	}
 	for _, tc := range cases {
-		if got := p.Evaluate("user1", "s3:GetObject", tc.resource); got != tc.want {
+		if got := p.Evaluate("ta/user1", "s3:GetObject", tc.resource); got != tc.want {
 			t.Errorf("Evaluate(resource=%q) = %v, want %v", tc.resource, got, tc.want)
 		}
 	}
@@ -355,18 +355,18 @@ func TestEvaluateResourceWildcard(t *testing.T) {
 func TestEvaluateLiteralDotSegments(t *testing.T) {
 	p, err := policy.Parse(`{
 		"Statement": [
-			{"Effect": "Allow", "Principal": {"S3RP": ["user1"]}, "Action": "s3:GetObject", "Resource": "photos/public/*"}
+			{"Effect": "Allow", "Principal": {"S3RP": ["ta/user1"]}, "Action": "s3:GetObject", "Resource": "photos/public/*"}
 		]
 	}`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// the ".." key matches the prefix literally (it is not collapsed)
-	if got := p.Evaluate("user1", "s3:GetObject", "photos/public/../private.txt"); got != policy.Allow {
+	if got := p.Evaluate("ta/user1", "s3:GetObject", "photos/public/../private.txt"); got != policy.Allow {
 		t.Errorf("literal .. under the prefix should match, got %v", got)
 	}
 	// a sibling key outside the prefix is not matched
-	if got := p.Evaluate("user1", "s3:GetObject", "photos/private.txt"); got != policy.None {
+	if got := p.Evaluate("ta/user1", "s3:GetObject", "photos/private.txt"); got != policy.None {
 		t.Errorf("key outside the prefix must not match, got %v", got)
 	}
 }
@@ -418,20 +418,20 @@ func TestMatchWildcards(t *testing.T) {
 func TestEvaluateQuestionWildcard(t *testing.T) {
 	p, err := policy.Parse(`{
 		"Statement": [
-			{"Effect": "Deny", "Principal": {"S3RP": ["batch"]}, "Action": "s3:???Object", "Resource": "b/log-????"}
+			{"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": "s3:???Object", "Resource": "b/log-????"}
 		]
 	}`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := p.Evaluate("batch", "s3:PutObject", "b/log-2026"); got != policy.Deny {
+	if got := p.Evaluate("ta/batch", "s3:PutObject", "b/log-2026"); got != policy.Deny {
 		t.Errorf("expect Deny, got %v", got)
 	}
-	if got := p.Evaluate("batch", "s3:GetObject", "b/log-2026"); got != policy.Deny {
+	if got := p.Evaluate("ta/batch", "s3:GetObject", "b/log-2026"); got != policy.Deny {
 		t.Errorf("expect Deny (s3:???Object matches Get), got %v", got)
 	}
 	// resource with the wrong length does not match the ???? pattern
-	if got := p.Evaluate("batch", "s3:PutObject", "b/log-12345"); got != policy.None {
+	if got := p.Evaluate("ta/batch", "s3:PutObject", "b/log-12345"); got != policy.None {
 		t.Errorf("expect None (log-???? needs 4 chars), got %v", got)
 	}
 }
@@ -638,7 +638,7 @@ func repeatQuoted(s string, n int) string {
 func TestEvaluateActionCaseInsensitive(t *testing.T) {
 	p, err := policy.Parse(`{
 		"Statement": [
-			{"Effect": "Deny", "Principal": {"S3RP": ["batch"]}, "Action": ["s3:putobject", "S3:DeleteObject", "s3:Get*"], "Resource": "photos/*"}
+			{"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": ["s3:putobject", "S3:DeleteObject", "s3:Get*"], "Resource": "photos/*"}
 		]
 	}`)
 	if err != nil {
@@ -657,7 +657,7 @@ func TestEvaluateActionCaseInsensitive(t *testing.T) {
 		{"s3:PutObject", "Photos/a", policy.None},    // resource case-sensitive
 	}
 	for _, tc := range cases {
-		if got := p.Evaluate("batch", tc.action, tc.resource); got != tc.want {
+		if got := p.Evaluate("ta/batch", tc.action, tc.resource); got != tc.want {
 			t.Errorf("Evaluate(%q, %q) = %v, want %v", tc.action, tc.resource, got, tc.want)
 		}
 	}

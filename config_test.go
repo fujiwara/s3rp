@@ -306,7 +306,7 @@ tenants:
 		errStr: "must start with s3:",
 	},
 	{
-		name: "self-qualified policy principal",
+		name: "unqualified policy principal",
 		yaml: `
 tenants:
   - name: foo
@@ -315,9 +315,9 @@ tenants:
       - name: bucket1
         backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
         policy: |
-          {"Statement": [{"Effect": "Allow", "Principal": {"S3RP": ["foo/user1"]}, "Action": "s3:GetObject", "Resource": "bucket1/*"}]}
+          {"Statement": [{"Effect": "Allow", "Principal": {"S3RP": ["user1"]}, "Action": "s3:GetObject", "Resource": "bucket1/*"}]}
 `,
-		errStr: "names its own tenant",
+		errStr: "invalid principal",
 	},
 	{
 		name: "credentials not set together",
@@ -333,8 +333,8 @@ tenants:
 	},
 }
 
-// A principal naming another tenant's user is valid: that is how a bucket
-// policy grants cross-tenant access.
+// Principals are always tenant-qualified: the own tenant's users, another
+// tenant's user (a cross-tenant grant), and a tenant wildcard all validate.
 func TestConfigCrossTenantPrincipal(t *testing.T) {
 	dir := t.TempDir()
 	f := dir + "/cross.yaml"
@@ -346,7 +346,10 @@ tenants:
       - name: bucket1
         backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
         policy: |
-          {"Statement": [{"Effect": "Allow", "Principal": {"S3RP": ["bar/user2"]}, "Action": "s3:GetObject", "Resource": "bucket1/*"}]}
+          {"Statement": [
+            {"Effect": "Deny", "Principal": {"S3RP": ["foo/user1"]}, "Action": "s3:DeleteObject", "Resource": "bucket1/*"},
+            {"Effect": "Allow", "Principal": {"S3RP": ["bar/user2", "bar/*"]}, "Action": "s3:GetObject", "Resource": "bucket1/*"}
+          ]}
   - name: bar
     users: [{name: user2, keys: [{access_key_id: k2, secret_access_key: s}]}]
     buckets:
@@ -356,7 +359,7 @@ tenants:
 		t.Fatal(err)
 	}
 	if _, err := s3rp.LoadConfig(f); err != nil {
-		t.Errorf("cross-tenant principal must validate: %v", err)
+		t.Errorf("qualified principals must validate: %v", err)
 	}
 }
 

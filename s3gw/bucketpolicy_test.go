@@ -20,7 +20,7 @@ const batchReadOnlyPolicy = `{
     {
       "Sid": "BatchIsReadOnly",
       "Effect": "Deny",
-      "Principal": {"S3RP": ["batch"]},
+      "Principal": {"S3RP": ["poltenant/batch"]},
       "Action": ["s3:PutObject", "s3:DeleteObject"],
       "Resource": ["policied/*"]
     }
@@ -44,7 +44,7 @@ const onlyAdminWritesPolicy = `{
     {
       "Sid": "OnlyAdminWrites",
       "Effect": "Deny",
-      "NotPrincipal": {"S3RP": ["admin"]},
+      "NotPrincipal": {"S3RP": ["poltenant/admin"]},
       "Action": ["s3:PutObject", "s3:DeleteObject"],
       "Resource": ["locked/*"]
     }

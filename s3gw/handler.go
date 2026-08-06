@@ -220,7 +220,7 @@ func (g *Gateway) resolveBucket(ctx context.Context, vr *verifiedRequest, bucket
 		}
 		return nil, s3err.Internal(err, "bucket lookup failed")
 	}
-	if b.Policy == nil || !b.Policy.MentionsPrincipal(vr.Tenant+"/"+vr.User) {
+	if b.Policy == nil || !b.Policy.MentionsPrincipal(vr.principal()) {
 		return nil, s3err.AccessDenied()
 	}
 	return b, nil

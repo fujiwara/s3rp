@@ -16,7 +16,7 @@ func TestDialectPrincipalKey(t *testing.T) {
 	  "Statement": [
 	    {
 	      "Effect": "Deny",
-	      "Principal": {"MyService": ["batch"]},
+	      "Principal": {"MyService": ["ta/batch"]},
 	      "Action": ["s3:PutObject"],
 	      "Resource": ["photos/*"]
 	    }
@@ -25,7 +25,7 @@ func TestDialectPrincipalKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := p.Evaluate("batch", "s3:PutObject", "photos/a.txt"); got != policy.Deny {
+	if got := p.Evaluate("ta/batch", "s3:PutObject", "photos/a.txt"); got != policy.Deny {
 		t.Errorf("expect Deny, got %v", got)
 	}
 	if got := p.Evaluate("app1", "s3:PutObject", "photos/a.txt"); got != policy.None {
@@ -35,7 +35,7 @@ func TestDialectPrincipalKey(t *testing.T) {
 	// the default key is not recognized by a custom dialect
 	_, err = d.Parse(`{
 	  "Statement": [
-	    {"Effect": "Deny", "Principal": {"S3RP": ["batch"]}, "Action": ["s3:PutObject"], "Resource": ["photos/*"]}
+	    {"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": ["s3:PutObject"], "Resource": ["photos/*"]}
 	  ]
 	}`)
 	if err == nil || !strings.Contains(err.Error(), "MyService") {
@@ -46,16 +46,16 @@ func TestDialectPrincipalKey(t *testing.T) {
 	p, err = d.Parse(`{
 	  "Statement": [
 	    {"Effect": "Deny", "Principal": "*", "Action": ["s3:DeleteObject"], "Resource": ["photos/*"]},
-	    {"Effect": "Deny", "NotPrincipal": {"MyService": ["admin"]}, "Action": ["s3:PutObject"], "Resource": ["photos/*"]}
+	    {"Effect": "Deny", "NotPrincipal": {"MyService": ["ta/admin"]}, "Action": ["s3:PutObject"], "Resource": ["photos/*"]}
 	  ]
 	}`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := p.Evaluate("admin", "s3:DeleteObject", "photos/a.txt"); got != policy.Deny {
+	if got := p.Evaluate("ta/admin", "s3:DeleteObject", "photos/a.txt"); got != policy.Deny {
 		t.Errorf("expect Deny for everyone, got %v", got)
 	}
-	if got := p.Evaluate("admin", "s3:PutObject", "photos/a.txt"); got != policy.None {
+	if got := p.Evaluate("ta/admin", "s3:PutObject", "photos/a.txt"); got != policy.None {
 		t.Errorf("expect None for the excepted user, got %v", got)
 	}
 }
@@ -66,7 +66,7 @@ func TestDialectResourcePrefix(t *testing.T) {
 	  "Statement": [
 	    {
 	      "Effect": "Deny",
-	      "Principal": {"S3RP": ["batch"]},
+	      "Principal": {"S3RP": ["ta/batch"]},
 	      "Action": ["s3:PutObject"],
 	      "Resource": ["arn:aws:s3:::photos/*", "arn:aws:s3:::photos"]
 	    }
@@ -76,17 +76,17 @@ func TestDialectResourcePrefix(t *testing.T) {
 		t.Fatal(err)
 	}
 	// resources are matched in the stripped, plain-path form
-	if got := p.Evaluate("batch", "s3:PutObject", "photos/a.txt"); got != policy.Deny {
+	if got := p.Evaluate("ta/batch", "s3:PutObject", "photos/a.txt"); got != policy.Deny {
 		t.Errorf("expect Deny, got %v", got)
 	}
-	if got := p.Evaluate("batch", "s3:PutObject", "photos"); got != policy.Deny {
+	if got := p.Evaluate("ta/batch", "s3:PutObject", "photos"); got != policy.Deny {
 		t.Errorf("expect Deny on the bucket resource, got %v", got)
 	}
 
 	// a resource without the prefix is rejected, not silently taken as-is
 	_, err = d.Parse(`{
 	  "Statement": [
-	    {"Effect": "Deny", "Principal": {"S3RP": ["batch"]}, "Action": ["s3:PutObject"], "Resource": ["photos/*"]}
+	    {"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": ["s3:PutObject"], "Resource": ["photos/*"]}
 	  ]
 	}`)
 	if err == nil || !strings.Contains(err.Error(), "arn:aws:s3:::") {
@@ -120,7 +120,7 @@ func TestDialectPatternLenAfterStrip(t *testing.T) {
 func TestDialectZeroValueIsDefault(t *testing.T) {
 	text := `{
 	  "Statement": [
-	    {"Effect": "Deny", "Principal": {"S3RP": ["batch"]}, "Action": ["s3:PutObject"], "Resource": ["photos/*"]}
+	    {"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": ["s3:PutObject"], "Resource": ["photos/*"]}
 	  ]
 	}`
 	var d policy.Dialect
@@ -133,7 +133,7 @@ func TestDialectZeroValueIsDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, p := range []*policy.Policy{fromDialect, fromParse} {
-		if got := p.Evaluate("batch", "s3:PutObject", "photos/a.txt"); got != policy.Deny {
+		if got := p.Evaluate("ta/batch", "s3:PutObject", "photos/a.txt"); got != policy.Deny {
 			t.Errorf("expect Deny, got %v", got)
 		}
 	}
