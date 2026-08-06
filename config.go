@@ -208,21 +208,8 @@ func (c *Config) Validate() error {
 			}
 
 			for _, rule := range b.CORS {
-				if len(rule.AllowedOrigins) == 0 {
-					return fmt.Errorf("bucket %s: cors rule requires at least one allowed origin", b.Name)
-				}
-				if len(rule.AllowedMethods) == 0 {
-					return fmt.Errorf("bucket %s: cors rule requires at least one allowed method", b.Name)
-				}
-				for _, m := range rule.AllowedMethods {
-					switch m {
-					case "GET", "PUT", "POST", "DELETE", "HEAD":
-					default:
-						return fmt.Errorf("bucket %s: unsupported cors method %q", b.Name, m)
-					}
-				}
-				if rule.MaxAgeSeconds < 0 {
-					return fmt.Errorf("bucket %s: cors max_age_seconds must not be negative", b.Name)
+				if err := rule.Validate(); err != nil {
+					return fmt.Errorf("bucket %s: %w", b.Name, err)
 				}
 			}
 		}

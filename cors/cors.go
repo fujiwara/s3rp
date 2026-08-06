@@ -9,6 +9,7 @@
 package cors
 
 import (
+	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
@@ -25,6 +26,33 @@ type Rule struct {
 	AllowedHeaders []string `yaml:"allowed_headers,omitempty" json:"allowed_headers,omitempty"`
 	ExposeHeaders  []string `yaml:"expose_headers,omitempty" json:"expose_headers,omitempty"`
 	MaxAgeSeconds  int      `yaml:"max_age_seconds,omitempty" json:"max_age_seconds,omitempty"`
+}
+
+// Validate checks a rule's structure: at least one origin and one method,
+// only methods the S3 API can actually serve, and a non-negative max age.
+// A rule with no origins or methods can never match a request — a dead
+// rule its author believes in — and AWS rejects the same mistakes at
+// PutBucketCors time, so a store accepting rules for a bucket should run
+// this where definitions are written (evaluation deliberately does not
+// re-check per request).
+func (r *Rule) Validate() error {
+	if len(r.AllowedOrigins) == 0 {
+		return fmt.Errorf("cors rule requires at least one allowed origin")
+	}
+	if len(r.AllowedMethods) == 0 {
+		return fmt.Errorf("cors rule requires at least one allowed method")
+	}
+	for _, m := range r.AllowedMethods {
+		switch m {
+		case "GET", "PUT", "POST", "DELETE", "HEAD":
+		default:
+			return fmt.Errorf("unsupported cors method %q", m)
+		}
+	}
+	if r.MaxAgeSeconds < 0 {
+		return fmt.Errorf("cors max_age_seconds must not be negative")
+	}
+	return nil
 }
 
 // Match returns the first rule allowing the origin and method, or nil.
