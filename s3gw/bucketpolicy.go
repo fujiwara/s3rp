@@ -9,25 +9,15 @@ import (
 	"github.com/fujiwara/s3rp/store"
 )
 
-// principalFor is the identity string the bucket policy is evaluated with:
-// the plain user name for the bucket's own tenant, "tenant/user" for a
-// requester from another tenant. The two forms cannot collide — a user name
-// never contains "/".
-func principalFor(vr *verifiedRequest, b *store.Bucket) string {
-	if b.Tenant == vr.Tenant {
-		return vr.User
-	}
-	return vr.Tenant + "/" + vr.User
-}
-
 // authorize evaluates the bucket policy for the authenticated user
-// performing an action on a resource ("bucket" or "bucket/key").
+// performing an action on a resource ("bucket" or "bucket/key"). The
+// principal is always the qualified "tenant/user" form (vr.principal).
 //
 // The baseline depends on who asks. A user of the bucket's own tenant has
 // full access, and an explicit Deny in the bucket policy restricts it. A
-// user of another tenant has no access, and only an Allow naming their
-// qualified principal ("tenant/user") grants it — Deny still wins over
-// Allow, so a matching Deny cuts a cross-tenant grant too.
+// user of another tenant has no access, and only a matching Allow grants
+// it — Deny still wins over Allow, so a matching Deny cuts a cross-tenant
+// grant too.
 func (g *Gateway) authorize(vr *verifiedRequest, b *store.Bucket, action, resource string) *s3err.Error {
 	// the user's identity policy gates the action first (default allow all);
 	// then the bucket policy decides by tenant.
@@ -35,12 +25,12 @@ func (g *Gateway) authorize(vr *verifiedRequest, b *store.Bucket, action, resour
 		return s3err.AccessDenied()
 	}
 	if b.Tenant != vr.Tenant {
-		if b.Policy == nil || b.Policy.Evaluate(principalFor(vr, b), action, resource) != policy.Allow {
+		if b.Policy == nil || b.Policy.Evaluate(vr.principal(), action, resource) != policy.Allow {
 			return s3err.AccessDenied()
 		}
 		return nil
 	}
-	if b.Policy != nil && b.Policy.Evaluate(vr.User, action, resource) == policy.Deny {
+	if b.Policy != nil && b.Policy.Evaluate(vr.principal(), action, resource) == policy.Deny {
 		return s3err.AccessDenied()
 	}
 	return nil
@@ -71,17 +61,16 @@ func (g *Gateway) perObjectAuthorizer(vr *verifiedRequest, b *store.Bucket, acti
 		if b.Policy == nil {
 			return perObjectAuthorizer{denyAll: true}
 		}
-		principal := principalFor(vr, b)
-		a.allow = b.Policy.AllowEvaluatorFor(principal, action)
+		a.allow = b.Policy.AllowEvaluatorFor(vr.principal(), action)
 		if a.allow.AlwaysDenies() {
 			return perObjectAuthorizer{denyAll: true}
 		}
 		a.requireAllow = true
-		a.eval = b.Policy.DenyEvaluatorFor(principal, action)
+		a.eval = b.Policy.DenyEvaluatorFor(vr.principal(), action)
 		return a
 	}
 	if b.Policy != nil {
-		a.eval = b.Policy.DenyEvaluatorFor(vr.User, action)
+		a.eval = b.Policy.DenyEvaluatorFor(vr.principal(), action)
 	}
 	return a
 }

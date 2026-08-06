@@ -298,7 +298,7 @@ func TestPostObjectRefusals(t *testing.T) {
 	// a gateway whose bucket policy denies PutObject for the user
 	denyingGateway := func(t *testing.T) (*s3gw.Gateway, *stubPost) {
 		t.Helper()
-		text := `{"Statement":[{"Effect":"Deny","Principal":{"S3RP":["testuser"]},"Action":["s3:PutObject"],"Resource":["testbucket/*"]}]}`
+		text := `{"Statement":[{"Effect":"Deny","Principal":{"S3RP":["testtenant/testuser"]},"Action":["s3:PutObject"],"Resource":["testbucket/*"]}]}`
 		p, err := policy.Parse(text)
 		if err != nil {
 			t.Fatal(err)

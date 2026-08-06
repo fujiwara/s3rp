@@ -7,9 +7,11 @@ import (
 	"github.com/fujiwara/s3rp/policy"
 )
 
-// A qualified principal ("tenant/user") names another tenant's user. It is
-// granted only by an explicit Principal listing — "*" and NotPrincipal never
-// widen an Allow across tenants — while Deny statements match it broadly.
+// Principals are always tenant-qualified: "tenant/user" one user,
+// "tenant/*" every user of a tenant, "*" every authenticated user of any
+// tenant. The requester's tenant no longer changes how a statement matches —
+// cross-tenant behavior comes solely from the gateway's baseline (deny
+// unless allowed), not from special matching rules.
 
 const crossTenantPolicy = `{
 	"Statement": [
@@ -40,11 +42,11 @@ func TestEvaluateQualifiedPrincipal(t *testing.T) {
 		resource  string
 		want      policy.Effect
 	}{
-		{"listed qualified principal is allowed", "tb/bob", "s3:GetObject", "shared/a.txt", policy.Allow},
-		{"other qualified principal matches nothing", "tb/carol", "s3:GetObject", "shared/a.txt", policy.None},
-		{"plain name does not match the qualified listing", "bob", "s3:GetObject", "shared/a.txt", policy.None},
+		{"listed principal is allowed", "tb/bob", "s3:GetObject", "shared/a.txt", policy.Allow},
+		{"unlisted principal matches nothing", "tb/carol", "s3:GetObject", "shared/a.txt", policy.None},
 		{"unlisted action matches nothing", "tb/bob", "s3:PutObject", "shared/a.txt", policy.None},
-		{"blanket Deny catches the qualified principal", "tb/bob", "s3:GetObject", "shared/secret/x", policy.Deny},
+		{"blanket Deny catches the listed principal", "tb/bob", "s3:GetObject", "shared/secret/x", policy.Deny},
+		{"blanket Deny catches any principal", "ta/alice", "s3:GetObject", "shared/secret/x", policy.Deny},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -55,8 +57,8 @@ func TestEvaluateQualifiedPrincipal(t *testing.T) {
 	}
 }
 
-func TestQualifiedPrincipalNeverWidens(t *testing.T) {
-	t.Run("wildcard Allow does not reach qualified principals", func(t *testing.T) {
+func TestEvaluateWildcardPrincipals(t *testing.T) {
+	t.Run("star matches every authenticated principal", func(t *testing.T) {
 		p, err := policy.Parse(`{
 			"Statement": [
 				{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "open/*"}
@@ -65,49 +67,66 @@ func TestQualifiedPrincipalNeverWidens(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := p.Evaluate("tb/bob", "s3:GetObject", "open/a.txt"); got != policy.None {
-			t.Errorf("qualified principal matched Allow *: %v", got)
-		}
-		if got := p.Evaluate("alice", "s3:GetObject", "open/a.txt"); got != policy.Allow {
-			t.Errorf("plain principal must match Allow *: %v", got)
+		for _, principal := range []string{"ta/alice", "tb/bob"} {
+			if got := p.Evaluate(principal, "s3:GetObject", "open/a.txt"); got != policy.Allow {
+				t.Errorf("Allow * must match %q: %v", principal, got)
+			}
 		}
 	})
-	t.Run("NotPrincipal Allow does not reach qualified principals", func(t *testing.T) {
+	t.Run("tenant wildcard matches only that tenant", func(t *testing.T) {
 		p, err := policy.Parse(`{
 			"Statement": [
-				{"Effect": "Allow", "NotPrincipal": {"S3RP": ["alice"]}, "Action": "s3:GetObject", "Resource": "open/*"}
+				{"Effect": "Allow", "Principal": {"S3RP": ["tb/*"]}, "Action": "s3:GetObject", "Resource": "shared/*"}
 			]
 		}`)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := p.Evaluate("tb/bob", "s3:GetObject", "open/a.txt"); got != policy.None {
-			t.Errorf("qualified principal matched NotPrincipal Allow: %v", got)
+		for _, principal := range []string{"tb/bob", "tb/carol"} {
+			if got := p.Evaluate(principal, "s3:GetObject", "shared/a.txt"); got != policy.Allow {
+				t.Errorf("tb/* must match %q: %v", principal, got)
+			}
 		}
-		if got := p.Evaluate("carol", "s3:GetObject", "open/a.txt"); got != policy.Allow {
-			t.Errorf("plain principal must match NotPrincipal Allow: %v", got)
+		if got := p.Evaluate("ta/alice", "s3:GetObject", "shared/a.txt"); got != policy.None {
+			t.Errorf("tb/* must not match ta/alice: %v", got)
+		}
+		// the wildcard is a whole-name form, not a prefix: "tb" the tenant,
+		// not tenants starting with "tb"
+		if got := p.Evaluate("tbx/bob", "s3:GetObject", "shared/a.txt"); got != policy.None {
+			t.Errorf("tb/* must not match tbx/bob: %v", got)
 		}
 	})
-	t.Run("NotPrincipal Deny catches qualified principals", func(t *testing.T) {
+	t.Run("tenant wildcard works in Deny and NotPrincipal", func(t *testing.T) {
 		p, err := policy.Parse(`{
 			"Statement": [
-				{"Effect": "Deny", "NotPrincipal": {"S3RP": ["tb/bob"]}, "Action": "s3:DeleteObject", "Resource": "shared/*"}
+				{"Effect": "Deny", "NotPrincipal": {"S3RP": ["ta/*"]}, "Action": "s3:PutObject", "Resource": "b/*"}
 			]
 		}`)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := p.Evaluate("tb/carol", "s3:DeleteObject", "shared/a.txt"); got != policy.Deny {
-			t.Errorf("excluded-only Deny must catch other qualified principals: %v", got)
+		if got := p.Evaluate("tb/bob", "s3:PutObject", "b/k"); got != policy.Deny {
+			t.Errorf("everyone outside ta must be denied: %v", got)
 		}
-		if got := p.Evaluate("tb/bob", "s3:DeleteObject", "shared/a.txt"); got != policy.None {
-			t.Errorf("the excluded qualified principal must not be denied: %v", got)
+		if got := p.Evaluate("ta/alice", "s3:PutObject", "b/k"); got != policy.None {
+			t.Errorf("ta users are excluded from the Deny: %v", got)
 		}
 	})
 }
 
+func TestNotPrincipalDenyOnly(t *testing.T) {
+	_, err := policy.Parse(`{
+		"Statement": [
+			{"Effect": "Allow", "NotPrincipal": {"S3RP": ["ta/alice"]}, "Action": "s3:GetObject", "Resource": "b/*"}
+		]
+	}`)
+	if err == nil || !strings.Contains(err.Error(), "NotPrincipal is only allowed with Effect Deny") {
+		t.Errorf("Allow + NotPrincipal must be rejected, got %v", err)
+	}
+}
+
 func TestParseQualifiedPrincipal(t *testing.T) {
-	valid := []string{"tb/bob", "tenant-b/some_user", "t2/u2"}
+	valid := []string{"tb/bob", "tenant-b/some_user", "t2/u2", "tb/*"}
 	for _, u := range valid {
 		if _, err := policy.Parse(`{
 			"Statement": [
@@ -117,14 +136,14 @@ func TestParseQualifiedPrincipal(t *testing.T) {
 			t.Errorf("principal %q must parse: %v", u, err)
 		}
 	}
-	invalid := []string{"tb/tb/bob", "/bob", "tb/", "Tb/bob", "tb/B0b"}
+	invalid := []string{"bob", "tb/tb/bob", "/bob", "tb/", "Tb/bob", "tb/B0b", "*/bob", "tb/b*"}
 	for _, u := range invalid {
 		_, err := policy.Parse(`{
 			"Statement": [
 				{"Effect": "Allow", "Principal": {"S3RP": ["` + u + `"]}, "Action": "s3:GetObject", "Resource": "b/*"}
 			]
 		}`)
-		if err == nil || !strings.Contains(err.Error(), "invalid principal user name") {
+		if err == nil || !strings.Contains(err.Error(), "invalid principal") {
 			t.Errorf("principal %q must be rejected, got %v", u, err)
 		}
 	}
@@ -192,5 +211,21 @@ func TestMentionsPrincipal(t *testing.T) {
 	}
 	if denyOnly.MentionsPrincipal("tb/bob") {
 		t.Error("a Deny-only listing must not count as a mention")
+	}
+	// "tenant/*" and "*" grants cover principals they match
+	wildcards, err := policy.Parse(`{
+		"Statement": [
+			{"Effect": "Allow", "Principal": {"S3RP": ["tb/*"]}, "Action": "s3:GetObject", "Resource": "b/*"},
+			{"Effect": "Allow", "Principal": "*", "Action": "s3:ListBucket", "Resource": "b"}
+		]
+	}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !wildcards.MentionsPrincipal("tb/carol") {
+		t.Error("tb/* must mention tb/carol")
+	}
+	if !wildcards.MentionsPrincipal("tc/dave") {
+		t.Error(`Allow "*" must mention every authenticated principal`)
 	}
 }

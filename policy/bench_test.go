@@ -43,7 +43,7 @@ func maxBucketPolicy(tb testing.TB) *policy.Policy {
 // benignBucketPolicy denies a different action, so it never matches
 // s3:DeleteObject: the common case the de-amplification must keep O(1) per key.
 func benignBucketPolicy(tb testing.TB) *policy.Policy {
-	p, err := policy.Parse(`{"Statement":[{"Effect":"Deny","Principal":{"S3RP":["someone"]},"Action":"s3:PutObject","Resource":"b/*"}]}`)
+	p, err := policy.Parse(`{"Statement":[{"Effect":"Deny","Principal":{"S3RP":["ta/someone"]},"Action":"s3:PutObject","Resource":"b/*"}]}`)
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func BenchmarkEvaluate(b *testing.B) {
 	key := worstKey()
 	b.ReportAllocs()
 	for b.Loop() {
-		p.Evaluate("someuser", "s3:DeleteObject", key)
+		p.Evaluate("ta/someuser", "s3:DeleteObject", key)
 	}
 }
 
@@ -104,7 +104,7 @@ func BenchmarkDeleteObjects(b *testing.B) {
 			if !up.Allows("s3:DeleteObject") {
 				continue
 			}
-			e := p.DenyEvaluatorFor("someuser", "s3:DeleteObject")
+			e := p.DenyEvaluatorFor("ta/someuser", "s3:DeleteObject")
 			if e.AlwaysAllows() {
 				continue // the proxy skips the per-object loop entirely
 			}
