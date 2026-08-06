@@ -157,21 +157,16 @@ func (s *StringOrSlice) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Parse parses and validates a policy document in the default dialect
-// (principals under the "S3RP" key, resources as plain paths). A service
-// whose tenants write a different surface syntax parses with a Dialect.
-func Parse(text string) (*Policy, error) {
+// Parse parses and validates the named bucket's policy document in the
+// default dialect (principals under the "S3RP" key, resources as plain
+// paths). A policy is always attached to a bucket, so parsing takes the
+// bucket's name and requires every resource to refer to it
+// (ValidateResourcesFor) — there is deliberately no way to parse a bucket
+// policy without that check. A service whose tenants write a different
+// surface syntax parses with a Dialect.
+func Parse(bucket, text string) (*Policy, error) {
 	var d Dialect
-	return d.Parse(text)
-}
-
-// ParseFor parses and validates a policy document as the named bucket's
-// policy: on top of Parse's checks, every resource must refer to that
-// bucket (ValidateResourcesFor). A store accepting a policy attached to a
-// bucket should parse with this rather than Parse.
-func ParseFor(bucket, text string) (*Policy, error) {
-	var d Dialect
-	return d.ParseFor(bucket, text)
+	return d.Parse(bucket, text)
 }
 
 // statementName names a statement in an error: its Sid, or its index when
@@ -189,11 +184,10 @@ func statementName(sid string, i int) string {
 // an entry naming anything else can never match anything; that is almost
 // certainly a typo, and keeping it silently would leave the author
 // believing a restriction holds that in fact matches nothing. AWS rejects
-// the same mistake at PutBucketPolicy time ("Policy has invalid resource"),
-// and so should a store accepting a policy for a bucket — via this method,
-// or ParseFor which combines it with parsing. With a Dialect the check runs
-// on the normalized resources, so the bucket name is always the plain
-// internal one.
+// the same mistake at PutBucketPolicy time ("Policy has invalid resource").
+// Parse runs this check on every document (on the normalized resources, so
+// the bucket name is always the plain internal one); it is exported for
+// re-validating a Policy built without Parse.
 func (p *Policy) ValidateResourcesFor(bucket string) error {
 	for i, st := range p.Statement {
 		for _, res := range st.Resource {

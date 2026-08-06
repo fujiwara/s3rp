@@ -21,8 +21,9 @@ func worstKey() string {
 
 // maxBucketPolicy is the most expensive bucket policy the caps allow to
 // evaluate: MaxStatements Deny statements, each with MaxResourcesPerStatement
-// adversarial resource patterns ("*zb" hunts a char absent from the key,
-// forcing a full scan), all matching the requester's principal and action.
+// adversarial resource patterns ("photos/*zb" — the mandatory bucket prefix,
+// then a wildcard hunting a char absent from the key, forcing a full scan),
+// all matching the requester's principal and action.
 // Every statement also carries a condition that the benchmark's source
 // (10.0.0.1) satisfies only at the last value, so the full prefix lists are
 // scanned and every statement still reaches the resource scan. The lists
@@ -33,7 +34,7 @@ func worstKey() string {
 func maxBucketPolicy(tb testing.TB) *policy.Policy {
 	res := make([]string, policy.MaxResourcesPerStatement)
 	for i := range res {
-		res[i] = `"*zb"`
+		res[i] = `"photos/*zb"`
 	}
 	ips := make([]string, 20)
 	notIPs := make([]string, 20)
@@ -48,7 +49,7 @@ func maxBucketPolicy(tb testing.TB) *policy.Policy {
 	for i := range stmts {
 		stmts[i] = stmt
 	}
-	p, err := policy.Parse(`{"Statement":[` + strings.Join(stmts, ",") + `]}`)
+	p, err := policy.Parse("photos", `{"Statement":[`+strings.Join(stmts, ",")+`]}`)
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -58,7 +59,7 @@ func maxBucketPolicy(tb testing.TB) *policy.Policy {
 // benignBucketPolicy denies a different action, so it never matches
 // s3:DeleteObject: the common case the de-amplification must keep O(1) per key.
 func benignBucketPolicy(tb testing.TB) *policy.Policy {
-	p, err := policy.Parse(`{"Statement":[{"Effect":"Deny","Principal":{"S3RP":["ta/someone"]},"Action":"s3:PutObject","Resource":"b/*"}]}`)
+	p, err := policy.Parse("b", `{"Statement":[{"Effect":"Deny","Principal":{"S3RP":["ta/someone"]},"Action":"s3:PutObject","Resource":"b/*"}]}`)
 	if err != nil {
 		tb.Fatal(err)
 	}

@@ -9,7 +9,7 @@ import (
 
 func TestParse(t *testing.T) {
 	t.Run("string and array forms", func(t *testing.T) {
-		p, err := policy.Parse(`{
+		p, err := policy.Parse("photos", `{
 			"Version": "2012-10-17",
 			"Statement": [
 				{
@@ -40,7 +40,7 @@ func TestParse(t *testing.T) {
 		}
 	})
 	t.Run("wildcard principal", func(t *testing.T) {
-		p, err := policy.Parse(`{
+		p, err := policy.Parse("photos", `{
 			"Statement": [
 				{"Effect": "Deny", "Principal": "*", "Action": "s3:DeleteObject", "Resource": "photos/*"}
 			]
@@ -53,7 +53,7 @@ func TestParse(t *testing.T) {
 		}
 	})
 	t.Run("not principal", func(t *testing.T) {
-		p, err := policy.Parse(`{
+		p, err := policy.Parse("photos", `{
 			"Statement": [
 				{"Effect": "Deny", "NotPrincipal": {"S3RP": ["ta/admin"]}, "Action": "s3:PutObject", "Resource": "photos/*"}
 			]
@@ -132,7 +132,7 @@ func TestParse(t *testing.T) {
 	}
 	for _, tc := range errCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := policy.Parse(tc.text)
+			_, err := policy.Parse("b", tc.text)
 			if err == nil {
 				t.Fatal("expect error")
 			}
@@ -147,7 +147,7 @@ func TestParse(t *testing.T) {
 // principal and action) agrees with Evaluate on the Deny decision, and that
 // AlwaysAllows short-circuits when no Deny statement matches.
 func TestDenyEvaluator(t *testing.T) {
-	p, err := policy.Parse(`{
+	p, err := policy.Parse("photos", `{
 		"Statement": [
 			{"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": ["s3:DeleteObject", "s3:PutObject"], "Resource": ["photos/*", "photos/2026/*"]},
 			{"Effect": "Deny", "Principal": "*", "Action": "s3:DeleteObject", "Resource": "photos/archive/*"},
@@ -192,7 +192,7 @@ func TestDenyEvaluator(t *testing.T) {
 }
 
 func TestEvaluate(t *testing.T) {
-	p, err := policy.Parse(`{
+	p, err := policy.Parse("photos", `{
 		"Statement": [
 			{
 				"Sid": "BatchReadOnly",
@@ -245,7 +245,7 @@ func TestEvaluate(t *testing.T) {
 }
 
 func TestEvaluateNotPrincipal(t *testing.T) {
-	p, err := policy.Parse(`{
+	p, err := policy.Parse("photos", `{
 		"Statement": [
 			{
 				"Sid": "OnlyAdminWrites",
@@ -274,7 +274,7 @@ func TestEvaluateNotPrincipal(t *testing.T) {
 }
 
 func TestEvaluateActionWildcard(t *testing.T) {
-	p, err := policy.Parse(`{
+	p, err := policy.Parse("b", `{
 		"Statement": [
 			{"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": "s3:Put*", "Resource": "b/*"},
 			{"Effect": "Deny", "Principal": {"S3RP": ["ta/batch2"]}, "Action": "s3:*", "Resource": "b/*"}
@@ -300,7 +300,7 @@ func TestEvaluateActionWildcard(t *testing.T) {
 // TestEvaluateActionMiddleWildcard covers wildcards in the middle of an
 // action pattern (e.g. s3:*Object*), not just a trailing s3:Get*.
 func TestEvaluateActionMiddleWildcard(t *testing.T) {
-	p, err := policy.Parse(`{
+	p, err := policy.Parse("b", `{
 		"Statement": [
 			{"Effect": "Deny", "Principal": {"S3RP": ["ta/user1"]}, "Action": ["s3:*Object*", "s3:*Multipart*"], "Resource": "b/*"}
 		]
@@ -322,7 +322,7 @@ func TestEvaluateActionMiddleWildcard(t *testing.T) {
 // TestEvaluateResourceWildcard covers resource patterns: multi-segment
 // wildcards, prefix wildcards, and bucket-only vs object patterns.
 func TestEvaluateResourceWildcard(t *testing.T) {
-	p, err := policy.Parse(`{
+	p, err := policy.Parse("b", `{
 		"Statement": [
 			{"Effect": "Deny", "Principal": {"S3RP": ["ta/user1"]}, "Action": "s3:GetObject",
 			 "Resource": ["b/*/*", "b/2026-*"]}
@@ -353,7 +353,7 @@ func TestEvaluateResourceWildcard(t *testing.T) {
 // does not grant access to a key literally named "photos/private.txt", and
 // a key containing ".." is a distinct object, not a traversal.
 func TestEvaluateLiteralDotSegments(t *testing.T) {
-	p, err := policy.Parse(`{
+	p, err := policy.Parse("photos", `{
 		"Statement": [
 			{"Effect": "Allow", "Principal": {"S3RP": ["ta/user1"]}, "Action": "s3:GetObject", "Resource": "photos/public/*"}
 		]
@@ -416,7 +416,7 @@ func TestMatchWildcards(t *testing.T) {
 // TestEvaluateQuestionWildcard verifies "?" works through policy evaluation,
 // so a Deny using it does not silently fail open.
 func TestEvaluateQuestionWildcard(t *testing.T) {
-	p, err := policy.Parse(`{
+	p, err := policy.Parse("b", `{
 		"Statement": [
 			{"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": "s3:???Object", "Resource": "b/log-????"}
 		]
@@ -573,7 +573,7 @@ func TestPolicyLimits(t *testing.T) {
 	}
 	for _, tc := range bucketCases {
 		t.Run("bucket/"+tc.name, func(t *testing.T) {
-			if _, err := policy.Parse(tc.text); err == nil || !strings.Contains(err.Error(), tc.errStr) {
+			if _, err := policy.Parse("b", tc.text); err == nil || !strings.Contains(err.Error(), tc.errStr) {
 				t.Errorf("expect error containing %q, got %v", tc.errStr, err)
 			}
 		})
@@ -629,16 +629,17 @@ func TestPolicyLimits(t *testing.T) {
 	})
 }
 
-// TestParseFor covers the bucket-scope check a store runs when accepting a
-// policy attached to a bucket: every resource must refer to that bucket.
-func TestParseFor(t *testing.T) {
+// TestParseBucketScope covers the bucket-scope check Parse runs on every
+// document: every resource must refer to the bucket the policy is parsed
+// for.
+func TestParseBucketScope(t *testing.T) {
 	valid := `{
 		"Statement": [
 			{"Effect": "Deny", "Principal": "*", "Action": "s3:ListBucket", "Resource": "photos"},
 			{"Effect": "Deny", "Principal": "*", "Action": "s3:PutObject", "Resource": ["photos/*", "photos/tmp/a.txt"]}
 		]
 	}`
-	if _, err := policy.ParseFor("photos", valid); err != nil {
+	if _, err := policy.Parse("photos", valid); err != nil {
 		t.Fatalf("valid policy rejected: %v", err)
 	}
 
@@ -653,17 +654,18 @@ func TestParseFor(t *testing.T) {
 	for _, tc := range errCases {
 		t.Run(tc.name, func(t *testing.T) {
 			text := `{"Statement": [{"Sid": "S1", "Effect": "Deny", "Principal": "*", "Action": "s3:PutObject", "Resource": ` + tc.resource + `}]}`
-			_, err := policy.ParseFor("photos", text)
+			_, err := policy.Parse("photos", text)
 			if err == nil || !strings.Contains(err.Error(), "does not refer to bucket") {
 				t.Errorf("expect a scope error, got %v", err)
 			}
 			if err != nil && !strings.Contains(err.Error(), "S1") {
 				t.Errorf("expect the error to name the statement, got %v", err)
 			}
-			// the same document is fine as another bucket's policy or parsed
-			// without a bucket scope
-			if _, err := policy.Parse(text); err != nil {
-				t.Errorf("Parse must not apply the scope check: %v", err)
+			// the same document is fine as the bucket it does refer to
+			if tc.name == "another bucket" {
+				if _, err := policy.Parse("otherbucket", text); err != nil {
+					t.Errorf("the document must parse for its own bucket: %v", err)
+				}
 			}
 		})
 	}
@@ -681,7 +683,7 @@ func repeatQuoted(s string, n int) string {
 // of case (as in AWS), so a mis-cased Deny cannot silently fail open, while
 // resources stay case-sensitive.
 func TestEvaluateActionCaseInsensitive(t *testing.T) {
-	p, err := policy.Parse(`{
+	p, err := policy.Parse("photos", `{
 		"Statement": [
 			{"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": ["s3:putobject", "S3:DeleteObject", "s3:Get*"], "Resource": "photos/*"}
 		]

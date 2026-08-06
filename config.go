@@ -202,7 +202,7 @@ func (c *Config) Validate() error {
 			backendOwner[target] = t.Name
 
 			if b.Policy != "" {
-				if _, err := policy.ParseFor(b.Name, b.Policy); err != nil {
+				if _, err := policy.Parse(b.Name, b.Policy); err != nil {
 					return fmt.Errorf("bucket %s: invalid policy: %w", b.Name, err)
 				}
 			}

@@ -31,7 +31,7 @@ const crossTenantPolicy = `{
 }`
 
 func TestEvaluateQualifiedPrincipal(t *testing.T) {
-	p, err := policy.Parse(crossTenantPolicy)
+	p, err := policy.Parse("shared", crossTenantPolicy)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestEvaluateQualifiedPrincipal(t *testing.T) {
 
 func TestEvaluateWildcardPrincipals(t *testing.T) {
 	t.Run("star matches every authenticated principal", func(t *testing.T) {
-		p, err := policy.Parse(`{
+		p, err := policy.Parse("open", `{
 			"Statement": [
 				{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "open/*"}
 			]
@@ -74,7 +74,7 @@ func TestEvaluateWildcardPrincipals(t *testing.T) {
 		}
 	})
 	t.Run("tenant wildcard matches only that tenant", func(t *testing.T) {
-		p, err := policy.Parse(`{
+		p, err := policy.Parse("shared", `{
 			"Statement": [
 				{"Effect": "Allow", "Principal": {"S3RP": ["tb/*"]}, "Action": "s3:GetObject", "Resource": "shared/*"}
 			]
@@ -97,7 +97,7 @@ func TestEvaluateWildcardPrincipals(t *testing.T) {
 		}
 	})
 	t.Run("tenant wildcard works in Deny and NotPrincipal", func(t *testing.T) {
-		p, err := policy.Parse(`{
+		p, err := policy.Parse("b", `{
 			"Statement": [
 				{"Effect": "Deny", "NotPrincipal": {"S3RP": ["ta/*"]}, "Action": "s3:PutObject", "Resource": "b/*"}
 			]
@@ -115,7 +115,7 @@ func TestEvaluateWildcardPrincipals(t *testing.T) {
 }
 
 func TestNotPrincipalDenyOnly(t *testing.T) {
-	_, err := policy.Parse(`{
+	_, err := policy.Parse("b", `{
 		"Statement": [
 			{"Effect": "Allow", "NotPrincipal": {"S3RP": ["ta/alice"]}, "Action": "s3:GetObject", "Resource": "b/*"}
 		]
@@ -128,9 +128,9 @@ func TestNotPrincipalDenyOnly(t *testing.T) {
 func TestParseQualifiedPrincipal(t *testing.T) {
 	valid := []string{"tb/bob", "tenant-b/some_user", "t2/u2", "tb/*"}
 	for _, u := range valid {
-		if _, err := policy.Parse(`{
+		if _, err := policy.Parse("b", `{
 			"Statement": [
-				{"Effect": "Allow", "Principal": {"S3RP": ["` + u + `"]}, "Action": "s3:GetObject", "Resource": "b/*"}
+				{"Effect": "Allow", "Principal": {"S3RP": ["`+u+`"]}, "Action": "s3:GetObject", "Resource": "b/*"}
 			]
 		}`); err != nil {
 			t.Errorf("principal %q must parse: %v", u, err)
@@ -138,9 +138,9 @@ func TestParseQualifiedPrincipal(t *testing.T) {
 	}
 	invalid := []string{"bob", "tb/tb/bob", "/bob", "tb/", "Tb/bob", "tb/B0b", "*/bob", "tb/b*"}
 	for _, u := range invalid {
-		_, err := policy.Parse(`{
+		_, err := policy.Parse("b", `{
 			"Statement": [
-				{"Effect": "Allow", "Principal": {"S3RP": ["` + u + `"]}, "Action": "s3:GetObject", "Resource": "b/*"}
+				{"Effect": "Allow", "Principal": {"S3RP": ["`+u+`"]}, "Action": "s3:GetObject", "Resource": "b/*"}
 			]
 		}`)
 		if err == nil || !strings.Contains(err.Error(), "invalid principal") {
@@ -150,7 +150,7 @@ func TestParseQualifiedPrincipal(t *testing.T) {
 }
 
 func TestAllowEvaluator(t *testing.T) {
-	p, err := policy.Parse(`{
+	p, err := policy.Parse("shared", `{
 		"Statement": [
 			{"Effect": "Allow", "Principal": {"S3RP": ["tb/bob"]}, "Action": "s3:DeleteObject", "Resource": "shared/tmp/*"},
 			{"Effect": "Deny", "Principal": {"S3RP": ["tb/bob"]}, "Action": "s3:DeleteObject", "Resource": "shared/tmp/pinned/*"}
@@ -189,7 +189,7 @@ func TestAllowEvaluator(t *testing.T) {
 }
 
 func TestMentionsPrincipal(t *testing.T) {
-	p, err := policy.Parse(crossTenantPolicy)
+	p, err := policy.Parse("shared", crossTenantPolicy)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +201,7 @@ func TestMentionsPrincipal(t *testing.T) {
 	}
 	// a Deny listing is not a mention: it grants nothing, so it must not
 	// make the bucket visible
-	denyOnly, err := policy.Parse(`{
+	denyOnly, err := policy.Parse("b", `{
 		"Statement": [
 			{"Effect": "Deny", "Principal": {"S3RP": ["tb/bob"]}, "Action": "s3:GetObject", "Resource": "b/*"}
 		]
@@ -213,7 +213,7 @@ func TestMentionsPrincipal(t *testing.T) {
 		t.Error("a Deny-only listing must not count as a mention")
 	}
 	// "tenant/*" and "*" grants cover principals they match
-	wildcards, err := policy.Parse(`{
+	wildcards, err := policy.Parse("b", `{
 		"Statement": [
 			{"Effect": "Allow", "Principal": {"S3RP": ["tb/*"]}, "Action": "s3:GetObject", "Resource": "b/*"},
 			{"Effect": "Allow", "Principal": "*", "Action": "s3:ListBucket", "Resource": "b"}

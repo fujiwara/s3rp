@@ -67,9 +67,12 @@ type rawStatement struct {
 	Condition    *Condition      `json:"Condition"`
 }
 
-// Parse parses and validates a policy document written in this dialect. The
-// returned Policy is in the internal form regardless of the dialect.
-func (d *Dialect) Parse(text string) (*Policy, error) {
+// Parse parses and validates the named bucket's policy document written in
+// this dialect. The returned Policy is in the internal form regardless of
+// the dialect, and every resource must refer to the bucket
+// (ValidateResourcesFor, run after normalization — bucket is the plain
+// internal name even when the surface syntax is ARN-prefixed).
+func (d *Dialect) Parse(bucket, text string) (*Policy, error) {
 	if len(text) > MaxPolicyBytes {
 		return nil, fmt.Errorf("policy is %d bytes, at most %d are allowed", len(text), MaxPolicyBytes)
 	}
@@ -111,18 +114,6 @@ func (d *Dialect) Parse(text string) (*Policy, error) {
 		p.Statement[i] = st
 	}
 	if err := p.validate(); err != nil {
-		return nil, err
-	}
-	return p, nil
-}
-
-// ParseFor is Parse plus the bucket-scope check: every resource of the
-// parsed document must refer to the named bucket (ValidateResourcesFor).
-// The check runs after normalization, so bucket is the plain internal name
-// even when the dialect's surface syntax is ARN-prefixed.
-func (d *Dialect) ParseFor(bucket, text string) (*Policy, error) {
-	p, err := d.Parse(text)
-	if err != nil {
 		return nil, err
 	}
 	if err := p.ValidateResourcesFor(bucket); err != nil {
