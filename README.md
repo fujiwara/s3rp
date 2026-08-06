@@ -231,6 +231,26 @@ Principal forms:
 - `"*"` — **every authenticated user of any tenant**. There is no anonymous access, so this means "anyone with valid credentials", not "public". An `Allow` with `"*"` opens the bucket to all tenants — write `"mytenant/*"` when you mean your own users.
 - `NotPrincipal` (exclusive with `Principal`, `Deny` only) — everyone except the listed names. `Deny` + `NotPrincipal` expresses "only these users may ..." so that newly added users — and every other tenant's users — are denied by default. `Allow` + `NotPrincipal` would be a grant to everyone-but, which never crosses anyone's mind on purpose; it is rejected at load time.
 
+#### IP address conditions
+
+A statement may carry a `Condition` restricting it to requests from certain source addresses, with the same spelling as AWS (and Ceph RGW, MinIO — a policy written for them works unchanged):
+
+```json
+{
+  "Sid": "WritesOnlyFromTheOffice",
+  "Effect": "Deny",
+  "Principal": "*",
+  "Action": ["s3:PutObject", "s3:DeleteObject"],
+  "Resource": ["photos/*"],
+  "Condition": {"NotIpAddress": {"aws:SourceIp": ["203.0.113.0/24", "2001:db8::/32"]}}
+}
+```
+
+- The supported operators are `IpAddress` and `NotIpAddress`, and the only key is `aws:SourceIp` (key names are case-insensitive, as on AWS). Anything else is rejected at load time rather than ignored — a restriction the author intended is never silently dropped.
+- Values are CIDR prefixes or plain addresses (a plain address is a `/32` or `/128`). Values within one operator are ORed; the operators of one `Condition` are ANDed. IPv4 and IPv6 are distinct families — an IPv4 prefix never matches an IPv6 source (IPv4-mapped IPv6 sources count as IPv4).
+- The source address is the connection's `RemoteAddr`. When the request's source is unknown, conditions fail **closed**: `IpAddress` does not match (an `Allow` gated on it grants nothing) and `NotIpAddress` matches (a `Deny` gated on it applies). Behind a reverse proxy, `RemoteAddr` is the proxy's address — see [Behind a TLS terminator](#behind-a-tls-terminator).
+- A source address is weak evidence: it can be spoofed or mangled by a misconfigured proxy chain. Use IP conditions to *restrict* (`Deny` + `NotIpAddress`, as above) as defense in depth, not as the sole basis for widening access.
+
 #### Cross-tenant access
 
 A bucket policy may grant access to another tenant's users — one by name, a whole tenant, or every authenticated user:
@@ -287,7 +307,7 @@ Evaluation is IAM-style and independent of the bucket policy's baseline-allow mo
 
 A request must pass **both** layers: the user policy must allow the action **and** the bucket policy must not `Deny` it. Either denial returns `403 AccessDenied`. The check sits at the same single authorization chokepoint as bucket policies, so it covers every operation uniformly (including per-object DeleteObjects entries and the source/destination actions of a copy).
 
-Both bucket and user policies are bounded in size: at most 20 KB per document, 20 statements per policy, 30 actions and 10 resources per statement, 128 bytes per action/resource pattern, and 100 principal users per statement. Oversized policies are rejected when loaded.
+Both bucket and user policies are bounded in size: at most 20 KB per document, 20 statements per policy, 30 actions and 10 resources per statement, 128 bytes per action/resource pattern, 100 principal users per statement, and 50 condition values per operator. Oversized policies are rejected when loaded.
 
 ### CORS
 
@@ -369,7 +389,7 @@ server {
 }
 ```
 
-**What you lose.** Every request now arrives from the proxy, so the `RemoteAddr` in the access log is the proxy's. s3rp does not interpret `X-Forwarded-For` — how many hops to trust is a property of the deployment, not of the gateway. A service that needs the client address should rewrite `RemoteAddr` in a handler wrapped around `gw.Handler()`, which the gateway reads for logging and uses for nothing else. Also leave the `x-amz-request-id` response header alone: it is what ties a user's report to the log line explaining it.
+**What you lose.** Every request now arrives from the proxy, so the `RemoteAddr` the gateway sees is the proxy's — and `RemoteAddr` is not just the access-log field: it is the source address that bucket-policy [IP conditions](#ip-address-conditions) evaluate. s3rp does not interpret `X-Forwarded-For` — how many hops to trust is a property of the deployment, not of the gateway — so a deployment using IP conditions (or wanting real client addresses in the log) **must** rewrite `RemoteAddr` to the client address in a handler wrapped around `gw.Handler()`. Left unrewritten, conditions see the proxy's address and fail closed: IP-gated `Allow`s grant nothing and `NotIpAddress` `Deny`s fire for everyone — wrong, but never silently open. Also leave the `x-amz-request-id` response header alone: it is what ties a user's report to the log line explaining it.
 
 **The hop itself.** The scheme is not part of a SigV4 signature, so terminating TLS and forwarding over plain HTTP verifies correctly — but that hop carries object payloads and the requests authenticating them, so it belongs on a trusted network or under mTLS.
 
@@ -497,7 +517,7 @@ func main() {
 
 - Definitions are read on **every request** and nothing is cached: `GetKey` on each authentication, `GetBucket` on each bucket resolution. Caching is your store's business — it knows when a key is revoked, which the gateway cannot.
 - If your store does cache, keep the parsed `*policy.Policy` / `*policy.UserPolicy` around, not the policy JSON: the compiled match patterns live on the policy object (built lazily on its first evaluation, safe to share across concurrent requests), so a store that re-parses the text per request silently repeats that work every time. A cache keyed by the policy text invalidates itself — a changed policy is a different key.
-- The policy syntax — the `"S3RP"` principal key, `tenant/user` principals, plain-path resources — is only the default `policy.Dialect`. If your tenants should write a different key, ARN-prefixed resources (`arn:aws:s3:::bucket/*`), or their own principal syntax, parse with your own `Dialect`: `PrincipalKey` and `ResourcePrefix` cover the fixed parts, and the `NormalizePrincipal` / `NormalizeResource` hooks rewrite each value to the internal form (`"arn:myco:iam::ta:user/alice"` → `"ta/alice"`) inside the same parse pass — no pre-parsing of the tenant's JSON — with validation and the caps applied to the normalized result. Evaluation is identical in any dialect. Keep the tenant's original text in `store.Bucket.PolicyText` (returned verbatim by GetBucketPolicy) and put the `Dialect`-parsed form in `Policy` — the two fields are deliberately independent.
+- The policy syntax — the `"S3RP"` principal key, `tenant/user` principals, plain-path resources — is only the default `policy.Dialect`. If your tenants should write a different key, ARN-prefixed resources (`arn:aws:s3:::bucket/*`), or their own principal syntax, parse with your own `Dialect`: `PrincipalKey` and `ResourcePrefix` cover the fixed parts, and the `NormalizePrincipal` / `NormalizeResource` hooks rewrite each value to the internal form (`"arn:myco:iam::ta:user/alice"` → `"ta/alice"`) inside the same parse pass — no pre-parsing of the tenant's JSON — with validation and the caps applied to the normalized result. Evaluation is identical in any dialect, and so is the `Condition` syntax (the IP operators and the `aws:SourceIp` key are the same everywhere). Keep the tenant's original text in `store.Bucket.PolicyText` (returned verbatim by GetBucketPolicy) and put the `Dialect`-parsed form in `Policy` — the two fields are deliberately independent.
 - **Temporary credentials** are a store concern, not a gateway one: set `store.Key.SessionToken` on a key your control plane issues under an existing user (empty = long-lived key). A request signed with that key must present exactly that token — header auth, presigned URLs and POST uploads all carry it — and a token on a long-lived key is refused (`InvalidToken`), never dropped. Expiry is also yours: an expired key is simply not returned by `GetKey`. Authorization needs nothing new — the key belongs to a user, and a per-key `UserPolicy` narrows its actions. One issuance rule: do not return the credentials to the caller before the key is visible to the store the gateways read, or the first use races the write (and a stale not-found may be negative-cached).
 - Two tenants must not map buckets to the same physical backend bucket — the gateway cannot detect this, so validate it where definitions are written.
 

@@ -169,8 +169,8 @@ func TestDenyEvaluator(t *testing.T) {
 		{"ta/batch", "s3:PutObject", "photos/a.jpg"},
 	}
 	for _, tc := range cases {
-		want := p.Evaluate(tc.principal, tc.action, tc.resource) == policy.Deny
-		eval := p.DenyEvaluatorFor(tc.principal, tc.action)
+		want := p.Evaluate(tc.principal, tc.action, tc.resource, policy.RequestContext{}) == policy.Deny
+		eval := p.DenyEvaluatorFor(tc.principal, tc.action, policy.RequestContext{})
 		if got := eval.Denies(tc.resource); got != want {
 			t.Errorf("Denies(%s,%s,%s)=%v, Evaluate says deny=%v", tc.principal, tc.action, tc.resource, got, want)
 		}
@@ -179,14 +179,14 @@ func TestDenyEvaluator(t *testing.T) {
 		}
 	}
 	// no Deny statement matches this action -> AlwaysAllows, per-object check skippable
-	if !p.DenyEvaluatorFor("ta/batch", "s3:GetObject").AlwaysAllows() {
+	if !p.DenyEvaluatorFor("ta/batch", "s3:GetObject", policy.RequestContext{}).AlwaysAllows() {
 		t.Error("expect AlwaysAllows when only an inert Allow matches")
 	}
-	if !p.DenyEvaluatorFor("ta/app1", "s3:PutObject").AlwaysAllows() {
+	if !p.DenyEvaluatorFor("ta/app1", "s3:PutObject", policy.RequestContext{}).AlwaysAllows() {
 		t.Error("expect AlwaysAllows when no statement matches the principal")
 	}
 	// a matching Deny is not AlwaysAllows
-	if p.DenyEvaluatorFor("ta/batch", "s3:DeleteObject").AlwaysAllows() {
+	if p.DenyEvaluatorFor("ta/batch", "s3:DeleteObject", policy.RequestContext{}).AlwaysAllows() {
 		t.Error("expect not AlwaysAllows when a Deny matches")
 	}
 }
@@ -237,7 +237,7 @@ func TestEvaluate(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := p.Evaluate(tc.principal, tc.action, tc.resource); got != tc.want {
+			if got := p.Evaluate(tc.principal, tc.action, tc.resource, policy.RequestContext{}); got != tc.want {
 				t.Errorf("expect %v, got %v", tc.want, got)
 			}
 		})
@@ -259,16 +259,16 @@ func TestEvaluateNotPrincipal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := p.Evaluate("ta/admin", "s3:PutObject", "photos/a"); got != policy.None {
+	if got := p.Evaluate("ta/admin", "s3:PutObject", "photos/a", policy.RequestContext{}); got != policy.None {
 		t.Errorf("admin must not be denied, got %v", got)
 	}
 	// any other user, including ones added later, is denied
 	for _, u := range []string{"ta/batch", "newuser"} {
-		if got := p.Evaluate(u, "s3:PutObject", "photos/a"); got != policy.Deny {
+		if got := p.Evaluate(u, "s3:PutObject", "photos/a", policy.RequestContext{}); got != policy.Deny {
 			t.Errorf("%s must be denied, got %v", u, got)
 		}
 	}
-	if got := p.Evaluate("ta/batch", "s3:GetObject", "photos/a"); got != policy.None {
+	if got := p.Evaluate("ta/batch", "s3:GetObject", "photos/a", policy.RequestContext{}); got != policy.None {
 		t.Errorf("read must not be denied, got %v", got)
 	}
 }
@@ -283,16 +283,16 @@ func TestEvaluateActionWildcard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := p.Evaluate("ta/batch", "s3:PutObject", "b/k"); got != policy.Deny {
+	if got := p.Evaluate("ta/batch", "s3:PutObject", "b/k", policy.RequestContext{}); got != policy.Deny {
 		t.Errorf("expect Deny for s3:Put*, got %v", got)
 	}
-	if got := p.Evaluate("ta/batch", "s3:PutObjectTagging", "b/k"); got != policy.Deny {
+	if got := p.Evaluate("ta/batch", "s3:PutObjectTagging", "b/k", policy.RequestContext{}); got != policy.Deny {
 		t.Errorf("expect Deny for s3:Put*, got %v", got)
 	}
-	if got := p.Evaluate("ta/batch", "s3:GetObject", "b/k"); got != policy.None {
+	if got := p.Evaluate("ta/batch", "s3:GetObject", "b/k", policy.RequestContext{}); got != policy.None {
 		t.Errorf("expect None for get, got %v", got)
 	}
-	if got := p.Evaluate("ta/batch2", "s3:GetObject", "b/k"); got != policy.Deny {
+	if got := p.Evaluate("ta/batch2", "s3:GetObject", "b/k", policy.RequestContext{}); got != policy.Deny {
 		t.Errorf("expect Deny for s3:*, got %v", got)
 	}
 }
@@ -310,11 +310,11 @@ func TestEvaluateActionMiddleWildcard(t *testing.T) {
 	}
 	deny := []string{"s3:GetObject", "s3:PutObjectTagging", "s3:ListMultipartUploadParts"}
 	for _, a := range deny {
-		if got := p.Evaluate("ta/user1", a, "b/k"); got != policy.Deny {
+		if got := p.Evaluate("ta/user1", a, "b/k", policy.RequestContext{}); got != policy.Deny {
 			t.Errorf("Evaluate(%q) = %v, want Deny", a, got)
 		}
 	}
-	if got := p.Evaluate("ta/user1", "s3:ListBucket", "b/k"); got != policy.None {
+	if got := p.Evaluate("ta/user1", "s3:ListBucket", "b/k", policy.RequestContext{}); got != policy.None {
 		t.Errorf("s3:ListBucket should not match, got %v", got)
 	}
 }
@@ -342,7 +342,7 @@ func TestEvaluateResourceWildcard(t *testing.T) {
 		{"b/2025-01", policy.None},         // wrong prefix, single segment
 	}
 	for _, tc := range cases {
-		if got := p.Evaluate("ta/user1", "s3:GetObject", tc.resource); got != tc.want {
+		if got := p.Evaluate("ta/user1", "s3:GetObject", tc.resource, policy.RequestContext{}); got != tc.want {
 			t.Errorf("Evaluate(resource=%q) = %v, want %v", tc.resource, got, tc.want)
 		}
 	}
@@ -362,11 +362,11 @@ func TestEvaluateLiteralDotSegments(t *testing.T) {
 		t.Fatal(err)
 	}
 	// the ".." key matches the prefix literally (it is not collapsed)
-	if got := p.Evaluate("ta/user1", "s3:GetObject", "photos/public/../private.txt"); got != policy.Allow {
+	if got := p.Evaluate("ta/user1", "s3:GetObject", "photos/public/../private.txt", policy.RequestContext{}); got != policy.Allow {
 		t.Errorf("literal .. under the prefix should match, got %v", got)
 	}
 	// a sibling key outside the prefix is not matched
-	if got := p.Evaluate("ta/user1", "s3:GetObject", "photos/private.txt"); got != policy.None {
+	if got := p.Evaluate("ta/user1", "s3:GetObject", "photos/private.txt", policy.RequestContext{}); got != policy.None {
 		t.Errorf("key outside the prefix must not match, got %v", got)
 	}
 }
@@ -424,14 +424,14 @@ func TestEvaluateQuestionWildcard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := p.Evaluate("ta/batch", "s3:PutObject", "b/log-2026"); got != policy.Deny {
+	if got := p.Evaluate("ta/batch", "s3:PutObject", "b/log-2026", policy.RequestContext{}); got != policy.Deny {
 		t.Errorf("expect Deny, got %v", got)
 	}
-	if got := p.Evaluate("ta/batch", "s3:GetObject", "b/log-2026"); got != policy.Deny {
+	if got := p.Evaluate("ta/batch", "s3:GetObject", "b/log-2026", policy.RequestContext{}); got != policy.Deny {
 		t.Errorf("expect Deny (s3:???Object matches Get), got %v", got)
 	}
 	// resource with the wrong length does not match the ???? pattern
-	if got := p.Evaluate("ta/batch", "s3:PutObject", "b/log-12345"); got != policy.None {
+	if got := p.Evaluate("ta/batch", "s3:PutObject", "b/log-12345", policy.RequestContext{}); got != policy.None {
 		t.Errorf("expect None (log-???? needs 4 chars), got %v", got)
 	}
 }
@@ -554,6 +554,10 @@ func TestPolicyLimits(t *testing.T) {
 	for i := range tooManyPrincipals {
 		tooManyPrincipals[i] = `"user"`
 	}
+	tooManyIPs := make([]string, policy.MaxConditionValues+1)
+	for i := range tooManyIPs {
+		tooManyIPs[i] = `"10.0.0.1"`
+	}
 
 	bucketCases := []struct {
 		name, text, errStr string
@@ -565,6 +569,7 @@ func TestPolicyLimits(t *testing.T) {
 		{"too many resources", `{"Statement":[{"Effect":"Deny","Principal":"*","Action":"s3:GetObject","Resource":[` + repeatQuoted(`"b/*"`, policy.MaxResourcesPerStatement+1) + `]}]}`, "at most"},
 		{"action pattern too long", `{"Statement":[{"Effect":"Deny","Principal":"*","Action":"` + longPat + `","Resource":"b/*"}]}`, "too long"},
 		{"resource pattern too long", `{"Statement":[{"Effect":"Deny","Principal":"*","Action":"s3:GetObject","Resource":"` + strings.Repeat("a", policy.MaxPatternLen+1) + `"}]}`, "too long"},
+		{"too many condition values", `{"Statement":[{"Effect":"Deny","Principal":"*","Action":"s3:GetObject","Resource":"b/*","Condition":{"IpAddress":{"aws:SourceIp":[` + strings.Join(tooManyIPs, ",") + `]}}}]}`, "at most"},
 	}
 	for _, tc := range bucketCases {
 		t.Run("bucket/"+tc.name, func(t *testing.T) {
@@ -657,7 +662,7 @@ func TestEvaluateActionCaseInsensitive(t *testing.T) {
 		{"s3:PutObject", "Photos/a", policy.None},    // resource case-sensitive
 	}
 	for _, tc := range cases {
-		if got := p.Evaluate("ta/batch", tc.action, tc.resource); got != tc.want {
+		if got := p.Evaluate("ta/batch", tc.action, tc.resource, policy.RequestContext{}); got != tc.want {
 			t.Errorf("Evaluate(%q, %q) = %v, want %v", tc.action, tc.resource, got, tc.want)
 		}
 	}
