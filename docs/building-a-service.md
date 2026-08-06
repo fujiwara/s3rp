@@ -124,11 +124,15 @@ func main() {
 - If your store does cache, keep the parsed `*policy.Policy` / `*policy.UserPolicy` around, not the policy JSON: the compiled match patterns live on the policy object (built lazily on its first evaluation, safe to share across concurrent requests), so a store that re-parses the text per request silently repeats that work every time. A cache keyed by the policy text invalidates itself — a changed policy is a different key.
 
   ```go
-  var policies sync.Map // (bucket + "\x00" + policyText) → *policy.Policy
+  // a comparable struct key: no concatenation, so a lookup does not copy
+  // the policy text (up to 20 KB) on the request path
+  type policyKey struct{ bucket, text string }
+
+  var policies sync.Map // policyKey → *policy.Policy
 
   // inside GetBucket, after loading the row
   func (d *definitions) parsedPolicy(bucket, text string) (*policy.Policy, error) {
-  	key := bucket + "\x00" + text // a changed policy is a different key
+  	key := policyKey{bucket, text} // a changed policy is a different key
   	if p, ok := policies.Load(key); ok {
   		return p.(*policy.Policy), nil // compiled patterns reused, safe to share
   	}
