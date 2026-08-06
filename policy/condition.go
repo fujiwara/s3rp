@@ -52,6 +52,9 @@ type Condition struct {
 }
 
 func (c *Condition) UnmarshalJSON(data []byte) error {
+	// reset the receiver so decoding into a reused Condition cannot
+	// accumulate values or keep stale compiled state
+	*c = Condition{}
 	var raw map[string]map[string]StringOrSlice
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return fmt.Errorf("malformed condition: %w", err)

@@ -60,6 +60,22 @@ func TestParseCondition(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("unmarshal resets a reused receiver", func(t *testing.T) {
+		var c policy.Condition
+		if err := json.Unmarshal([]byte(`{"IpAddress": {"aws:SourceIp": "10.0.0.0/8"}, "NotIpAddress": {"aws:SourceIp": "192.0.2.0/24"}}`), &c); err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal([]byte(`{"IpAddress": {"aws:SourceIp": "172.16.0.0/12"}}`), &c); err != nil {
+			t.Fatal(err)
+		}
+		if len(c.IPAddress) != 1 || c.IPAddress[0] != "172.16.0.0/12" {
+			t.Errorf("expect only the second document's IPAddress, got %v", c.IPAddress)
+		}
+		if len(c.NotIPAddress) != 0 {
+			t.Errorf("expect NotIPAddress cleared, got %v", c.NotIPAddress)
+		}
+	})
 }
 
 func TestEvaluateCondition(t *testing.T) {
