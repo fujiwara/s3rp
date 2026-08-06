@@ -60,7 +60,7 @@ Flags:
 
 The config file is YAML. Environment variables in the file are expanded (`${VAR}` or `$VAR`).
 
-A tenant owns one or more buckets and users. A user is the stable identity within a tenant (name: `[a-z][a-z0-9_-]+`); access keys are issued per user and rotate under it — add a new key, switch clients, then remove the old one. Every key of a tenant can access all of the tenant's buckets, unless restricted by a [bucket policy](#bucket-policies) or a [user policy](#user-policies). Two tenants may not map their buckets to the same physical backend bucket (endpoint + backend bucket name); this is rejected at startup to preserve tenant isolation.
+A tenant owns one or more buckets and users. A user is the stable identity within a tenant (name: `[a-z][a-z0-9_-]+`); access keys are issued per user and rotate under it — add a new key, switch clients, then remove the old one. Every key of a tenant can access all of the tenant's buckets, unless restricted by a [bucket policy](#bucket-policies) or a [user policy](#user-policies); a bucket policy can also grant selected operations to another tenant's user ([cross-tenant access](#cross-tenant-access)). Two tenants may not map their buckets to the same physical backend bucket (endpoint + backend bucket name); this is rejected at startup to preserve tenant isolation.
 
 ```yaml
 listen: ":8080"
@@ -101,7 +101,7 @@ Notes:
 - When `backend.endpoint` is omitted, the backend is Amazon S3: the SDK resolves the endpoint from `region`, and `use_path_style` defaults to `false` (it defaults to `true` when an endpoint is set).
 - When `backend.access_key_id` and `backend.secret_access_key` are omitted, the SDK default credential chain is used (environment variables, shared config, IAM roles, etc.).
 - `GET /` (ListBuckets) returns the buckets of the key's tenant, with the tenant name as the owner.
-- Copying (CopyObject / UploadPartCopy) resolves the source within the requesting key's tenant, so cross-tenant copying is impossible.
+- Copying (CopyObject / UploadPartCopy) resolves the source within the requesting key's tenant, so copying **from** another tenant's bucket is impossible. Copying **into** another tenant's bucket works when its policy grants `s3:PutObject` ([cross-tenant access](#cross-tenant-access)).
 
 ### Definition store
 
@@ -161,11 +161,11 @@ Because operations are reconstructed rather than forwarded, each one is implemen
 
 Other operations return a `NotImplemented` error.
 
-CopyObject and UploadPartCopy work between buckets served by the same backend (same endpoint, region and credentials); copying across different backends returns `NotImplemented`. The copy source bucket must belong to the requester's tenant.
+CopyObject and UploadPartCopy work between buckets served by the same backend (same endpoint, region and credentials); copying across different backends returns `NotImplemented`. The copy source bucket must belong to the requester's tenant; the destination may be another tenant's bucket when its policy grants `s3:PutObject` ([cross-tenant access](#cross-tenant-access)).
 
 GetBucketLocation and HeadBucket (the `x-amz-bucket-region` header) report the gateway's own region — the value pinned with `SetRegion`, `us-east-1` when unset — never the backend's region, which stays hidden like the backend bucket name and endpoint.
 
-Wherever a response exposes an `Owner` or `Initiator` — object and version listings, multipart listings, ACLs, ListBuckets — it is the requesting tenant, never the backend account the proxy uses.
+Wherever a response exposes an `Owner` or `Initiator` — object and version listings, multipart listings, ACLs, ListBuckets — it is the bucket-owning tenant (which differs from the requester's on a [cross-tenant request](#cross-tenant-access)), never the backend account the proxy uses.
 
 ListBuckets answers from the store without calling any backend: the bucket names are the front names, and each `CreationDate` is the store's `created_at` for the bucket (the Unix epoch when the store does not track one).
 
@@ -201,7 +201,7 @@ Backend notes for Ceph RGW: SSE requests require TLS toward RGW by default (`rgw
 
 A bucket may carry an AWS-style policy document, written as JSON text in the config (`buckets[].policy`). GetBucketPolicy returns it; PutBucketPolicy / DeleteBucketPolicy are not supported (policies are defined in the store, not via the S3 API).
 
-Two simplifications against AWS: principals are plain user names of the tenant under the `S3RP` key (no ARNs), and resources are plain `"bucket"` / `"bucket/prefix*"` strings (no ARNs). Action and Resource support the AWS wildcards `*` (any run of characters, including `/`) and `?` (exactly one character). As in AWS, `Action` matching is case-insensitive (so a mis-cased `Deny` cannot silently fail open), while `Resource` matching is case-sensitive since object keys are.
+Two simplifications against AWS: principals are plain user names under the `S3RP` key (no ARNs) — `"alice"` names a user of the bucket's own tenant, `"tenant-b/alice"` a user of another tenant — and resources are plain `"bucket"` / `"bucket/prefix*"` strings (no ARNs). Action and Resource support the AWS wildcards `*` (any run of characters, including `/`) and `?` (exactly one character). As in AWS, `Action` matching is case-insensitive (so a mis-cased `Deny` cannot silently fail open), while `Resource` matching is case-sensitive since object keys are.
 
 ```yaml
 buckets:
@@ -222,15 +222,41 @@ buckets:
       }
 ```
 
-Evaluation model: every user of a tenant has full access to the tenant's buckets by default, and explicit `Deny` statements restrict it. `Allow` statements are accepted but have no effect yet (everything is already allowed); they will become meaningful when anonymous and cross-tenant access are introduced.
+Evaluation model: every user of a tenant has full access to the tenant's buckets by default, and explicit `Deny` statements restrict it. For the bucket's own users, `Allow` statements have no effect (everything is already allowed); they are what grants cross-tenant access (below).
 
 Principal forms:
 
-- `{"S3RP": ["name", ...]}` — the listed users of the tenant.
-- `"*"` — all users, including ones added later. Note that the scope of `"*"` will widen when anonymous / cross-tenant access arrives (an `Allow` with `"*"` will then mean public access).
+- `{"S3RP": ["name", ...]}` — the listed users: `"alice"` is a user of the bucket's own tenant, `"tenant-b/alice"` a user of another tenant. Writing the own tenant's users in qualified form is rejected at load time (evaluation matches them by their plain name).
+- `"*"` — all users **of the bucket's tenant**, including ones added later. It never reaches other tenants' users.
 - `NotPrincipal` (exclusive with `Principal`) — everyone except the listed users. `Deny` + `NotPrincipal` expresses "only these users may ..." so that newly added users are denied by default.
 
-Limitations: policies only cover users of the owning tenant; versioned operations use the same action names as unversioned ones (no `s3:GetObjectVersion` distinction). DeleteObjects is evaluated per object: denied keys are reported in the `Error` entries of the response. Copying evaluates `s3:GetObject` on the source and `s3:PutObject` on the destination.
+#### Cross-tenant access
+
+A bucket policy may grant access to another tenant's user by listing its qualified principal:
+
+```json
+{
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {"S3RP": ["tenant-b/bob"]},
+      "Action": ["s3:GetObject", "s3:ListBucket"],
+      "Resource": ["photos", "photos/*"]
+    }
+  ]
+}
+```
+
+The baseline for a foreign requester is the opposite of the own-tenant one: **deny unless an `Allow` matches**, and `Deny` still wins over `Allow`. Grants never widen across tenants implicitly — an `Allow` reaches a foreign user only when its `Principal` lists the qualified name explicitly; `"*"` and `NotPrincipal`-based `Allow` statements do not. `Deny` statements match broadly, so a blanket `Deny` (`"*"`, or `NotPrincipal`) also catches cross-tenant principals granted elsewhere in the policy.
+
+A bucket whose policy does not mention the requester answers with the same `403 AccessDenied` a nonexistent bucket produces, so bucket names cannot be probed across tenants. Responses expose the bucket-owning tenant as `Owner`, never the requester's. ListBuckets lists only the tenant's own buckets, as on AWS.
+
+Copying across tenants works in one direction only:
+
+- **Into** another tenant's bucket — supported: the destination goes through the normal authorization path, so an `s3:PutObject` grant (plus the same-backend restriction) is all it takes; the source read is authorized within your own tenant as usual.
+- **From** another tenant's bucket — not supported, even with an `s3:GetObject` grant: the `x-amz-copy-source` bucket always resolves within the requester's own tenant. A server-side copy never streams through the proxy, so the source owner's request hooks would see nothing of the read; fetching with GetObject (which the grant does allow) and re-uploading achieves the same result with both sides authorized and observable.
+
+Limitations: versioned operations use the same action names as unversioned ones (no `s3:GetObjectVersion` distinction). DeleteObjects is evaluated per object: denied keys are reported in the `Error` entries of the response. Copying evaluates `s3:GetObject` on the source and `s3:PutObject` on the destination.
 
 ### User policies
 

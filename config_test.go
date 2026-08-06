@@ -306,6 +306,20 @@ tenants:
 		errStr: "must start with s3:",
 	},
 	{
+		name: "self-qualified policy principal",
+		yaml: `
+tenants:
+  - name: foo
+    users: [{name: user1, keys: [{access_key_id: k, secret_access_key: s}]}]
+    buckets:
+      - name: bucket1
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
+        policy: |
+          {"Statement": [{"Effect": "Allow", "Principal": {"S3RP": ["foo/user1"]}, "Action": "s3:GetObject", "Resource": "bucket1/*"}]}
+`,
+		errStr: "names its own tenant",
+	},
+	{
 		name: "credentials not set together",
 		yaml: `
 tenants:
@@ -317,6 +331,33 @@ tenants:
 `,
 		errStr: "must be set together",
 	},
+}
+
+// A principal naming another tenant's user is valid: that is how a bucket
+// policy grants cross-tenant access.
+func TestConfigCrossTenantPrincipal(t *testing.T) {
+	dir := t.TempDir()
+	f := dir + "/cross.yaml"
+	if err := writeFile(t, f, `
+tenants:
+  - name: foo
+    users: [{name: user1, keys: [{access_key_id: k1, secret_access_key: s}]}]
+    buckets:
+      - name: bucket1
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
+        policy: |
+          {"Statement": [{"Effect": "Allow", "Principal": {"S3RP": ["bar/user2"]}, "Action": "s3:GetObject", "Resource": "bucket1/*"}]}
+  - name: bar
+    users: [{name: user2, keys: [{access_key_id: k2, secret_access_key: s}]}]
+    buckets:
+      - name: bucket2
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
+`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s3rp.LoadConfig(f); err != nil {
+		t.Errorf("cross-tenant principal must validate: %v", err)
+	}
 }
 
 func TestConfigValidate(t *testing.T) {

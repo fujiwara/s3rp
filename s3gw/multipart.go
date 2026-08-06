@@ -264,7 +264,7 @@ func (g *Gateway) listParts(c *opCtx) error {
 	}
 	// Owner and Initiator are the tenant, as everywhere the API exposes an
 	// owner; the backend's account stays hidden
-	owner := tenantOwner(c.vr.Tenant)
+	owner := tenantOwner(c.rt.cfg.Tenant)
 	result := &s3xml.ListPartsResult{
 		XMLNS:        s3xml.Namespace,
 		Bucket:       rt.cfg.Name,
@@ -366,7 +366,7 @@ func (g *Gateway) listMultipartUploads(c *opCtx) error {
 	if out.IsTruncated != nil {
 		result.IsTruncated = *out.IsTruncated
 	}
-	owner := tenantOwner(c.vr.Tenant)
+	owner := tenantOwner(c.rt.cfg.Tenant)
 	for _, u := range out.Uploads {
 		upload := s3xml.Upload{
 			StorageClass: string(u.StorageClass),

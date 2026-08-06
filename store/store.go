@@ -29,7 +29,8 @@ type Store interface {
 	GetBucket(ctx context.Context, tenant, bucket string) (*Bucket, error)
 	// GetBucketByName returns the bucket by its (globally unique) name,
 	// regardless of the tenant. Used for unauthenticated CORS preflight
-	// requests, which carry no tenant identity.
+	// requests, which carry no tenant identity, and to resolve cross-tenant
+	// requests — a bucket whose policy names another tenant's user.
 	GetBucketByName(ctx context.Context, bucket string) (*Bucket, error)
 	// ListBuckets returns the tenant's buckets as light entries — just what
 	// the ListBuckets response exposes — so an implementation does not have

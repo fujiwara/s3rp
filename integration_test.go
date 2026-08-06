@@ -719,6 +719,135 @@ func TestIntegration(t *testing.T) {
 			VersionId: vid, BypassGovernanceRetention: aws.Bool(true),
 		})
 	})
+	t.Run("CrossTenant", func(t *testing.T) {
+		// a bucket policy granting another tenant's user by its qualified
+		// principal ("tenant/user"): reads work, ungranted actions and
+		// unnamed users get the same AccessDenied a nonexistent bucket does
+		const ctBackendBucket = "s3rp-it-ct-backend"
+		if _, err := backendClient.CreateBucket(t.Context(), &s3.CreateBucketInput{
+			Bucket: aws.String(ctBackendBucket),
+		}); err != nil {
+			var exists *types.BucketAlreadyOwnedByYou
+			if !errors.As(err, &exists) {
+				t.Fatalf("failed to create backend bucket: %v", err)
+			}
+		}
+		const (
+			guestKeyID     = "S3RPTESTKEY002"
+			guestSecret    = "testsecret002"
+			strangerKeyID  = "S3RPTESTKEY003"
+			strangerSecret = "testsecret003"
+			ctSharedPolicy = `{
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {"S3RP": ["ct-other/guest"]},
+      "Action": ["s3:GetObject", "s3:ListBucket"],
+      "Resource": ["ct-shared", "ct-shared/*"]
+    }
+  ]
+}`
+		)
+		ctCfg := &s3rp.Config{
+			Tenants: []*s3rp.TenantConfig{
+				{
+					Name:  "ct-owner",
+					Users: []*s3rp.UserConfig{{Name: "owner", Keys: []*s3rp.KeyConfig{{AccessKeyID: testAccessKeyID, SecretAccessKey: testSecretAccessKey}}}},
+					Buckets: []*s3rp.BucketConfig{{
+						Name:   "ct-shared",
+						Policy: ctSharedPolicy,
+						Backend: &s3rp.BackendConfig{
+							Endpoint: endpoint, Bucket: ctBackendBucket,
+							AccessKeyID: backendKey, SecretAccessKey: s3rp.Password(backendSecret),
+						},
+					}},
+				},
+				{
+					Name: "ct-other",
+					Users: []*s3rp.UserConfig{
+						{Name: "guest", Keys: []*s3rp.KeyConfig{{AccessKeyID: guestKeyID, SecretAccessKey: guestSecret}}},
+						{Name: "stranger", Keys: []*s3rp.KeyConfig{{AccessKeyID: strangerKeyID, SecretAccessKey: strangerSecret}}},
+					},
+					// a tenant needs at least one bucket; this one is never
+					// touched, so its backend bucket does not have to exist
+					Buckets: []*s3rp.BucketConfig{{
+						Name: "ct-other-bucket",
+						Backend: &s3rp.BackendConfig{
+							Endpoint: endpoint, Bucket: "s3rp-it-ct-unused",
+							AccessKeyID: backendKey, SecretAccessKey: s3rp.Password(backendSecret),
+						},
+					}},
+				},
+			},
+		}
+		ctCfg.SetDefaults()
+		if err := ctCfg.Validate(); err != nil {
+			t.Fatal(err)
+		}
+		ctApp, err := s3rp.New(t.Context(), ctCfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctTS := httptest.NewServer(ctApp.Handler())
+		t.Cleanup(ctTS.Close)
+		owner := newS3Client(t, ctTS.URL, testAccessKeyID, testSecretAccessKey)
+		guest := newS3Client(t, ctTS.URL, guestKeyID, guestSecret)
+		stranger := newS3Client(t, ctTS.URL, strangerKeyID, strangerSecret)
+
+		content := "cross-tenant shared content"
+		if _, err := owner.PutObject(t.Context(), &s3.PutObjectInput{
+			Bucket: aws.String("ct-shared"),
+			Key:    aws.String("shared.txt"),
+			Body:   strings.NewReader(content),
+		}); err != nil {
+			t.Fatal(err)
+		}
+		defer owner.DeleteObject(t.Context(), &s3.DeleteObjectInput{
+			Bucket: aws.String("ct-shared"), Key: aws.String("shared.txt"),
+		})
+
+		// the granted foreign user reads through the proxy
+		out, err := guest.GetObject(t.Context(), &s3.GetObjectInput{
+			Bucket: aws.String("ct-shared"), Key: aws.String("shared.txt"),
+		})
+		if err != nil {
+			t.Fatalf("granted cross-tenant read must succeed: %v", err)
+		}
+		body, err := io.ReadAll(out.Body)
+		out.Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(body) != content {
+			t.Errorf("content mismatch: %q", body)
+		}
+		// the exposed owner is the bucket's tenant, not the requester's
+		list, err := guest.ListObjects(t.Context(), &s3.ListObjectsInput{
+			Bucket: aws.String("ct-shared"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if aws.ToString(list.Name) != "ct-shared" || len(list.Contents) == 0 {
+			t.Fatalf("unexpected listing %v", list.Contents)
+		}
+		if o := list.Contents[0].Owner; o == nil || aws.ToString(o.ID) != "ct-owner" {
+			t.Errorf("expect ct-owner owner, got %v", o)
+		}
+		// an action the policy does not allow stays denied
+		if _, err := guest.PutObject(t.Context(), &s3.PutObjectInput{
+			Bucket: aws.String("ct-shared"), Key: aws.String("shared.txt"),
+			Body: strings.NewReader("overwrite"),
+		}); err == nil {
+			t.Error("expect AccessDenied for an ungranted action")
+		}
+		// a user the policy never names cannot even see the bucket
+		if _, err := stranger.GetObject(t.Context(), &s3.GetObjectInput{
+			Bucket: aws.String("ct-shared"), Key: aws.String("shared.txt"),
+		}); err == nil {
+			t.Error("expect AccessDenied for an unnamed user")
+		}
+	})
 	t.Run("PresignedURL", func(t *testing.T) {
 		presigner := s3.NewPresignClient(client)
 		content := "presigned integration content"

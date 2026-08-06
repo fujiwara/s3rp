@@ -17,7 +17,6 @@ import (
 	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/s3xml"
 	"github.com/fujiwara/s3rp/sigv4"
-	"github.com/fujiwara/s3rp/store"
 )
 
 // Browser-based POST uploads: the form carries the authentication (a signed
@@ -150,12 +149,9 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, bucke
 		info.Tenant, info.User = vr.Tenant, vr.User
 	}
 
-	b, err := g.store.GetBucket(r.Context(), vr.Tenant, bucket)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			return s3err.AccessDenied()
-		}
-		return s3err.Internal(err, "bucket lookup failed")
+	b, s3e := g.resolveBucket(r.Context(), vr, bucket)
+	if s3e != nil {
+		return s3e
 	}
 	client, err := g.backendClient(r.Context(), b.Backend)
 	if err != nil {

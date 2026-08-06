@@ -51,12 +51,13 @@ func ownerFullControlPolicy(owner string) *s3xml.AccessControlPolicy {
 }
 
 func (g *Gateway) getBucketACL(c *opCtx) error {
-	w, vr := c.w, c.vr
-	return s3xml.Write(w, ownerFullControlPolicy(vr.Tenant))
+	// the owner is the bucket's tenant, not the requester's — they differ
+	// for a cross-tenant request
+	return s3xml.Write(c.w, ownerFullControlPolicy(c.rt.cfg.Tenant))
 }
 
 func (g *Gateway) getObjectACL(c *opCtx) error {
-	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
+	w, r, rt, key := c.w, c.r, c.rt, c.key
 	// verify the object exists so that a missing key still errors
 	in := &s3.HeadObjectInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
@@ -68,5 +69,5 @@ func (g *Gateway) getObjectACL(c *opCtx) error {
 	if _, err := rt.client.HeadObject(r.Context(), in); err != nil {
 		return s3err.FromSDKError(err, r.URL.Path)
 	}
-	return s3xml.Write(w, ownerFullControlPolicy(vr.Tenant))
+	return s3xml.Write(w, ownerFullControlPolicy(rt.cfg.Tenant))
 }

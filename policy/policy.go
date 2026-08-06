@@ -3,9 +3,10 @@
 // The document structure follows the AWS policy language (Version /
 // Statement / Effect / Principal / Action / Resource), with two
 // simplifications: principals are plain user names (no ARNs) under the
-// "S3RP" key, and resources are plain "bucket" or "bucket/prefix*" strings
-// (no ARNs). Action and Resource support the AWS wildcards "*" (any run of
-// characters) and "?" (a single character).
+// "S3RP" key — "tenant/user" names another tenant's user, a plain name a
+// user of the bucket's own tenant — and resources are plain "bucket" or
+// "bucket/prefix*" strings (no ARNs). Action and Resource support the AWS
+// wildcards "*" (any run of characters) and "?" (a single character).
 //
 // Those two syntax choices are the default Dialect; a service can accept a
 // different principal key or ARN-prefixed resources by parsing with its own
@@ -33,7 +34,10 @@ const (
 	Deny
 )
 
-var userNameRegexp = regexp.MustCompile(`^[a-z][a-z0-9_-]+$`)
+// principalRegexp accepts a plain user name ("alice", a user of the bucket's
+// own tenant) or a tenant-qualified one ("tenant-b/alice", another tenant's
+// user). Both parts use the user-name charset.
+var principalRegexp = regexp.MustCompile(`^([a-z][a-z0-9_-]+/)?[a-z][a-z0-9_-]+$`)
 
 // Structural limits on a policy document. Policies are tenant-authored, so
 // they are untrusted input, and authorization runs on every request (per
@@ -89,7 +93,9 @@ type Statement struct {
 	resourceRunes [][]rune
 }
 
-// Principal is either "*" (all users) or {"S3RP": user names}.
+// Principal is either "*" (all users of the bucket's tenant) or
+// {"S3RP": user names}, where a name is plain ("alice", the bucket's own
+// tenant) or tenant-qualified ("tenant-b/alice", another tenant's user).
 type Principal struct {
 	All   bool
 	Users []string
@@ -185,7 +191,7 @@ func (p *Policy) validate() error {
 				return fmt.Errorf("%s: %d principal users, at most %d are allowed", name, len(pr.Users), MaxPrincipalUsers)
 			}
 			for _, u := range pr.Users {
-				if !userNameRegexp.MatchString(u) {
+				if !principalRegexp.MatchString(u) {
 					return fmt.Errorf("%s: invalid principal user name %q", name, u)
 				}
 			}
@@ -327,8 +333,10 @@ func MarshalUserPolicy(up *UserPolicy) (string, error) {
 	return string(data), nil
 }
 
-// Evaluate evaluates the policy for a principal (user name) performing an
-// action on a resource ("bucket" or "bucket/key"). Deny takes precedence
+// Evaluate evaluates the policy for a principal performing an action on a
+// resource ("bucket" or "bucket/key"). The principal is a plain user name
+// for the bucket's own tenant, or "tenant/user" for another tenant's user;
+// see matchPrincipal for how the two are matched. Deny takes precedence
 // over Allow; None means no statement matched.
 func (p *Policy) Evaluate(principal, action, resource string) Effect {
 	// AWS treats the Action element as case-insensitive; comparing it
@@ -340,10 +348,11 @@ func (p *Policy) Evaluate(principal, action, resource string) Effect {
 	// and pattern, this is the dominant cost for a large policy or a long key.
 	actionRunes := []rune(strings.ToLower(action))
 	resourceRunes := []rune(resource)
+	qualified := qualifiedPrincipal(principal)
 	result := None
 	for i := range p.Statement {
 		st := &p.Statement[i]
-		if !st.matchPrincipal(principal) {
+		if !st.matchPrincipal(principal, qualified) {
 			continue
 		}
 		if !matchAnyRunes(st.actionRunes, actionRunes) {
@@ -372,19 +381,22 @@ type DenyEvaluator struct {
 }
 
 // DenyEvaluatorFor pre-matches principal and action and returns an evaluator
-// over the resource alone. Only Deny statements matter: bucket-policy Allow
-// statements are inert (the baseline already allows), so a matching Deny is
-// the only thing that can restrict access.
+// over the resource alone. It covers only the Deny side: under the own-tenant
+// baseline (allow) a matching Deny is the only thing that can restrict
+// access, so it is the whole check; under the cross-tenant baseline (deny) a
+// caller pairs it with AllowEvaluatorFor, since each resource must also
+// match an Allow.
 func (p *Policy) DenyEvaluatorFor(principal, action string) DenyEvaluator {
 	p.compileOnce.Do(p.compile)
 	actionRunes := []rune(strings.ToLower(action))
+	qualified := qualifiedPrincipal(principal)
 	var e DenyEvaluator
 	for i := range p.Statement {
 		st := &p.Statement[i]
 		if st.Effect != "Deny" {
 			continue
 		}
-		if !st.matchPrincipal(principal) {
+		if !st.matchPrincipal(principal, qualified) {
 			continue
 		}
 		if !matchAnyRunes(st.actionRunes, actionRunes) {
@@ -395,6 +407,76 @@ func (p *Policy) DenyEvaluatorFor(principal, action string) DenyEvaluator {
 	return e
 }
 
+// AllowEvaluator answers whether a resource is allowed for a principal/action
+// pair that has already been matched, the Allow-side counterpart of
+// DenyEvaluator. A per-object operation under a default-deny baseline
+// (a cross-tenant DeleteObjects) needs both: each key must match an Allow
+// and no Deny.
+type AllowEvaluator struct {
+	// resource patterns of every Allow statement whose principal and action
+	// matched; a resource is allowed iff it matches any of them.
+	allowResources [][]rune
+}
+
+// AllowEvaluatorFor pre-matches principal and action over the Allow
+// statements and returns an evaluator over the resource alone.
+func (p *Policy) AllowEvaluatorFor(principal, action string) AllowEvaluator {
+	p.compileOnce.Do(p.compile)
+	actionRunes := []rune(strings.ToLower(action))
+	qualified := qualifiedPrincipal(principal)
+	var e AllowEvaluator
+	for i := range p.Statement {
+		st := &p.Statement[i]
+		if st.Effect != "Allow" {
+			continue
+		}
+		if !st.matchPrincipal(principal, qualified) {
+			continue
+		}
+		if !matchAnyRunes(st.actionRunes, actionRunes) {
+			continue
+		}
+		e.allowResources = append(e.allowResources, st.resourceRunes...)
+	}
+	return e
+}
+
+// AlwaysDenies reports that no Allow statement matched the principal/action,
+// so under a default-deny baseline every resource is denied and the
+// per-object check can be skipped.
+func (e AllowEvaluator) AlwaysDenies() bool {
+	return len(e.allowResources) == 0
+}
+
+// Allows reports whether the resource is allowed.
+func (e AllowEvaluator) Allows(resource string) bool {
+	return e.AllowsRunes([]rune(resource))
+}
+
+// AllowsRunes is Allows for a caller that already converted the resource to
+// runes; see DenyEvaluator.DeniesRunes.
+func (e AllowEvaluator) AllowsRunes(resource []rune) bool {
+	if len(e.allowResources) == 0 {
+		return false
+	}
+	return matchAnyRunes(e.allowResources, resource)
+}
+
+// MentionsPrincipal reports whether any Allow statement's Principal lists
+// the principal explicitly. It is the cross-tenant visibility gate: another
+// tenant's bucket is reachable only for principals its policy names, so
+// every other requester gets the same answer a nonexistent bucket produces
+// and bucket names cannot be probed across tenants.
+func (p *Policy) MentionsPrincipal(principal string) bool {
+	for i := range p.Statement {
+		st := &p.Statement[i]
+		if st.Effect == "Allow" && st.Principal != nil && slices.Contains(st.Principal.Users, principal) {
+			return true
+		}
+	}
+	return false
+}
+
 // AlwaysAllows reports that no Deny statement matched the principal/action,
 // so every resource is allowed and the per-object check can be skipped.
 func (e DenyEvaluator) AlwaysAllows() bool {
@@ -403,10 +485,17 @@ func (e DenyEvaluator) AlwaysAllows() bool {
 
 // Denies reports whether the resource is denied.
 func (e DenyEvaluator) Denies(resource string) bool {
+	return e.DeniesRunes([]rune(resource))
+}
+
+// DeniesRunes is Denies for a caller that already converted the resource to
+// runes — a per-object loop testing each resource against both the Allow and
+// the Deny side converts it once and calls the rune forms of both.
+func (e DenyEvaluator) DeniesRunes(resource []rune) bool {
 	if len(e.denyResources) == 0 {
 		return false
 	}
-	return matchAnyRunes(e.denyResources, []rune(resource))
+	return matchAnyRunes(e.denyResources, resource)
 }
 
 // compile precomputes the rune form of every action and resource pattern so
@@ -419,12 +508,35 @@ func (p *Policy) compile() {
 	}
 }
 
-func (st *Statement) matchPrincipal(principal string) bool {
+// matchPrincipal reports whether the statement applies to the principal.
+// qualified marks a tenant-qualified principal ("tenant/user" — another
+// tenant's user); callers compute it once per evaluation.
+//
+// A qualified principal is matched by an Allow statement only when its
+// Principal lists it explicitly: "*" and NotPrincipal widen a statement to
+// principals the author never named, and a grant must not widen across
+// tenants. Deny statements match broadly for the same safety reason — a
+// blanket "Deny *" must also catch cross-tenant principals the policy
+// allowed elsewhere.
+func (st *Statement) matchPrincipal(principal string, qualified bool) bool {
 	if st.Principal != nil {
-		return st.Principal.All || slices.Contains(st.Principal.Users, principal)
+		if st.Principal.All {
+			return !qualified || st.Effect == "Deny"
+		}
+		return slices.Contains(st.Principal.Users, principal)
 	}
 	// NotPrincipal: matches everyone except the listed users
+	if qualified && st.Effect != "Deny" {
+		return false
+	}
 	return !slices.Contains(st.NotPrincipal.Users, principal)
+}
+
+// qualifiedPrincipal reports whether the principal is tenant-qualified
+// ("tenant/user"): another tenant's user, as opposed to a plain user name of
+// the bucket's own tenant.
+func qualifiedPrincipal(principal string) bool {
+	return strings.ContainsRune(principal, '/')
 }
 
 func matchAnyRunes(patterns [][]rune, value []rune) bool {
