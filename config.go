@@ -5,7 +5,6 @@ import (
 	"net/url"
 	"os"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/fujiwara/s3rp/cors"
@@ -203,16 +202,8 @@ func (c *Config) Validate() error {
 			backendOwner[target] = t.Name
 
 			if b.Policy != "" {
-				p, err := policy.Parse(b.Policy)
-				if err != nil {
+				if _, err := policy.Parse(b.Name, b.Policy); err != nil {
 					return fmt.Errorf("bucket %s: invalid policy: %w", b.Name, err)
-				}
-				for _, st := range p.Statement {
-					for _, res := range st.Resource {
-						if res != b.Name && !strings.HasPrefix(res, b.Name+"/") {
-							return fmt.Errorf("bucket %s: policy resource %q does not refer to this bucket", b.Name, res)
-						}
-					}
 				}
 			}
 

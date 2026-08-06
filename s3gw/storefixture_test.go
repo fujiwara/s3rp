@@ -76,7 +76,7 @@ func (m memStore) addTenant(t *testing.T, tenant string, users []userSpec, bucke
 			PolicyText: b.policyText, CORS: b.cors,
 		}
 		if b.policyText != "" {
-			p, err := policy.Parse(b.policyText)
+			p, err := policy.Parse(b.name, b.policyText)
 			if err != nil {
 				t.Fatalf("bucket %s: %v", b.name, err)
 			}

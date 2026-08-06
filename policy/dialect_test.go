@@ -13,7 +13,7 @@ import (
 
 func TestDialectPrincipalKey(t *testing.T) {
 	d := &policy.Dialect{PrincipalKey: "MyService"}
-	p, err := d.Parse(`{
+	p, err := d.Parse("photos", `{
 	  "Statement": [
 	    {
 	      "Effect": "Deny",
@@ -34,7 +34,7 @@ func TestDialectPrincipalKey(t *testing.T) {
 	}
 
 	// the default key is not recognized by a custom dialect
-	_, err = d.Parse(`{
+	_, err = d.Parse("photos", `{
 	  "Statement": [
 	    {"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": ["s3:PutObject"], "Resource": ["photos/*"]}
 	  ]
@@ -44,7 +44,7 @@ func TestDialectPrincipalKey(t *testing.T) {
 	}
 
 	// "*" and NotPrincipal work in any dialect
-	p, err = d.Parse(`{
+	p, err = d.Parse("photos", `{
 	  "Statement": [
 	    {"Effect": "Deny", "Principal": "*", "Action": ["s3:DeleteObject"], "Resource": ["photos/*"]},
 	    {"Effect": "Deny", "NotPrincipal": {"MyService": ["ta/admin"]}, "Action": ["s3:PutObject"], "Resource": ["photos/*"]}
@@ -63,7 +63,7 @@ func TestDialectPrincipalKey(t *testing.T) {
 
 func TestDialectResourcePrefix(t *testing.T) {
 	d := &policy.Dialect{ResourcePrefix: "arn:aws:s3:::"}
-	p, err := d.Parse(`{
+	p, err := d.Parse("photos", `{
 	  "Statement": [
 	    {
 	      "Effect": "Deny",
@@ -85,7 +85,7 @@ func TestDialectResourcePrefix(t *testing.T) {
 	}
 
 	// a resource without the prefix is rejected, not silently taken as-is
-	_, err = d.Parse(`{
+	_, err = d.Parse("photos", `{
 	  "Statement": [
 	    {"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": ["s3:PutObject"], "Resource": ["photos/*"]}
 	  ]
@@ -95,22 +95,43 @@ func TestDialectResourcePrefix(t *testing.T) {
 	}
 }
 
+// Parse's bucket-scope check runs on the normalized resources, so the
+// bucket is named in the plain internal form even under an ARN dialect.
+func TestDialectBucketScope(t *testing.T) {
+	d := &policy.Dialect{ResourcePrefix: "arn:aws:s3:::"}
+	if _, err := d.Parse("photos", `{
+	  "Statement": [
+	    {"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": ["s3:PutObject"], "Resource": ["arn:aws:s3:::photos/*"]}
+	  ]
+	}`); err != nil {
+		t.Fatalf("valid policy rejected: %v", err)
+	}
+	_, err := d.Parse("photos", `{
+	  "Statement": [
+	    {"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": ["s3:PutObject"], "Resource": ["arn:aws:s3:::otherbucket/*"]}
+	  ]
+	}`)
+	if err == nil || !strings.Contains(err.Error(), "does not refer to bucket") {
+		t.Errorf("expect a scope error on the stripped resource, got %v", err)
+	}
+}
+
 // MaxPatternLen applies to the stripped pattern, the one actually matched:
 // the prefix must not eat into the tenant's budget.
 func TestDialectPatternLenAfterStrip(t *testing.T) {
 	d := &policy.Dialect{ResourcePrefix: "arn:aws:s3:::"}
-	res := "arn:aws:s3:::" + strings.Repeat("k", policy.MaxPatternLen)
-	if _, err := d.Parse(`{
+	res := "arn:aws:s3:::b/" + strings.Repeat("k", policy.MaxPatternLen-2)
+	if _, err := d.Parse("b", `{
 	  "Statement": [
-	    {"Effect": "Deny", "Principal": "*", "Action": ["s3:PutObject"], "Resource": ["` + res + `"]}
+	    {"Effect": "Deny", "Principal": "*", "Action": ["s3:PutObject"], "Resource": ["`+res+`"]}
 	  ]
 	}`); err != nil {
 		t.Errorf("expect a max-length stripped pattern to pass, got %v", err)
 	}
-	over := "arn:aws:s3:::" + strings.Repeat("k", policy.MaxPatternLen+1)
-	if _, err := d.Parse(`{
+	over := "arn:aws:s3:::b/" + strings.Repeat("k", policy.MaxPatternLen-1)
+	if _, err := d.Parse("b", `{
 	  "Statement": [
-	    {"Effect": "Deny", "Principal": "*", "Action": ["s3:PutObject"], "Resource": ["` + over + `"]}
+	    {"Effect": "Deny", "Principal": "*", "Action": ["s3:PutObject"], "Resource": ["`+over+`"]}
 	  ]
 	}`); err == nil {
 		t.Error("expect an over-length stripped pattern to be rejected")
@@ -132,7 +153,7 @@ func TestDialectNormalizePrincipal(t *testing.T) {
 		return tenant + "/" + user, nil
 	}
 	d := &policy.Dialect{PrincipalKey: "AWS", NormalizePrincipal: normalize}
-	p, err := d.Parse(`{
+	p, err := d.Parse("photos", `{
 	  "Statement": [
 	    {"Effect": "Allow", "Principal": {"AWS": ["arn:myco:iam::tb:user/bob"]}, "Action": ["s3:GetObject"], "Resource": ["photos/*"]},
 	    {"Effect": "Deny", "NotPrincipal": {"AWS": ["arn:myco:iam::ta:user/admin"]}, "Action": ["s3:PutObject"], "Resource": ["photos/*"]}
@@ -153,7 +174,7 @@ func TestDialectNormalizePrincipal(t *testing.T) {
 	}
 
 	// "*" is not passed through the normalizer
-	if _, err := d.Parse(`{
+	if _, err := d.Parse("photos", `{
 	  "Statement": [
 	    {"Effect": "Allow", "Principal": "*", "Action": ["s3:GetObject"], "Resource": ["photos/*"]}
 	  ]
@@ -162,7 +183,7 @@ func TestDialectNormalizePrincipal(t *testing.T) {
 	}
 
 	// a normalizer error is reported with the statement and the original value
-	_, err = d.Parse(`{
+	_, err = d.Parse("photos", `{
 	  "Statement": [
 	    {"Sid": "Bad", "Effect": "Allow", "Principal": {"AWS": ["alice"]}, "Action": ["s3:GetObject"], "Resource": ["photos/*"]}
 	  ]
@@ -173,7 +194,7 @@ func TestDialectNormalizePrincipal(t *testing.T) {
 
 	// a normalizer result that is not the internal form is still validated
 	d.NormalizePrincipal = func(string) (string, error) { return "Not Internal", nil }
-	_, err = d.Parse(`{
+	_, err = d.Parse("photos", `{
 	  "Statement": [
 	    {"Effect": "Allow", "Principal": {"AWS": ["arn:myco:iam::tb:user/bob"]}, "Action": ["s3:GetObject"], "Resource": ["photos/*"]}
 	  ]
@@ -194,7 +215,7 @@ func TestDialectNormalizeResource(t *testing.T) {
 		}
 		return parts[5], nil
 	}}
-	p, err := d.Parse(`{
+	p, err := d.Parse("photos", `{
 	  "Statement": [
 	    {"Effect": "Deny", "Principal": "*", "Action": ["s3:PutObject"], "Resource": ["arn:myco:s3:us-east-1:acct-1:photos/thumb-*"]}
 	  ]
@@ -210,7 +231,7 @@ func TestDialectNormalizeResource(t *testing.T) {
 		t.Errorf("expect None outside the pattern, got %v", got)
 	}
 
-	_, err = d.Parse(`{
+	_, err = d.Parse("photos", `{
 	  "Statement": [
 	    {"Effect": "Deny", "Principal": "*", "Action": ["s3:PutObject"], "Resource": ["photos/*"]}
 	  ]
@@ -228,11 +249,11 @@ func TestDialectZeroValueIsDefault(t *testing.T) {
 	  ]
 	}`
 	var d policy.Dialect
-	fromDialect, err := d.Parse(text)
+	fromDialect, err := d.Parse("photos", text)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fromParse, err := policy.Parse(text)
+	fromParse, err := policy.Parse("photos", text)
 	if err != nil {
 		t.Fatal(err)
 	}

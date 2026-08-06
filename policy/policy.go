@@ -157,12 +157,47 @@ func (s *StringOrSlice) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Parse parses and validates a policy document in the default dialect
-// (principals under the "S3RP" key, resources as plain paths). A service
-// whose tenants write a different surface syntax parses with a Dialect.
-func Parse(text string) (*Policy, error) {
+// Parse parses and validates the named bucket's policy document in the
+// default dialect (principals under the "S3RP" key, resources as plain
+// paths). A policy is always attached to a bucket, so parsing takes the
+// bucket's name and requires every resource to refer to it
+// (ValidateResourcesFor) — there is deliberately no way to parse a bucket
+// policy without that check. A service whose tenants write a different
+// surface syntax parses with a Dialect.
+func Parse(bucket, text string) (*Policy, error) {
 	var d Dialect
-	return d.Parse(text)
+	return d.Parse(bucket, text)
+}
+
+// statementName names a statement in an error: its Sid, or its index when
+// it has none.
+func statementName(sid string, i int) string {
+	if sid == "" {
+		return fmt.Sprintf("statement[%d]", i)
+	}
+	return sid
+}
+
+// ValidateResourcesFor checks that every Resource entry refers to the named
+// bucket — the bucket itself ("photos") or its objects ("photos/...").
+// A bucket policy is evaluated only against its own bucket's resources, so
+// an entry naming anything else can never match anything; that is almost
+// certainly a typo, and keeping it silently would leave the author
+// believing a restriction holds that in fact matches nothing. AWS rejects
+// the same mistake at PutBucketPolicy time ("Policy has invalid resource").
+// Parse runs this check on every document (on the normalized resources, so
+// the bucket name is always the plain internal one); it is exported for
+// re-validating a Policy built without Parse.
+func (p *Policy) ValidateResourcesFor(bucket string) error {
+	for i, st := range p.Statement {
+		for _, res := range st.Resource {
+			if res != bucket && !strings.HasPrefix(res, bucket+"/") {
+				return fmt.Errorf("%s: resource %q does not refer to bucket %q",
+					statementName(st.Sid, i), res, bucket)
+			}
+		}
+	}
+	return nil
 }
 
 // validate checks the document structure and the caps. It runs on the
@@ -180,10 +215,7 @@ func (p *Policy) validate() error {
 		return fmt.Errorf("policy has %d statements, at most %d are allowed", len(p.Statement), MaxStatements)
 	}
 	for i, st := range p.Statement {
-		name := st.Sid
-		if name == "" {
-			name = fmt.Sprintf("statement[%d]", i)
-		}
+		name := statementName(st.Sid, i)
 		if st.Effect != "Allow" && st.Effect != "Deny" {
 			return fmt.Errorf("%s: effect must be Allow or Deny", name)
 		}

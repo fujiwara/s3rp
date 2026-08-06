@@ -19,7 +19,7 @@ func from(addr string) policy.RequestContext {
 
 func TestParseCondition(t *testing.T) {
 	t.Run("case-insensitive key, string and array values", func(t *testing.T) {
-		p, err := policy.Parse(`{
+		p, err := policy.Parse("b", `{
 			"Statement": [
 				{"Effect": "Deny", "Principal": "*", "Action": "s3:PutObject", "Resource": "b/*",
 				 "Condition": {"IpAddress": {"AWS:sourceip": "10.0.0.0/8"}}},
@@ -55,7 +55,7 @@ func TestParseCondition(t *testing.T) {
 	for _, tc := range errCases {
 		t.Run(tc.name, func(t *testing.T) {
 			text := `{"Statement": [{"Effect": "Deny", "Principal": "*", "Action": "s3:PutObject", "Resource": "b/*", "Condition": ` + tc.cond + `}]}`
-			if _, err := policy.Parse(text); err == nil || !strings.Contains(err.Error(), tc.errStr) {
+			if _, err := policy.Parse("b", text); err == nil || !strings.Contains(err.Error(), tc.errStr) {
 				t.Errorf("expect error containing %q, got %v", tc.errStr, err)
 			}
 		})
@@ -79,7 +79,7 @@ func TestParseCondition(t *testing.T) {
 }
 
 func TestEvaluateCondition(t *testing.T) {
-	p, err := policy.Parse(`{
+	p, err := policy.Parse("b", `{
 		"Statement": [
 			{
 				"Sid": "AllowFromOffice",
@@ -158,7 +158,7 @@ func TestEvaluateCondition(t *testing.T) {
 // evaluator is built: a statement excluded by its condition contributes no
 // resource patterns, so the AlwaysAllows/AlwaysDenies fast paths still fire.
 func TestEvaluatorConditions(t *testing.T) {
-	p, err := policy.Parse(`{
+	p, err := policy.Parse("b", `{
 		"Statement": [
 			{
 				"Effect": "Deny",
@@ -244,7 +244,7 @@ func TestConditionMarshalRoundTrip(t *testing.T) {
 			}
 		]
 	}`
-	p, err := policy.Parse(text)
+	p, err := policy.Parse("b", text)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +252,7 @@ func TestConditionMarshalRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rp, err := policy.Parse(string(data))
+	rp, err := policy.Parse("b", string(data))
 	if err != nil {
 		t.Fatalf("re-parse of %s: %v", data, err)
 	}
