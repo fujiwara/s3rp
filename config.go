@@ -2,9 +2,7 @@ package s3rp
 
 import (
 	"fmt"
-	"net/url"
 	"os"
-	"regexp"
 	"time"
 
 	"github.com/fujiwara/s3rp/cors"
@@ -19,11 +17,6 @@ const (
 	// DefaultRegion lives with the backend definition it applies to, so both
 	// Store implementations resolve it identically.
 	DefaultRegion = store.DefaultRegion
-)
-
-var (
-	bucketNameRegexp = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`)
-	userNameRegexp   = regexp.MustCompile(`^[a-z][a-z0-9_-]+$`)
 )
 
 // Password and BackendConfig are defined in the store package; the aliases
@@ -112,8 +105,8 @@ func (c *Config) Validate() error {
 	// bucket): two tenants mapping to the same physical bucket would share data
 	backendOwner := make(map[string]string)
 	for _, t := range c.Tenants {
-		if t.Name == "" {
-			return fmt.Errorf("tenant name is required")
+		if err := store.ValidateTenantName(t.Name); err != nil {
+			return err
 		}
 		if tenantNames[t.Name] {
 			return fmt.Errorf("duplicate tenant name %q", t.Name)
@@ -125,8 +118,8 @@ func (c *Config) Validate() error {
 		}
 		userNames := make(map[string]bool, len(t.Users))
 		for _, u := range t.Users {
-			if !userNameRegexp.MatchString(u.Name) {
-				return fmt.Errorf("tenant %s: invalid user name %q", t.Name, u.Name)
+			if err := store.ValidateUserName(u.Name); err != nil {
+				return fmt.Errorf("tenant %s: %w", t.Name, err)
 			}
 			if userNames[u.Name] {
 				return fmt.Errorf("tenant %s: duplicate user name %q", t.Name, u.Name)
@@ -161,11 +154,8 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("tenant %s: at least one bucket is required", t.Name)
 		}
 		for _, b := range t.Buckets {
-			if b.Name == "" {
-				return fmt.Errorf("tenant %s: bucket name is required", t.Name)
-			}
-			if !bucketNameRegexp.MatchString(b.Name) {
-				return fmt.Errorf("invalid bucket name %q", b.Name)
+			if err := store.ValidateBucketName(b.Name); err != nil {
+				return err
 			}
 			if bucketNames[b.Name] {
 				return fmt.Errorf("duplicate bucket name %q", b.Name)
@@ -175,17 +165,8 @@ func (c *Config) Validate() error {
 			if b.Backend == nil {
 				return fmt.Errorf("bucket %s: backend is required", b.Name)
 			}
-			// an empty endpoint means AWS S3 (resolved by the SDK from the region)
-			if b.Backend.Endpoint != "" {
-				if u, err := url.Parse(b.Backend.Endpoint); err != nil {
-					return fmt.Errorf("bucket %s: invalid backend endpoint: %w", b.Name, err)
-				} else if u.Scheme != "http" && u.Scheme != "https" {
-					return fmt.Errorf("bucket %s: backend endpoint must be an http(s) URL: %s", b.Name, b.Backend.Endpoint)
-				}
-			}
-			// empty credentials mean the SDK default credential chain
-			if (b.Backend.AccessKeyID == "") != (b.Backend.SecretAccessKey == "") {
-				return fmt.Errorf("bucket %s: backend access_key_id and secret_access_key must be set together", b.Name)
+			if err := b.Backend.Validate(); err != nil {
+				return fmt.Errorf("bucket %s: %w", b.Name, err)
 			}
 			// two tenants must not target the same physical backend bucket, or
 			// each could read/overwrite/delete the other's objects. The backend
