@@ -240,7 +240,7 @@ tenants:
         policy: |
           {"Statement": [{"Effect": "Deny", "Principal": "*", "Action": "s3:PutObject", "Resource": "otherbucket/*"}]}
 `,
-		errStr: "does not refer to this bucket",
+		errStr: "does not refer to bucket",
 	},
 	{
 		name: "cors rule without origins",

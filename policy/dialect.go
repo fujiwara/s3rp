@@ -82,10 +82,7 @@ func (d *Dialect) Parse(text string) (*Policy, error) {
 	}
 	p := &Policy{Version: doc.Version, Statement: make([]Statement, len(doc.Statement))}
 	for i, rs := range doc.Statement {
-		name := rs.Sid
-		if name == "" {
-			name = fmt.Sprintf("statement[%d]", i)
-		}
+		name := statementName(rs.Sid, i)
 		st := Statement{Sid: rs.Sid, Effect: rs.Effect, Action: rs.Action, Resource: rs.Resource, Condition: rs.Condition}
 		var err error
 		if st.Principal, err = d.decodePrincipal(rs.Principal); err != nil {
@@ -114,6 +111,21 @@ func (d *Dialect) Parse(text string) (*Policy, error) {
 		p.Statement[i] = st
 	}
 	if err := p.validate(); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+// ParseFor is Parse plus the bucket-scope check: every resource of the
+// parsed document must refer to the named bucket (ValidateResourcesFor).
+// The check runs after normalization, so bucket is the plain internal name
+// even when the dialect's surface syntax is ARN-prefixed.
+func (d *Dialect) ParseFor(bucket, text string) (*Policy, error) {
+	p, err := d.Parse(text)
+	if err != nil {
+		return nil, err
+	}
+	if err := p.ValidateResourcesFor(bucket); err != nil {
 		return nil, err
 	}
 	return p, nil

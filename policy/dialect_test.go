@@ -95,6 +95,27 @@ func TestDialectResourcePrefix(t *testing.T) {
 	}
 }
 
+// ParseFor's bucket-scope check runs on the normalized resources, so the
+// bucket is named in the plain internal form even under an ARN dialect.
+func TestDialectParseFor(t *testing.T) {
+	d := &policy.Dialect{ResourcePrefix: "arn:aws:s3:::"}
+	if _, err := d.ParseFor("photos", `{
+	  "Statement": [
+	    {"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": ["s3:PutObject"], "Resource": ["arn:aws:s3:::photos/*"]}
+	  ]
+	}`); err != nil {
+		t.Fatalf("valid policy rejected: %v", err)
+	}
+	_, err := d.ParseFor("photos", `{
+	  "Statement": [
+	    {"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": ["s3:PutObject"], "Resource": ["arn:aws:s3:::otherbucket/*"]}
+	  ]
+	}`)
+	if err == nil || !strings.Contains(err.Error(), "does not refer to bucket") {
+		t.Errorf("expect a scope error on the stripped resource, got %v", err)
+	}
+}
+
 // MaxPatternLen applies to the stripped pattern, the one actually matched:
 // the prefix must not eat into the tenant's budget.
 func TestDialectPatternLenAfterStrip(t *testing.T) {

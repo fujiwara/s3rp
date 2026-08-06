@@ -165,6 +165,47 @@ func Parse(text string) (*Policy, error) {
 	return d.Parse(text)
 }
 
+// ParseFor parses and validates a policy document as the named bucket's
+// policy: on top of Parse's checks, every resource must refer to that
+// bucket (ValidateResourcesFor). A store accepting a policy attached to a
+// bucket should parse with this rather than Parse.
+func ParseFor(bucket, text string) (*Policy, error) {
+	var d Dialect
+	return d.ParseFor(bucket, text)
+}
+
+// statementName names a statement in an error: its Sid, or its index when
+// it has none.
+func statementName(sid string, i int) string {
+	if sid == "" {
+		return fmt.Sprintf("statement[%d]", i)
+	}
+	return sid
+}
+
+// ValidateResourcesFor checks that every Resource entry refers to the named
+// bucket — the bucket itself ("photos") or its objects ("photos/...").
+// A bucket policy is evaluated only against its own bucket's resources, so
+// an entry naming anything else can never match anything; that is almost
+// certainly a typo, and keeping it silently would leave the author
+// believing a restriction holds that in fact matches nothing. AWS rejects
+// the same mistake at PutBucketPolicy time ("Policy has invalid resource"),
+// and so should a store accepting a policy for a bucket — via this method,
+// or ParseFor which combines it with parsing. With a Dialect the check runs
+// on the normalized resources, so the bucket name is always the plain
+// internal one.
+func (p *Policy) ValidateResourcesFor(bucket string) error {
+	for i, st := range p.Statement {
+		for _, res := range st.Resource {
+			if res != bucket && !strings.HasPrefix(res, bucket+"/") {
+				return fmt.Errorf("%s: resource %q does not refer to bucket %q",
+					statementName(st.Sid, i), res, bucket)
+			}
+		}
+	}
+	return nil
+}
+
 // validate checks the document structure and the caps. It runs on the
 // normalized (dialect-independent) form.
 func (p *Policy) validate() error {
@@ -180,10 +221,7 @@ func (p *Policy) validate() error {
 		return fmt.Errorf("policy has %d statements, at most %d are allowed", len(p.Statement), MaxStatements)
 	}
 	for i, st := range p.Statement {
-		name := st.Sid
-		if name == "" {
-			name = fmt.Sprintf("statement[%d]", i)
-		}
+		name := statementName(st.Sid, i)
 		if st.Effect != "Allow" && st.Effect != "Deny" {
 			return fmt.Errorf("%s: effect must be Allow or Deny", name)
 		}

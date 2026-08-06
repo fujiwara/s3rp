@@ -629,6 +629,46 @@ func TestPolicyLimits(t *testing.T) {
 	})
 }
 
+// TestParseFor covers the bucket-scope check a store runs when accepting a
+// policy attached to a bucket: every resource must refer to that bucket.
+func TestParseFor(t *testing.T) {
+	valid := `{
+		"Statement": [
+			{"Effect": "Deny", "Principal": "*", "Action": "s3:ListBucket", "Resource": "photos"},
+			{"Effect": "Deny", "Principal": "*", "Action": "s3:PutObject", "Resource": ["photos/*", "photos/tmp/a.txt"]}
+		]
+	}`
+	if _, err := policy.ParseFor("photos", valid); err != nil {
+		t.Fatalf("valid policy rejected: %v", err)
+	}
+
+	errCases := []struct {
+		name, resource string
+	}{
+		{"another bucket", `"otherbucket/*"`},
+		{"typoed bucket name", `"photo/*"`},
+		{"bucket-name wildcard", `"photos*"`},
+		{"bucket name as prefix without slash", `"photosarchive"`},
+	}
+	for _, tc := range errCases {
+		t.Run(tc.name, func(t *testing.T) {
+			text := `{"Statement": [{"Sid": "S1", "Effect": "Deny", "Principal": "*", "Action": "s3:PutObject", "Resource": ` + tc.resource + `}]}`
+			_, err := policy.ParseFor("photos", text)
+			if err == nil || !strings.Contains(err.Error(), "does not refer to bucket") {
+				t.Errorf("expect a scope error, got %v", err)
+			}
+			if err != nil && !strings.Contains(err.Error(), "S1") {
+				t.Errorf("expect the error to name the statement, got %v", err)
+			}
+			// the same document is fine as another bucket's policy or parsed
+			// without a bucket scope
+			if _, err := policy.Parse(text); err != nil {
+				t.Errorf("Parse must not apply the scope check: %v", err)
+			}
+		})
+	}
+}
+
 func repeatQuoted(s string, n int) string {
 	parts := make([]string, n)
 	for i := range parts {
