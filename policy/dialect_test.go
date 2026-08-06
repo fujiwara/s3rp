@@ -1,6 +1,7 @@
 package policy_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -113,6 +114,109 @@ func TestDialectPatternLenAfterStrip(t *testing.T) {
 	  ]
 	}`); err == nil {
 		t.Error("expect an over-length stripped pattern to be rejected")
+	}
+}
+
+// A dialect with ARN-style principals normalizes them to "tenant/user" in
+// the parse pass, so a store hands Parse the tenant's original text.
+func TestDialectNormalizePrincipal(t *testing.T) {
+	normalize := func(s string) (string, error) {
+		rest, ok := strings.CutPrefix(s, "arn:myco:iam::")
+		if !ok {
+			return "", fmt.Errorf("not a principal ARN")
+		}
+		tenant, user, ok := strings.Cut(rest, ":user/")
+		if !ok {
+			return "", fmt.Errorf("not a principal ARN")
+		}
+		return tenant + "/" + user, nil
+	}
+	d := &policy.Dialect{PrincipalKey: "AWS", NormalizePrincipal: normalize}
+	p, err := d.Parse(`{
+	  "Statement": [
+	    {"Effect": "Allow", "Principal": {"AWS": ["arn:myco:iam::tb:user/bob"]}, "Action": ["s3:GetObject"], "Resource": ["photos/*"]},
+	    {"Effect": "Deny", "NotPrincipal": {"AWS": ["arn:myco:iam::ta:user/admin"]}, "Action": ["s3:PutObject"], "Resource": ["photos/*"]}
+	  ]
+	}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// evaluation sees the internal form
+	if got := p.Evaluate("tb/bob", "s3:GetObject", "photos/a.txt"); got != policy.Allow {
+		t.Errorf("expect Allow for the normalized principal, got %v", got)
+	}
+	if got := p.Evaluate("ta/admin", "s3:PutObject", "photos/a.txt"); got != policy.None {
+		t.Errorf("expect None for the NotPrincipal-excepted user, got %v", got)
+	}
+	if got := p.Statement[0].Principal.Users[0]; got != "tb/bob" {
+		t.Errorf("expect the stored principal to be normalized, got %q", got)
+	}
+
+	// "*" is not passed through the normalizer
+	if _, err := d.Parse(`{
+	  "Statement": [
+	    {"Effect": "Allow", "Principal": "*", "Action": ["s3:GetObject"], "Resource": ["photos/*"]}
+	  ]
+	}`); err != nil {
+		t.Errorf(`"*" must not go through NormalizePrincipal: %v`, err)
+	}
+
+	// a normalizer error is reported with the statement and the original value
+	_, err = d.Parse(`{
+	  "Statement": [
+	    {"Sid": "Bad", "Effect": "Allow", "Principal": {"AWS": ["alice"]}, "Action": ["s3:GetObject"], "Resource": ["photos/*"]}
+	  ]
+	}`)
+	if err == nil || !strings.Contains(err.Error(), "Bad") || !strings.Contains(err.Error(), "alice") {
+		t.Errorf("expect an error naming the statement and value, got %v", err)
+	}
+
+	// a normalizer result that is not the internal form is still validated
+	d.NormalizePrincipal = func(string) (string, error) { return "Not Internal", nil }
+	_, err = d.Parse(`{
+	  "Statement": [
+	    {"Effect": "Allow", "Principal": {"AWS": ["arn:myco:iam::tb:user/bob"]}, "Action": ["s3:GetObject"], "Resource": ["photos/*"]}
+	  ]
+	}`)
+	if err == nil || !strings.Contains(err.Error(), "invalid principal") {
+		t.Errorf("expect the normalized value to be validated, got %v", err)
+	}
+}
+
+// A dialect whose resource syntax is not a fixed prefix (variable ARN
+// fields) normalizes with a function instead of ResourcePrefix.
+func TestDialectNormalizeResource(t *testing.T) {
+	d := &policy.Dialect{NormalizeResource: func(s string) (string, error) {
+		// arn:myco:s3:<region>:<account>:bucket/key — strip five fields
+		parts := strings.SplitN(s, ":", 6)
+		if len(parts) != 6 || parts[0] != "arn" || parts[1] != "myco" || parts[2] != "s3" {
+			return "", fmt.Errorf("not a resource ARN")
+		}
+		return parts[5], nil
+	}}
+	p, err := d.Parse(`{
+	  "Statement": [
+	    {"Effect": "Deny", "Principal": "*", "Action": ["s3:PutObject"], "Resource": ["arn:myco:s3:us-east-1:acct-1:photos/thumb-*"]}
+	  ]
+	}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the wildcard survives normalization and matches in the plain form
+	if got := p.Evaluate("ta/batch", "s3:PutObject", "photos/thumb-1.jpg"); got != policy.Deny {
+		t.Errorf("expect Deny, got %v", got)
+	}
+	if got := p.Evaluate("ta/batch", "s3:PutObject", "photos/full-1.jpg"); got != policy.None {
+		t.Errorf("expect None outside the pattern, got %v", got)
+	}
+
+	_, err = d.Parse(`{
+	  "Statement": [
+	    {"Effect": "Deny", "Principal": "*", "Action": ["s3:PutObject"], "Resource": ["photos/*"]}
+	  ]
+	}`)
+	if err == nil || !strings.Contains(err.Error(), "photos/*") {
+		t.Errorf("expect an error naming the unrecognized resource, got %v", err)
 	}
 }
 

@@ -20,9 +20,7 @@ const DefaultPrincipalKey = "S3RP"
 // store.Bucket.PolicyText, which is what GetBucketPolicy returns.
 type Dialect struct {
 	// PrincipalKey is the JSON key of the Principal object holding the
-	// names (empty = DefaultPrincipalKey). The principal values stay
-	// "tenant/user" (or "tenant/*") names in any dialect; mapping something
-	// else onto them is the caller's business, before parsing.
+	// names (empty = DefaultPrincipalKey).
 	PrincipalKey string
 	// ResourcePrefix, when set, is required on every Resource entry and
 	// stripped during parsing (e.g. "arn:aws:s3:::"), so resources are
@@ -30,6 +28,22 @@ type Dialect struct {
 	// stripped pattern — the one actually matched — while MaxPolicyBytes
 	// still caps the raw document.
 	ResourcePrefix string
+	// NormalizePrincipal, when set, rewrites each Principal/NotPrincipal
+	// entry to the internal "tenant/user" (or "tenant/*") form during
+	// parsing — e.g. "arn:myco:iam::tenant-a:user/alice" → "tenant-a/alice"
+	// — so a dialect store hands Parse the original text instead of
+	// rewriting the JSON itself. It is not applied to "*" (every dialect
+	// spells everyone the same way). Validation runs on the normalized
+	// value, so a result that is not the internal form is rejected.
+	NormalizePrincipal func(string) (string, error)
+	// NormalizeResource, when set, rewrites each Resource entry during
+	// parsing, after ResourcePrefix stripping, for dialects whose resource
+	// syntax is not a fixed prefix (e.g. ARNs with variable middle fields).
+	// Entries are glob patterns, not literals: rewrite only the literal
+	// prefix you recognize and pass the rest — wildcards included —
+	// through untouched, or return an error. The caps apply to the
+	// normalized pattern.
+	NormalizeResource func(string) (string, error)
 }
 
 func (d *Dialect) principalKey() string {
@@ -85,6 +99,15 @@ func (d *Dialect) Parse(text string) (*Policy, error) {
 				st.Resource[j] = res[len(prefix):]
 			}
 		}
+		if d.NormalizeResource != nil {
+			for j, res := range st.Resource {
+				n, err := d.NormalizeResource(res)
+				if err != nil {
+					return nil, fmt.Errorf("%s: resource %q: %w", name, res, err)
+				}
+				st.Resource[j] = n
+			}
+		}
 		p.Statement[i] = st
 	}
 	if err := p.validate(); err != nil {
@@ -115,6 +138,15 @@ func (d *Dialect) decodePrincipal(data json.RawMessage) (*Principal, error) {
 	users := obj[key]
 	if len(users) == 0 {
 		return nil, fmt.Errorf("principal must be %q or an object with the %s key", "*", key)
+	}
+	if d.NormalizePrincipal != nil {
+		for i, u := range users {
+			n, err := d.NormalizePrincipal(u)
+			if err != nil {
+				return nil, fmt.Errorf("principal %q: %w", u, err)
+			}
+			users[i] = n
+		}
 	}
 	return &Principal{Users: users}, nil
 }
