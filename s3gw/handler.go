@@ -201,9 +201,10 @@ func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) error {
 // the requester's qualified principal (cross-tenant access). Every other
 // case — no such bucket anywhere, or a policy that never mentions the
 // requester — is the same AccessDenied, so bucket names cannot be probed
-// across tenants; the gate also keeps unauthorized requests from reaching
-// the foreign bucket's backend client and CORS headers. Whether a mentioned
-// principal may perform the specific operation is authorize's job.
+// across tenants; the gate also keeps requesters the policy never mentions
+// from reaching the foreign bucket's backend client and CORS headers. It is
+// a visibility gate only: whether a mentioned principal may perform the
+// specific operation is authorize's job.
 func (g *Gateway) resolveBucket(ctx context.Context, vr *verifiedRequest, bucket string) (*store.Bucket, *s3err.Error) {
 	b, err := g.store.GetBucket(ctx, vr.Tenant, bucket)
 	if err == nil {

@@ -381,9 +381,11 @@ type DenyEvaluator struct {
 }
 
 // DenyEvaluatorFor pre-matches principal and action and returns an evaluator
-// over the resource alone. Only Deny statements matter: bucket-policy Allow
-// statements are inert (the baseline already allows), so a matching Deny is
-// the only thing that can restrict access.
+// over the resource alone. It covers only the Deny side: under the own-tenant
+// baseline (allow) a matching Deny is the only thing that can restrict
+// access, so it is the whole check; under the cross-tenant baseline (deny) a
+// caller pairs it with AllowEvaluatorFor, since each resource must also
+// match an Allow.
 func (p *Policy) DenyEvaluatorFor(principal, action string) DenyEvaluator {
 	p.compileOnce.Do(p.compile)
 	actionRunes := []rune(strings.ToLower(action))
@@ -448,10 +450,16 @@ func (e AllowEvaluator) AlwaysDenies() bool {
 
 // Allows reports whether the resource is allowed.
 func (e AllowEvaluator) Allows(resource string) bool {
+	return e.AllowsRunes([]rune(resource))
+}
+
+// AllowsRunes is Allows for a caller that already converted the resource to
+// runes; see DenyEvaluator.DeniesRunes.
+func (e AllowEvaluator) AllowsRunes(resource []rune) bool {
 	if len(e.allowResources) == 0 {
 		return false
 	}
-	return matchAnyRunes(e.allowResources, []rune(resource))
+	return matchAnyRunes(e.allowResources, resource)
 }
 
 // MentionsPrincipal reports whether any Allow statement's Principal lists
@@ -477,10 +485,17 @@ func (e DenyEvaluator) AlwaysAllows() bool {
 
 // Denies reports whether the resource is denied.
 func (e DenyEvaluator) Denies(resource string) bool {
+	return e.DeniesRunes([]rune(resource))
+}
+
+// DeniesRunes is Denies for a caller that already converted the resource to
+// runes — a per-object loop testing each resource against both the Allow and
+// the Deny side converts it once and calls the rune forms of both.
+func (e DenyEvaluator) DeniesRunes(resource []rune) bool {
 	if len(e.denyResources) == 0 {
 		return false
 	}
-	return matchAnyRunes(e.denyResources, []rune(resource))
+	return matchAnyRunes(e.denyResources, resource)
 }
 
 // compile precomputes the rune form of every action and resource pattern so

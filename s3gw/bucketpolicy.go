@@ -90,10 +90,12 @@ func (a perObjectAuthorizer) denies(resource string) bool {
 	if a.denyAll {
 		return true
 	}
-	if a.requireAllow && !a.allow.Allows(resource) {
-		return true
+	if !a.requireAllow {
+		return a.eval.Denies(resource)
 	}
-	return a.eval.Denies(resource)
+	// testing both the Allow and the Deny side: convert the resource once
+	r := []rune(resource)
+	return !a.allow.AllowsRunes(r) || a.eval.DeniesRunes(r)
 }
 
 // allowsEverything reports that no resource can be denied for this action, so
