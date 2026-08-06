@@ -1,6 +1,6 @@
 # Building a service on the gateway
 
-The S3 API lives in `s3gw`, separate from the parts of this repository that are only its PoC packaging — the YAML config, its store, the CLI. A real service does not fork the proxy: it implements the two things that are genuinely its own and hands them to the gateway.
+The S3 API lives in `s3gw`, separate from the parts of this repository that are only its PoC packaging — the YAML config, its store, the CLI. A real service does not fork the proxy: it implements what is genuinely its own and hands it to the gateway.
 
 ## What you provide
 
@@ -122,22 +122,132 @@ func main() {
 
 - Definitions are read on **every request** and nothing is cached: `GetKey` on each authentication, `GetBucket` on each bucket resolution. Caching is your store's business — it knows when a key is revoked, which the gateway cannot.
 - If your store does cache, keep the parsed `*policy.Policy` / `*policy.UserPolicy` around, not the policy JSON: the compiled match patterns live on the policy object (built lazily on its first evaluation, safe to share across concurrent requests), so a store that re-parses the text per request silently repeats that work every time. A cache keyed by the policy text invalidates itself — a changed policy is a different key.
+
+  ```go
+  var policies sync.Map // (bucket + "\x00" + policyText) → *policy.Policy
+
+  // inside GetBucket, after loading the row
+  func (d *definitions) parsedPolicy(bucket, text string) (*policy.Policy, error) {
+  	key := bucket + "\x00" + text // a changed policy is a different key
+  	if p, ok := policies.Load(key); ok {
+  		return p.(*policy.Policy), nil // compiled patterns reused, safe to share
+  	}
+  	p, err := policy.Parse(bucket, text)
+  	if err != nil {
+  		return nil, err // a stored policy that no longer parses is a bug upstream
+  	}
+  	policies.Store(key, p)
+  	return p, nil
+  }
+  ```
 - The policy syntax — the `"S3RP"` principal key, `tenant/user` principals, plain-path resources — is only the default `policy.Dialect`. If your tenants should write a different key, ARN-prefixed resources (`arn:aws:s3:::bucket/*`), or their own principal syntax, parse with your own `Dialect`: `PrincipalKey` and `ResourcePrefix` cover the fixed parts, and the `NormalizePrincipal` / `NormalizeResource` hooks rewrite each value to the internal form (`"arn:myco:iam::ta:user/alice"` → `"ta/alice"`) inside the same parse pass — no pre-parsing of the tenant's JSON — with validation and the caps applied to the normalized result. Evaluation is identical in any dialect, and so is the `Condition` syntax (the IP operators and the `aws:SourceIp` key are the same everywhere). Keep the tenant's original text in `store.Bucket.PolicyText` (returned verbatim by GetBucketPolicy) and put the `Dialect`-parsed form in `Policy` — the two fields are deliberately independent.
 - Parsing takes the bucket's name — `policy.Parse(bucketName, text)` / `Dialect.Parse` — and requires every resource to refer to that bucket; there is deliberately no way to parse a bucket policy without the check. A statement naming any other bucket can never match anything — a policy is only ever evaluated against its own bucket — so accepting it would leave the author trusting a restriction that silently does nothing; AWS rejects the same mistake at PutBucketPolicy time. With a dialect the check runs on the normalized resources, so pass the plain internal bucket name.
+
+  ```go
+  // tenants write AWS-style ARNs; the gateway evaluates the internal form
+  var dialect = &policy.Dialect{
+  	PrincipalKey:   "AWS",
+  	ResourcePrefix: "arn:aws:s3:::",
+  	NormalizePrincipal: func(s string) (string, error) {
+  		// "arn:myco:iam::tenant-a:user/alice" → "tenant-a/alice"
+  		rest, ok := strings.CutPrefix(s, "arn:myco:iam::")
+  		tenant, user, ok2 := strings.Cut(rest, ":user/")
+  		if !ok || !ok2 {
+  			return "", fmt.Errorf("not a principal ARN")
+  		}
+  		return tenant + "/" + user, nil
+  	},
+  }
+
+  p, err := dialect.Parse(bucketName, text) // the plain name: the check runs post-normalization
+  if err != nil {
+  	return err // reject at write time, exactly as PutBucketPolicy would
+  }
+  b := &store.Bucket{
+  	PolicyText: text, // what the tenant wrote; GetBucketPolicy returns it verbatim
+  	Policy:     p,    // what the gateway evaluates
+  }
+  ```
 - **Temporary credentials** are a store concern, not a gateway one: set `store.Key.SessionToken` on a key your control plane issues under an existing user (empty = long-lived key). A request signed with that key must present exactly that token — header auth, presigned URLs and POST uploads all carry it — and a token on a long-lived key is refused (`InvalidToken`), never dropped. Expiry is also yours: an expired key is simply not returned by `GetKey`. Authorization needs nothing new — the key belongs to a user, and a per-key `UserPolicy` narrows its actions. One issuance rule: do not return the credentials to the caller before the key is visible to the store the gateways read, or the first use races the write (and a stale not-found may be negative-cached).
 - Two tenants must not map buckets to the same physical backend bucket — the gateway cannot detect this, so validate it where definitions are written.
 - Validate names and backends where definitions are written, with the store package's validators: `store.ValidateBucketName` (bucket names are what path routing and `bucket/key` policy resources are built from), `store.ValidateTenantName` / `store.ValidateUserName` (tenant and user names share the charset of policy principals — a name outside it could never be written in a `Principal` element, so its grants would be unexpressible), and `store.Backend.Validate` (endpoint and credential shape). Like `Backend.SetDefaults`, these are the store's to call; the gateway does not re-check per request.
 - Validate CORS rules with `cors.Rule.Validate()` where definitions are written: a rule with no origins or methods can never match (a dead rule its author believes in) and an unsupported method could never be answered — AWS rejects the same at PutBucketCors time. The gateway deliberately does not re-check rules per request.
 
+  Together, a control plane's write path looks like:
+
+  ```go
+  // where definitions are written — the gateway re-checks none of this
+  func validateBucketDefinition(tenant string, b *BucketDefinition) error {
+  	if err := store.ValidateTenantName(tenant); err != nil {
+  		return err
+  	}
+  	if err := store.ValidateBucketName(b.Name); err != nil {
+  		return err
+  	}
+  	if err := b.Backend.Validate(); err != nil {
+  		return err
+  	}
+  	if b.PolicyText != "" {
+  		if _, err := policy.Parse(b.Name, b.PolicyText); err != nil {
+  			return err
+  		}
+  	}
+  	for _, r := range b.CORS {
+  		if err := r.Validate(); err != nil {
+  			return err
+  		}
+  	}
+  	// plus what only the whole definition set can answer: global bucket-name
+  	// and access-key uniqueness, and that no other tenant maps to the same
+  	// physical backend bucket — unique database constraints, typically
+  	return nil
+  }
+  ```
+
 ## In front of the gateway
 
 - Unauthenticated requests are not free. `GetKey` runs **before** signature verification — the secret is what verifies — so a well-formed `Authorization` header with a bogus access key still costs one store lookup, and a valid key with a bad signature costs the HMAC chain too. A store should negative-cache unknown key ids (weighing the TTL against how soon a freshly issued key must start working), and rate limiting belongs **outside** `Handler()`, in a wrapping handler or the fronting proxy: the `Authorizer` runs only after verification and the policies, which is too late for DoS economics.
 - That same wrapping layer is where a health-check endpoint and a request body cap (`http.MaxBytesReader`) go. To the gateway every path is S3 — `GET /` is an authenticated ListBuckets — and it deliberately caps nothing itself, for the same reason it sets no read or write timeouts.
+
+  ```go
+  // a plain handler, NOT http.ServeMux: its path cleaning and 301 redirects
+  // break S3 keys and their signatures
+  s3 := gw.Handler()
+  h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+  	// "_" cannot appear in a bucket name, so no tenant can own this path
+  	if r.URL.Path == "/_healthz" {
+  		w.WriteHeader(http.StatusOK)
+  		return
+  	}
+  	if !limiter.Allow(clientIP(r)) { // before verification — the Authorizer is too late
+  		http.Error(w, "429 too many requests", http.StatusTooManyRequests)
+  		return
+  	}
+  	r.Body = http.MaxBytesReader(w, r.Body, 5<<30) // largest accepted upload
+  	// behind a proxy, also rewrite r.RemoteAddr to the real client here:
+  	// it is what the access log records and aws:SourceIp conditions evaluate
+  	s3.ServeHTTP(w, r)
+  })
+  log.Fatal(http.ListenAndServe(":8080", h))
+  ```
 - The signing region of a request is taken from its credential scope, so by default **any region verifies** — the signature commits to the region either way, and a front endpoint has no inherent region. A multi-region deployment should pin each endpoint with `SetRegion`: not for signature integrity, but so a client pointed at the wrong regional endpoint fails fast with AWS's own error (`AuthorizationHeaderMalformed`, naming the expected region) instead of silently being served cross-region, and so a leaked derived signing key stays scoped to its region as SigV4 intends. The pinned region is also what GetBucketLocation and HeadBucket report, keeping region discovery consistent with what the verifier accepts.
 
 ## Backend clients and the gateway's caches
 
 - Backend clients are built by the gateway, but `SetClientOptions` lets you contribute `s3.Options` to every one it builds — a custom `Retryer`, an instrumented `HTTPClient` (an otelhttp transport is how you get per-backend latency and retry metrics, which the hooks cannot see), timeouts. The hook receives the backend definition, so options can differ per backend, and runs after the gateway's own settings — which are load-bearing for non-AWS backends, so override them only knowingly. Set it before serving: clients are cached per backend and keep the options they were built with.
+
+  ```go
+  // must be deterministic per backend: a cached client is reused without
+  // consulting the hook again
+  gw.SetClientOptions(func(b *store.Backend) []func(*s3.Options) {
+  	return []func(*s3.Options){func(o *s3.Options) {
+  		o.HTTPClient = &http.Client{ // per-backend latency/retry metrics live here
+  			Transport: otelhttp.NewTransport(http.DefaultTransport),
+  		}
+  		o.Retryer = retry.AddWithMaxAttempts(retry.NewStandard(), 2)
+  	}}
+  })
+  ```
 - What the gateway does cache is derived from definitions, never a definition itself, and is bounded: backend **clients** (one per distinct endpoint/credentials, LRU, default 128 — `SetClientCacheSize`) and one SigV4 **signer** per access key (default 512 slots — `SetSignerCacheSize`). Size them to the number of distinct backends and of access keys active at once; an evicted entry is rebuilt on its next request, so undersizing costs latency, not correctness.
 - Whether they *are* sized right is answerable: `ClientCacheStats` / `SignerCacheStats` return snapshots (hits, misses, evictions, len, capacity — monotonic counters, poll them from your metrics collector). A rising eviction rate with `Len` near `Capacity` means the cache is too small. The signer cache's evictions are collision displacements: a high rate with `Len` well **under** `Capacity` means hot keys sharing a slot by hash luck, which more slots make improbable.
 
@@ -160,6 +270,17 @@ func main() {
 
   Returning without calling `next` refuses the request — nothing inside runs, the backend is never contacted. An error returned by an inner layer is the outer layer's `next()` result, and whatever the outermost returns decides what the client is told. The byte counts are set at the innermost point, so metering is code placed after `next` in **any** layer and the counts are identical; a *duration* measured in A includes B, though, as in any middleware stack.
 - A client that disconnects mid-response cancels the request context, which also aborts the backend transfer — `next` still returns promptly, with `op.BytesOut` counting what was actually sent (a truncated download reports the status it already sent, usually 200, and no error). The trap: the `ctx` your after-`next` code holds **is that canceled context**, so metering I/O that uses it fails with `context.Canceled` precisely for disconnected clients — and only for them, since on a normal completion the context outlives the hooks. Use `context.WithoutCancel(ctx)` for your own writes, or hand the self-contained `Op`/`RequestInfo` to a queue and drop the context entirely.
+
+  ```go
+  gw.Use(func(ctx context.Context, op *s3gw.Op, next func() error) error {
+  	err := next()
+  	// ctx is canceled when the client disconnected mid-response; detached,
+  	// the usage write succeeds for exactly the requests it would otherwise
+  	// silently miss
+  	recordUsage(context.WithoutCancel(ctx), op.Tenant, op.BytesIn, op.BytesOut)
+  	return err
+  })
+  ```
 - A client that retries sends a **new request**, which is verified, authorized and metered on its own. That is what the server served; whether a retry should count toward a quota or an invoice is the application's decision, not the gateway's.
 - `Op.BytesIn` / `BytesOut` count bytes on the wire, so an `aws-chunked` upload includes its framing. They measure transfer, not storage: a quota over bytes at rest needs the backend's inventory (deletes, overwrites and versions carry no sizes through the hooks).
 
