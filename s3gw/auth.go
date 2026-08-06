@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/netip"
 
 	"github.com/fujiwara/s3rp/s3err"
 
@@ -25,6 +26,13 @@ type verifiedRequest struct {
 	// KeyMetadata is store.Key.Metadata, carried along so dispatch can hand
 	// it to the hooks on Op.
 	KeyMetadata any
+	// SourceIP is the client's source address, parsed from r.RemoteAddr —
+	// what bucket-policy IP conditions evaluate. A deployment behind a
+	// proxy must rewrite RemoteAddr to the real client address in a handler
+	// wrapped around Gateway.Handler(); the gateway itself never interprets
+	// X-Forwarded-For. Zero when RemoteAddr does not parse, which fails
+	// conditions closed.
+	SourceIP netip.Addr
 }
 
 // principal is the identity string bucket policies are evaluated with:
@@ -32,6 +40,25 @@ type verifiedRequest struct {
 // bucket the request targets.
 func (vr *verifiedRequest) principal() string {
 	return vr.Tenant + "/" + vr.User
+}
+
+// requestContext is the request-constant condition input for bucket-policy
+// evaluation.
+func (vr *verifiedRequest) requestContext() policy.RequestContext {
+	return policy.RequestContext{SourceIP: vr.SourceIP}
+}
+
+// remoteIP parses the client address out of r.RemoteAddr, which is normally
+// "ip:port" but may be a bare IP when a wrapping handler rewrote it. A
+// value that parses as neither yields a zero Addr.
+func remoteIP(r *http.Request) netip.Addr {
+	if ap, err := netip.ParseAddrPort(r.RemoteAddr); err == nil {
+		return ap.Addr()
+	}
+	if a, err := netip.ParseAddr(r.RemoteAddr); err == nil {
+		return a
+	}
+	return netip.Addr{}
 }
 
 // verifyRequest authenticates an incoming request, either by the
@@ -64,6 +91,7 @@ func (g *Gateway) verifyRequest(r *http.Request) (*verifiedRequest, *s3err.Error
 		User:        key.User,
 		UserPolicy:  key.Policy,
 		KeyMetadata: key.Metadata,
+		SourceIP:    remoteIP(r),
 	}, nil
 }
 
@@ -95,5 +123,6 @@ func (g *Gateway) verifyPostRequest(r *http.Request, fields map[string]string) (
 		User:        key.User,
 		UserPolicy:  key.Policy,
 		KeyMetadata: key.Metadata,
+		SourceIP:    remoteIP(r),
 	}, pp, nil
 }

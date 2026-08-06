@@ -26,10 +26,10 @@ func TestDialectPrincipalKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := p.Evaluate("ta/batch", "s3:PutObject", "photos/a.txt"); got != policy.Deny {
+	if got := p.Evaluate("ta/batch", "s3:PutObject", "photos/a.txt", policy.RequestContext{}); got != policy.Deny {
 		t.Errorf("expect Deny, got %v", got)
 	}
-	if got := p.Evaluate("app1", "s3:PutObject", "photos/a.txt"); got != policy.None {
+	if got := p.Evaluate("app1", "s3:PutObject", "photos/a.txt", policy.RequestContext{}); got != policy.None {
 		t.Errorf("expect None for another user, got %v", got)
 	}
 
@@ -53,10 +53,10 @@ func TestDialectPrincipalKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := p.Evaluate("ta/admin", "s3:DeleteObject", "photos/a.txt"); got != policy.Deny {
+	if got := p.Evaluate("ta/admin", "s3:DeleteObject", "photos/a.txt", policy.RequestContext{}); got != policy.Deny {
 		t.Errorf("expect Deny for everyone, got %v", got)
 	}
-	if got := p.Evaluate("ta/admin", "s3:PutObject", "photos/a.txt"); got != policy.None {
+	if got := p.Evaluate("ta/admin", "s3:PutObject", "photos/a.txt", policy.RequestContext{}); got != policy.None {
 		t.Errorf("expect None for the excepted user, got %v", got)
 	}
 }
@@ -77,10 +77,10 @@ func TestDialectResourcePrefix(t *testing.T) {
 		t.Fatal(err)
 	}
 	// resources are matched in the stripped, plain-path form
-	if got := p.Evaluate("ta/batch", "s3:PutObject", "photos/a.txt"); got != policy.Deny {
+	if got := p.Evaluate("ta/batch", "s3:PutObject", "photos/a.txt", policy.RequestContext{}); got != policy.Deny {
 		t.Errorf("expect Deny, got %v", got)
 	}
-	if got := p.Evaluate("ta/batch", "s3:PutObject", "photos"); got != policy.Deny {
+	if got := p.Evaluate("ta/batch", "s3:PutObject", "photos", policy.RequestContext{}); got != policy.Deny {
 		t.Errorf("expect Deny on the bucket resource, got %v", got)
 	}
 
@@ -142,10 +142,10 @@ func TestDialectNormalizePrincipal(t *testing.T) {
 		t.Fatal(err)
 	}
 	// evaluation sees the internal form
-	if got := p.Evaluate("tb/bob", "s3:GetObject", "photos/a.txt"); got != policy.Allow {
+	if got := p.Evaluate("tb/bob", "s3:GetObject", "photos/a.txt", policy.RequestContext{}); got != policy.Allow {
 		t.Errorf("expect Allow for the normalized principal, got %v", got)
 	}
-	if got := p.Evaluate("ta/admin", "s3:PutObject", "photos/a.txt"); got != policy.None {
+	if got := p.Evaluate("ta/admin", "s3:PutObject", "photos/a.txt", policy.RequestContext{}); got != policy.None {
 		t.Errorf("expect None for the NotPrincipal-excepted user, got %v", got)
 	}
 	if got := p.Statement[0].Principal.Users[0]; got != "tb/bob" {
@@ -203,10 +203,10 @@ func TestDialectNormalizeResource(t *testing.T) {
 		t.Fatal(err)
 	}
 	// the wildcard survives normalization and matches in the plain form
-	if got := p.Evaluate("ta/batch", "s3:PutObject", "photos/thumb-1.jpg"); got != policy.Deny {
+	if got := p.Evaluate("ta/batch", "s3:PutObject", "photos/thumb-1.jpg", policy.RequestContext{}); got != policy.Deny {
 		t.Errorf("expect Deny, got %v", got)
 	}
-	if got := p.Evaluate("ta/batch", "s3:PutObject", "photos/full-1.jpg"); got != policy.None {
+	if got := p.Evaluate("ta/batch", "s3:PutObject", "photos/full-1.jpg", policy.RequestContext{}); got != policy.None {
 		t.Errorf("expect None outside the pattern, got %v", got)
 	}
 
@@ -237,7 +237,7 @@ func TestDialectZeroValueIsDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, p := range []*policy.Policy{fromDialect, fromParse} {
-		if got := p.Evaluate("ta/batch", "s3:PutObject", "photos/a.txt"); got != policy.Deny {
+		if got := p.Evaluate("ta/batch", "s3:PutObject", "photos/a.txt", policy.RequestContext{}); got != policy.Deny {
 			t.Errorf("expect Deny, got %v", got)
 		}
 	}

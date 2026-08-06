@@ -50,7 +50,7 @@ func TestEvaluateQualifiedPrincipal(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := p.Evaluate(tc.principal, tc.action, tc.resource); got != tc.want {
+			if got := p.Evaluate(tc.principal, tc.action, tc.resource, policy.RequestContext{}); got != tc.want {
 				t.Errorf("Evaluate(%q, %q, %q) = %v, want %v", tc.principal, tc.action, tc.resource, got, tc.want)
 			}
 		})
@@ -68,7 +68,7 @@ func TestEvaluateWildcardPrincipals(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, principal := range []string{"ta/alice", "tb/bob"} {
-			if got := p.Evaluate(principal, "s3:GetObject", "open/a.txt"); got != policy.Allow {
+			if got := p.Evaluate(principal, "s3:GetObject", "open/a.txt", policy.RequestContext{}); got != policy.Allow {
 				t.Errorf("Allow * must match %q: %v", principal, got)
 			}
 		}
@@ -83,16 +83,16 @@ func TestEvaluateWildcardPrincipals(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, principal := range []string{"tb/bob", "tb/carol"} {
-			if got := p.Evaluate(principal, "s3:GetObject", "shared/a.txt"); got != policy.Allow {
+			if got := p.Evaluate(principal, "s3:GetObject", "shared/a.txt", policy.RequestContext{}); got != policy.Allow {
 				t.Errorf("tb/* must match %q: %v", principal, got)
 			}
 		}
-		if got := p.Evaluate("ta/alice", "s3:GetObject", "shared/a.txt"); got != policy.None {
+		if got := p.Evaluate("ta/alice", "s3:GetObject", "shared/a.txt", policy.RequestContext{}); got != policy.None {
 			t.Errorf("tb/* must not match ta/alice: %v", got)
 		}
 		// the wildcard is a whole-name form, not a prefix: "tb" the tenant,
 		// not tenants starting with "tb"
-		if got := p.Evaluate("tbx/bob", "s3:GetObject", "shared/a.txt"); got != policy.None {
+		if got := p.Evaluate("tbx/bob", "s3:GetObject", "shared/a.txt", policy.RequestContext{}); got != policy.None {
 			t.Errorf("tb/* must not match tbx/bob: %v", got)
 		}
 	})
@@ -105,10 +105,10 @@ func TestEvaluateWildcardPrincipals(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := p.Evaluate("tb/bob", "s3:PutObject", "b/k"); got != policy.Deny {
+		if got := p.Evaluate("tb/bob", "s3:PutObject", "b/k", policy.RequestContext{}); got != policy.Deny {
 			t.Errorf("everyone outside ta must be denied: %v", got)
 		}
-		if got := p.Evaluate("ta/alice", "s3:PutObject", "b/k"); got != policy.None {
+		if got := p.Evaluate("ta/alice", "s3:PutObject", "b/k", policy.RequestContext{}); got != policy.None {
 			t.Errorf("ta users are excluded from the Deny: %v", got)
 		}
 	})
@@ -159,7 +159,7 @@ func TestAllowEvaluator(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := p.AllowEvaluatorFor("tb/bob", "s3:DeleteObject")
+	e := p.AllowEvaluatorFor("tb/bob", "s3:DeleteObject", policy.RequestContext{})
 	if e.AlwaysDenies() {
 		t.Fatal("an Allow statement matched, AlwaysDenies must be false")
 	}
@@ -170,19 +170,19 @@ func TestAllowEvaluator(t *testing.T) {
 		t.Error("resource outside the Allow pattern must not be allowed")
 	}
 	// the Deny side is a separate evaluator, as in the gateway
-	d := p.DenyEvaluatorFor("tb/bob", "s3:DeleteObject")
+	d := p.DenyEvaluatorFor("tb/bob", "s3:DeleteObject", policy.RequestContext{})
 	if !d.Denies("shared/tmp/pinned/a.txt") {
 		t.Error("Deny must still win inside the allowed prefix")
 	}
 
-	unmatched := p.AllowEvaluatorFor("tb/carol", "s3:DeleteObject")
+	unmatched := p.AllowEvaluatorFor("tb/carol", "s3:DeleteObject", policy.RequestContext{})
 	if !unmatched.AlwaysDenies() {
 		t.Error("no Allow matches this principal, AlwaysDenies must be true")
 	}
 	if unmatched.Allows("shared/tmp/a.txt") {
 		t.Error("an empty evaluator must not allow anything")
 	}
-	wrongAction := p.AllowEvaluatorFor("tb/bob", "s3:PutObject")
+	wrongAction := p.AllowEvaluatorFor("tb/bob", "s3:PutObject", policy.RequestContext{})
 	if !wrongAction.AlwaysDenies() {
 		t.Error("no Allow matches this action, AlwaysDenies must be true")
 	}

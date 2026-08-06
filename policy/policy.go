@@ -7,7 +7,9 @@
 // of a tenant and "*" every authenticated user of any tenant — and
 // resources are plain "bucket" or "bucket/prefix*" strings (no ARNs).
 // Action and Resource support the AWS wildcards "*" (any run of
-// characters) and "?" (a single character).
+// characters) and "?" (a single character). A statement may carry a
+// Condition restricting it by the client's source address (the IpAddress
+// and NotIpAddress operators on the "aws:SourceIp" key; see Condition).
 //
 // Those two syntax choices are the default Dialect; a service can accept a
 // different principal key or ARN-prefixed resources by parsing with its own
@@ -69,6 +71,12 @@ const (
 	// MaxPatternLen caps the length (in bytes) of a single action or
 	// resource pattern, bounding the per-pattern glob-match cost.
 	MaxPatternLen = 128
+	// MaxConditionValues caps the values in one condition operator.
+	// Conditions are matched once per request (never per object) and each
+	// value is an O(1) prefix test, so this is structural hygiene rather
+	// than a performance bound; real source-IP lists are rarely more than
+	// a dozen entries.
+	MaxConditionValues = 50
 )
 
 // Policy is a bucket policy document.
@@ -87,6 +95,7 @@ type Statement struct {
 	NotPrincipal *Principal    `json:"NotPrincipal,omitempty"`
 	Action       StringOrSlice `json:"Action"`
 	Resource     StringOrSlice `json:"Resource"`
+	Condition    *Condition    `json:"Condition,omitempty"`
 
 	// precompiled by Policy.compile: action patterns are lower-cased for
 	// case-insensitive matching, resource patterns kept as-is.
@@ -226,6 +235,22 @@ func (p *Policy) validate() error {
 				return fmt.Errorf("%s: resource pattern too long (%d bytes, max %d)", name, len(res), MaxPatternLen)
 			}
 		}
+		if c := st.Condition; c != nil {
+			if len(c.IPAddress) == 0 && len(c.NotIPAddress) == 0 {
+				return fmt.Errorf("%s: condition must contain at least one operator", name)
+			}
+			if len(c.IPAddress) > MaxConditionValues {
+				return fmt.Errorf("%s: %d %s values, at most %d are allowed", name, len(c.IPAddress), opIPAddress, MaxConditionValues)
+			}
+			if len(c.NotIPAddress) > MaxConditionValues {
+				return fmt.Errorf("%s: %d %s values, at most %d are allowed", name, len(c.NotIPAddress), opNotIPAddress, MaxConditionValues)
+			}
+			// compile also parses the values, so a bad one is the author's
+			// error here instead of a fail-closed surprise at evaluation.
+			if err := c.compile(); err != nil {
+				return fmt.Errorf("%s: %w", name, err)
+			}
+		}
 	}
 	return nil
 }
@@ -342,13 +367,18 @@ func MarshalUserPolicy(up *UserPolicy) (string, error) {
 }
 
 // Evaluate evaluates the policy for a principal ("tenant/user") performing
-// an action on a resource ("bucket" or "bucket/key"). Deny takes precedence
-// over Allow; None means no statement matched.
-func (p *Policy) Evaluate(principal, action, resource string) Effect {
+// an action on a resource ("bucket" or "bucket/key"), in the request
+// context rc (the zero value means an unknown source, failing conditions
+// closed). Deny takes precedence over Allow; None means no statement
+// matched.
+func (p *Policy) Evaluate(principal, action, resource string, rc RequestContext) Effect {
 	// AWS treats the Action element as case-insensitive; comparing it
 	// case-sensitively would let a mis-cased Deny silently fail open. The
 	// Resource is an object key and stays case-sensitive.
 	p.compileOnce.Do(p.compile)
+	// A dual-stack listener reports IPv4 peers as 4-in-6 (::ffff:a.b.c.d),
+	// which would never match an IPv4 prefix; unmap once up front.
+	rc.SourceIP = rc.SourceIP.Unmap()
 	// Convert the action and resource to runes once, up front, rather than
 	// on every Match call: with the same value reused across every statement
 	// and pattern, this is the dominant cost for a large policy or a long key.
@@ -358,6 +388,9 @@ func (p *Policy) Evaluate(principal, action, resource string) Effect {
 	for i := range p.Statement {
 		st := &p.Statement[i]
 		if !st.matchPrincipal(principal) {
+			continue
+		}
+		if !st.matchCondition(rc) {
 			continue
 		}
 		if !matchAnyRunes(st.actionRunes, actionRunes) {
@@ -391,8 +424,13 @@ type DenyEvaluator struct {
 // access, so it is the whole check; under the cross-tenant baseline (deny) a
 // caller pairs it with AllowEvaluatorFor, since each resource must also
 // match an Allow.
-func (p *Policy) DenyEvaluatorFor(principal, action string) DenyEvaluator {
+//
+// Conditions are request-constant, so they are resolved here at build time:
+// a statement whose condition does not hold in rc is skipped entirely and
+// contributes nothing to the per-object check.
+func (p *Policy) DenyEvaluatorFor(principal, action string, rc RequestContext) DenyEvaluator {
 	p.compileOnce.Do(p.compile)
+	rc.SourceIP = rc.SourceIP.Unmap()
 	actionRunes := []rune(strings.ToLower(action))
 	var e DenyEvaluator
 	for i := range p.Statement {
@@ -401,6 +439,9 @@ func (p *Policy) DenyEvaluatorFor(principal, action string) DenyEvaluator {
 			continue
 		}
 		if !st.matchPrincipal(principal) {
+			continue
+		}
+		if !st.matchCondition(rc) {
 			continue
 		}
 		if !matchAnyRunes(st.actionRunes, actionRunes) {
@@ -423,9 +464,11 @@ type AllowEvaluator struct {
 }
 
 // AllowEvaluatorFor pre-matches principal and action over the Allow
-// statements and returns an evaluator over the resource alone.
-func (p *Policy) AllowEvaluatorFor(principal, action string) AllowEvaluator {
+// statements and returns an evaluator over the resource alone. Conditions
+// are resolved here at build time, as in DenyEvaluatorFor.
+func (p *Policy) AllowEvaluatorFor(principal, action string, rc RequestContext) AllowEvaluator {
 	p.compileOnce.Do(p.compile)
+	rc.SourceIP = rc.SourceIP.Unmap()
 	actionRunes := []rune(strings.ToLower(action))
 	var e AllowEvaluator
 	for i := range p.Statement {
@@ -434,6 +477,9 @@ func (p *Policy) AllowEvaluatorFor(principal, action string) AllowEvaluator {
 			continue
 		}
 		if !st.matchPrincipal(principal) {
+			continue
+		}
+		if !st.matchCondition(rc) {
 			continue
 		}
 		if !matchAnyRunes(st.actionRunes, actionRunes) {
@@ -471,7 +517,9 @@ func (e AllowEvaluator) AllowsRunes(resource []rune) bool {
 // cross-tenant visibility gate: another tenant's bucket is reachable only
 // for principals its policy could grant something to, so every other
 // requester gets the same answer a nonexistent bucket produces and bucket
-// names cannot be probed across tenants.
+// names cannot be probed across tenants. Conditions are deliberately not
+// consulted: this is a visibility gate only, and authorization still
+// enforces them.
 func (p *Policy) MentionsPrincipal(principal string) bool {
 	for i := range p.Statement {
 		st := &p.Statement[i]
@@ -513,7 +561,29 @@ func (p *Policy) compile() {
 	for i := range p.Statement {
 		p.Statement[i].actionRunes = lowerPatternRunes(p.Statement[i].Action)
 		p.Statement[i].resourceRunes = patternRunes(p.Statement[i].Resource)
+		if c := p.Statement[i].Condition; c != nil && !c.compiled {
+			// Parse already compiled conditions; this path only exists for
+			// a hand-built policy, where a bad value marks the condition
+			// invalid and fails closed in matchCondition.
+			c.compile()
+		}
 	}
+}
+
+// matchCondition reports whether the statement's condition holds in the
+// request context; a statement without one always applies. The fail-closed
+// direction of an uncompilable condition (only reachable on a hand-built
+// policy that bypassed Parse) depends on the effect: it never holds for
+// Allow and always holds for Deny.
+func (st *Statement) matchCondition(rc RequestContext) bool {
+	c := st.Condition
+	if c == nil {
+		return true
+	}
+	if c.invalid {
+		return st.Effect == "Deny"
+	}
+	return c.match(rc)
 }
 
 // matchPrincipal reports whether the statement applies to the principal

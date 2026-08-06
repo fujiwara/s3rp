@@ -25,12 +25,12 @@ func (g *Gateway) authorize(vr *verifiedRequest, b *store.Bucket, action, resour
 		return s3err.AccessDenied()
 	}
 	if b.Tenant != vr.Tenant {
-		if b.Policy == nil || b.Policy.Evaluate(vr.principal(), action, resource) != policy.Allow {
+		if b.Policy == nil || b.Policy.Evaluate(vr.principal(), action, resource, vr.requestContext()) != policy.Allow {
 			return s3err.AccessDenied()
 		}
 		return nil
 	}
-	if b.Policy != nil && b.Policy.Evaluate(vr.principal(), action, resource) == policy.Deny {
+	if b.Policy != nil && b.Policy.Evaluate(vr.principal(), action, resource, vr.requestContext()) == policy.Deny {
 		return s3err.AccessDenied()
 	}
 	return nil
@@ -57,20 +57,21 @@ func (g *Gateway) perObjectAuthorizer(vr *verifiedRequest, b *store.Bucket, acti
 		return perObjectAuthorizer{denyAll: true}
 	}
 	a := perObjectAuthorizer{}
+	rc := vr.requestContext()
 	if b.Tenant != vr.Tenant {
 		if b.Policy == nil {
 			return perObjectAuthorizer{denyAll: true}
 		}
-		a.allow = b.Policy.AllowEvaluatorFor(vr.principal(), action)
+		a.allow = b.Policy.AllowEvaluatorFor(vr.principal(), action, rc)
 		if a.allow.AlwaysDenies() {
 			return perObjectAuthorizer{denyAll: true}
 		}
 		a.requireAllow = true
-		a.eval = b.Policy.DenyEvaluatorFor(vr.principal(), action)
+		a.eval = b.Policy.DenyEvaluatorFor(vr.principal(), action, rc)
 		return a
 	}
 	if b.Policy != nil {
-		a.eval = b.Policy.DenyEvaluatorFor(vr.principal(), action)
+		a.eval = b.Policy.DenyEvaluatorFor(vr.principal(), action, rc)
 	}
 	return a
 }

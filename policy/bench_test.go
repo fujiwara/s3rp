@@ -23,12 +23,27 @@ func worstKey() string {
 // evaluate: MaxStatements Deny statements, each with MaxResourcesPerStatement
 // adversarial resource patterns ("*zb" hunts a char absent from the key,
 // forcing a full scan), all matching the requester's principal and action.
+// Every statement also carries a condition that the benchmark's source
+// (10.0.0.1) satisfies only at the last value, so the full prefix lists are
+// scanned and every statement still reaches the resource scan. The lists
+// hold 20 values per operator, not MaxConditionValues: MaxPolicyBytes is
+// the binding constraint here — a document cannot carry max-length
+// adversarial resources and maxed-out conditions in every statement at
+// once, and the resource scans are what dominate the cost.
 func maxBucketPolicy(tb testing.TB) *policy.Policy {
 	res := make([]string, policy.MaxResourcesPerStatement)
 	for i := range res {
 		res[i] = `"*zb"`
 	}
-	stmt := `{"Effect":"Deny","Principal":"*","Action":["s3:*Object*"],"Resource":[` + strings.Join(res, ",") + `]}`
+	ips := make([]string, 20)
+	notIPs := make([]string, 20)
+	for i := range ips {
+		ips[i] = `"192.0.2.1"`
+		notIPs[i] = `"198.51.100.1"`
+	}
+	ips[len(ips)-1] = `"10.0.0.0/8"` // the only value containing the source
+	cond := `{"IpAddress":{"aws:SourceIp":[` + strings.Join(ips, ",") + `]},"NotIpAddress":{"aws:SourceIp":[` + strings.Join(notIPs, ",") + `]}}`
+	stmt := `{"Effect":"Deny","Principal":"*","Action":["s3:*Object*"],"Resource":[` + strings.Join(res, ",") + `],"Condition":` + cond + `}`
 	stmts := make([]string, policy.MaxStatements)
 	for i := range stmts {
 		stmts[i] = stmt
@@ -69,9 +84,10 @@ func maxUserPolicy() *policy.UserPolicy {
 func BenchmarkEvaluate(b *testing.B) {
 	p := maxBucketPolicy(b)
 	key := worstKey()
+	rc := from("10.0.0.1")
 	b.ReportAllocs()
 	for b.Loop() {
-		p.Evaluate("ta/someuser", "s3:DeleteObject", key)
+		p.Evaluate("ta/someuser", "s3:DeleteObject", key, rc)
 	}
 }
 
@@ -98,13 +114,14 @@ func BenchmarkDeleteObjects(b *testing.B) {
 	for i := range keys {
 		keys[i] = worstKey()
 	}
+	rc := from("10.0.0.1")
 	run := func(b *testing.B, p *policy.Policy) {
 		b.ReportAllocs()
 		for b.Loop() {
 			if !up.Allows("s3:DeleteObject") {
 				continue
 			}
-			e := p.DenyEvaluatorFor("ta/someuser", "s3:DeleteObject")
+			e := p.DenyEvaluatorFor("ta/someuser", "s3:DeleteObject", rc)
 			if e.AlwaysAllows() {
 				continue // the proxy skips the per-object loop entirely
 			}

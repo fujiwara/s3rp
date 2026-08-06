@@ -18,6 +18,8 @@ const DefaultPrincipalKey = "S3RP"
 // dialect-independent. A service whose tenants write a different syntax
 // parses with its own Dialect and keeps the original text in
 // store.Bucket.PolicyText, which is what GetBucketPolicy returns.
+// Condition syntax (the operators and the "aws:SourceIp" key) is the same
+// in every dialect.
 type Dialect struct {
 	// PrincipalKey is the JSON key of the Principal object holding the
 	// names (empty = DefaultPrincipalKey).
@@ -62,6 +64,7 @@ type rawStatement struct {
 	NotPrincipal json.RawMessage `json:"NotPrincipal"`
 	Action       StringOrSlice   `json:"Action"`
 	Resource     StringOrSlice   `json:"Resource"`
+	Condition    *Condition      `json:"Condition"`
 }
 
 // Parse parses and validates a policy document written in this dialect. The
@@ -83,7 +86,7 @@ func (d *Dialect) Parse(text string) (*Policy, error) {
 		if name == "" {
 			name = fmt.Sprintf("statement[%d]", i)
 		}
-		st := Statement{Sid: rs.Sid, Effect: rs.Effect, Action: rs.Action, Resource: rs.Resource}
+		st := Statement{Sid: rs.Sid, Effect: rs.Effect, Action: rs.Action, Resource: rs.Resource, Condition: rs.Condition}
 		var err error
 		if st.Principal, err = d.decodePrincipal(rs.Principal); err != nil {
 			return nil, fmt.Errorf("%s: %w", name, err)
