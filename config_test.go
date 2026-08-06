@@ -83,6 +83,20 @@ tenants:
 		errStr: "duplicate tenant name",
 	},
 	{
+		// a tenant name outside the principal charset could never be named
+		// in a bucket policy ("Tenant-A/user" is an invalid principal)
+		name: "invalid tenant name",
+		yaml: `
+tenants:
+  - name: Tenant-A
+    users: [{name: user1, keys: [{access_key_id: k, secret_access_key: s}]}]
+    buckets:
+      - name: bucket1
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
+`,
+		errStr: "invalid tenant name",
+	},
+	{
 		name: "duplicate access key id across tenants",
 		yaml: `
 tenants:

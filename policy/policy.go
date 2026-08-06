@@ -38,7 +38,9 @@ const (
 
 // principalRegexp accepts a tenant-qualified user name ("tenant-a/alice")
 // or a tenant wildcard ("tenant-a/*", every user of the tenant). Both parts
-// use the user-name charset; there is no unqualified form — "*" (every
+// use the user-name charset — kept in sync with the store package's
+// ValidateTenantName/ValidateUserName (store imports policy, so the regexp
+// cannot be shared) — and there is no unqualified form: "*" (every
 // authenticated user) is the Principal "All" shape, not a list entry.
 var principalRegexp = regexp.MustCompile(`^[a-z][a-z0-9_-]+/([a-z][a-z0-9_-]+|\*)$`)
 
