@@ -204,14 +204,27 @@ func main() {
   }
   ```
 
+**Do**
+
+- Cache the parsed `*policy.Policy` / `*policy.UserPolicy`, keyed by the policy text.
+- Parse a bucket policy with its bucket's name (`policy.Parse(bucket, text)`); with a dialect, keep the tenant's original text in `PolicyText`.
+- Run `store.Validate*`, `Backend.Validate`, `Backend.SetDefaults` and `cors.Rule.Validate` where definitions are written, and enforce global uniqueness (bucket names, access key ids) and physical-backend-bucket exclusivity there too.
+- Make an issued key visible to the store the gateways read **before** returning its credentials to the caller.
+
+**Don't**
+
+- Don't re-parse policy JSON per request — the compiled patterns live on the parsed object.
+- Don't hand the gateway a `Backend` that skipped `SetDefaults`, or definitions whose `Metadata` is mutated while requests share it.
+- Don't return expired keys from `GetKey` — expiry is the store's concern, the gateway has no notion of it.
+
 ## In front of the gateway
 
 - Unauthenticated requests are not free. `GetKey` runs **before** signature verification — the secret is what verifies — so a well-formed `Authorization` header with a bogus access key still costs one store lookup, and a valid key with a bad signature costs the HMAC chain too. A store should negative-cache unknown key ids (weighing the TTL against how soon a freshly issued key must start working), and rate limiting belongs **outside** `Handler()`, in a wrapping handler or the fronting proxy: the `Authorizer` runs only after verification and the policies, which is too late for DoS economics.
 - That same wrapping layer is where a health-check endpoint and a request body cap (`http.MaxBytesReader`) go. To the gateway every path is S3 — `GET /` is an authenticated ListBuckets — and it deliberately caps nothing itself, for the same reason it sets no read or write timeouts.
 
+- **The wrapper must be a plain `http.Handler`, never `http.ServeMux`** — any version, patterns or not. ServeMux canonicalizes request paths: it collapses `//`, resolves `.` and `..` segments, and answers a non-canonical path with a **301 redirect** to the cleaned one. Both halves break S3. Object keys are opaque strings — `a//b`, `a/./b` and `a/../b` name three distinct objects, so the "cleaned" path is a *different key*. And the SigV4 signature commits to the path exactly as the client signed it, so a client that follows the redirect re-requests a path it never signed and fails verification (this is why the gateway itself routes with a single catch-all and manual dispatch, and why the nginx example in the README passes the request line through untouched — the same rule binds every hop in front of the gateway, proxies included). Route the few non-S3 paths by exact comparison on `r.URL.Path` inside a plain handler, as below — or serve health, metrics and pprof on a **separate listener**, which cannot collide with tenant traffic at all.
+
   ```go
-  // a plain handler, NOT http.ServeMux: its path cleaning and 301 redirects
-  // break S3 keys and their signatures
   s3 := gw.Handler()
   h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
   	// "_" cannot appear in a bucket name, so no tenant can own this path
@@ -232,6 +245,19 @@ func main() {
   ```
 - The signing region of a request is taken from its credential scope, so by default **any region verifies** — the signature commits to the region either way, and a front endpoint has no inherent region. A multi-region deployment should pin each endpoint with `SetRegion`: not for signature integrity, but so a client pointed at the wrong regional endpoint fails fast with AWS's own error (`AuthorizationHeaderMalformed`, naming the expected region) instead of silently being served cross-region, and so a leaked derived signing key stays scoped to its region as SigV4 intends. The pinned region is also what GetBucketLocation and HeadBucket report, keeping region discovery consistent with what the verifier accepts.
 
+**Do**
+
+- Rate-limit and cap request bodies (`http.MaxBytesReader`) in the wrapping handler, before verification; negative-cache unknown access key ids in the store.
+- Serve health/metrics/pprof on a path no bucket name can collide with (`_`-prefixed) or on a separate listener.
+- Behind a proxy, rewrite `r.RemoteAddr` to the real client — it feeds the access log and `aws:SourceIp` conditions.
+- Pin the accepted signing region per endpoint (`SetRegion`) in a multi-region deployment.
+
+**Don't**
+
+- Don't route with `http.ServeMux` or anything else that cleans paths or redirects — S3 keys and their signatures do not survive it.
+- Don't let any hop rewrite the request line, its escaping, or the `x-amz-request-id` response header.
+- Don't put rate limiting in the `Authorizer` — it runs after verification and the policies, which is too late for DoS economics.
+
 ## Backend clients and the gateway's caches
 
 - Backend clients are built by the gateway, but `SetClientOptions` lets you contribute `s3.Options` to every one it builds — a custom `Retryer`, an instrumented `HTTPClient` (an otelhttp transport is how you get per-backend latency and retry metrics, which the hooks cannot see), timeouts. The hook receives the backend definition, so options can differ per backend, and runs after the gateway's own settings — which are load-bearing for non-AWS backends, so override them only knowingly. Set it before serving: clients are cached per backend and keep the options they were built with.
@@ -250,6 +276,17 @@ func main() {
   ```
 - What the gateway does cache is derived from definitions, never a definition itself, and is bounded: backend **clients** (one per distinct endpoint/credentials, LRU, default 128 — `SetClientCacheSize`) and one SigV4 **signer** per access key (default 512 slots — `SetSignerCacheSize`). Size them to the number of distinct backends and of access keys active at once; an evicted entry is rebuilt on its next request, so undersizing costs latency, not correctness.
 - Whether they *are* sized right is answerable: `ClientCacheStats` / `SignerCacheStats` return snapshots (hits, misses, evictions, len, capacity — monotonic counters, poll them from your metrics collector). A rising eviction rate with `Len` near `Capacity` means the cache is too small. The signer cache's evictions are collision displacements: a high rate with `Len` well **under** `Capacity` means hot keys sharing a slot by hash luck, which more slots make improbable.
+
+**Do**
+
+- Set `SetClientOptions` before serving, and keep it deterministic per backend — a cached client never consults it again.
+- Instrument the backend `HTTPClient` (e.g. an otelhttp transport) for per-backend latency and retry metrics; the hooks cannot see them.
+- Size the caches to what is active at once and poll the stats to verify.
+
+**Don't**
+
+- Don't override the gateway's own client settings casually — the unsigned-payload and checksum settings are load-bearing for non-AWS backends.
+- Don't change client options at runtime and expect existing clients to pick them up; they keep what they were built with.
 
 ## Hooks and metering
 
@@ -284,12 +321,34 @@ func main() {
 - A client that retries sends a **new request**, which is verified, authorized and metered on its own. That is what the server served; whether a retry should count toward a quota or an invoice is the application's decision, not the gateway's.
 - `Op.BytesIn` / `BytesOut` count bytes on the wire, so an `aws-chunked` upload includes its framing. They measure transfer, not storage: a quota over bytes at rest needs the backend's inventory (deletes, overwrites and versions carry no sizes through the hooks).
 
+**Do**
+
+- Meter after `next()` — the byte counts are final by then, in any layer.
+- Refuse a request by returning **without** calling `next`; read what the store already loaded from `Op.BucketMetadata` / `Op.KeyMetadata`.
+- Use `context.WithoutCancel(ctx)` for your own I/O after `next`, or hand the self-contained `Op` to a queue.
+
+**Don't**
+
+- Don't query the store again in a hook for data `Metadata` already carries.
+- Don't use the request context as-is for post-`next` writes — it is canceled exactly for disconnected clients, so their usage silently vanishes.
+- Don't read `BytesOut` as stored bytes (it is wire transfer), and don't expect the gateway to de-duplicate client retries — each retry is a new, separately metered request.
+
 ## Observation
 
 - **Nothing is logged unless you install an observer**, including failures. The cause of a failure is not recoverable anywhere else: it never reaches the client, by design. An observer is called once per request, after the response has been written, whether or not the request ever reached an operation — a signature that did not verify or a bucket that does not exist never reaches an interceptor, but is still observed.
 - `RequestInfo` keeps the identity apart from the operation: `Tenant` and `User` are set as soon as the signature verifies, `Op` only once routing and the policies pass. So a request refused for an unknown bucket or a denied action still records **who** asked, which is usually the point of looking.
 - `RequestInfo` stands on its own, `Start` included, so it can be handed to a metering queue or a batch and still say when it happened — an observer that defers the work must not have to stamp the time itself. It carries snake_case JSON tags and can be emitted as it stands; the failure reason is rendered as its message, since an `error` marshals to an empty object on its own. `Op` is tagged the same way.
 - Log `RequestInfo.RawQuery`, not the request's own query string: the gateway masks the presigned authentication parameters, and a presigned URL's signature is a bearer credential until it expires.
+
+**Do**
+
+- Install an observer — it is the only place a failure's cause exists at all.
+- Keep it fast (it runs on the request path, after the response): buffer or sample at real request rates, or hand `RequestInfo` to a queue — it is self-contained, `Start` included.
+
+**Don't**
+
+- Don't log the request's own query string — log `RequestInfo.RawQuery`, which already masks presigned signatures.
+- Don't surface the failure cause (`RequestInfo.Err`) to clients; it may name backend endpoints and buckets, which is why the gateway kept it out of the response.
 
 ## The other packages
 
