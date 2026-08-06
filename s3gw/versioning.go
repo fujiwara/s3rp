@@ -129,7 +129,7 @@ func (g *Gateway) listObjectVersions(c *opCtx) error {
 	}
 	// AWS always carries an Owner on versions and delete markers; the
 	// tenant, never the backend's account
-	owner := tenantOwner(c.vr.Tenant)
+	owner := tenantOwner(c.rt.cfg.Tenant)
 	for _, v := range out.Versions {
 		version := s3xml.ObjectVersion{
 			StorageClass: string(v.StorageClass),

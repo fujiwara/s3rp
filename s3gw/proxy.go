@@ -343,7 +343,7 @@ func (g *Gateway) listObjectsV2(c *opCtx) error {
 	// owner presence follows the request (fetch-owner), like AWS
 	var owner *s3xml.Owner
 	if in.FetchOwner != nil && *in.FetchOwner {
-		owner = tenantOwner(c.vr.Tenant)
+		owner = tenantOwner(c.rt.cfg.Tenant)
 	}
 	result.Contents = objectsFromSDK(out.Contents, owner)
 	for _, cp := range out.CommonPrefixes {
@@ -444,7 +444,7 @@ func (g *Gateway) listObjectsV1(c *opCtx) error {
 		result.IsTruncated = *out.IsTruncated
 	}
 	// ListObjects (V1) always carries an Owner on AWS
-	result.Contents = objectsFromSDK(out.Contents, tenantOwner(c.vr.Tenant))
+	result.Contents = objectsFromSDK(out.Contents, tenantOwner(c.rt.cfg.Tenant))
 	for _, cp := range out.CommonPrefixes {
 		if cp.Prefix != nil {
 			result.CommonPrefixes = append(result.CommonPrefixes, s3xml.CommonPrefix{Prefix: *cp.Prefix})

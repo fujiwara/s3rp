@@ -35,8 +35,9 @@ func (g *Gateway) resolveCopySource(r *http.Request, vr *verifiedRequest, dst *b
 	if err != nil {
 		return "", s3err.New(http.StatusBadRequest, "InvalidArgument", "Invalid copy source")
 	}
-	// the source is resolved within the requesting key's tenant, so
-	// copying from another tenant's bucket is impossible by construction
+	// the source is resolved within the requesting key's tenant — deliberately
+	// not through resolveBucket — so copying from another tenant's bucket is
+	// impossible by construction even where a policy grants cross-tenant reads
 	src, err := g.store.GetBucket(r.Context(), vr.Tenant, srcBucket)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
