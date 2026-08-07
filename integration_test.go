@@ -462,8 +462,10 @@ func TestIntegration(t *testing.T) {
 	})
 	t.Run("Versioning", func(t *testing.T) {
 		// requires versitygw started with --versioning-dir
-		if _, err := client.PutBucketVersioning(t.Context(), &s3.PutBucketVersioningInput{
-			Bucket: aws.String("it-bucket"),
+		// bucket configuration is not writable via the gateway, so enable
+		// versioning directly on the backend, as a control plane would
+		if _, err := backendClient.PutBucketVersioning(t.Context(), &s3.PutBucketVersioningInput{
+			Bucket: aws.String(backendBucket),
 			VersioningConfiguration: &types.VersioningConfiguration{
 				Status: types.BucketVersioningStatusEnabled,
 			},
@@ -539,8 +541,8 @@ func TestIntegration(t *testing.T) {
 			}
 		}
 		// suspend versioning to avoid affecting other subtests
-		if _, err := client.PutBucketVersioning(t.Context(), &s3.PutBucketVersioningInput{
-			Bucket: aws.String("it-bucket"),
+		if _, err := backendClient.PutBucketVersioning(t.Context(), &s3.PutBucketVersioningInput{
+			Bucket: aws.String(backendBucket),
 			VersioningConfiguration: &types.VersioningConfiguration{
 				Status: types.BucketVersioningStatusSuspended,
 			},

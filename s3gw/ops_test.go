@@ -258,21 +258,6 @@ func TestProxyBucketVersioning(t *testing.T) {
 	}
 	client, _ := newTestProxy(t, stub)
 
-	if _, err := client.PutBucketVersioning(t.Context(), &s3.PutBucketVersioningInput{
-		Bucket: aws.String("testbucket"),
-		VersioningConfiguration: &types.VersioningConfiguration{
-			Status: types.BucketVersioningStatusEnabled,
-		},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if aws.ToString(stub.putVerIn.Bucket) != "backend-testbucket" {
-		t.Errorf("expect backend-testbucket, got %s", aws.ToString(stub.putVerIn.Bucket))
-	}
-	if stub.putVerIn.VersioningConfiguration.Status != types.BucketVersioningStatusEnabled {
-		t.Errorf("unexpected status %v", stub.putVerIn.VersioningConfiguration.Status)
-	}
-
 	out, err := client.GetBucketVersioning(t.Context(), &s3.GetBucketVersioningInput{
 		Bucket: aws.String("testbucket"),
 	})

@@ -138,14 +138,12 @@ Because operations are reconstructed rather than forwarded, each one is implemen
 - PutObjectTagging
 - DeleteObjectTagging
 - GetBucketVersioning
-- PutBucketVersioning
 - ListObjectVersions
 - GetBucketAcl
 - GetObjectAcl
 - GetBucketPolicy
 - GetBucketCors
 - GetObjectLockConfiguration
-- PutObjectLockConfiguration
 - GetObjectRetention
 - PutObjectRetention
 - GetObjectLegalHold
@@ -169,13 +167,13 @@ Wherever a response exposes an `Owner` or `Initiator` — object and version lis
 
 ListBuckets answers from the store without calling any backend: the bucket names are the front names, and each `CreationDate` is the store's `created_at` for the bucket (the Unix epoch when the store does not track one).
 
-The `versionId` query parameter is passed through on GetObject, HeadObject, DeleteObject, GetObjectAcl and the object tagging operations. Versioning requires a backend that supports it.
+The `versionId` query parameter is passed through on GetObject, HeadObject, DeleteObject, GetObjectAcl and the object tagging operations. Versioning requires a backend that supports it. The versioning **state** is bucket configuration: PutBucketVersioning is not proxied (see [Limitations](#limitations)), so it is set on the backend bucket by whoever created it; GetBucketVersioning reports it.
 
 `aws-chunked` request bodies (`STREAMING-AWS4-HMAC-SHA256-PAYLOAD` and the trailer variants), which the AWS CLI and SDKs use for uploads over plain http endpoints, are decoded and their chunk signatures are verified.
 
 ### Object Lock
 
-Object Lock (WORM) is passed through to the backend, which enforces the retention. The object-lock configuration, per-object retention, and legal hold operations are proxied, and the `x-amz-object-lock-*` headers on uploads and `x-amz-bypass-governance-retention` on deletes are forwarded. Bucket policies gain the corresponding actions (`s3:GetObjectRetention`, `s3:PutObjectRetention`, `s3:GetObjectLegalHold`, `s3:PutObjectLegalHold`, `s3:BypassGovernanceRetention`, `s3:Get/PutBucketObjectLockConfiguration`).
+Object Lock (WORM) is passed through to the backend, which enforces the retention. The per-object retention and legal hold operations are proxied, and the `x-amz-object-lock-*` headers on uploads and `x-amz-bypass-governance-retention` on deletes are forwarded. Bucket policies gain the corresponding actions (`s3:GetObjectRetention`, `s3:PutObjectRetention`, `s3:GetObjectLegalHold`, `s3:PutObjectLegalHold`, `s3:BypassGovernanceRetention`, `s3:GetBucketObjectLockConfiguration`). The bucket-level configuration is readable (GetObjectLockConfiguration) but not writable through the gateway: the default retention is bucket configuration, written where the bucket is created (see [Limitations](#limitations)).
 
 Object Lock must be enabled when a bucket is created, and s3rp does not proxy CreateBucket, so the backend bucket must have been created with Object Lock enabled. The exact behavior depends on the backend: Ceph RGW and Amazon S3 support it fully, while versitygw enforces retention but does not honor governance-mode bypass.
 
@@ -405,6 +403,7 @@ The other packages are usable on their own: `sigv4` (server-side SigV4 verificat
 
 - Requests that sign the `user-agent` or other headers the AWS SDK signer ignores will fail verification. Real AWS SDK/CLI clients do not do this.
 - Bucket lifecycle configuration (expiration, transitions) is deliberately **not** exposed via the S3 API — `?lifecycle` gets the same loud `NotImplemented` as every unsupported subresource. Enforcement is the backend's job, so rules must live on the backend bucket, and they are written there by the control plane with backend credentials — the same split as bucket policies and CORS, whose `Put*` are also not proxied. This is a deliberate choice beyond consistency: a bucket holds exactly **one** lifecycle configuration, so letting tenants `PutBucketLifecycleConfiguration` would let one request replace the operator's baseline rules (such as aborting stale multipart uploads); exposing it would require a merge layer, not a pass-through. For experiments, Ceph RGW's `rgw_lc_debug_interval` shortens expiry to seconds.
+- The same rule covers every bucket-configuration write: PutBucketVersioning and PutObjectLockConfiguration are also `NotImplemented`. Bucket configuration is written where the bucket is created — the control plane — and a data-plane access key must not be able to overwrite it: suspending versioning changes what the bucket retains from then on, and rewriting the Object Lock default retention would let any key of the tenant undo what the bucket was provisioned with. The reads (GetBucketVersioning, GetObjectLockConfiguration) stay proxied.
 - Definitions are read from the store on every request and nothing is cached, so the store is on the hot path. Caching belongs to a store implementation, which is the only thing that knows when a key is revoked.
 - Every request is logged synchronously. At any real request rate that write dominates the request path — it roughly doubled the time of a small GET when measured — so a deployment would want the log buffered or sampled.
 

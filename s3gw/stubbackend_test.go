@@ -48,13 +48,11 @@ type stubBackend struct {
 	delTagIn   *s3.DeleteObjectTaggingInput
 	getVerIn   *s3.GetBucketVersioningInput
 	getVerOut  *s3.GetBucketVersioningOutput
-	putVerIn   *s3.PutBucketVersioningInput
 	listVerIn  *s3.ListObjectVersionsInput
 	listVerOut *s3.ListObjectVersionsOutput
 
 	getLockCfgIn    *s3.GetObjectLockConfigurationInput
 	getLockCfgOut   *s3.GetObjectLockConfigurationOutput
-	putLockCfgIn    *s3.PutObjectLockConfigurationInput
 	getRetentionIn  *s3.GetObjectRetentionInput
 	getRetentionOut *s3.GetObjectRetentionOutput
 	putRetentionIn  *s3.PutObjectRetentionInput
@@ -170,11 +168,6 @@ func (b *stubBackend) GetBucketVersioning(ctx context.Context, in *s3.GetBucketV
 	return b.getVerOut, nil
 }
 
-func (b *stubBackend) PutBucketVersioning(ctx context.Context, in *s3.PutBucketVersioningInput, _ ...func(*s3.Options)) (*s3.PutBucketVersioningOutput, error) {
-	b.putVerIn = in
-	return &s3.PutBucketVersioningOutput{}, nil
-}
-
 func (b *stubBackend) ListObjectVersions(ctx context.Context, in *s3.ListObjectVersionsInput, _ ...func(*s3.Options)) (*s3.ListObjectVersionsOutput, error) {
 	b.listVerIn = in
 	return b.listVerOut, nil
@@ -198,11 +191,6 @@ func (b *stubBackend) DeleteObjectTagging(ctx context.Context, in *s3.DeleteObje
 func (b *stubBackend) GetObjectLockConfiguration(ctx context.Context, in *s3.GetObjectLockConfigurationInput, _ ...func(*s3.Options)) (*s3.GetObjectLockConfigurationOutput, error) {
 	b.getLockCfgIn = in
 	return b.getLockCfgOut, nil
-}
-
-func (b *stubBackend) PutObjectLockConfiguration(ctx context.Context, in *s3.PutObjectLockConfigurationInput, _ ...func(*s3.Options)) (*s3.PutObjectLockConfigurationOutput, error) {
-	b.putLockCfgIn = in
-	return &s3.PutObjectLockConfigurationOutput{}, nil
 }
 
 func (b *stubBackend) GetObjectRetention(ctx context.Context, in *s3.GetObjectRetentionInput, _ ...func(*s3.Options)) (*s3.GetObjectRetentionOutput, error) {

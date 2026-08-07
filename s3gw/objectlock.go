@@ -16,7 +16,11 @@ import (
 
 // Object Lock is passed through to the backend, which enforces the WORM
 // semantics. The bucket must have been created with Object Lock enabled
-// on the backend (s3rp does not proxy CreateBucket).
+// on the backend (s3rp does not proxy CreateBucket), and its configuration
+// — the default retention — is written the same way, by whoever created
+// the bucket: PutObjectLockConfiguration is deliberately not proxied, like
+// every other bucket-configuration write. Only the object-level operations
+// (retention, legal hold) and the reads go through.
 
 const objectLockTimeFormat = "2006-01-02T15:04:05.000Z"
 
@@ -45,42 +49,6 @@ func (g *Gateway) getObjectLockConfiguration(c *opCtx) error {
 		}
 	}
 	return s3xml.Write(w, result)
-}
-
-func (g *Gateway) putObjectLockConfiguration(c *opCtx) error {
-	w, r, rt, vr := c.w, c.r, c.rt, c.vr
-	var req s3xml.ObjectLockConfiguration
-	if err := readXMLBody(r, vr, &req); err != nil {
-		return err
-	}
-	in := &s3.PutObjectLockConfigurationInput{
-		Bucket: aws.String(rt.cfg.Backend.Bucket),
-		ObjectLockConfiguration: &types.ObjectLockConfiguration{
-			ObjectLockEnabled: types.ObjectLockEnabled(req.ObjectLockEnabled),
-		},
-	}
-	if req.Rule != nil && req.Rule.DefaultRetention != nil {
-		dr := req.Rule.DefaultRetention
-		in.ObjectLockConfiguration.Rule = &types.ObjectLockRule{
-			DefaultRetention: &types.DefaultRetention{
-				Mode: types.ObjectLockRetentionMode(dr.Mode),
-			},
-		}
-		if dr.Days > 0 {
-			in.ObjectLockConfiguration.Rule.DefaultRetention.Days = aws.Int32(dr.Days)
-		}
-		if dr.Years > 0 {
-			in.ObjectLockConfiguration.Rule.DefaultRetention.Years = aws.Int32(dr.Years)
-		}
-	}
-	if v := r.Header.Get("x-amz-bucket-object-lock-token"); v != "" {
-		in.Token = aws.String(v)
-	}
-	if _, err := rt.client.PutObjectLockConfiguration(r.Context(), in); err != nil {
-		return s3err.FromSDKError(err, r.URL.Path)
-	}
-	w.WriteHeader(http.StatusOK)
-	return nil
 }
 
 func (g *Gateway) getObjectRetention(c *opCtx) error {

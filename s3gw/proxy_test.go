@@ -397,6 +397,32 @@ func TestProxyNotImplemented(t *testing.T) {
 				return err
 			},
 		},
+		// bucket configuration is written by the control plane, never via
+		// the S3 API — a data-plane key must not be able to overwrite it
+		{
+			name: "PutBucketVersioning",
+			call: func(ctx context.Context, client *s3.Client) error {
+				_, err := client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
+					Bucket: aws.String("testbucket"),
+					VersioningConfiguration: &types.VersioningConfiguration{
+						Status: types.BucketVersioningStatusEnabled,
+					},
+				})
+				return err
+			},
+		},
+		{
+			name: "PutObjectLockConfiguration",
+			call: func(ctx context.Context, client *s3.Client) error {
+				_, err := client.PutObjectLockConfiguration(ctx, &s3.PutObjectLockConfigurationInput{
+					Bucket: aws.String("testbucket"),
+					ObjectLockConfiguration: &types.ObjectLockConfiguration{
+						ObjectLockEnabled: types.ObjectLockEnabledEnabled,
+					},
+				})
+				return err
+			},
+		},
 	}
 	client, _ := newTestProxy(t, &stubBackend{})
 	for _, tc := range testCases {
