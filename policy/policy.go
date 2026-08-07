@@ -42,7 +42,7 @@ const (
 // ValidateTenantName/ValidateUserName (store imports policy, so the regexp
 // cannot be shared) — and there is no unqualified form: "*" (every
 // authenticated user) is the Principal "All" shape, not a list entry.
-var principalRegexp = regexp.MustCompile(`^[a-z][a-z0-9_-]+/([a-z][a-z0-9_-]+|\*)$`)
+var principalRegexp = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]+/([a-z0-9][a-z0-9_-]+|\*)$`)
 
 // Structural limits on a policy document. Policies are tenant-authored, so
 // they are untrusted input, and authorization runs on every request (per
