@@ -164,6 +164,7 @@ func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	}
 	if info := recordOf(r.Context()); info != nil {
 		info.Tenant, info.User = vr.Tenant, vr.User
+		info.AccessKeyID = vr.AccessKeyID
 	}
 	bucket, key, err := splitPath(r.URL.EscapedPath())
 	if err != nil {

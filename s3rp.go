@@ -66,7 +66,8 @@ func logRequest(ctx context.Context, info *s3gw.RequestInfo) {
 	// even for a request that is then refused; what they asked for is only
 	// known once the request reached an operation
 	if info.Tenant != "" {
-		attrs = append(attrs, "tenant", info.Tenant, "user", info.User)
+		attrs = append(attrs, "tenant", info.Tenant, "user", info.User,
+			"access_key_id", info.AccessKeyID)
 	}
 	if info.Op != nil {
 		attrs = append(attrs, "action", info.Op.Action, "bucket", info.Op.Bucket)
