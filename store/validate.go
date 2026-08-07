@@ -26,8 +26,10 @@ import (
 var (
 	bucketNameRegexp = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$`)
 	// tenant and user names deliberately share one charset: a principal is
-	// "tenant/user", so both halves must be writable in a policy.
-	principalPartRegexp = regexp.MustCompile(`^[a-z][a-z0-9_-]+$`)
+	// "tenant/user", so both halves must be writable in a policy. A digit
+	// may lead (an account-ID-style all-numeric tenant name is valid); "-"
+	// and "_" may not.
+	principalPartRegexp = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]+$`)
 )
 
 // ValidateBucketName checks that name is a valid front-side bucket name.

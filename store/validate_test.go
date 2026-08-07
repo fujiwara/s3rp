@@ -32,8 +32,8 @@ func TestValidateBucketName(t *testing.T) {
 // ("tenant/user"): a name outside it could never be written in a Principal
 // element.
 func TestValidatePrincipalPartNames(t *testing.T) {
-	valid := []string{"acme", "tenant-b", "some_user", "t2"}
-	invalid := []string{"", "a", "Acme", "0tenant", "my.tenant", "my/tenant", "my tenant"}
+	valid := []string{"acme", "tenant-b", "some_user", "t2", "0tenant", "123456789012"}
+	invalid := []string{"", "a", "0", "Acme", "-tenant", "_tenant", "my.tenant", "my/tenant", "my tenant"}
 	for _, name := range valid {
 		if err := store.ValidateTenantName(name); err != nil {
 			t.Errorf("tenant name %q must be valid: %v", name, err)

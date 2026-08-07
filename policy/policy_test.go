@@ -52,6 +52,20 @@ func TestParse(t *testing.T) {
 			t.Error("expect All principal")
 		}
 	})
+	t.Run("digit-leading principal", func(t *testing.T) {
+		// account-ID-style tenant names and digit-leading user names are valid
+		p, err := policy.Parse("photos", `{
+			"Statement": [
+				{"Effect": "Allow", "Principal": {"S3RP": ["123456789012/0app", "123456789012/*"]}, "Action": "s3:GetObject", "Resource": "photos/*"}
+			]
+		}`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.Statement[0].Principal.Users[0] != "123456789012/0app" {
+			t.Errorf("unexpected principal %+v", p.Statement[0].Principal)
+		}
+	})
 	t.Run("not principal", func(t *testing.T) {
 		p, err := policy.Parse("photos", `{
 			"Statement": [
@@ -102,6 +116,11 @@ func TestParse(t *testing.T) {
 			"invalid principal shape",
 			`{"Statement": [{"Effect": "Deny", "Principal": "everyone", "Action": "s3:GetObject", "Resource": "b"}]}`,
 			"principal must be",
+		},
+		{
+			"hyphen-leading principal",
+			`{"Statement": [{"Effect": "Deny", "Principal": {"S3RP": ["-ta/app"]}, "Action": "s3:GetObject", "Resource": "b"}]}`,
+			"invalid principal",
 		},
 		{
 			"non-s3 action",
