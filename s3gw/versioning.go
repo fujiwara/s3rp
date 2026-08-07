@@ -1,8 +1,6 @@
 package s3gw
 
 import (
-	"encoding/xml"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -27,40 +25,6 @@ func (g *Gateway) getBucketVersioning(c *opCtx) error {
 		XMLNS:  s3xml.Namespace,
 		Status: string(out.Status),
 	})
-}
-
-func (g *Gateway) putBucketVersioning(c *opCtx) error {
-	w, r, rt, vr := c.w, c.r, c.rt, c.vr
-	body, _, s3e := requestBody(r, vr)
-	if s3e != nil {
-		return s3e
-	}
-	data, err := io.ReadAll(io.LimitReader(body, maxXMLBodySize))
-	if err != nil {
-		return s3err.New(http.StatusBadRequest, "InvalidRequest", "failed to read request body")
-	}
-	var req s3xml.VersioningConfiguration
-	if err := xml.Unmarshal(data, &req); err != nil {
-		return s3err.New(http.StatusBadRequest, "MalformedXML",
-			"The XML you provided was not well-formed or did not validate against our published schema.")
-	}
-	switch req.Status {
-	case "Enabled", "Suspended":
-	default:
-		return s3err.New(http.StatusBadRequest, "MalformedXML",
-			"The XML you provided was not well-formed or did not validate against our published schema.")
-	}
-	in := &s3.PutBucketVersioningInput{
-		Bucket: aws.String(rt.cfg.Backend.Bucket),
-		VersioningConfiguration: &types.VersioningConfiguration{
-			Status: types.BucketVersioningStatus(req.Status),
-		},
-	}
-	if _, err := rt.client.PutBucketVersioning(r.Context(), in); err != nil {
-		return s3err.FromSDKError(err, r.URL.Path)
-	}
-	w.WriteHeader(http.StatusOK)
-	return nil
 }
 
 func (g *Gateway) listObjectVersions(c *opCtx) error {

@@ -387,10 +387,14 @@ var bucketRoutes = map[string][]route{
 		{action: "s3:ListBucket", handle: (*Gateway).headBucket},
 	},
 	http.MethodPut: {
-		{match: has(subVersioning), params: versioningOnlyParams, action: "s3:PutBucketVersioning", handle: (*Gateway).putBucketVersioning},
-		{match: has(subObjectLock), params: objectLockOnlyParams, action: "s3:PutBucketObjectLockConfiguration", handle: (*Gateway).putObjectLockConfiguration},
 		{match: has(subACL), handle: rejectACL},
-		// bucket policies and CORS rules are defined in the store, not via the S3 API
+		// bucket configuration is written where the bucket is created — the
+		// control plane / store — never via the S3 API: policies and CORS
+		// rules live in the store, and versioning / Object Lock defaults
+		// would let a data-plane key overwrite what the bucket's creator
+		// configured (the reads stay proxied)
+		notImplemented(has(subVersioning), "PutBucketVersioning"),
+		notImplemented(has(subObjectLock), "PutObjectLockConfiguration"),
 		notImplemented(has(subPolicy), "PutBucketPolicy"),
 		notImplemented(has(subCORS), "PutBucketCors"),
 		notImplemented(nil, "this bucket operation"),

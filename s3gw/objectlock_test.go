@@ -26,31 +26,6 @@ func TestProxyObjectLockConfiguration(t *testing.T) {
 	}
 	client, _ := newTestProxy(t, stub)
 
-	if _, err := client.PutObjectLockConfiguration(t.Context(), &s3.PutObjectLockConfigurationInput{
-		Bucket: aws.String("testbucket"),
-		ObjectLockConfiguration: &types.ObjectLockConfiguration{
-			ObjectLockEnabled: types.ObjectLockEnabledEnabled,
-			Rule: &types.ObjectLockRule{
-				DefaultRetention: &types.DefaultRetention{
-					Mode: types.ObjectLockRetentionModeCompliance,
-					Days: aws.Int32(7),
-				},
-			},
-		},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	in := stub.putLockCfgIn
-	if aws.ToString(in.Bucket) != "backend-testbucket" {
-		t.Errorf("expect backend-testbucket, got %s", aws.ToString(in.Bucket))
-	}
-	if in.ObjectLockConfiguration.Rule.DefaultRetention.Mode != types.ObjectLockRetentionModeCompliance {
-		t.Errorf("unexpected mode %v", in.ObjectLockConfiguration.Rule.DefaultRetention.Mode)
-	}
-	if aws.ToInt32(in.ObjectLockConfiguration.Rule.DefaultRetention.Days) != 7 {
-		t.Errorf("unexpected days %v", in.ObjectLockConfiguration.Rule.DefaultRetention.Days)
-	}
-
 	out, err := client.GetObjectLockConfiguration(t.Context(), &s3.GetObjectLockConfigurationInput{
 		Bucket: aws.String("testbucket"),
 	})
