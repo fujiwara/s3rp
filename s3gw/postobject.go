@@ -147,6 +147,7 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, bucke
 	}
 	if info := recordOf(r.Context()); info != nil {
 		info.Tenant, info.User = vr.Tenant, vr.User
+		info.AccessKeyID = vr.AccessKeyID
 	}
 
 	b, s3e := g.resolveBucket(r.Context(), vr, bucket)

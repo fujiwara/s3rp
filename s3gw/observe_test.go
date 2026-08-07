@@ -134,6 +134,7 @@ func TestRequestInfoJSON(t *testing.T) {
 	info := &s3gw.RequestInfo{
 		Method: "GET", Path: "/photos/a.jpg", RemoteAddr: "10.0.0.5:1234",
 		RawQuery: "X-Amz-Signature=REDACTED", RequestID: "abc123",
+		Tenant: "ta", User: "app1", AccessKeyID: "S3RPKEY001",
 		Status: 502, Code: "InternalError",
 		Err:      errors.New("connection refused"),
 		BytesOut: 217,
@@ -151,6 +152,7 @@ func TestRequestInfoJSON(t *testing.T) {
 	want := map[string]any{
 		"method": "GET", "path": "/photos/a.jpg", "remote_addr": "10.0.0.5:1234",
 		"raw_query": "X-Amz-Signature=REDACTED", "request_id": "abc123",
+		"tenant": "ta", "user": "app1", "access_key_id": "S3RPKEY001",
 		"status": float64(502), "code": "InternalError",
 		"error":    "connection refused", // not {}
 		"bytes_in": float64(0), "bytes_out": float64(217),
@@ -182,7 +184,7 @@ func TestObserverIdentityAndOp(t *testing.T) {
 		gw.SetObserver(func(_ context.Context, info *s3gw.RequestInfo) { got = info })
 		serve(t, gw, stubGet{body: "hello"})
 
-		if got.Tenant != "testtenant" || got.User != "testuser" {
+		if got.Tenant != "testtenant" || got.User != "testuser" || got.AccessKeyID != testAccessKeyID {
 			t.Errorf("expect the identity, got %+v", got)
 		}
 		if got.Op == nil {
@@ -207,7 +209,7 @@ func TestObserverIdentityAndOp(t *testing.T) {
 		if w.Code != http.StatusForbidden {
 			t.Fatalf("expect the bucket to be refused, got %d", w.Code)
 		}
-		if got.Tenant != "testtenant" || got.User != "testuser" {
+		if got.Tenant != "testtenant" || got.User != "testuser" || got.AccessKeyID != testAccessKeyID {
 			t.Errorf("expect the identity of the refused request, got %+v", got)
 		}
 		if got.Op != nil {
@@ -225,7 +227,7 @@ func TestObserverIdentityAndOp(t *testing.T) {
 		w := httptest.NewRecorder()
 		gw.Handler().ServeHTTP(w, req)
 
-		if got.Tenant != "" || got.User != "" || got.Op != nil {
+		if got.Tenant != "" || got.User != "" || got.AccessKeyID != "" || got.Op != nil {
 			t.Errorf("nothing is proven by a bad signature, got %+v", got)
 		}
 		if got.Code != "SignatureDoesNotMatch" {

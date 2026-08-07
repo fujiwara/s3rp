@@ -33,6 +33,12 @@ type RequestInfo struct {
 	// empty when the signature itself did not verify.
 	Tenant string `json:"tenant,omitempty"`
 	User   string `json:"user,omitempty"`
+	// AccessKeyID is the key the signature was made with, set together with
+	// Tenant and User. A user can hold several keys at once (that is how
+	// rotation works), so key-level accounting — a last-used timestamp that
+	// tells whether an old key is still in use — needs the key, not just the
+	// user. Key ids are identifiers, not secrets.
+	AccessKeyID string `json:"access_key_id,omitempty"`
 	// Op is the operation the request resolved to, present only once routing
 	// and the policies have passed. A request refused before that — an
 	// unverifiable signature, an unknown bucket, a denied action — has none,
