@@ -24,7 +24,7 @@ const (
 
 var testTime = time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
 
-func lookup(_ context.Context, accessKeyID string) (sigv4.Credential, error) {
+func lookup(_ context.Context, accessKeyID, _ string) (sigv4.Credential, error) {
 	if accessKeyID != testAccessKeyID {
 		return sigv4.Credential{}, sigv4.ErrUnknownKey
 	}
@@ -121,7 +121,7 @@ func TestVerifyRejects(t *testing.T) {
 // key, since that would tell a client its credentials are wrong when the
 // service is merely broken
 func TestVerifyLookupFailure(t *testing.T) {
-	failing := func(context.Context, string) (sigv4.Credential, error) {
+	failing := func(context.Context, string, string) (sigv4.Credential, error) {
 		return sigv4.Credential{}, errors.New("database is down")
 	}
 	_, err := newVerifier().Verify(signedRequest(t, testSecret), failing)

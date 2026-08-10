@@ -29,11 +29,11 @@ func (g *Gateway) resolveCopySource(r *http.Request, vr *verifiedRequest, dst *b
 	}
 	srcBucket, err := url.PathUnescape(rawBucket)
 	if err != nil {
-		return "", s3err.New(http.StatusBadRequest, "InvalidArgument", "Invalid copy source")
+		return "", s3err.New(http.StatusBadRequest, "InvalidArgument", "Invalid copy source").WithCause(err)
 	}
 	srcKey, err := unescapeKey(rawKey)
 	if err != nil {
-		return "", s3err.New(http.StatusBadRequest, "InvalidArgument", "Invalid copy source")
+		return "", s3err.New(http.StatusBadRequest, "InvalidArgument", "Invalid copy source").WithCause(err)
 	}
 	// the source is resolved within the requesting key's tenant — deliberately
 	// not through resolveBucket — so copying from another tenant's bucket is
@@ -41,7 +41,9 @@ func (g *Gateway) resolveCopySource(r *http.Request, vr *verifiedRequest, dst *b
 	src, err := g.store.GetBucket(r.Context(), vr.Tenant, srcBucket)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return "", s3err.AccessDenied()
+			// the cause tells the observer this denial is an unresolved
+			// source bucket, not a policy decision; the client sees neither
+			return "", s3err.AccessDenied().WithCause(err)
 		}
 		return "", s3err.Internal(err, "bucket lookup failed")
 	}

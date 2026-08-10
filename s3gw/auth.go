@@ -3,6 +3,7 @@ package s3gw
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/netip"
 
@@ -61,27 +62,40 @@ func remoteIP(r *http.Request) netip.Addr {
 	return netip.Addr{}
 }
 
-// verifyRequest authenticates an incoming request, either by the
-// Authorization header or by presigned URL query parameters, and resolves the
-// identity behind the access key.
-func (g *Gateway) verifyRequest(r *http.Request) (*verifiedRequest, *s3err.Error) {
-	// the store lookup that supplies the secret also yields the identity, so
-	// capture it here instead of looking the key up twice
-	var key *store.Key
-	verified, s3e := g.verifier.Verify(r, func(ctx context.Context, accessKeyID string) (sigv4.Credential, error) {
-		k, err := g.store.GetKey(ctx, accessKeyID)
+// secretLookup returns the SecretLookup backing signature verification. The
+// store lookup that supplies the secret also yields the identity, so the
+// resolved key is captured into *key instead of being looked up twice. The
+// presented session token is handed through to the store, which decides what
+// to make of it (see store.Store.GetKey).
+func (g *Gateway) secretLookup(key **store.Key) sigv4.SecretLookup {
+	return func(ctx context.Context, accessKeyID, sessionToken string) (sigv4.Credential, error) {
+		k, err := g.store.GetKey(ctx, accessKeyID, sessionToken)
 		if err != nil {
-			if errors.Is(err, store.ErrNotFound) {
-				return sigv4.Credential{}, sigv4.ErrUnknownKey
+			switch {
+			case errors.Is(err, store.ErrNotFound):
+				return sigv4.Credential{}, fmt.Errorf("%w: %w", sigv4.ErrUnknownKey, err)
+			case errors.Is(err, store.ErrInvalidToken):
+				// keep the store's error: it becomes the cause the observer
+				// sees, and "mac mismatch" vs "revoked" is what one wants
+				// to know there
+				return sigv4.Credential{}, fmt.Errorf("%w: %w", sigv4.ErrInvalidToken, err)
 			}
 			return sigv4.Credential{}, err
 		}
-		key = k
+		*key = k
 		return sigv4.Credential{
 			SecretAccessKey: k.SecretAccessKey.String(),
 			SessionToken:    k.SessionToken,
 		}, nil
-	})
+	}
+}
+
+// verifyRequest authenticates an incoming request, either by the
+// Authorization header or by presigned URL query parameters, and resolves the
+// identity behind the access key.
+func (g *Gateway) verifyRequest(r *http.Request) (*verifiedRequest, *s3err.Error) {
+	var key *store.Key
+	verified, s3e := g.verifier.Verify(r, g.secretLookup(&key))
 	if s3e != nil {
 		return nil, s3e
 	}
@@ -100,20 +114,7 @@ func (g *Gateway) verifyRequest(r *http.Request) (*verifiedRequest, *s3err.Error
 // verifyRequest does for header and presigned authentication.
 func (g *Gateway) verifyPostRequest(r *http.Request, fields map[string]string) (*verifiedRequest, *sigv4.PostPolicy, *s3err.Error) {
 	var key *store.Key
-	verified, pp, s3e := g.verifier.VerifyPost(r, fields, func(ctx context.Context, accessKeyID string) (sigv4.Credential, error) {
-		k, err := g.store.GetKey(ctx, accessKeyID)
-		if err != nil {
-			if errors.Is(err, store.ErrNotFound) {
-				return sigv4.Credential{}, sigv4.ErrUnknownKey
-			}
-			return sigv4.Credential{}, err
-		}
-		key = k
-		return sigv4.Credential{
-			SecretAccessKey: k.SecretAccessKey.String(),
-			SessionToken:    k.SessionToken,
-		}, nil
-	})
+	verified, pp, s3e := g.verifier.VerifyPost(r, fields, g.secretLookup(&key))
 	if s3e != nil {
 		return nil, nil, s3e
 	}

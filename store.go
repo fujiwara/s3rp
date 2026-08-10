@@ -64,7 +64,9 @@ func NewConfigStore(cfg *Config) store.Store {
 	return s
 }
 
-func (s *configStore) GetKey(ctx context.Context, accessKeyID string) (*store.Key, error) {
+// GetKey ignores the presented session token: config-defined keys are
+// long-lived, so the gateway's exact-match check refuses any token by itself.
+func (s *configStore) GetKey(ctx context.Context, accessKeyID, _ string) (*store.Key, error) {
 	if k, ok := s.keys[accessKeyID]; ok {
 		return k, nil
 	}

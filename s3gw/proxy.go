@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/xml"
+	"errors"
 	"hash"
 	"io"
 	"log/slog"
@@ -477,18 +478,9 @@ func (g *Gateway) getBucketLocation(c *opCtx) error {
 
 func (g *Gateway) deleteObjects(c *opCtx) error {
 	w, r, rt, vr := c.w, c.r, c.rt, c.vr
-	body, _, s3e := requestBody(r, vr)
-	if s3e != nil {
-		return s3e
-	}
-	data, err := io.ReadAll(io.LimitReader(body, maxXMLBodySize))
-	if err != nil {
-		return s3err.New(http.StatusBadRequest, "InvalidRequest", "failed to read request body")
-	}
 	var req s3xml.DeleteRequest
-	if err := xml.Unmarshal(data, &req); err != nil {
-		return s3err.New(http.StatusBadRequest, "MalformedXML",
-			"The XML you provided was not well-formed or did not validate against our published schema.")
+	if s3e := readXMLBody(r, vr, &req); s3e != nil {
+		return s3e
 	}
 	if len(req.Objects) == 0 || len(req.Objects) > 1000 {
 		return s3err.New(http.StatusBadRequest, "MalformedXML",
@@ -650,6 +642,31 @@ func requestBody(r *http.Request, vr *verifiedRequest) (io.Reader, int64, *s3err
 		}
 		return r.Body, r.ContentLength, nil
 	}
+}
+
+// readXMLBody decodes an XML request body (aws-chunked aware) into v.
+func readXMLBody(r *http.Request, vr *verifiedRequest, v any) *s3err.Error {
+	body, _, s3e := requestBody(r, vr)
+	if s3e != nil {
+		return s3e
+	}
+	data, err := io.ReadAll(io.LimitReader(body, maxXMLBodySize))
+	if err != nil {
+		// the body reader verifies payload integrity (the signed hash, chunk
+		// signatures, trailer checksums), so a read error may be the S3 error
+		// the client must see — same unwrapping as fromSDKError
+		var s3e *s3err.Error
+		if errors.As(err, &s3e) {
+			return s3e
+		}
+		return s3err.New(http.StatusBadRequest, "InvalidRequest",
+			"failed to read request body").WithCause(err)
+	}
+	if err := xml.Unmarshal(data, v); err != nil {
+		return s3err.New(http.StatusBadRequest, "MalformedXML",
+			"The XML you provided was not well-formed or did not validate against our published schema.").WithCause(err)
+	}
+	return nil
 }
 
 // isHexSHA256 reports whether s is a 64-character hex string, i.e. a concrete

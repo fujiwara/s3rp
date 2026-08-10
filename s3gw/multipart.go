@@ -1,8 +1,6 @@
 package s3gw
 
 import (
-	"encoding/xml"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -138,18 +136,9 @@ func (g *Gateway) uploadPart(c *opCtx) error {
 
 func (g *Gateway) completeMultipartUpload(c *opCtx) error {
 	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
-	body, _, s3e := requestBody(r, vr)
-	if s3e != nil {
-		return s3e
-	}
-	data, err := io.ReadAll(io.LimitReader(body, maxXMLBodySize))
-	if err != nil {
-		return s3err.New(http.StatusBadRequest, "InvalidRequest", "failed to read request body")
-	}
 	var req s3xml.CompleteMultipartUploadRequest
-	if err := xml.Unmarshal(data, &req); err != nil {
-		return s3err.New(http.StatusBadRequest, "MalformedXML",
-			"The XML you provided was not well-formed or did not validate against our published schema.")
+	if s3e := readXMLBody(r, vr, &req); s3e != nil {
+		return s3e
 	}
 	if len(req.Parts) == 0 {
 		return s3err.New(http.StatusBadRequest, "InvalidRequest",

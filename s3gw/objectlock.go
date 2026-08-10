@@ -1,8 +1,6 @@
 package s3gw
 
 import (
-	"encoding/xml"
-	"io"
 	"net/http"
 	"time"
 
@@ -181,21 +179,4 @@ func setObjectLockResponseHeaders(h http.Header, mode types.ObjectLockMode, reta
 	if legalHold != "" {
 		h.Set("x-amz-object-lock-legal-hold", string(legalHold))
 	}
-}
-
-// readXMLBody decodes an XML request body (aws-chunked aware) into v.
-func readXMLBody(r *http.Request, vr *verifiedRequest, v any) *s3err.Error {
-	body, _, s3e := requestBody(r, vr)
-	if s3e != nil {
-		return s3e
-	}
-	data, err := io.ReadAll(io.LimitReader(body, maxXMLBodySize))
-	if err != nil {
-		return s3err.New(http.StatusBadRequest, "InvalidRequest", "failed to read request body")
-	}
-	if err := xml.Unmarshal(data, v); err != nil {
-		return s3err.New(http.StatusBadRequest, "MalformedXML",
-			"The XML you provided was not well-formed or did not validate against our published schema.")
-	}
-	return nil
 }

@@ -28,7 +28,7 @@ type memStore struct {
 	buckets map[string]*store.Bucket
 }
 
-func (m memStore) GetKey(_ context.Context, id string) (*store.Key, error) {
+func (m memStore) GetKey(_ context.Context, id, _ string) (*store.Key, error) {
 	if k, ok := m.keys[id]; ok {
 		return k, nil
 	}
