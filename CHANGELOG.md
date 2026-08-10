@@ -1,5 +1,20 @@
 # Changelog
 
+## [v0.0.4](https://github.com/fujiwara/s3rp/compare/v0.0.3...v0.0.4) - 2026-08-10
+
+- Hide backend identity in responses (region, owner) and report real bucket creation dates by @fujiwara in https://github.com/fujiwara/s3rp/pull/68
+- Support cross-tenant access grants in bucket policies by @fujiwara in https://github.com/fujiwara/s3rp/pull/70
+- Make policy principals always tenant-qualified by @fujiwara in https://github.com/fujiwara/s3rp/pull/71
+- Add source-IP conditions to bucket policy evaluation by @fujiwara in https://github.com/fujiwara/s3rp/pull/72
+- Require the bucket name to parse a bucket policy by @fujiwara in https://github.com/fujiwara/s3rp/pull/73
+- Move CORS rule validation into the cors package by @fujiwara in https://github.com/fujiwara/s3rp/pull/74
+- Move definition validation into the store package by @fujiwara in https://github.com/fujiwara/s3rp/pull/75
+- Extract the service-building guide into docs/building-a-service.md by @fujiwara in https://github.com/fujiwara/s3rp/pull/76
+- Allow digit-leading tenant and user names by @fujiwara in https://github.com/fujiwara/s3rp/pull/77
+- Expose the access key id on RequestInfo by @fujiwara in https://github.com/fujiwara/s3rp/pull/78
+- Stop proxying bucket-configuration writes by @fujiwara in https://github.com/fujiwara/s3rp/pull/79
+- Pass the presented session token to the store lookup by @fujiwara in https://github.com/fujiwara/s3rp/pull/80
+
 ## [v0.0.3](https://github.com/fujiwara/s3rp/compare/v0.0.2...v0.0.3) - 2026-08-02
 
 - Bound the backend client cache with an LRU and make cache sizes adjustable by @fujiwara in https://github.com/fujiwara/s3rp/pull/50
