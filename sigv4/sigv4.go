@@ -96,17 +96,33 @@ type Credential struct {
 	// token (header, presigned query, or POST form field); when empty, a
 	// request presenting a token is refused — a token on a long-lived key
 	// is client confusion, not something to drop silently. Expiry is the
-	// store's business: an expired key is simply not returned.
+	// store's business: an expired key is simply not returned. A lookup
+	// that validates the presented token itself (a self-contained token)
+	// returns the presented value here, which passes the exact-match
+	// trivially.
 	SessionToken string
 }
 
-// SecretLookup returns the credential for an access key id. Return
-// ErrUnknownKey when the id does not exist, so that the caller's client sees
-// InvalidAccessKeyId rather than an internal error.
-type SecretLookup func(ctx context.Context, accessKeyID string) (Credential, error)
+// SecretLookup returns the credential for an access key id. sessionToken is
+// the session token the request presented (empty when none), taken from the
+// request before the signature is verified — it is untrusted input at this
+// point, so a lookup that derives the credential from the token itself must
+// authenticate the token (e.g. verify its MAC) before trusting anything in
+// it. A lookup that resolves keys by id alone may ignore it: the verifier
+// still requires the presented token to match Credential.SessionToken
+// exactly. Return ErrUnknownKey when the id does not exist, so that the
+// caller's client sees InvalidAccessKeyId rather than an internal error, and
+// ErrInvalidToken when the token itself fails the lookup's validation.
+type SecretLookup func(ctx context.Context, accessKeyID, sessionToken string) (Credential, error)
 
 // ErrUnknownKey reports that an access key id does not exist.
 var ErrUnknownKey = errors.New("unknown access key id")
+
+// ErrInvalidToken reports that the presented session token failed the
+// lookup's own validation — a self-validating token whose authentication
+// failed, or one the lookup knows to be revoked. The client sees the same
+// InvalidToken error an exact-match failure produces.
+var ErrInvalidToken = errors.New("invalid session token")
 
 // Verifier verifies inbound SigV4 requests. The zero value is not usable;
 // build one with NewVerifier.
@@ -156,15 +172,23 @@ func (v *Verifier) now() time.Time {
 	return time.Now()
 }
 
-func lookupSecret(r *http.Request, lookup SecretLookup, accessKeyID string) (Credential, *s3err.Error) {
-	cred, err := lookup(r.Context(), accessKeyID)
+func lookupSecret(r *http.Request, lookup SecretLookup, accessKeyID, sessionToken string) (Credential, *s3err.Error) {
+	cred, err := lookup(r.Context(), accessKeyID, sessionToken)
 	if err != nil {
-		if errors.Is(err, ErrUnknownKey) {
+		switch {
+		case errors.Is(err, ErrUnknownKey):
 			return Credential{}, s3err.InvalidAccessKeyID()
+		case errors.Is(err, ErrInvalidToken):
+			return Credential{}, invalidTokenError().WithCause(err)
 		}
 		return Credential{}, s3err.Internal(err, "key lookup failed")
 	}
 	return cred, nil
+}
+
+func invalidTokenError() *s3err.Error {
+	return s3err.New(http.StatusBadRequest, "InvalidToken",
+		"The provided token is malformed or otherwise invalid.")
 }
 
 // validateSessionToken enforces the token rules symmetrically: a temporary
@@ -184,8 +208,7 @@ func validateSessionToken(expected, presented string) *s3err.Error {
 	if subtle.ConstantTimeCompare(e[:], p[:]) == 1 {
 		return nil
 	}
-	return s3err.New(http.StatusBadRequest, "InvalidToken",
-		"The provided token is malformed or otherwise invalid.")
+	return invalidTokenError()
 }
 
 // IsStreaming reports whether a payload hash denotes an aws-chunked body,
@@ -249,11 +272,12 @@ func (v *Verifier) verifyHeaderRequest(r *http.Request, lookup SecretLookup) (*V
 		return nil, s3err.New(http.StatusBadRequest, "AuthorizationHeaderMalformed",
 			fmt.Sprintf("The authorization header is malformed; the region '%s' is wrong; expecting '%s'", auth.Region, v.region))
 	}
-	cred, s3e := lookupSecret(r, lookup, auth.AccessKeyID)
+	presentedToken := r.Header.Get("X-Amz-Security-Token")
+	cred, s3e := lookupSecret(r, lookup, auth.AccessKeyID, presentedToken)
 	if s3e != nil {
 		return nil, s3e
 	}
-	if s3e := validateSessionToken(cred.SessionToken, r.Header.Get("X-Amz-Security-Token")); s3e != nil {
+	if s3e := validateSessionToken(cred.SessionToken, presentedToken); s3e != nil {
 		return nil, s3e
 	}
 
@@ -383,11 +407,12 @@ func (v *Verifier) verifyPresignedRequest(r *http.Request, lookup SecretLookup) 
 	if t.After(now.Add(maxClockSkew)) {
 		return nil, s3err.New(http.StatusForbidden, "AccessDenied", "Request is not valid yet")
 	}
-	cred, s3e := lookupSecret(r, lookup, akid)
+	presentedToken := query.Get("X-Amz-Security-Token")
+	cred, s3e := lookupSecret(r, lookup, akid, presentedToken)
 	if s3e != nil {
 		return nil, s3e
 	}
-	if s3e := validateSessionToken(cred.SessionToken, query.Get("X-Amz-Security-Token")); s3e != nil {
+	if s3e := validateSessionToken(cred.SessionToken, presentedToken); s3e != nil {
 		return nil, s3e
 	}
 

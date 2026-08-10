@@ -30,7 +30,7 @@ const (
 
 var awsExampleTime = time.Date(2015, 12, 29, 0, 0, 1, 0, time.UTC)
 
-func awsExampleLookup(_ context.Context, akid string) (sigv4.Credential, error) {
+func awsExampleLookup(_ context.Context, akid, _ string) (sigv4.Credential, error) {
 	if akid != awsExampleAccessKeyID {
 		return sigv4.Credential{}, sigv4.ErrUnknownKey
 	}

@@ -102,13 +102,14 @@ func (v *Verifier) VerifyPost(r *http.Request, fields map[string]string, lookup 
 		return nil, nil, invalid("Bucket POST must contain a field named 'x-amz-signature'.")
 	}
 
-	cred, s3e := lookupSecret(r, lookup, akid)
+	presentedToken := fields["x-amz-security-token"]
+	cred, s3e := lookupSecret(r, lookup, akid, presentedToken)
 	if s3e != nil {
 		return nil, nil, s3e
 	}
 	// the token is a form field like the rest of the auth; the policy's
 	// coverage rule additionally forces it into the signed conditions
-	if s3e := validateSessionToken(cred.SessionToken, fields["x-amz-security-token"]); s3e != nil {
+	if s3e := validateSessionToken(cred.SessionToken, presentedToken); s3e != nil {
 		return nil, nil, s3e
 	}
 	key := deriveSigningKey(cred.SecretAccessKey, scopeDate, region)

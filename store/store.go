@@ -17,12 +17,29 @@ import (
 // entity does not exist.
 var ErrNotFound = errors.New("not found")
 
+// ErrInvalidToken is returned by GetKey when the presented session token
+// fails the store's own validation — a self-validating token whose
+// authentication failed, or one the store knows to be revoked. The client
+// sees InvalidToken instead of the InvalidAccessKeyId an ErrNotFound
+// produces.
+var ErrInvalidToken = errors.New("invalid session token")
+
 // Store provides read-only access to tenant, key and bucket definitions.
 // Methods must be safe for concurrent use.
 type Store interface {
-	// GetKey returns the access key by its id.
-	// Returns an error wrapping ErrNotFound when the key does not exist.
-	GetKey(ctx context.Context, accessKeyID string) (*Key, error)
+	// GetKey returns the access key by its id. sessionToken is the session
+	// token the request presented (empty when none), handed over before the
+	// signature is verified — untrusted input. A store that persists
+	// temporary keys may ignore it: the gateway still requires the
+	// presented token to match Key.SessionToken exactly, so revocation
+	// stays a row delete. A store that issues self-contained tokens instead
+	// derives the Key from the token — after authenticating it, e.g. by its
+	// MAC — and returns the presented token as Key.SessionToken, which
+	// passes the gateway's exact-match trivially.
+	// Returns an error wrapping ErrNotFound when the key does not exist,
+	// and one wrapping ErrInvalidToken when the token itself fails the
+	// store's validation.
+	GetKey(ctx context.Context, accessKeyID, sessionToken string) (*Key, error)
 	// GetBucket returns the named bucket of the tenant.
 	// Returns an error wrapping ErrNotFound when the tenant does not own
 	// such a bucket.
@@ -57,9 +74,11 @@ type Key struct {
 	// SessionToken marks a temporary credential (empty = long-lived key):
 	// a request signed with this key must present exactly this token.
 	// Expiry is the Store's business — an expired key is simply not
-	// returned by GetKey — and issuance is the control plane's; the
-	// issuance response must not be returned before the key is visible to
-	// the store the gateways read, or the first use races the write.
+	// returned by GetKey — and issuance is the control plane's; for a
+	// persisted temporary key the issuance response must not be returned
+	// before the key is visible to the store the gateways read, or the
+	// first use races the write. A store validating self-contained tokens
+	// sets the presented token it authenticated (see Store.GetKey).
 	SessionToken string
 	// Policy is the user's identity policy (nil = allow all operations).
 	Policy *policy.UserPolicy

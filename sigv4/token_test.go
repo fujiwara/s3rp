@@ -18,7 +18,7 @@ import (
 
 const testToken = "FwoGZXIvYXdzEXAMPLETOKEN=="
 
-func tokenLookup(_ context.Context, akid string) (sigv4.Credential, error) {
+func tokenLookup(_ context.Context, akid, _ string) (sigv4.Credential, error) {
 	if akid != testAccessKeyID {
 		return sigv4.Credential{}, sigv4.ErrUnknownKey
 	}
@@ -114,6 +114,68 @@ func TestVerifySessionToken(t *testing.T) {
 	})
 }
 
+// echoLookup mimics a lookup that validates the presented token itself (a
+// self-contained token): it records what it received and returns it as the
+// expected token, which must pass the exact-match.
+func echoLookup(record *string) sigv4.SecretLookup {
+	return func(_ context.Context, _, token string) (sigv4.Credential, error) {
+		*record = token
+		return sigv4.Credential{SecretAccessKey: testSecret, SessionToken: token}, nil
+	}
+}
+
+// TestLookupReceivesPresentedToken: the token the client presented reaches
+// the SecretLookup before verification, so a lookup can derive the
+// credential from the token itself.
+func TestLookupReceivesPresentedToken(t *testing.T) {
+	tempCreds := aws.Credentials{
+		AccessKeyID: testAccessKeyID, SecretAccessKey: testSecret, SessionToken: testToken,
+	}
+	t.Run("header auth", func(t *testing.T) {
+		var got string
+		if _, s3e := newVerifier().Verify(signedRequestCreds(t, tempCreds), echoLookup(&got)); s3e != nil {
+			t.Fatalf("expect the echoed token to verify, got %v", s3e)
+		}
+		if got != testToken {
+			t.Errorf("expect the lookup to receive %q, got %q", testToken, got)
+		}
+	})
+	t.Run("presigned", func(t *testing.T) {
+		var got string
+		if _, s3e := newVerifier().Verify(presignedRequestCreds(t, tempCreds), echoLookup(&got)); s3e != nil {
+			t.Fatalf("expect the echoed token to verify, got %v", s3e)
+		}
+		if got != testToken {
+			t.Errorf("expect the lookup to receive %q, got %q", testToken, got)
+		}
+	})
+	t.Run("no token presents empty", func(t *testing.T) {
+		got := "unset"
+		creds := aws.Credentials{AccessKeyID: testAccessKeyID, SecretAccessKey: testSecret}
+		if _, s3e := newVerifier().Verify(signedRequestCreds(t, creds), echoLookup(&got)); s3e != nil {
+			t.Fatalf("expect a token-less request to verify, got %v", s3e)
+		}
+		if got != "" {
+			t.Errorf("expect the lookup to receive an empty token, got %q", got)
+		}
+	})
+}
+
+// a lookup that refuses the token itself must surface as InvalidToken, not
+// as a bad key or an internal error
+func TestLookupInvalidToken(t *testing.T) {
+	refusing := func(context.Context, string, string) (sigv4.Credential, error) {
+		return sigv4.Credential{}, sigv4.ErrInvalidToken
+	}
+	tempCreds := aws.Credentials{
+		AccessKeyID: testAccessKeyID, SecretAccessKey: testSecret, SessionToken: testToken,
+	}
+	_, s3e := newVerifier().Verify(signedRequestCreds(t, tempCreds), refusing)
+	if s3e == nil || s3e.Code != "InvalidToken" {
+		t.Errorf("expect InvalidToken, got %v", s3e)
+	}
+}
+
 func TestVerifyPostSessionToken(t *testing.T) {
 	policy := `{"expiration":"2026-08-02T00:00:00Z","conditions":[` +
 		`{"bucket":"testbucket"},{"key":"a.txt"},` +
@@ -140,5 +202,13 @@ func TestVerifyPostSessionToken(t *testing.T) {
 	}
 	if _, _, s3e := postVerifier(testTime).VerifyPost(r, fields("FORGEDTOKEN"), tokenLookup); s3e == nil || s3e.Code != "InvalidToken" {
 		t.Errorf("expect InvalidToken for a wrong token, got %v", s3e)
+	}
+	// the token form field reaches the lookup, like the header and query do
+	var got string
+	if _, _, s3e := postVerifier(testTime).VerifyPost(r, fields(testToken), echoLookup(&got)); s3e != nil {
+		t.Fatalf("expect the echoed token to verify, got %v", s3e)
+	}
+	if got != testToken {
+		t.Errorf("expect the lookup to receive %q, got %q", testToken, got)
 	}
 }

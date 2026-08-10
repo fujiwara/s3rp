@@ -16,7 +16,7 @@ func storeContract(t *testing.T, st store.Store) {
 	ctx := t.Context()
 
 	t.Run("GetKey", func(t *testing.T) {
-		key, err := st.GetKey(ctx, "S3RPKEY001")
+		key, err := st.GetKey(ctx, "S3RPKEY001", "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -28,7 +28,7 @@ func storeContract(t *testing.T, st store.Store) {
 			t.Errorf("expect no policy for app1, got %+v", key.Policy)
 		}
 		// a key of another user of the same tenant, carrying a user policy
-		key2, err := st.GetKey(ctx, "S3RPKEY003")
+		key2, err := st.GetKey(ctx, "S3RPKEY003", "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -41,7 +41,7 @@ func storeContract(t *testing.T, st store.Store) {
 		if !key2.Policy.Allows("s3:GetObject") || key2.Policy.Allows("s3:GetObjectAcl") {
 			t.Errorf("batch policy Get*/deny GetObjectAcl mismatch: %+v", key2.Policy)
 		}
-		if _, err := st.GetKey(ctx, "NOSUCHKEY"); !errors.Is(err, store.ErrNotFound) {
+		if _, err := st.GetKey(ctx, "NOSUCHKEY", ""); !errors.Is(err, store.ErrNotFound) {
 			t.Errorf("expect ErrNotFound, got %v", err)
 		}
 	})
