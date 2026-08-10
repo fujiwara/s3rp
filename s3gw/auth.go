@@ -3,6 +3,7 @@ package s3gw
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/netip"
 
@@ -74,7 +75,10 @@ func (g *Gateway) secretLookup(key **store.Key) sigv4.SecretLookup {
 			case errors.Is(err, store.ErrNotFound):
 				return sigv4.Credential{}, sigv4.ErrUnknownKey
 			case errors.Is(err, store.ErrInvalidToken):
-				return sigv4.Credential{}, sigv4.ErrInvalidToken
+				// keep the store's error: it becomes the cause the observer
+				// sees, and "mac mismatch" vs "revoked" is what one wants
+				// to know there
+				return sigv4.Credential{}, fmt.Errorf("%w: %w", sigv4.ErrInvalidToken, err)
 			}
 			return sigv4.Credential{}, err
 		}

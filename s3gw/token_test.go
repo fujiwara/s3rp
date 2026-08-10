@@ -2,6 +2,7 @@ package s3gw_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -75,7 +76,7 @@ const validTokenPrefix = "valid:"
 
 func (s statelessStore) GetKey(_ context.Context, id, token string) (*store.Key, error) {
 	if !strings.HasPrefix(token, validTokenPrefix) {
-		return nil, store.ErrInvalidToken
+		return nil, fmt.Errorf("%w: mac mismatch", store.ErrInvalidToken)
 	}
 	return &store.Key{
 		AccessKeyID: id, SecretAccessKey: testSecretAccessKey,
@@ -104,6 +105,8 @@ func TestGatewayStatelessToken(t *testing.T) {
 	if err := gw.SetBackend("testbucket", stubGet{body: "x"}); err != nil {
 		t.Fatal(err)
 	}
+	var observed *s3gw.RequestInfo
+	gw.SetObserver(func(_ context.Context, info *s3gw.RequestInfo) { observed = info })
 
 	do := func(token string) *httptest.ResponseRecorder {
 		t.Helper()
@@ -124,5 +127,13 @@ func TestGatewayStatelessToken(t *testing.T) {
 	forged := do("forged")
 	if forged.Code != http.StatusBadRequest || !strings.Contains(forged.Body.String(), "InvalidToken") {
 		t.Errorf("expect InvalidToken for a token the store refuses, got %d: %s", forged.Code, forged.Body.String())
+	}
+	// the store's reason survives as the observed cause (and never reaches
+	// the client: the XML above carries only the InvalidToken message)
+	if observed == nil || observed.Err == nil || !strings.Contains(observed.Err.Error(), "mac mismatch") {
+		t.Errorf("expect the store's error to reach the observer, got %v", observed)
+	}
+	if strings.Contains(forged.Body.String(), "mac mismatch") {
+		t.Errorf("the cause must not reach the client: %s", forged.Body.String())
 	}
 }
