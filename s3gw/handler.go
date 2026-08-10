@@ -150,7 +150,7 @@ func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	if r.Method == http.MethodPost && isMultipartForm(r) {
 		bucket, key, err := splitPath(r.URL.EscapedPath())
 		if err != nil {
-			return s3err.New(http.StatusBadRequest, "InvalidURI", "Couldn't parse the specified URI.")
+			return s3err.New(http.StatusBadRequest, "InvalidURI", "Couldn't parse the specified URI.").WithCause(err)
 		}
 		if bucket != "" && key == "" {
 			return g.handlePostObject(w, r, bucket)
@@ -168,7 +168,7 @@ func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	}
 	bucket, key, err := splitPath(r.URL.EscapedPath())
 	if err != nil {
-		return s3err.New(http.StatusBadRequest, "InvalidURI", "Couldn't parse the specified URI.")
+		return s3err.New(http.StatusBadRequest, "InvalidURI", "Couldn't parse the specified URI.").WithCause(err)
 	}
 
 	if bucket == "" {
@@ -217,7 +217,10 @@ func (g *Gateway) resolveBucket(ctx context.Context, vr *verifiedRequest, bucket
 	b, err = g.store.GetBucketByName(ctx, bucket)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return nil, s3err.AccessDenied()
+			// the cause distinguishes "no such bucket anywhere" from the
+			// policy-silent denial below for the observer; the client gets
+			// the same AccessDenied either way (no cross-tenant probing)
+			return nil, s3err.AccessDenied().WithCause(err)
 		}
 		return nil, s3err.Internal(err, "bucket lookup failed")
 	}

@@ -73,7 +73,7 @@ func (g *Gateway) secretLookup(key **store.Key) sigv4.SecretLookup {
 		if err != nil {
 			switch {
 			case errors.Is(err, store.ErrNotFound):
-				return sigv4.Credential{}, sigv4.ErrUnknownKey
+				return sigv4.Credential{}, fmt.Errorf("%w: %w", sigv4.ErrUnknownKey, err)
 			case errors.Is(err, store.ErrInvalidToken):
 				// keep the store's error: it becomes the cause the observer
 				// sees, and "mac mismatch" vs "revoked" is what one wants

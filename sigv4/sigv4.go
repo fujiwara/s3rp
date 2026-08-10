@@ -177,7 +177,7 @@ func lookupSecret(r *http.Request, lookup SecretLookup, accessKeyID, sessionToke
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrUnknownKey):
-			return Credential{}, s3err.InvalidAccessKeyID()
+			return Credential{}, s3err.InvalidAccessKeyID().WithCause(err)
 		case errors.Is(err, ErrInvalidToken):
 			return Credential{}, invalidTokenError().WithCause(err)
 		}

@@ -5,10 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/fujiwara/s3rp/s3gw"
+	"github.com/fujiwara/s3rp/store"
 )
 
 func TestPayloadVerifier(t *testing.T) {
@@ -66,6 +70,45 @@ func TestPayloadVerifier(t *testing.T) {
 		}
 		assertS3Code(t, readErr, "XAmzContentSHA256Mismatch")
 	})
+}
+
+// TestXMLBodyHashMismatch: an XML-bodied operation whose body does not match
+// the signed payload hash must answer with the verifying reader's own error
+// (XAmzContentSHA256Mismatch), not a generic failed-to-read — the same rule
+// fromSDKError applies on the PutObject path.
+func TestXMLBodyHashMismatch(t *testing.T) {
+	pathStyle := true
+	gw := s3gw.New(memStore{
+		keys: map[string]*store.Key{
+			testAccessKeyID: {
+				AccessKeyID: testAccessKeyID, SecretAccessKey: testSecretAccessKey,
+				Tenant: "testtenant", User: "testuser",
+			},
+		},
+		buckets: map[string]*store.Bucket{
+			"testbucket": {
+				Tenant: "testtenant", Name: "testbucket",
+				Backend: &store.Backend{
+					Endpoint: "http://backend.invalid", Region: "us-east-1",
+					Bucket: "backend-testbucket", AccessKeyID: "bk", SecretAccessKey: "bs",
+					UsePathStyle: &pathStyle,
+				},
+			},
+		},
+	})
+	if err := gw.SetBackend("testbucket", stubGet{}); err != nil {
+		t.Fatal(err)
+	}
+
+	body := []byte(`<Delete><Object><Key>a.txt</Key></Object></Delete>`)
+	other := sha256.Sum256([]byte("not the body that is sent"))
+	req := signedRequest(t, "POST", "http://s3.example.com/testbucket?delete",
+		body, hex.EncodeToString(other[:]), time.Now(), testCreds(), nil)
+	w := httptest.NewRecorder()
+	gw.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "XAmzContentSHA256Mismatch") {
+		t.Errorf("expect XAmzContentSHA256Mismatch, got %d: %s", w.Code, w.Body.String())
+	}
 }
 
 func assertS3Code(t *testing.T, err error, code string) {
