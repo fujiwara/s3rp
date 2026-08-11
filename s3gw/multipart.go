@@ -103,8 +103,10 @@ func (g *Gateway) uploadPart(c *opCtx) error {
 	}
 	in.Body = body
 	in.ContentLength = aws.Int64(length)
-	if v := r.Header.Get("Content-MD5"); v != "" {
-		in.ContentMD5 = aws.String(v)
+	if md5v, s3e := contentMD5Header(r); s3e != nil {
+		return s3e
+	} else if md5v != nil {
+		in.ContentMD5 = md5v
 	}
 	cs := checksum.FromHeaders(r.Header)
 	in.ChecksumCRC32 = cs.CRC32
@@ -167,6 +169,14 @@ func (g *Gateway) completeMultipartUpload(c *opCtx) error {
 		Key:             aws.String(key),
 		UploadId:        aws.String(r.URL.Query().Get("uploadId")),
 		MultipartUpload: &types.CompletedMultipartUpload{Parts: parts},
+	}
+	// write preconditions: dropping them would make the completion
+	// unconditional while the client believes it is protected
+	if v := r.Header.Get("If-Match"); v != "" {
+		in.IfMatch = aws.String(v)
+	}
+	if v := r.Header.Get("If-None-Match"); v != "" {
+		in.IfNoneMatch = aws.String(v)
 	}
 	if v := r.Header.Get("x-amz-checksum-type"); v != "" {
 		in.ChecksumType = types.ChecksumType(strings.ToUpper(v))

@@ -32,19 +32,27 @@ counts below are the hand-curated result.
 
 | category | tests |
 |---|---:|
-| s3rp bugs and gaps (details below) | 29 |
-| deliberate design differences | 367 |
+| s3rp bugs and gaps (details below) | 27 |
+| deliberate design differences | 369 |
 | backend (demo RGW) limitations | 62 |
 | upstream s3-tests bug | 1 |
 
 The pass rate is dominated by what s3rp deliberately does not do: of the
-459 failures, 367 are the documented design surface (unimplemented
+459 failures, 369 are the documented design surface (unimplemented
 bucket-configuration writes, the ACL stub, SigV4-only authentication, the
 anti-probing 403). The suite's value was the remaining slice: it found
 **one crash-class bug, one fail-open bug, and a handful of response
 fidelity bugs**, all listed below.
 
 ## s3rp bugs found (to fix)
+
+> **Status**: every item in this section has since been fixed (one commit
+> per item, same branch as this correction), verified by rerunning the
+> affected tests against RGW — 21 of them now pass; the rest fail on RGW
+> 19.2.0's own partial enforcement (see Backend limitations). Two
+> findings originally listed here turned out not to be bugs on closer
+> inspection and moved to the design-differences section: the "expired
+> presign answers 400" case and `x-amz-tagging-count` on HeadObject.
 
 ### 1. Backend transport errors panic the request handler
 
@@ -84,9 +92,6 @@ headers on 304). 2 tests.
 
 - ListObjectsV2 does not echo `ContinuationToken` when the request
   supplied one.
-- An expired presigned URL returns 400; AWS answers 403 `AccessDenied`
-  ("Request has expired").
-- HeadObject does not return `x-amz-tagging-count` (GetObject does).
 - ListBuckets ignores `max-buckets`/`continuation-token` instead of
   paginating — and silently, which also breaks the "unknown query
   parameters 501 loudly" rule for `GET /`. (The test also trips over
@@ -95,9 +100,10 @@ headers on 304). 2 tests.
 - Error responses do not relay informational backend headers
   (`x-amz-delete-marker` on a 404 HEAD).
 - An empty `Content-MD5` header is not rejected (AWS: 400
-  `InvalidDigest`); Go drops the empty header before it can be forwarded.
+  `InvalidDigest`); `Header.Get` cannot tell the empty header from an
+  absent one, so it silently vanished.
 
-## Deliberate design differences (367)
+## Deliberate design differences (369)
 
 Expected failures, matching README/CLAUDE.md; the suite confirms they
 fail *loudly* rather than silently.
@@ -121,13 +127,18 @@ fail *loudly* rather than silently.
   (no bucket-name probing).
 - **Bucket-name charset (1)**: names s3rp's stricter charset refuses
   (dots) → `InvalidBucketName` at the harness.
-- **Others (5)**: Go's `net/http` answers a malformed `Expect` header
+- **Others (7)**: Go's `net/http` answers a malformed `Expect` header
   with 417 before the proxy runs (2); plain
   `Transfer-Encoding: chunked` without Content-Length is not accepted
   (1); harness CreateBucket-conflict semantics (409
   `BucketAlreadyOwnedByYou`, RGW-style) (1); `GetBucketLocation` returns
   the gateway region while the conf's `api_name` expects RGW's zonegroup
-  name (1, conf artifact).
+  name (1, conf artifact); the expired-presign test sends a *negative*
+  `X-Amz-Expires`, which s3rp refuses with 400 like AWS while RGW
+  answers 403 — a genuinely expired presign already gets AWS's 403
+  "Request has expired" (1); `x-amz-tagging-count` on HeadObject is an
+  RGW extension the S3 API model does not have — the gateway returns it
+  on GetObject only, following the model (1).
 
 ## Backend limitations (62) — ceph/demo RGW, not s3rp
 
@@ -143,6 +154,15 @@ fail *loudly* rather than silently.
   returns 500 "completion already in progress" (AWS: 404
   `NoSuchUpload`); tagging passed on CreateMultipartUpload is not
   persisted (verified directly against RGW).
+- **Partial conditional-write enforcement**: with the proxy now
+  forwarding every precondition, Ceph 19.2.0 RGW enforces `If-Match` and
+  `If-None-Match: *` on PUT (412 through the proxy) but ignores the
+  DeleteObject/DeleteObjects preconditions and a specific-ETag
+  `If-None-Match`, answers 304 where AWS answers 412 for a matching
+  `x-amz-copy-source-if-none-match`, and does not emit
+  `x-amz-delete-marker` on a non-versioned 404 — all verified directly
+  against RGW, so the remaining conditional-write test failures are the
+  backend's, not the proxy's.
 - **RGW crash (deselected)**: see Methodology — also the reason Object
   Lock test buckets linger: retained objects make them undeletable for
   the suite's cleaner, which then trips unrelated bucket-count

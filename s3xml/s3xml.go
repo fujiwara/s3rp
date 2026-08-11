@@ -20,12 +20,15 @@ func FormatTime(t time.Time) string {
 
 // ListBucketResult is the response of ListObjectsV2.
 type ListBucketResult struct {
-	XMLName               xml.Name       `xml:"ListBucketResult"`
-	XMLNS                 string         `xml:"xmlns,attr"`
-	Name                  string         `xml:"Name"`
-	Prefix                string         `xml:"Prefix"`
-	StartAfter            string         `xml:"StartAfter,omitempty"`
-	ContinuationToken     string         `xml:"ContinuationToken,omitempty"`
+	XMLName    xml.Name `xml:"ListBucketResult"`
+	XMLNS      string   `xml:"xmlns,attr"`
+	Name       string   `xml:"Name"`
+	Prefix     string   `xml:"Prefix"`
+	StartAfter string   `xml:"StartAfter,omitempty"`
+	// ContinuationToken echoes the request's token; a pointer so a
+	// supplied-but-empty token is echoed as an empty element rather than
+	// omitted.
+	ContinuationToken     *string        `xml:"ContinuationToken,omitempty"`
 	NextContinuationToken string         `xml:"NextContinuationToken,omitempty"`
 	KeyCount              int32          `xml:"KeyCount"`
 	MaxKeys               int32          `xml:"MaxKeys"`
@@ -87,6 +90,10 @@ type DeleteRequest struct {
 type DeleteRequestObject struct {
 	Key       string `xml:"Key"`
 	VersionID string `xml:"VersionId"`
+	// Delete preconditions: the object is deleted only if these match.
+	ETag             string `xml:"ETag"`
+	LastModifiedTime string `xml:"LastModifiedTime"`
+	Size             *int64 `xml:"Size"`
 }
 
 // DeleteResult is the response of DeleteObjects.
@@ -362,6 +369,9 @@ type ListAllMyBucketsResult struct {
 	Buckets struct {
 		Bucket []BucketEntry `xml:"Bucket"`
 	} `xml:"Buckets"`
+	// ContinuationToken is the token for the next page, present only when
+	// the listing is truncated.
+	ContinuationToken string `xml:"ContinuationToken,omitempty"`
 }
 
 type BucketEntry struct {

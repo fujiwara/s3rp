@@ -1,8 +1,10 @@
 package s3gw
 
 import (
+	"crypto/md5"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/xml"
 	"errors"
@@ -21,6 +23,7 @@ import (
 	"github.com/fujiwara/s3rp/sigv4"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
@@ -64,6 +67,7 @@ func (g *Gateway) getObject(c *opCtx) error {
 	}
 	out, err := rt.client.GetObject(r.Context(), in)
 	if err != nil {
+		relayErrorHeaders(w.Header(), err)
 		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	defer out.Body.Close()
@@ -130,6 +134,7 @@ func (g *Gateway) headObject(c *opCtx) error {
 	}
 	out, err := rt.client.HeadObject(r.Context(), in)
 	if err != nil {
+		relayErrorHeaders(w.Header(), err)
 		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	setObjectHeaders(w.Header(), objectHeaderValues{
@@ -176,11 +181,21 @@ func (g *Gateway) putObject(c *opCtx) error {
 	in.Body = body
 	in.ContentLength = aws.Int64(length)
 
+	// write preconditions: dropping them would make the write unconditional
+	// while the client believes it is protected
+	if v := r.Header.Get("If-Match"); v != "" {
+		in.IfMatch = aws.String(v)
+	}
+	if v := r.Header.Get("If-None-Match"); v != "" {
+		in.IfNoneMatch = aws.String(v)
+	}
 	if v := r.Header.Get("Content-Type"); v != "" {
 		in.ContentType = aws.String(v)
 	}
-	if v := r.Header.Get("Content-MD5"); v != "" {
-		in.ContentMD5 = aws.String(v)
+	if md5v, s3e := contentMD5Header(r); s3e != nil {
+		return s3e
+	} else if md5v != nil {
+		in.ContentMD5 = md5v
 	}
 	if v := r.Header.Get("Cache-Control"); v != "" {
 		in.CacheControl = aws.String(v)
@@ -260,6 +275,27 @@ func (g *Gateway) deleteObject(c *opCtx) error {
 	if bypassGovernanceRetention(r) {
 		in.BypassGovernanceRetention = aws.Bool(true)
 	}
+	// delete preconditions: dropped, they would make the delete
+	// unconditional while the client believes it is protected
+	if v := r.Header.Get("If-Match"); v != "" {
+		in.IfMatch = aws.String(v)
+	}
+	if v := r.Header.Get("x-amz-if-match-last-modified-time"); v != "" {
+		t, err := http.ParseTime(v)
+		if err != nil {
+			return s3err.New(http.StatusBadRequest, "InvalidArgument",
+				"x-amz-if-match-last-modified-time must be a valid HTTP date").WithCause(err)
+		}
+		in.IfMatchLastModifiedTime = aws.Time(t)
+	}
+	if v := r.Header.Get("x-amz-if-match-size"); v != "" {
+		size, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return s3err.New(http.StatusBadRequest, "InvalidArgument",
+				"x-amz-if-match-size must be an integer").WithCause(err)
+		}
+		in.IfMatchSize = aws.Int64(size)
+	}
 	out, err := rt.client.DeleteObject(r.Context(), in)
 	if err != nil {
 		return s3err.FromSDKError(err, r.URL.Path)
@@ -323,8 +359,10 @@ func (g *Gateway) listObjectsV2(c *opCtx) error {
 	if out.StartAfter != nil {
 		result.StartAfter = *out.StartAfter
 	}
-	if out.ContinuationToken != nil {
-		result.ContinuationToken = *out.ContinuationToken
+	// echo the request's token, not the backend's: an empty token is not
+	// forwarded, but S3 still echoes it (as an empty element)
+	if query.Has("continuation-token") {
+		result.ContinuationToken = aws.String(query.Get("continuation-token"))
 	}
 	if out.NextContinuationToken != nil {
 		result.NextContinuationToken = *out.NextContinuationToken
@@ -517,6 +555,20 @@ func (g *Gateway) deleteObjects(c *opCtx) error {
 		if o.VersionID != "" {
 			oi.VersionId = aws.String(o.VersionID)
 		}
+		// per-object delete preconditions; see deleteObject
+		if o.ETag != "" {
+			oi.ETag = aws.String(o.ETag)
+		}
+		if o.LastModifiedTime != "" {
+			// the SDKs serialize this member as an HTTP date
+			t, err := http.ParseTime(o.LastModifiedTime)
+			if err != nil {
+				return s3err.New(http.StatusBadRequest, "MalformedXML",
+					"The XML you provided was not well-formed or did not validate against our published schema.").WithCause(err)
+			}
+			oi.LastModifiedTime = aws.Time(t)
+		}
+		oi.Size = o.Size
 		objects = append(objects, oi)
 	}
 	if len(objects) == 0 {
@@ -586,15 +638,39 @@ func (g *Gateway) headBucket(c *opCtx) error {
 	return nil
 }
 
+// maxListBuckets is the ListBuckets page-size limit and default, as on S3.
+const maxListBuckets = 10000
+
 func (g *Gateway) listBuckets(w http.ResponseWriter, r *http.Request, vr *verifiedRequest) error {
+	query := r.URL.Query()
+	maxBuckets := maxListBuckets
+	if v := query.Get("max-buckets"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > maxListBuckets {
+			return s3err.New(http.StatusBadRequest, "InvalidArgument",
+				"max-buckets must be an integer between 1 and 10000")
+		}
+		maxBuckets = n
+	}
+	token := query.Get("continuation-token")
+
 	entries, err := g.store.ListBuckets(r.Context(), vr.Tenant)
 	if err != nil {
 		return s3err.Internal(err, "bucket lookup failed")
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	// the continuation token is the last bucket name of the previous page
+	if token != "" {
+		i := sort.Search(len(entries), func(i int) bool { return entries[i].Name > token })
+		entries = entries[i:]
+	}
 	result := &s3xml.ListAllMyBucketsResult{
 		XMLNS: s3xml.Namespace,
 		Owner: s3xml.Owner{ID: vr.Tenant, DisplayName: vr.Tenant},
+	}
+	if len(entries) > maxBuckets {
+		entries = entries[:maxBuckets]
+		result.ContinuationToken = entries[len(entries)-1].Name
 	}
 	for _, e := range entries {
 		created := e.CreatedAt
@@ -718,6 +794,47 @@ func (v *payloadVerifier) Read(p []byte) (int, error) {
 	return n, err
 }
 
+// contentMD5Header returns the request's Content-MD5 value after checking
+// that a present header — even an empty one, which Header.Get cannot tell
+// from an absent one — is the base64 of an MD5 digest. S3 refuses an
+// invalid value with InvalidDigest; forwarding it blind would let an empty
+// header vanish while the client believes the integrity check applied.
+func contentMD5Header(r *http.Request) (*string, *s3err.Error) {
+	vs := r.Header.Values("Content-MD5")
+	if len(vs) == 0 {
+		return nil, nil
+	}
+	b, err := base64.StdEncoding.DecodeString(vs[0])
+	if err != nil || len(b) != md5.Size {
+		return nil, s3err.New(http.StatusBadRequest, "InvalidDigest",
+			"The Content-MD5 you specified was invalid.")
+	}
+	return aws.String(vs[0]), nil
+}
+
+// relayedErrorHeaders are entity and informational headers a backend sets
+// on object error responses — the ETag/Last-Modified of a 304, the
+// x-amz-delete-marker of a 404 — that describe the tenant's own object and
+// must reach the client.
+var relayedErrorHeaders = []string{
+	"ETag", "Last-Modified", "Cache-Control", "Expires",
+	"x-amz-delete-marker", "x-amz-version-id",
+}
+
+// relayErrorHeaders copies relayedErrorHeaders out of the backend response
+// carried by an SDK error, if it carries one.
+func relayErrorHeaders(h http.Header, err error) {
+	var respErr *awshttp.ResponseError
+	if !errors.As(err, &respErr) || respErr.Response == nil || respErr.Response.Response == nil {
+		return
+	}
+	for _, k := range relayedErrorHeaders {
+		if v := respErr.Response.Header.Get(k); v != "" {
+			h.Set(k, v)
+		}
+	}
+}
+
 func applyConditionalHeaders(r *http.Request, ifMatch, ifNoneMatch **string, ifModifiedSince, ifUnmodifiedSince **time.Time) {
 	if v := r.Header.Get("If-Match"); v != "" {
 		*ifMatch = aws.String(v)
@@ -790,7 +907,10 @@ func setObjectHeaders(h http.Header, v objectHeaderValues) {
 	}
 	setSSEHeaders(h, v.SSE, v.SSEKMSKeyID)
 	for k, val := range v.Metadata {
-		h.Set("x-amz-meta-"+k, val)
+		// Header.Set would canonicalize the name (turning meta1 into
+		// X-Amz-Meta-Meta1 on the wire); S3 metadata keys reach the client
+		// lowercase, and clients index the parsed metadata by that suffix
+		h["x-amz-meta-"+strings.ToLower(k)] = []string{val}
 	}
 }
 

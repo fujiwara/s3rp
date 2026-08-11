@@ -186,8 +186,13 @@ func FromSDKError(err error, resource string) *Error {
 	hasStatus := false
 	var respErr *awshttp.ResponseError
 	if errors.As(err, &respErr) {
-		s3err.status = respErr.HTTPStatusCode()
-		hasStatus = true
+		// a transport failure (dial error, connection reset) still carries
+		// a ResponseError, with a zero status; adopting it would make the
+		// response unwritable (WriteHeader panics below 100)
+		if status := respErr.HTTPStatusCode(); status >= 100 {
+			s3err.status = status
+			hasStatus = true
+		}
 	}
 	var apiErr smithy.APIError
 	if errors.As(err, &apiErr) {

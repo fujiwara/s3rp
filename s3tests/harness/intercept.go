@@ -141,7 +141,7 @@ func (i *bucketInterceptor) createBucket(w http.ResponseWriter, r *http.Request,
 		var owned *types.BucketAlreadyOwnedByYou
 		if !errors.As(err, &owned) {
 			i.store.remove(bucket) // roll back the claim
-			i.finish(w, r, bucket, key.Tenant, requestID, fromSDKError(err, "/"+bucket))
+			i.finish(w, r, bucket, key.Tenant, requestID, s3err.FromSDKError(err, "/"+bucket))
 			return
 		}
 	}
@@ -164,25 +164,12 @@ func (i *bucketInterceptor) deleteBucket(w http.ResponseWriter, r *http.Request,
 	if _, err := i.backend.DeleteBucket(r.Context(), &s3.DeleteBucketInput{Bucket: aws.String(bucket)}); err != nil {
 		// keep the registration: the bucket still exists on the backend
 		// (e.g. BucketNotEmpty)
-		i.finish(w, r, bucket, key.Tenant, requestID, fromSDKError(err, "/"+bucket))
+		i.finish(w, r, bucket, key.Tenant, requestID, s3err.FromSDKError(err, "/"+bucket))
 		return
 	}
 	i.store.remove(bucket)
 	w.WriteHeader(http.StatusNoContent)
 	i.finish(w, r, bucket, key.Tenant, requestID, nil)
-}
-
-// fromSDKError wraps s3err.FromSDKError, guarding against the zero HTTP
-// status it currently reports for transport failures (the SDK error chain
-// carries a ResponseError with HTTPStatusCode()==0), which would panic in
-// WriteHeader. Documented as an s3rp bug in docs/s3-tests.md; drop this
-// guard once s3err is fixed.
-func fromSDKError(err error, resource string) *s3err.Error {
-	s3e := s3err.FromSDKError(err, resource)
-	if s3e.Status() < 100 {
-		return s3err.New(http.StatusBadGateway, s3e.Code, s3e.Message).WithCause(err)
-	}
-	return s3e
 }
 
 // finish writes the error response (if any) and logs the operation in the

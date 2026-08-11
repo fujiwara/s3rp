@@ -176,6 +176,11 @@ func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) error {
 			return s3err.New(http.StatusMethodNotAllowed, "MethodNotAllowed",
 				"The specified method is not allowed against this resource.")
 		}
+		// same discipline as every operation: unknown query parameters are
+		// refused loudly rather than silently ignored
+		if s3e := listBucketsParams.check(r.URL.Query()); s3e != nil {
+			return s3e
+		}
 		return g.listBuckets(w, r, vr)
 	}
 
@@ -536,4 +541,5 @@ var (
 		qpVersionID, "response-content-type", "response-content-disposition",
 		"response-cache-control", "response-content-encoding",
 		"response-content-language", "response-expires")
+	listBucketsParams = newParamSet("max-buckets", "continuation-token")
 )
