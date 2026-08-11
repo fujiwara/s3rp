@@ -38,9 +38,14 @@ mirrored in `s3tests.conf.in`.
 ./s3tests/run.sh
 ```
 
+Prerequisite: [mise](https://mise.jdx.dev/) — the Python toolchain and
+[uv](https://docs.astral.sh/uv/) are pinned in `s3tests/mise.toml` and
+installed by the script.
+
 This starts the `ceph` compose service (heavyweight; first pull is slow),
 builds and starts the harness on `127.0.0.1:7481`, checks out s3-tests at
-the pinned SHA into `s3tests/work/` (gitignored), sets up a venv, runs the
+the pinned SHA into `s3tests/work/` (gitignored), sets up a venv with uv,
+runs the
 boto3 functional suite (`test_s3.py`, `test_headers.py`) with the marker
 filter documented in `run.sh`, and writes:
 

@@ -27,6 +27,7 @@ DESELECT=${DESELECT:-"--deselect s3tests/functional/test_s3.py::test_upload_part
 PYTEST_ARGS=${PYTEST_ARGS:-}
 
 cd "$(dirname "$0")/.."   # repo root
+ROOT=$(pwd)
 WORK=s3tests/work
 RESULTS=$WORK/results
 mkdir -p "$RESULTS"
@@ -53,9 +54,12 @@ git -C "$WORK/s3-tests" fetch --quiet origin
 git -C "$WORK/s3-tests" checkout --quiet "$S3TESTS_REF"
 
 if [ ! -x "$WORK/venv/bin/pytest" ]; then
-    echo "==> creating venv"
-    python3 -m venv "$WORK/venv"
-    "$WORK/venv/bin/pip" install --quiet -r "$WORK/s3-tests/requirements.txt"
+    echo "==> creating venv (mise + uv, tools pinned in s3tests/mise.toml)"
+    mise --cd s3tests trust --quiet 2>/dev/null || true
+    mise --cd s3tests install
+    mise --cd s3tests exec -- uv venv --quiet "$ROOT/$WORK/venv"
+    mise --cd s3tests exec -- uv pip install --quiet \
+        -p "$ROOT/$WORK/venv/bin/python" -r "$ROOT/$WORK/s3-tests/requirements.txt"
 fi
 
 sed "s/@PORT@/$PORT/" s3tests/s3tests.conf.in > "$WORK/s3tests.conf"
