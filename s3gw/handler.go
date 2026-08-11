@@ -430,7 +430,7 @@ var objectRoutes = map[string][]route{
 		{params: getObjectParams, action: "s3:GetObject", handle: (*Gateway).getObject},
 	},
 	http.MethodHead: {
-		{params: versionIDOnlyParams, action: "s3:GetObject", handle: (*Gateway).headObject},
+		{params: headObjectParams, action: "s3:GetObject", handle: (*Gateway).headObject},
 	},
 	http.MethodPut: {
 		{match: has(subTagging), params: taggingParams, action: "s3:PutObjectTagging", handle: (*Gateway).putObjectTagging},
@@ -540,9 +540,10 @@ var (
 		subUploads, "prefix", "delimiter", "key-marker", "upload-id-marker",
 		"max-uploads", "encoding-type")
 	getObjectParams = newParamSet(
-		qpVersionID, "response-content-type", "response-content-disposition",
+		qpVersionID, qpPartNumber, "response-content-type", "response-content-disposition",
 		"response-cache-control", "response-content-encoding",
 		"response-content-language", "response-expires")
+	headObjectParams = newParamSet(qpVersionID, qpPartNumber)
 	listBucketsParams = newParamSet("max-buckets", "continuation-token")
 	attributesParams  = newParamSet(subAttributes, qpVersionID)
 )
