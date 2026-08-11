@@ -1,12 +1,14 @@
 package s3gw_test
 
 import (
+	"errors"
 	"io"
 	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go"
 )
 
 // GetObject/HeadObject with partNumber read a single part of a multipart
@@ -60,5 +62,24 @@ func TestGetObjectPartNumber(t *testing.T) {
 	}
 	if aws.ToInt32(hout.PartsCount) != 2 {
 		t.Errorf("HEAD x-amz-mp-parts-count not returned: %+v", hout.PartsCount)
+	}
+}
+
+func TestGetObjectPartNumberOutOfRange(t *testing.T) {
+	stub := &stubBackend{}
+	client, _ := newTestProxy(t, stub)
+	for _, n := range []int32{0, 10001} {
+		_, err := client.GetObject(t.Context(), &s3.GetObjectInput{
+			Bucket:     aws.String("testbucket"),
+			Key:        aws.String("k"),
+			PartNumber: aws.Int32(n),
+		})
+		var apiErr smithy.APIError
+		if !errors.As(err, &apiErr) || apiErr.ErrorCode() != "InvalidArgument" {
+			t.Errorf("partNumber=%d: expected InvalidArgument, got %v", n, err)
+		}
+	}
+	if stub.getIn != nil {
+		t.Error("an out-of-range part number must not reach the backend")
 	}
 }

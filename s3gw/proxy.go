@@ -862,7 +862,7 @@ func applyPartNumber(query url.Values, partNumber **int32) *s3err.Error {
 		return nil
 	}
 	n, err := strconv.ParseInt(v, 10, 32)
-	if err != nil || n < 1 {
+	if err != nil || n < 1 || n > 10000 {
 		return s3err.New(http.StatusBadRequest, "InvalidArgument",
 			"Part number must be an integer between 1 and 10000, inclusive").WithCause(err)
 	}
