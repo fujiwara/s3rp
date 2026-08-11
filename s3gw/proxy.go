@@ -176,6 +176,14 @@ func (g *Gateway) putObject(c *opCtx) error {
 	in.Body = body
 	in.ContentLength = aws.Int64(length)
 
+	// write preconditions: dropping them would make the write unconditional
+	// while the client believes it is protected
+	if v := r.Header.Get("If-Match"); v != "" {
+		in.IfMatch = aws.String(v)
+	}
+	if v := r.Header.Get("If-None-Match"); v != "" {
+		in.IfNoneMatch = aws.String(v)
+	}
 	if v := r.Header.Get("Content-Type"); v != "" {
 		in.ContentType = aws.String(v)
 	}
@@ -259,6 +267,27 @@ func (g *Gateway) deleteObject(c *opCtx) error {
 	}
 	if bypassGovernanceRetention(r) {
 		in.BypassGovernanceRetention = aws.Bool(true)
+	}
+	// delete preconditions: dropped, they would make the delete
+	// unconditional while the client believes it is protected
+	if v := r.Header.Get("If-Match"); v != "" {
+		in.IfMatch = aws.String(v)
+	}
+	if v := r.Header.Get("x-amz-if-match-last-modified-time"); v != "" {
+		t, err := http.ParseTime(v)
+		if err != nil {
+			return s3err.New(http.StatusBadRequest, "InvalidArgument",
+				"x-amz-if-match-last-modified-time must be a valid HTTP date").WithCause(err)
+		}
+		in.IfMatchLastModifiedTime = aws.Time(t)
+	}
+	if v := r.Header.Get("x-amz-if-match-size"); v != "" {
+		size, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return s3err.New(http.StatusBadRequest, "InvalidArgument",
+				"x-amz-if-match-size must be an integer").WithCause(err)
+		}
+		in.IfMatchSize = aws.Int64(size)
 	}
 	out, err := rt.client.DeleteObject(r.Context(), in)
 	if err != nil {
@@ -517,6 +546,20 @@ func (g *Gateway) deleteObjects(c *opCtx) error {
 		if o.VersionID != "" {
 			oi.VersionId = aws.String(o.VersionID)
 		}
+		// per-object delete preconditions; see deleteObject
+		if o.ETag != "" {
+			oi.ETag = aws.String(o.ETag)
+		}
+		if o.LastModifiedTime != "" {
+			// the SDKs serialize this member as an HTTP date
+			t, err := http.ParseTime(o.LastModifiedTime)
+			if err != nil {
+				return s3err.New(http.StatusBadRequest, "MalformedXML",
+					"The XML you provided was not well-formed or did not validate against our published schema.").WithCause(err)
+			}
+			oi.LastModifiedTime = aws.Time(t)
+		}
+		oi.Size = o.Size
 		objects = append(objects, oi)
 	}
 	if len(objects) == 0 {

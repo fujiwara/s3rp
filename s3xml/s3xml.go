@@ -87,6 +87,10 @@ type DeleteRequest struct {
 type DeleteRequestObject struct {
 	Key       string `xml:"Key"`
 	VersionID string `xml:"VersionId"`
+	// Delete preconditions: the object is deleted only if these match.
+	ETag             string `xml:"ETag"`
+	LastModifiedTime string `xml:"LastModifiedTime"`
+	Size             *int64 `xml:"Size"`
 }
 
 // DeleteResult is the response of DeleteObjects.

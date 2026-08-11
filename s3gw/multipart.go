@@ -168,6 +168,14 @@ func (g *Gateway) completeMultipartUpload(c *opCtx) error {
 		UploadId:        aws.String(r.URL.Query().Get("uploadId")),
 		MultipartUpload: &types.CompletedMultipartUpload{Parts: parts},
 	}
+	// write preconditions: dropping them would make the completion
+	// unconditional while the client believes it is protected
+	if v := r.Header.Get("If-Match"); v != "" {
+		in.IfMatch = aws.String(v)
+	}
+	if v := r.Header.Get("If-None-Match"); v != "" {
+		in.IfNoneMatch = aws.String(v)
+	}
 	if v := r.Header.Get("x-amz-checksum-type"); v != "" {
 		in.ChecksumType = types.ChecksumType(strings.ToUpper(v))
 	}
