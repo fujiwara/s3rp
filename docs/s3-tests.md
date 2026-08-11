@@ -111,7 +111,8 @@ fail *loudly* rather than silently.
 - **Unimplemented operations → 501 (250)**: bucket policy/CORS/
   lifecycle/website/logging/encryption/replication/public-access-block/
   ownership-controls/versioning/object-lock-configuration writes, RGW's
-  `allow-unordered` listing extension, `partNumber` GET, GetBucketTagging,
+  `allow-unordered` listing extension, `partNumber` GET (since
+  implemented, with GetObjectAttributes), GetBucketTagging,
   and SSE-C. Includes ~30 tests that probe *invalid inputs* of those
   operations and expect 400/404/409 — s3rp refuses the whole operation
   with 501 before input validation.
@@ -191,6 +192,17 @@ backend-limitation classification above — the limitations are the
   options (on `client.radosgw.gateway` — MicroCeph's RGW daemon name,
   which `client.rgw.*`-targeted config does not reach). Verified: the
   SSE-KMS tests that failed without it pass afterwards.
+
+Implementing GetObjectAttributes and `partNumber` reads on this baseline
+surfaced two more RGW interop quirks, both fixed on the proxy side: RGW
+rejects the signature of requests carrying repeated header lines (the Go
+SDK sends one `x-amz-object-attributes` line per attribute — merged into
+one before signing), and it stores a precomputed `x-amz-checksum-*` value
+only when `x-amz-sdk-checksum-algorithm` accompanies it (the algorithm is
+now named alongside forwarded checksums). With those, a full run against
+a fresh MicroCeph 20.2.1 passes 300 of 798 with no regressions; the
+remaining conditional/checksum failures are RGW semantics (part ETags on
+`partNumber` reads, COMPOSITE-only multipart checksum types).
 
 ## Upstream s3-tests bug (1)
 

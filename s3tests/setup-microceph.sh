@@ -44,7 +44,7 @@ if [ "$(microceph.ceph osd stat -f json | sed 's/.*"num_osds":\([0-9]*\).*/\1/')
     echo "==> OSDs already present"
 else
     echo "==> adding loop-file OSDs"
-    microceph disk add loop,4G,3
+    microceph disk add loop,8G,3
 fi
 
 if microceph status | grep -q rgw; then

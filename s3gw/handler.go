@@ -543,7 +543,7 @@ var (
 		qpVersionID, qpPartNumber, "response-content-type", "response-content-disposition",
 		"response-cache-control", "response-content-encoding",
 		"response-content-language", "response-expires")
-	headObjectParams = newParamSet(qpVersionID, qpPartNumber)
+	headObjectParams  = newParamSet(qpVersionID, qpPartNumber)
 	listBucketsParams = newParamSet("max-buckets", "continuation-token")
 	attributesParams  = newParamSet(subAttributes, qpVersionID)
 )
