@@ -14,3 +14,4 @@
 .envrc
 /s3rp
 dist/
+/s3tests/work/
