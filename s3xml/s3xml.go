@@ -369,6 +369,9 @@ type ListAllMyBucketsResult struct {
 	Buckets struct {
 		Bucket []BucketEntry `xml:"Bucket"`
 	} `xml:"Buckets"`
+	// ContinuationToken is the token for the next page, present only when
+	// the listing is truncated.
+	ContinuationToken string `xml:"ContinuationToken,omitempty"`
 }
 
 type BucketEntry struct {

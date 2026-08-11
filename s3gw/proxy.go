@@ -634,15 +634,39 @@ func (g *Gateway) headBucket(c *opCtx) error {
 	return nil
 }
 
+// maxListBuckets is the ListBuckets page-size limit and default, as on S3.
+const maxListBuckets = 10000
+
 func (g *Gateway) listBuckets(w http.ResponseWriter, r *http.Request, vr *verifiedRequest) error {
+	query := r.URL.Query()
+	maxBuckets := maxListBuckets
+	if v := query.Get("max-buckets"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > maxListBuckets {
+			return s3err.New(http.StatusBadRequest, "InvalidArgument",
+				"max-buckets must be an integer between 1 and 10000")
+		}
+		maxBuckets = n
+	}
+	token := query.Get("continuation-token")
+
 	entries, err := g.store.ListBuckets(r.Context(), vr.Tenant)
 	if err != nil {
 		return s3err.Internal(err, "bucket lookup failed")
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	// the continuation token is the last bucket name of the previous page
+	if token != "" {
+		i := sort.Search(len(entries), func(i int) bool { return entries[i].Name > token })
+		entries = entries[i:]
+	}
 	result := &s3xml.ListAllMyBucketsResult{
 		XMLNS: s3xml.Namespace,
 		Owner: s3xml.Owner{ID: vr.Tenant, DisplayName: vr.Tenant},
+	}
+	if len(entries) > maxBuckets {
+		entries = entries[:maxBuckets]
+		result.ContinuationToken = entries[len(entries)-1].Name
 	}
 	for _, e := range entries {
 		created := e.CreatedAt
