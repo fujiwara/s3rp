@@ -38,6 +38,10 @@ mirrored in `s3tests.conf.in`.
 ./s3tests/run.sh
 ```
 
+Or in CI: the manually-triggered [`s3-tests` workflow](../.github/workflows/s3tests.yml)
+runs the same script and puts the triage report in the job summary, with
+the full results (junit XML, pytest output, request log) as artifacts.
+
 Prerequisite: [mise](https://mise.jdx.dev/) — the Python toolchain and
 [uv](https://docs.astral.sh/uv/) are pinned in `s3tests/mise.toml` and
 installed by the script.

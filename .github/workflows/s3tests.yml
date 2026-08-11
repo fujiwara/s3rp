@@ -1,0 +1,47 @@
+# Runs the ceph/s3-tests compatibility suite (s3tests/run.sh) against the
+# compose Ceph RGW backend. Manually triggered: the run takes tens of
+# minutes and its outcome is a classified report, not a pass/fail — the
+# job succeeds when the suite ran, and the triage report lands in the job
+# summary (full results as artifacts).
+name: s3-tests
+on:
+  workflow_dispatch:
+
+jobs:
+  s3tests:
+    name: s3-tests (ceph)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26'
+
+      - name: Set up mise
+        uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3.6.3
+        with:
+          install: false # run.sh installs the tools pinned in s3tests/mise.toml
+
+      - name: Run the suite
+        run: ./s3tests/run.sh
+
+      - name: Put the triage report in the job summary
+        if: always()
+        run: |
+          if [ -f s3tests/work/results/report.md ]; then
+            cat s3tests/work/results/report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "no report produced — see the run logs" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: s3tests-results
+          path: s3tests/work/results/
+          if-no-files-found: warn
