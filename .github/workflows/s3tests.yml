@@ -1,15 +1,24 @@
-# Runs the ceph/s3-tests compatibility suite (s3tests/run.sh) against the
-# compose Ceph RGW backend. Manually triggered: the run takes tens of
+# Runs the ceph/s3-tests compatibility suite (s3tests/run.sh) against a
+# MicroCeph RGW, so the backend is a current Ceph rather than the frozen
+# quay.io/ceph/demo image. Manually triggered: the run takes tens of
 # minutes and its outcome is a classified report, not a pass/fail — the
 # job succeeds when the suite ran, and the triage report lands in the job
 # summary (full results as artifacts).
 name: s3-tests
 on:
   workflow_dispatch:
+    inputs:
+      channel:
+        description: MicroCeph snap channel (Ceph release)
+        type: choice
+        default: tentacle/stable
+        options:
+          - tentacle/stable
+          - squid/stable
 
 jobs:
   s3tests:
-    name: s3-tests (ceph)
+    name: s3-tests (microceph)
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -26,8 +35,17 @@ jobs:
         with:
           install: false # run.sh installs the tools pinned in s3tests/mise.toml
 
+      - name: Set up MicroCeph
+        run: |
+          sudo MICROCEPH_CHANNEL="$MICROCEPH_CHANNEL" ./s3tests/setup-microceph.sh
+          echo "backend: $(sudo microceph.ceph version)" >> "$GITHUB_STEP_SUMMARY"
+        env:
+          MICROCEPH_CHANNEL: ${{ inputs.channel }}
+
       - name: Run the suite
         run: ./s3tests/run.sh
+        env:
+          S3RP_TEST_BACKEND_ENDPOINT: http://127.0.0.1:7490
 
       - name: Put the triage report in the job summary
         if: always()
