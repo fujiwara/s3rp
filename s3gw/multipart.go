@@ -103,8 +103,10 @@ func (g *Gateway) uploadPart(c *opCtx) error {
 	}
 	in.Body = body
 	in.ContentLength = aws.Int64(length)
-	if v := r.Header.Get("Content-MD5"); v != "" {
-		in.ContentMD5 = aws.String(v)
+	if md5v, s3e := contentMD5Header(r); s3e != nil {
+		return s3e
+	} else if md5v != nil {
+		in.ContentMD5 = md5v
 	}
 	cs := checksum.FromHeaders(r.Header)
 	in.ChecksumCRC32 = cs.CRC32

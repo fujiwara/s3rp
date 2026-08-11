@@ -1,8 +1,10 @@
 package s3gw
 
 import (
+	"crypto/md5"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/xml"
 	"errors"
@@ -190,8 +192,10 @@ func (g *Gateway) putObject(c *opCtx) error {
 	if v := r.Header.Get("Content-Type"); v != "" {
 		in.ContentType = aws.String(v)
 	}
-	if v := r.Header.Get("Content-MD5"); v != "" {
-		in.ContentMD5 = aws.String(v)
+	if md5v, s3e := contentMD5Header(r); s3e != nil {
+		return s3e
+	} else if md5v != nil {
+		in.ContentMD5 = md5v
 	}
 	if v := r.Header.Get("Cache-Control"); v != "" {
 		in.CacheControl = aws.String(v)
@@ -788,6 +792,24 @@ func (v *payloadVerifier) Read(p []byte) (int, error) {
 		}
 	}
 	return n, err
+}
+
+// contentMD5Header returns the request's Content-MD5 value after checking
+// that a present header — even an empty one, which Header.Get cannot tell
+// from an absent one — is the base64 of an MD5 digest. S3 refuses an
+// invalid value with InvalidDigest; forwarding it blind would let an empty
+// header vanish while the client believes the integrity check applied.
+func contentMD5Header(r *http.Request) (*string, *s3err.Error) {
+	vs := r.Header.Values("Content-MD5")
+	if len(vs) == 0 {
+		return nil, nil
+	}
+	b, err := base64.StdEncoding.DecodeString(vs[0])
+	if err != nil || len(b) != md5.Size {
+		return nil, s3err.New(http.StatusBadRequest, "InvalidDigest",
+			"The Content-MD5 you specified was invalid.")
+	}
+	return aws.String(vs[0]), nil
 }
 
 // relayedErrorHeaders are entity and informational headers a backend sets
