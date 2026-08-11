@@ -246,6 +246,12 @@ func (g *Gateway) putObject(c *opCtx) error {
 	in.ChecksumCRC64NVME = cs.CRC64NVME
 	in.ChecksumSHA1 = cs.SHA1
 	in.ChecksumSHA256 = cs.SHA256
+	if alg := cs.Algorithm(); alg != "" {
+		// name the algorithm alongside a precomputed checksum: the SDK then
+		// sends x-amz-sdk-checksum-algorithm, without which Ceph RGW does
+		// not store the checksum it was given
+		in.ChecksumAlgorithm = types.ChecksumAlgorithm(alg)
+	}
 	if alg := checksum.TrailerAlgorithm(r.Header); alg != "" {
 		// the client sends the checksum as an aws-chunked trailer, which
 		// is verified by the chunked reader; the backend SDK recomputes
