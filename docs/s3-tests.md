@@ -168,6 +168,28 @@ fail *loudly* rather than silently.
   the suite's cleaner, which then trips unrelated bucket-count
   assertions.
 
+## Re-verification against Ceph 20.2.1 (Tentacle, MicroCeph)
+
+A follow-up run against a current Ceph (`s3tests/setup-microceph.sh`,
+2026-08-11: MicroCeph `tentacle/stable` = 20.2.1) confirms the
+backend-limitation classification above — the limitations are the
+19.2.0 image's, not s3rp's:
+
+- **Conditional-write enforcement is complete**: the 11 remaining
+  precondition tests now pass through the proxy (all DeleteObject/
+  DeleteObjects preconditions, specific-ETag `If-None-Match` on PUT) —
+  verified 412/`PreconditionFailed` end to end.
+- **The UploadPartCopy crasher is fixed**: a percent-encoded copy-source
+  key returns a normal `CopyPartResult` and the daemon survives (probed
+  directly); `run.sh` keeps the test deselected only for the frozen
+  compose backend.
+- CreateMultipartUpload **tagging is persisted** and multipart **SHA256
+  checksums are stored** (the checksum-limitation bucket shrank from 12
+  to 5).
+- The SSE-KMS tests need the `testing` KMS configuration the compose
+  service carries; the setup script applies the same three
+  `client.rgw` options.
+
 ## Upstream s3-tests bug (1)
 
 `test_bucket_create_exists` reads `e.status` on a `ClientError`, an

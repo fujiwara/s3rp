@@ -54,15 +54,30 @@ else
     microceph enable rgw --port "$RGW_PORT"
 fi
 
-echo "==> waiting for rgw to answer"
-for _ in $(seq 1 60); do
-    curl -sf -o /dev/null "http://127.0.0.1:$RGW_PORT/" && break
-    sleep 2
-done
-curl -sf -o /dev/null "http://127.0.0.1:$RGW_PORT/" || {
+wait_for_rgw() {
+    for _ in $(seq 1 60); do
+        curl -sf -o /dev/null "http://127.0.0.1:$RGW_PORT/" && return 0
+        sleep 2
+    done
     echo "error: rgw did not come up on port $RGW_PORT" >&2
     exit 1
 }
+
+# SSE over plain http with the built-in "testing" KMS backend, mirroring
+# the compose ceph service so the SSE-KMS tests work without a real KMS
+if [ "$(microceph.ceph config get client.rgw rgw_crypt_s3_kms_backend 2>/dev/null)" = "testing" ]; then
+    echo "==> rgw SSE test config already set"
+else
+    echo "==> configuring SSE for plain http with the testing KMS backend"
+    microceph.ceph config set client.rgw rgw_crypt_require_ssl false
+    microceph.ceph config set client.rgw rgw_crypt_s3_kms_backend testing
+    microceph.ceph config set client.rgw rgw_crypt_s3_kms_encryption_keys \
+        testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
+    snap restart microceph.rgw
+fi
+
+echo "==> waiting for rgw to answer"
+wait_for_rgw
 
 if microceph.radosgw-admin user info --uid=backend >/dev/null 2>&1; then
     echo "==> backend user already exists"
