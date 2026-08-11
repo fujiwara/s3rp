@@ -355,8 +355,10 @@ func (g *Gateway) listObjectsV2(c *opCtx) error {
 	if out.StartAfter != nil {
 		result.StartAfter = *out.StartAfter
 	}
-	if out.ContinuationToken != nil {
-		result.ContinuationToken = *out.ContinuationToken
+	// echo the request's token, not the backend's: an empty token is not
+	// forwarded, but S3 still echoes it (as an empty element)
+	if query.Has("continuation-token") {
+		result.ContinuationToken = aws.String(query.Get("continuation-token"))
 	}
 	if out.NextContinuationToken != nil {
 		result.NextContinuationToken = *out.NextContinuationToken

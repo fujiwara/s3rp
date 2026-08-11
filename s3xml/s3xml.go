@@ -20,12 +20,15 @@ func FormatTime(t time.Time) string {
 
 // ListBucketResult is the response of ListObjectsV2.
 type ListBucketResult struct {
-	XMLName               xml.Name       `xml:"ListBucketResult"`
-	XMLNS                 string         `xml:"xmlns,attr"`
-	Name                  string         `xml:"Name"`
-	Prefix                string         `xml:"Prefix"`
-	StartAfter            string         `xml:"StartAfter,omitempty"`
-	ContinuationToken     string         `xml:"ContinuationToken,omitempty"`
+	XMLName    xml.Name `xml:"ListBucketResult"`
+	XMLNS      string   `xml:"xmlns,attr"`
+	Name       string   `xml:"Name"`
+	Prefix     string   `xml:"Prefix"`
+	StartAfter string   `xml:"StartAfter,omitempty"`
+	// ContinuationToken echoes the request's token; a pointer so a
+	// supplied-but-empty token is echoed as an empty element rather than
+	// omitted.
+	ContinuationToken     *string        `xml:"ContinuationToken,omitempty"`
 	NextContinuationToken string         `xml:"NextContinuationToken,omitempty"`
 	KeyCount              int32          `xml:"KeyCount"`
 	MaxKeys               int32          `xml:"MaxKeys"`
