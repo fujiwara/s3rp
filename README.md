@@ -126,6 +126,7 @@ Because operations are reconstructed rather than forwarded, each one is implemen
 - GetObject
 - PutObject
 - HeadObject
+- GetObjectAttributes
 - DeleteObject
 - DeleteObjects
 - CopyObject

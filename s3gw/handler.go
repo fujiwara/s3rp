@@ -426,6 +426,7 @@ var objectRoutes = map[string][]route{
 		{match: has(subACL), params: aclParams, action: "s3:GetObjectAcl", handle: (*Gateway).getObjectACL},
 		{match: has(subRetention), params: retentionParams, action: "s3:GetObjectRetention", handle: (*Gateway).getObjectRetention},
 		{match: has(subLegalHold), params: legalHoldParams, action: "s3:GetObjectLegalHold", handle: (*Gateway).getObjectLegalHold},
+		{match: has(subAttributes), params: attributesParams, action: "s3:GetObject", handle: (*Gateway).getObjectAttributes},
 		{params: getObjectParams, action: "s3:GetObject", handle: (*Gateway).getObject},
 	},
 	http.MethodHead: {
@@ -496,6 +497,7 @@ const (
 	subLocation   = "location"
 	subObjectLock = "object-lock"
 	subPolicy     = "policy"
+	subAttributes = "attributes"
 	subRetention  = "retention"
 	subTagging    = "tagging"
 	subUploads    = "uploads"
@@ -542,4 +544,5 @@ var (
 		"response-cache-control", "response-content-encoding",
 		"response-content-language", "response-expires")
 	listBucketsParams = newParamSet("max-buckets", "continuation-token")
+	attributesParams  = newParamSet(subAttributes, qpVersionID)
 )

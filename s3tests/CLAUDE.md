@@ -69,9 +69,10 @@ A 501 is an *implementation candidate* when all of these hold:
    partial support. If only part of a feature can be honored, refusing
    loudly stays correct.
 
-Known candidate as of the 20.2.1 baseline: **GetObjectAttributes**
-(10 tests; note this API returns the ETag *without* quotes). Everything
-else in the 501 bucket is deliberate or backend-caused.
+GetObjectAttributes was the candidate the 20.2.1 baseline surfaced and
+has since been implemented (note that API returns the ETag *without*
+quotes). As of that baseline, everything else in the 501 bucket is
+deliberate or backend-caused.
 
 ## Comparing two runs
 

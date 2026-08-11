@@ -3,6 +3,7 @@ package s3gw
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/fujiwara/s3rp/store"
 
@@ -11,12 +12,35 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go/middleware"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
+
+// mergeRepeatedHeadersMiddleware folds header fields the SDK emitted as
+// repeated lines into one comma-joined line before signing. The canonical
+// request is identical either way, but Ceph RGW reconstructs it wrongly
+// from repeated lines and refuses the signature.
+func mergeRepeatedHeadersMiddleware(stack *middleware.Stack) error {
+	return stack.Finalize.Insert(middleware.FinalizeMiddlewareFunc("MergeRepeatedHeaders",
+		func(ctx context.Context, in middleware.FinalizeInput, next middleware.FinalizeHandler) (
+			middleware.FinalizeOutput, middleware.Metadata, error,
+		) {
+			if req, ok := in.Request.(*smithyhttp.Request); ok {
+				for k, vs := range req.Header {
+					if len(vs) > 1 {
+						req.Header[k] = []string{strings.Join(vs, ",")}
+					}
+				}
+			}
+			return next.HandleFinalize(ctx, in)
+		}), "Signing", middleware.Before)
+}
 
 // BackendClient is the narrow interface of the S3 client methods s3rp uses,
 // for injecting stubs in tests.
 type BackendClient interface {
 	GetObject(ctx context.Context, in *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error)
+	GetObjectAttributes(ctx context.Context, in *s3.GetObjectAttributesInput, optFns ...func(*s3.Options)) (*s3.GetObjectAttributesOutput, error)
 	PutObject(ctx context.Context, in *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error)
 	HeadObject(ctx context.Context, in *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
 	DeleteObject(ctx context.Context, in *s3.DeleteObjectInput, optFns ...func(*s3.Options)) (*s3.DeleteObjectOutput, error)
@@ -71,6 +95,12 @@ func newBackendClient(ctx context.Context, b *store.Backend, clientOptions func(
 		// the request body from the client is not seekable, so the SDK
 		// cannot compute a payload hash over plain http endpoints
 		o.APIOptions = append(o.APIOptions, v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware)
+		// the SDK serializes x-amz-object-attributes as one header line per
+		// attribute; Ceph RGW mis-canonicalizes repeated headers when
+		// verifying the signature and answers 403. Merging them into the
+		// equivalent single comma-joined header (the same canonical form)
+		// keeps both RGW and AWS verifying.
+		o.APIOptions = append(o.APIOptions, mergeRepeatedHeadersMiddleware)
 		// default CRC32 trailer checksums re-introduce aws-chunked
 		// encoding, which some S3-compatible backends reject
 		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired

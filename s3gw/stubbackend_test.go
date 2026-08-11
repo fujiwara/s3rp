@@ -12,21 +12,25 @@ import (
 // stubBackend implements s3gw.BackendClient recording inputs and returning
 // canned outputs.
 type stubBackend struct {
-	getIn   *s3.GetObjectInput
-	getOut  *s3.GetObjectOutput
-	getErr  error
-	putIn   *s3.PutObjectInput
-	putBody []byte
-	putOut  *s3.PutObjectOutput
-	headIn  *s3.HeadObjectInput
-	headOut *s3.HeadObjectOutput
-	headErr error
-	delIn   *s3.DeleteObjectInput
-	delOut  *s3.DeleteObjectOutput
-	listIn  *s3.ListObjectsV2Input
-	listOut *s3.ListObjectsV2Output
-	hbIn    *s3.HeadBucketInput
-	hbOut   *s3.HeadBucketOutput
+	getIn  *s3.GetObjectInput
+	getOut *s3.GetObjectOutput
+	getErr error
+
+	getAttrIn  *s3.GetObjectAttributesInput
+	getAttrOut *s3.GetObjectAttributesOutput
+	getAttrErr error
+	putIn      *s3.PutObjectInput
+	putBody    []byte
+	putOut     *s3.PutObjectOutput
+	headIn     *s3.HeadObjectInput
+	headOut    *s3.HeadObjectOutput
+	headErr    error
+	delIn      *s3.DeleteObjectInput
+	delOut     *s3.DeleteObjectOutput
+	listIn     *s3.ListObjectsV2Input
+	listOut    *s3.ListObjectsV2Output
+	hbIn       *s3.HeadBucketInput
+	hbOut      *s3.HeadBucketOutput
 
 	createMPUIn    *s3.CreateMultipartUploadInput
 	createMPUOut   *s3.CreateMultipartUploadOutput
@@ -73,6 +77,14 @@ func (b *stubBackend) GetObject(ctx context.Context, in *s3.GetObjectInput, _ ..
 		return nil, b.getErr
 	}
 	return b.getOut, nil
+}
+
+func (b *stubBackend) GetObjectAttributes(ctx context.Context, in *s3.GetObjectAttributesInput, _ ...func(*s3.Options)) (*s3.GetObjectAttributesOutput, error) {
+	b.getAttrIn = in
+	if b.getAttrErr != nil {
+		return nil, b.getAttrErr
+	}
+	return b.getAttrOut, nil
 }
 
 func (b *stubBackend) PutObject(ctx context.Context, in *s3.PutObjectInput, _ ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
