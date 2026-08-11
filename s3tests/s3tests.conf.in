@@ -1,0 +1,63 @@
+# S3TEST_CONF template for running ceph/s3-tests against the s3rp harness.
+# run.sh substitutes @PORT@. Credentials mirror s3tests/harness/harness.go;
+# user_id/display_name must be the tenant name — that is what the gateway
+# reports as Owner.
+
+[DEFAULT]
+host = 127.0.0.1
+port = @PORT@
+is_secure = False
+ssl_verify = False
+
+[fixtures]
+bucket prefix = s3rp-{random}-
+
+[s3 main]
+display_name = main
+user_id = main
+email = main@example.com
+api_name = us-east-1
+access_key = S3RPMAINKEY000000000
+secret_key = s3rpmainsecret0000000000000000000000000k
+# compose.yml configures RGW's built-in "testing" KMS backend with this key
+kms_keyid = testkey-1
+
+[s3 alt]
+display_name = alt
+user_id = alt
+email = alt@example.com
+access_key = S3RPALTKEY0000000000
+secret_key = s3rpaltsecret00000000000000000000000000k
+
+[s3 tenant]
+display_name = tenanted
+user_id = tenanted
+email = tenant@example.com
+access_key = S3RPTENANTKEY0000000
+secret_key = s3rptenantsecret00000000000000000000000k
+tenant = tenanted
+
+# The IAM sections below are read unconditionally at collection time but
+# only used by the IAM/STS test files, which this harness does not run.
+# Dummy values; these keys do not exist in the harness store.
+
+[iam]
+display_name = iamdummy
+user_id = iamdummy
+email = iam@example.com
+access_key = S3RPIAMDUMMYKEY00000
+secret_key = s3rpiamdummysecret000000000000000000000k
+
+[iam root]
+access_key = S3RPIAMROOTKEY000000
+secret_key = s3rpiamrootsecret0000000000000000000000k
+account_id = RGW11111111111111111
+user_id = RGW11111111111111111
+email = account1@example.com
+
+[iam alt root]
+access_key = S3RPIAMALTROOT000000
+secret_key = s3rpiamaltrootsecret0000000000000000000k
+account_id = RGW22222222222222222
+user_id = RGW22222222222222222
+email = account2@example.com

@@ -1,0 +1,5 @@
+# Tools for running the s3-tests suite (see run.sh). Scoped to s3tests/
+# so it does not affect the rest of the repository.
+[tools]
+python = "3.12"
+uv = "0.12.3"
