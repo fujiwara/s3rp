@@ -21,6 +21,7 @@ import (
 	"github.com/fujiwara/s3rp/sigv4"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
@@ -64,6 +65,7 @@ func (g *Gateway) getObject(c *opCtx) error {
 	}
 	out, err := rt.client.GetObject(r.Context(), in)
 	if err != nil {
+		relayErrorHeaders(w.Header(), err)
 		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	defer out.Body.Close()
@@ -130,6 +132,7 @@ func (g *Gateway) headObject(c *opCtx) error {
 	}
 	out, err := rt.client.HeadObject(r.Context(), in)
 	if err != nil {
+		relayErrorHeaders(w.Header(), err)
 		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	setObjectHeaders(w.Header(), objectHeaderValues{
@@ -759,6 +762,29 @@ func (v *payloadVerifier) Read(p []byte) (int, error) {
 		}
 	}
 	return n, err
+}
+
+// relayedErrorHeaders are entity and informational headers a backend sets
+// on object error responses — the ETag/Last-Modified of a 304, the
+// x-amz-delete-marker of a 404 — that describe the tenant's own object and
+// must reach the client.
+var relayedErrorHeaders = []string{
+	"ETag", "Last-Modified", "Cache-Control", "Expires",
+	"x-amz-delete-marker", "x-amz-version-id",
+}
+
+// relayErrorHeaders copies relayedErrorHeaders out of the backend response
+// carried by an SDK error, if it carries one.
+func relayErrorHeaders(h http.Header, err error) {
+	var respErr *awshttp.ResponseError
+	if !errors.As(err, &respErr) || respErr.Response == nil || respErr.Response.Response == nil {
+		return
+	}
+	for _, k := range relayedErrorHeaders {
+		if v := respErr.Response.Header.Get(k); v != "" {
+			h.Set(k, v)
+		}
+	}
 }
 
 func applyConditionalHeaders(r *http.Request, ifMatch, ifNoneMatch **string, ifModifiedSince, ifUnmodifiedSince **time.Time) {
