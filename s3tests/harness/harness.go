@@ -71,6 +71,9 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	if cfg.BackendEndpoint == "" {
 		return nil, fmt.Errorf("BackendEndpoint is required")
 	}
+	if cfg.BackendAccessKeyID == "" || cfg.BackendSecretAccessKey == "" {
+		return nil, fmt.Errorf("backend credentials are required")
+	}
 	if cfg.LogWriter == nil {
 		cfg.LogWriter = os.Stderr
 	}

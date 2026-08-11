@@ -29,7 +29,8 @@ CATEGORIES = [
     ("investigate", "NEEDS INVESTIGATION (candidate bugs)"),
 ]
 
-EXPECT_404 = re.compile(r"NoSuchBucket|NoSuchKey|404", re.I)
+EXPECT_404 = re.compile(r"NoSuchBucket|NoSuchKey|404", re.I)  # against failure text
+NAME_NONEXIST = re.compile(r"nonexist|not_?exist|no_?such", re.I)  # against test name
 ACLISH = re.compile(r"acl|grant|ownership", re.I)
 CHECKSUM = re.compile(r"[Cc]hecksum|x-amz-checksum")
 
@@ -50,7 +51,7 @@ def classify(name, text):
     if code == "InvalidBucketName":
         return "naming", op
     if code == "AccessDenied":
-        if EXPECT_404.search(name) or "NoSuchBucket" in text:
+        if NAME_NONEXIST.search(name) or EXPECT_404.search(text):
             return "anti_probing", op
         if ACLISH.search(name):
             return "acl_read", op

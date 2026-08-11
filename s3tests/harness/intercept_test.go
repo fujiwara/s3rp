@@ -352,3 +352,37 @@ func TestFallThrough(t *testing.T) {
 		t.Error("backend must not be touched by fall-through requests")
 	}
 }
+
+func TestBackendTransportErrorDoesNotPanic(t *testing.T) {
+	// s3err.FromSDKError reports status 0 for SDK transport failures (a
+	// known s3rp bug, see docs/s3-tests.md); the interceptor's guard must
+	// turn that into a 502 instead of panicking in WriteHeader.
+	transportErr := &awshttp.ResponseError{
+		ResponseError: &smithyhttp.ResponseError{
+			Response: &smithyhttp.Response{Response: &http.Response{StatusCode: 0, Header: http.Header{}}},
+			Err:      errors.New("dial tcp: connection refused"),
+		},
+	}
+	st, backend, _, url := newHarness(t)
+	backend.createErr = transportErr
+	backend.deleteErr = transportErr
+	client := sdkClient(t, url, harness.MainAccessKeyID, harness.MainSecretAccessKey)
+
+	_, err := client.CreateBucket(t.Context(), &s3.CreateBucketInput{Bucket: aws.String("bkt-down")})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var respErr *awshttp.ResponseError
+	if !errors.As(err, &respErr) || respErr.HTTPStatusCode() != http.StatusBadGateway {
+		t.Errorf("create: expected an HTTP 502 response, got %v", err)
+	}
+	if _, ok := st.Owner("bkt-down"); ok {
+		t.Error("claim not rolled back")
+	}
+
+	st.Claim("bkt-down", "main")
+	_, err = client.DeleteBucket(t.Context(), &s3.DeleteBucketInput{Bucket: aws.String("bkt-down")})
+	if !errors.As(err, &respErr) || respErr.HTTPStatusCode() != http.StatusBadGateway {
+		t.Errorf("delete: expected an HTTP 502 response, got %v", err)
+	}
+}

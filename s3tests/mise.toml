@@ -2,4 +2,4 @@
 # so it does not affect the rest of the repository.
 [tools]
 python = "3.12"
-uv = "latest"
+uv = "0.12.3"
