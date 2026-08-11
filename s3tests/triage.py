@@ -28,9 +28,9 @@ CATEGORIES = [
     ("input_probe_501", "Deliberate: 501 before input validation of an unimplemented operation"),
     ("sigv4_only", "Deliberate: SigV4-only / no anonymous access"),
     ("acl_write", "Deliberate: ACL writes refused (ACL-disabled bucket model)"),
-    ("acl_read", "Deliberate: ACL read stub (fixed FULL_CONTROL) — needs confirmation"),
+    ("acl_read", "Deliberate: ACL read stub (fixed FULL_CONTROL; name-heuristic)"),
     ("anti_probing", "Deliberate: 403 AccessDenied instead of 404 (anti-probing)"),
-    ("access_denied", "AccessDenied — cross-tenant/policy semantics, needs confirmation"),
+    ("access_denied", "AccessDenied — cross-tenant/policy semantics (name-heuristic)"),
     ("naming", "Deliberate: stricter bucket-name charset"),
     ("header_edge", "Deliberate/platform: request edge cases (Expect 417, chunked TE, negative presign expiry)"),
     ("backend_sse", "Backend: SSE/encrypted-copy behavior"),
@@ -146,30 +146,69 @@ def main():
         cat, sub = classify(name, text)
         buckets[cat].append((name, sub, excerpt_of(text)))
 
+    failed = total - passed - skipped
+    contaminated = buckets.get("contaminated", [])
+    unmatched = buckets.get("investigate", [])
+
     print("# s3-tests triage report\n")
-    print(f"- total: {total}  passed: {passed}  skipped: {skipped}  "
-          f"failed/errored: {total - passed - skipped}\n")
+    print(f"**{passed} passed / {failed} failed / {skipped} skipped** "
+          f"(of {total} selected)\n")
+
+    # ---- what to do, first ------------------------------------------------
+    if contaminated:
+        print(f"## 🛑 Rerun needed: the run is contaminated ({len(contaminated)})\n")
+        print("The backend or the proxy stopped answering mid-run, so every")
+        print("result after that point is unreliable — including the counts")
+        print("above. Find the first casualty in `harness.log`, fix the")
+        print("environment (a full MicroCeph answers `InsufficientCapacity`;")
+        print("recreate it with `setup-microceph.sh`), and rerun before")
+        print("reading anything else in this report.\n")
+        for name, _, excerpt in sorted(contaminated):
+            print(f"- `{name}` — {excerpt}")
+        print()
+    if unmatched:
+        print(f"## ⚠️ Triage these by hand ({len(unmatched)})\n")
+        print("No known pattern explains these failures: each one is either a")
+        print("new incompatibility (possibly an s3rp bug) or a pattern the")
+        print("classifier does not know yet. Follow s3tests/CLAUDE.md — read")
+        print("the failure, probe the backend directly to decide proxy vs")
+        print("backend, then fix or teach triage.py the verdict.\n")
+        for name, _, excerpt in sorted(unmatched):
+            print(f"- `{name}` — {excerpt}")
+        print()
+    if not contaminated and not unmatched:
+        print("## ✅ No action needed\n")
+        print("Every failure matches the verified classification: the")
+        print("deliberate design surface and documented backend behavior")
+        print("(docs/s3-tests.md). Worth a look only if the pass count above")
+        print("moved against the previous run — then check which expected")
+        print("category below changed size, and spot-check its list: these")
+        print("rules are name heuristics, and a *newly failing* test landing")
+        print("in an old category is exactly what they can misfile.\n")
+
+    # ---- the expected failures, collapsed ---------------------------------
+    print("## Expected failures (no action)\n")
     print("| category | count |")
     print("|---|---|")
     for key, title in CATEGORIES:
+        if key in ("contaminated", "investigate"):
+            continue
         print(f"| {title} | {len(buckets.get(key, []))} |")
     print()
-
     for key, title in CATEGORIES:
+        if key in ("contaminated", "investigate"):
+            continue
         cases = buckets.get(key, [])
         if not cases:
             continue
-        print(f"## {title} ({len(cases)})\n")
+        print(f"<details><summary>{title} ({len(cases)})</summary>\n")
         if key == "not_implemented":
             ops = Counter(sub or "?" for _, sub, _ in cases)
             print("by operation:", ", ".join(f"{o}×{n}" for o, n in ops.most_common()))
             print()
-        for name, sub, excerpt in sorted(cases):
-            if key == "investigate":
-                print(f"- `{name}` — {excerpt}")
-            else:
-                print(f"- `{name}`")
-        print()
+        for name, _, _ in sorted(cases):
+            print(f"- `{name}`")
+        print("\n</details>\n")
 
     if logfile:
         print(f"\nHarness/gateway request log: `{logfile}` "
