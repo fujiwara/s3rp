@@ -69,6 +69,22 @@ single test while triaging:
 PYTEST_ARGS='-k test_bucket_list_empty' ./s3tests/run.sh
 ```
 
+## Testing against a current Ceph (MicroCeph)
+
+The compose `ceph` service (quay.io/ceph/demo) is frozen at Ceph 19.2.0 —
+that image is no longer built. To verify against a current Ceph, set up a
+[MicroCeph](https://canonical-microceph.readthedocs-hosted.com/) cluster
+(snap; tracks upstream point releases) and point the runner at it:
+
+```sh
+sudo ./s3tests/setup-microceph.sh    # MICROCEPH_CHANNEL=squid/stable for 19.x
+S3RP_TEST_BACKEND_ENDPOINT=http://127.0.0.1:7490 ./s3tests/run.sh
+```
+
+The setup script is idempotent; `sudo snap remove --purge microceph`
+tears everything down. When the endpoint is not the compose default,
+`run.sh` skips `docker compose up`.
+
 ## Triage
 
 `triage.py` buckets failures into: deliberately unimplemented operations

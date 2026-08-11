@@ -32,8 +32,14 @@ WORK=s3tests/work
 RESULTS=$WORK/results
 mkdir -p "$RESULTS"
 
-echo "==> starting ceph backend"
-docker compose up -d --wait ceph
+# the compose ceph is only started when it is the backend being tested;
+# another endpoint (e.g. microceph via setup-microceph.sh) is used as-is
+if [ "$BACKEND_ENDPOINT" = "http://127.0.0.1:7480" ]; then
+    echo "==> starting ceph backend"
+    docker compose up -d --wait ceph
+else
+    echo "==> using external backend $BACKEND_ENDPOINT"
+fi
 
 echo "==> building and starting harness on 127.0.0.1:$PORT"
 go build -o "$WORK/s3tests-harness" ./cmd/s3tests-harness
