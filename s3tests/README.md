@@ -39,8 +39,10 @@ mirrored in `s3tests.conf.in`.
 ```
 
 Or in CI: the manually-triggered [`s3-tests` workflow](../.github/workflows/s3tests.yml)
-runs the same script and puts the triage report in the job summary, with
-the full results (junit XML, pytest output, request log) as artifacts.
+runs the same script against a MicroCeph RGW (the Ceph release is chosen
+by the snap-channel input, default `tentacle/stable`) and puts the triage
+report in the job summary, with the full results (junit XML, pytest
+output, request log) as artifacts.
 
 Prerequisite: [mise](https://mise.jdx.dev/) — the Python toolchain and
 [uv](https://docs.astral.sh/uv/) are pinned in `s3tests/mise.toml` and
@@ -68,6 +70,22 @@ single test while triaging:
 ```sh
 PYTEST_ARGS='-k test_bucket_list_empty' ./s3tests/run.sh
 ```
+
+## Testing against a current Ceph (MicroCeph)
+
+The compose `ceph` service (quay.io/ceph/demo) is frozen at Ceph 19.2.0 —
+that image is no longer built. To verify against a current Ceph, set up a
+[MicroCeph](https://canonical-microceph.readthedocs-hosted.com/) cluster
+(snap; tracks upstream point releases) and point the runner at it:
+
+```sh
+sudo ./s3tests/setup-microceph.sh    # MICROCEPH_CHANNEL=squid/stable for 19.x
+S3RP_TEST_BACKEND_ENDPOINT=http://127.0.0.1:7490 ./s3tests/run.sh
+```
+
+The setup script is idempotent; `sudo snap remove --purge microceph`
+tears everything down. When the endpoint is not the compose default,
+`run.sh` skips `docker compose up`.
 
 ## Triage
 
