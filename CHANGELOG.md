@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.0.5](https://github.com/fujiwara/s3rp/compare/v0.0.4...v0.0.5) - 2026-08-11
+
+- Add ceph/s3-tests compatibility harness and report by @fujiwara in https://github.com/fujiwara/s3rp/pull/81
+- Fix the s3rp bugs found by the s3-tests run by @fujiwara in https://github.com/fujiwara/s3rp/pull/83
+- Add a manually-triggered s3-tests workflow by @fujiwara in https://github.com/fujiwara/s3rp/pull/84
+- Add a MicroCeph setup script for testing against a current Ceph by @fujiwara in https://github.com/fujiwara/s3rp/pull/85
+- Add analysis instructions for s3-tests results by @fujiwara in https://github.com/fujiwara/s3rp/pull/86
+- Implement GetObjectAttributes and partNumber object reads by @fujiwara in https://github.com/fujiwara/s3rp/pull/87
+- Teach triage.py the verified failure classifications by @fujiwara in https://github.com/fujiwara/s3rp/pull/88
+- Update mise-action to v4 by @fujiwara in https://github.com/fujiwara/s3rp/pull/89
+- Make the triage report action-oriented by @fujiwara in https://github.com/fujiwara/s3rp/pull/90
+
 ## [v0.0.4](https://github.com/fujiwara/s3rp/compare/v0.0.3...v0.0.4) - 2026-08-10
 
 - Hide backend identity in responses (region, owner) and report real bucket creation dates by @fujiwara in https://github.com/fujiwara/s3rp/pull/68
