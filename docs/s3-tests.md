@@ -187,8 +187,10 @@ backend-limitation classification above — the limitations are the
   checksums are stored** (the checksum-limitation bucket shrank from 12
   to 5).
 - The SSE-KMS tests need the `testing` KMS configuration the compose
-  service carries; the setup script applies the same three
-  `client.rgw` options.
+  service carries; the setup script applies the same three RGW crypt
+  options (on `client.radosgw.gateway` — MicroCeph's RGW daemon name,
+  which `client.rgw.*`-targeted config does not reach). Verified: the
+  SSE-KMS tests that failed without it pass afterwards.
 
 ## Upstream s3-tests bug (1)
 

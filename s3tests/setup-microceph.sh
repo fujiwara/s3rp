@@ -64,14 +64,17 @@ wait_for_rgw() {
 }
 
 # SSE over plain http with the built-in "testing" KMS backend, mirroring
-# the compose ceph service so the SSE-KMS tests work without a real KMS
-if [ "$(microceph.ceph config get client.rgw rgw_crypt_s3_kms_backend 2>/dev/null)" = "testing" ]; then
+# the compose ceph service so the SSE-KMS tests work without a real KMS.
+# MicroCeph's RGW runs as client.radosgw.gateway (not client.rgw.*), so
+# the options must target that name to apply.
+RGW_NAME=client.radosgw.gateway
+if [ "$(microceph.ceph config get $RGW_NAME rgw_crypt_s3_kms_backend 2>/dev/null)" = "testing" ]; then
     echo "==> rgw SSE test config already set"
 else
     echo "==> configuring SSE for plain http with the testing KMS backend"
-    microceph.ceph config set client.rgw rgw_crypt_require_ssl false
-    microceph.ceph config set client.rgw rgw_crypt_s3_kms_backend testing
-    microceph.ceph config set client.rgw rgw_crypt_s3_kms_encryption_keys \
+    microceph.ceph config set $RGW_NAME rgw_crypt_require_ssl false
+    microceph.ceph config set $RGW_NAME rgw_crypt_s3_kms_backend testing
+    microceph.ceph config set $RGW_NAME rgw_crypt_s3_kms_encryption_keys \
         testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
     snap restart microceph.rgw
 fi
