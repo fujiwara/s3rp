@@ -833,7 +833,10 @@ func setObjectHeaders(h http.Header, v objectHeaderValues) {
 	}
 	setSSEHeaders(h, v.SSE, v.SSEKMSKeyID)
 	for k, val := range v.Metadata {
-		h.Set("x-amz-meta-"+k, val)
+		// Header.Set would canonicalize the name (turning meta1 into
+		// X-Amz-Meta-Meta1 on the wire); S3 metadata keys reach the client
+		// lowercase, and clients index the parsed metadata by that suffix
+		h["x-amz-meta-"+strings.ToLower(k)] = []string{val}
 	}
 }
 
