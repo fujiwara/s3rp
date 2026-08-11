@@ -34,6 +34,12 @@ func TestProxyPutObjectChecksumHeader(t *testing.T) {
 	if got := aws.ToString(stub.putIn.ChecksumCRC32); got != crc32Of123456789 {
 		t.Errorf("expect checksum passthrough, got %q", got)
 	}
+	// with the algorithm named alongside it: the SDK then sends
+	// x-amz-sdk-checksum-algorithm, without which Ceph RGW does not store
+	// the checksum it was given
+	if got := string(stub.putIn.ChecksumAlgorithm); got != "CRC32" {
+		t.Errorf("expect ChecksumAlgorithm CRC32 alongside the value, got %q", got)
+	}
 	// and the backend's checksum comes back to the client
 	if got := aws.ToString(out.ChecksumCRC32); got != crc32Of123456789 {
 		t.Errorf("expect checksum in response, got %q", got)

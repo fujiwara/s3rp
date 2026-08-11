@@ -32,6 +32,25 @@ type Values struct {
 	SHA256    *string
 }
 
+// Algorithm returns the upper-case name of the algorithm a value is set
+// for ("" when none) — the form x-amz-sdk-checksum-algorithm and the SDK's
+// ChecksumAlgorithm parameter use. A request carries at most one checksum.
+func (v Values) Algorithm() string {
+	switch {
+	case v.CRC32 != nil:
+		return "CRC32"
+	case v.CRC32C != nil:
+		return "CRC32C"
+	case v.CRC64NVME != nil:
+		return "CRC64NVME"
+	case v.SHA1 != nil:
+		return "SHA1"
+	case v.SHA256 != nil:
+		return "SHA256"
+	}
+	return ""
+}
+
 func FromHeaders(h http.Header) Values {
 	get := func(alg string) *string {
 		if v := h.Get("x-amz-checksum-" + alg); v != "" {

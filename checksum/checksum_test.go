@@ -131,3 +131,26 @@ func TestTrailerAlgorithm(t *testing.T) {
 		}
 	}
 }
+
+func TestValuesAlgorithm(t *testing.T) {
+	v := func(s string) *string { return &s }
+	cases := []struct {
+		name string
+		vals checksum.Values
+		want string
+	}{
+		{"none", checksum.Values{}, ""},
+		{"crc32", checksum.Values{CRC32: v("x")}, "CRC32"},
+		{"crc32c", checksum.Values{CRC32C: v("x")}, "CRC32C"},
+		{"crc64nvme", checksum.Values{CRC64NVME: v("x")}, "CRC64NVME"},
+		{"sha1", checksum.Values{SHA1: v("x")}, "SHA1"},
+		{"sha256", checksum.Values{SHA256: v("x")}, "SHA256"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.vals.Algorithm(); got != tc.want {
+				t.Errorf("expect %q, got %q", tc.want, got)
+			}
+		})
+	}
+}

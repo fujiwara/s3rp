@@ -114,6 +114,11 @@ func (g *Gateway) uploadPart(c *opCtx) error {
 	in.ChecksumCRC64NVME = cs.CRC64NVME
 	in.ChecksumSHA1 = cs.SHA1
 	in.ChecksumSHA256 = cs.SHA256
+	if alg := cs.Algorithm(); alg != "" {
+		// see putObject: RGW stores a precomputed checksum only when the
+		// algorithm is named alongside it
+		in.ChecksumAlgorithm = types.ChecksumAlgorithm(alg)
+	}
 	if alg := checksum.TrailerAlgorithm(r.Header); alg != "" {
 		in.ChecksumAlgorithm = types.ChecksumAlgorithm(strings.ToUpper(alg))
 	}

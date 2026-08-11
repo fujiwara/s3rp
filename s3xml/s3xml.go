@@ -379,6 +379,50 @@ type BucketEntry struct {
 	CreationDate string `xml:"CreationDate"`
 }
 
+// GetObjectAttributesResult is the response of GetObjectAttributes. Only
+// the attributes the request asked for are present. Note this API returns
+// the ETag without quotes, unlike every other S3 response.
+type GetObjectAttributesResult struct {
+	XMLName      xml.Name              `xml:"GetObjectAttributesResponse"`
+	XMLNS        string                `xml:"xmlns,attr"`
+	ETag         string                `xml:"ETag,omitempty"`
+	Checksum     *AttributesChecksum   `xml:"Checksum,omitempty"`
+	ObjectParts  *ObjectAttributeParts `xml:"ObjectParts,omitempty"`
+	StorageClass string                `xml:"StorageClass,omitempty"`
+	ObjectSize   *int64                `xml:"ObjectSize,omitempty"`
+}
+
+// AttributesChecksum is the Checksum member of GetObjectAttributesResult.
+type AttributesChecksum struct {
+	ChecksumCRC32     string `xml:"ChecksumCRC32,omitempty"`
+	ChecksumCRC32C    string `xml:"ChecksumCRC32C,omitempty"`
+	ChecksumCRC64NVME string `xml:"ChecksumCRC64NVME,omitempty"`
+	ChecksumSHA1      string `xml:"ChecksumSHA1,omitempty"`
+	ChecksumSHA256    string `xml:"ChecksumSHA256,omitempty"`
+	ChecksumType      string `xml:"ChecksumType,omitempty"`
+}
+
+// ObjectAttributeParts is the ObjectParts member of GetObjectAttributesResult.
+type ObjectAttributeParts struct {
+	IsTruncated          bool                  `xml:"IsTruncated"`
+	MaxParts             *int32                `xml:"MaxParts,omitempty"`
+	NextPartNumberMarker string                `xml:"NextPartNumberMarker,omitempty"`
+	PartNumberMarker     string                `xml:"PartNumberMarker,omitempty"`
+	PartsCount           *int32                `xml:"PartsCount,omitempty"`
+	Parts                []ObjectAttributePart `xml:"Part"`
+}
+
+// ObjectAttributePart is one part of ObjectAttributeParts.
+type ObjectAttributePart struct {
+	PartNumber        int32  `xml:"PartNumber"`
+	Size              int64  `xml:"Size"`
+	ChecksumCRC32     string `xml:"ChecksumCRC32,omitempty"`
+	ChecksumCRC32C    string `xml:"ChecksumCRC32C,omitempty"`
+	ChecksumCRC64NVME string `xml:"ChecksumCRC64NVME,omitempty"`
+	ChecksumSHA1      string `xml:"ChecksumSHA1,omitempty"`
+	ChecksumSHA256    string `xml:"ChecksumSHA256,omitempty"`
+}
+
 // PostResponse is the body of a browser-based POST upload response when the
 // form requests success_action_status 201.
 type PostResponse struct {

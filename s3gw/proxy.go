@@ -12,6 +12,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -44,6 +45,9 @@ func (g *Gateway) getObject(c *opCtx) error {
 	query := r.URL.Query()
 	if v := query.Get(qpVersionID); v != "" {
 		in.VersionId = aws.String(v)
+	}
+	if s3e := applyPartNumber(query, &in.PartNumber); s3e != nil {
+		return s3e
 	}
 	if v := query.Get("response-content-type"); v != "" {
 		in.ResponseContentType = aws.String(v)
@@ -95,6 +99,9 @@ func (g *Gateway) getObject(c *opCtx) error {
 	if out.TagCount != nil {
 		h.Set("x-amz-tagging-count", strconv.FormatInt(int64(*out.TagCount), 10))
 	}
+	if out.PartsCount != nil {
+		h.Set("x-amz-mp-parts-count", strconv.FormatInt(int64(*out.PartsCount), 10))
+	}
 	checksum.SetHeaders(h, checksum.Values{
 		CRC32:     out.ChecksumCRC32,
 		CRC32C:    out.ChecksumCRC32C,
@@ -129,6 +136,9 @@ func (g *Gateway) headObject(c *opCtx) error {
 	if v := r.URL.Query().Get(qpVersionID); v != "" {
 		in.VersionId = aws.String(v)
 	}
+	if s3e := applyPartNumber(r.URL.Query(), &in.PartNumber); s3e != nil {
+		return s3e
+	}
 	if strings.EqualFold(r.Header.Get("x-amz-checksum-mode"), "enabled") {
 		in.ChecksumMode = types.ChecksumModeEnabled
 	}
@@ -155,6 +165,9 @@ func (g *Gateway) headObject(c *opCtx) error {
 	})
 	if out.AcceptRanges != nil {
 		w.Header().Set("Accept-Ranges", *out.AcceptRanges)
+	}
+	if out.PartsCount != nil {
+		w.Header().Set("x-amz-mp-parts-count", strconv.FormatInt(int64(*out.PartsCount), 10))
 	}
 	checksum.SetHeaders(w.Header(), checksum.Values{
 		CRC32:     out.ChecksumCRC32,
@@ -233,6 +246,12 @@ func (g *Gateway) putObject(c *opCtx) error {
 	in.ChecksumCRC64NVME = cs.CRC64NVME
 	in.ChecksumSHA1 = cs.SHA1
 	in.ChecksumSHA256 = cs.SHA256
+	if alg := cs.Algorithm(); alg != "" {
+		// name the algorithm alongside a precomputed checksum: the SDK then
+		// sends x-amz-sdk-checksum-algorithm, without which Ceph RGW does
+		// not store the checksum it was given
+		in.ChecksumAlgorithm = types.ChecksumAlgorithm(alg)
+	}
 	if alg := checksum.TrailerAlgorithm(r.Header); alg != "" {
 		// the client sends the checksum as an aws-chunked trailer, which
 		// is verified by the chunked reader; the backend SDK recomputes
@@ -833,6 +852,22 @@ func relayErrorHeaders(h http.Header, err error) {
 			h.Set(k, v)
 		}
 	}
+}
+
+// applyPartNumber forwards the partNumber query parameter (a ranged read
+// of one part of a multipart object) on GetObject/HeadObject.
+func applyPartNumber(query url.Values, partNumber **int32) *s3err.Error {
+	v := query.Get(qpPartNumber)
+	if v == "" {
+		return nil
+	}
+	n, err := strconv.ParseInt(v, 10, 32)
+	if err != nil || n < 1 || n > 10000 {
+		return s3err.New(http.StatusBadRequest, "InvalidArgument",
+			"Part number must be an integer between 1 and 10000, inclusive").WithCause(err)
+	}
+	*partNumber = aws.Int32(int32(n))
+	return nil
 }
 
 func applyConditionalHeaders(r *http.Request, ifMatch, ifNoneMatch **string, ifModifiedSince, ifUnmodifiedSince **time.Time) {
