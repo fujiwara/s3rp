@@ -59,6 +59,25 @@ var fromSDKErrorTestCases = []struct {
 		wantCode:   "InternalError",
 		wantStatus: http.StatusBadGateway,
 	},
+	{
+		// a transport failure carries a ResponseError with status 0, which
+		// must not become the response status (WriteHeader panics below 100)
+		name: "transport failure with zero status",
+		err: &smithy.OperationError{
+			ServiceID:     "S3",
+			OperationName: "PutObject",
+			Err: &awshttp.ResponseError{
+				ResponseError: &smithyhttp.ResponseError{
+					Response: &smithyhttp.Response{
+						Response: &http.Response{StatusCode: 0},
+					},
+					Err: http.ErrServerClosed,
+				},
+			},
+		},
+		wantCode:   "InternalError",
+		wantStatus: http.StatusBadGateway,
+	},
 }
 
 func TestFromSDKError(t *testing.T) {
