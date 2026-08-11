@@ -17,10 +17,17 @@ the curated baseline report.
 
 ## triage.py is a first pass, not the answer
 
-Its categories are regex heuristics, and its `NotImplemented` group is
-keyed by the **boto3 operation name in the ClientError** — which
-conflates three different causes. Split them by the **501 message text**,
-not the operation name:
+Its rules encode the *hand-verified* findings of docs/s3-tests.md, so on
+the verified baseline every failure lands in a named category and the
+`UNMATCHED` bucket is the actual to-triage list — anything appearing
+there after a backend or suite update is either a new incompatibility or
+a pattern the rules don't know yet. The name-based rules are heuristics:
+when the failure mix shifts, spot-check that reclassified tests really
+belong where they landed (a *newly failing* test matching an old pattern
+is exactly what to distrust). The `NotImplemented` group is keyed by the
+**boto3 operation name in the ClientError** — which conflates three
+different causes. Split them by the **501 message text**, not the
+operation name:
 
 | message | cause |
 |---|---|
