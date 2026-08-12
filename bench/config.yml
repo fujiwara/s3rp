@@ -1,0 +1,20 @@
+# Benchmark config: s3rp fronting the local microceph RGW.
+# Backend credentials come from the environment (expanded by LoadConfig):
+#   RGW_ACCESS_KEY / RGW_SECRET_KEY
+listen: ":8090"
+tenants:
+  - name: bench
+    users:
+      - name: bench
+        keys:
+          - access_key_id: S3RPBENCHKEY
+            secret_access_key: S3RPBENCHSECRET
+    buckets:
+      - name: warp-benchmark-bucket
+        backend:
+          endpoint: http://127.0.0.1:7490
+          region: us-east-1
+          bucket: s3rp-bench
+          use_path_style: true
+          access_key_id: ${RGW_ACCESS_KEY}
+          secret_access_key: ${RGW_SECRET_KEY}
