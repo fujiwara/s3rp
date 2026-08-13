@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 	"net/http"
+
+	"github.com/fujiwara/shapeio"
 )
 
 // Hooks a service installs to take part in each operation.
@@ -78,12 +80,32 @@ func (g *Gateway) SetAuthorizer(a Authorizer) { g.authorizer = a }
 // Use appends an interceptor. The first one added is the outermost.
 func (g *Gateway) Use(i Interceptor) { g.interceptors = append(g.interceptors, i) }
 
+// SetBandwidthLimit installs a hook that picks the pacing rates for an
+// operation in bytes per second, called once per request after the policies
+// and the Authorizer have allowed it. in paces the request body as read off
+// the wire (an aws-chunked upload is paced with its framing, matching
+// Op.BytesIn), out paces the response body as written; 0 means unlimited in
+// that direction.
+//
+// Pacing is per stream (github.com/fujiwara/shapeio): each request is shaped
+// independently, so a rate of R with N concurrent requests from the same
+// tenant admits N*R in aggregate. This bounds per-connection burstiness, not
+// a principal's total bandwidth — an aggregate cap needs a limiter shared
+// across requests, which this hook cannot express.
+func (g *Gateway) SetBandwidthLimit(f func(op *Op) (in, out float64)) {
+	g.bandwidthRate = f
+}
+
 // runOp applies the hooks around one operation.
 func (g *Gateway) runOp(ctx context.Context, op *Op, c *opCtx, run func() error) error {
 	if g.authorizer != nil {
 		if err := g.authorizer.Authorize(ctx, op); err != nil {
 			return err
 		}
+	}
+	if g.bandwidthRate != nil {
+		in, out := g.bandwidthRate(op)
+		c.setBandwidthRates(ctx, in, out)
 	}
 	next := func() error {
 		err := run()
@@ -114,6 +136,28 @@ func (c *opCtx) transferred() (in, out int64) {
 		in = cb.n
 	}
 	return in, out
+}
+
+// setBandwidthRates inserts shapeio pacing inside the counting wrappers
+// installed by wrapHandler: the pacing reader goes under countingBody and the
+// pacing writer under statusWriter, so the byte counts keep measuring the
+// wire exactly as before. Like transferred, a handler invoked outside
+// wrapHandler has no wrappers and simply goes unpaced rather than failing.
+func (c *opCtx) setBandwidthRates(ctx context.Context, in, out float64) {
+	if in > 0 {
+		if cb, ok := c.r.Body.(*countingBody); ok && cb.ReadCloser != nil {
+			paced := shapeio.NewReadCloserWithContext(cb.ReadCloser, ctx)
+			paced.SetRateLimit(in)
+			cb.ReadCloser = paced
+		}
+	}
+	if out > 0 {
+		if sw, ok := c.w.(*statusWriter); ok {
+			paced := shapeio.NewWriterWithContext(sw.ResponseWriter, ctx)
+			paced.SetRateLimit(out)
+			sw.paced = paced
+		}
+	}
 }
 
 // countingBody counts the bytes read from a request body. Only the goroutine

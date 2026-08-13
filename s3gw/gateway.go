@@ -37,9 +37,10 @@ type Gateway struct {
 	// backend identity and is never exposed.
 	region string
 
-	authorizer   Authorizer
-	interceptors []Interceptor
-	observer     Observer
+	authorizer    Authorizer
+	interceptors  []Interceptor
+	observer      Observer
+	bandwidthRate func(op *Op) (in, out float64)
 
 	newClient     func(ctx context.Context, b *store.Backend) (BackendClient, error)
 	clientOptions func(b *store.Backend) []func(*s3.Options)

@@ -3,6 +3,7 @@ package s3gw
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -44,6 +45,9 @@ type statusWriter struct {
 	http.ResponseWriter
 	status  int
 	written int64
+	// paced, when set, is a shapeio writer wrapping ResponseWriter; body
+	// writes go through it so the response is traffic-shaped
+	paced io.Writer
 }
 
 func (w *statusWriter) WriteHeader(status int) {
@@ -52,7 +56,13 @@ func (w *statusWriter) WriteHeader(status int) {
 }
 
 func (w *statusWriter) Write(p []byte) (int, error) {
-	n, err := w.ResponseWriter.Write(p)
+	var n int
+	var err error
+	if w.paced != nil {
+		n, err = w.paced.Write(p)
+	} else {
+		n, err = w.ResponseWriter.Write(p)
+	}
 	w.written += int64(n)
 	return n, err
 }
