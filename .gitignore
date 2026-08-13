@@ -16,3 +16,4 @@
 dist/
 /s3tests/work/
 /bench/out/
+__pycache__/

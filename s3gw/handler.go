@@ -44,6 +44,8 @@ type statusWriter struct {
 	http.ResponseWriter
 	status  int
 	written int64
+	limiter BandwidthLimiter
+	ctx     context.Context // the request's context, set with limiter
 }
 
 func (w *statusWriter) WriteHeader(status int) {
@@ -52,9 +54,31 @@ func (w *statusWriter) WriteHeader(status int) {
 }
 
 func (w *statusWriter) Write(p []byte) (int, error) {
-	n, err := w.ResponseWriter.Write(p)
-	w.written += int64(n)
-	return n, err
+	if w.limiter == nil {
+		n, err := w.ResponseWriter.Write(p)
+		w.written += int64(n)
+		return n, err
+	}
+	// pace and send in waitChunk slices, waiting before each send: waiting
+	// for the whole of p up front and then writing it in one call would
+	// defeat the pacing for exactly the writes large enough to need it
+	// (io.Copy can hand a WriterTo source over in a single Write), and a
+	// pacing failure (the client is gone, or the limiter cannot grant a
+	// chunk) must abort the response rather than let it through unpaced.
+	var total int
+	for total < len(p) {
+		end := min(total+waitChunk, len(p))
+		if err := w.limiter.WaitN(w.ctx, end-total); err != nil {
+			return total, err
+		}
+		n, err := w.ResponseWriter.Write(p[total:end])
+		w.written += int64(n)
+		total += n
+		if err != nil {
+			return total, err
+		}
+	}
+	return total, nil
 }
 
 func (g *Gateway) wrapHandler(h handlerFunc) http.HandlerFunc {
