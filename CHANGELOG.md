@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.0.6](https://github.com/fujiwara/s3rp/compare/v0.0.5...v0.0.6) - 2026-08-13
+
+- Add performance benchmark harness (bench/) by @fujiwara in https://github.com/fujiwara/s3rp/pull/91
+- Add a bandwidth-limit hook for per-stream traffic shaping by @fujiwara in https://github.com/fujiwara/s3rp/pull/93
+- bench: measure the bandwidth-limit hook by @fujiwara in https://github.com/fujiwara/s3rp/pull/95
+
 ## [v0.0.5](https://github.com/fujiwara/s3rp/compare/v0.0.4...v0.0.5) - 2026-08-11
 
 - Add ceph/s3-tests compatibility harness and report by @fujiwara in https://github.com/fujiwara/s3rp/pull/81
