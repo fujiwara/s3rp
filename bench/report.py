@@ -9,14 +9,20 @@ from collections import defaultdict
 from datetime import date
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
+WORKLOAD = os.environ.get("WORKLOAD", "large")
 SCENARIOS = [
     ("put-proxy", "PUT (via s3rp)"),
     ("put-direct", "PUT (RGW direct)"),
     ("get-proxy", "GET (via s3rp)"),
     ("get-direct", "GET (RGW direct)"),
-    ("multipart-proxy", "Multipart (via s3rp)"),
-    ("multipart-direct", "Multipart (RGW direct)"),
 ]
+WORKLOADS = ["put", "get"]
+if WORKLOAD == "large":
+    SCENARIOS += [
+        ("multipart-proxy", "Multipart (via s3rp)"),
+        ("multipart-direct", "Multipart (RGW direct)"),
+    ]
+    WORKLOADS.append("multipart")
 MAIN_OP = {"put": "PUT", "get": "GET", "multipart": "PUTPART"}
 
 
@@ -132,15 +138,18 @@ def main():
 
     lines = []
     add = lines.append
-    add("# s3rp benchmark report")
+    add(f"# s3rp benchmark report ({WORKLOAD} objects)")
     add("")
     add(f"- Date: {date.today().isoformat()}")
     add(f"- Host: {cpu_model} ({nproc} cores), kernel {platform.release()}")
     add(f"- s3rp: commit {commit}, {gover}")
     add("- Backend: microceph RGW at 127.0.0.1:7490 (same host, loopback-file OSDs)")
-    add(f"- warp: obj.size={env['OBJ_SIZE']}, duration={env['DURATION']}, "
-        f"concurrent={env['CONCURRENT']}, multipart part.size={env['PART_SIZE']} "
-        f"x {env['PARTS']} parts/client, get objects={env['GET_OBJECTS']}")
+    warp_line = (f"- warp: obj.size={env['OBJ_SIZE']}, duration={env['DURATION']}, "
+                 f"concurrent={env['CONCURRENT']}, get objects={env['GET_OBJECTS']}")
+    if WORKLOAD == "large":
+        warp_line += (f", multipart part.size={env['PART_SIZE']} "
+                      f"x {env['PARTS']} parts/client")
+    add(warp_line)
     add(f"- s3rp log level: {env['S3RP_LOG_LEVEL']} (access log suppressed)")
     add("")
     add("## Results")
@@ -164,7 +173,7 @@ def main():
     add("")
     add("| Workload | direct MiB/s | via s3rp MiB/s | throughput ratio | direct p50 (ms) | via s3rp p50 (ms) |")
     add("|---|---|---|---|---|---|")
-    for wl in ("put", "get", "multipart"):
+    for wl in WORKLOADS:
         p, d = results.get(f"{wl}-proxy"), results.get(f"{wl}-direct")
         if not p or not d or not d["mibps"]:
             add(f"| {wl} | - | - | - | - | - |")
@@ -187,7 +196,8 @@ def main():
     add("- Raw data: `bench/out/` (warp benchdata, per-scenario warp output, pidstat logs).")
     add("")
 
-    path = os.path.join(os.path.dirname(OUT), "report.md")
+    fname = "report.md" if WORKLOAD == "large" else f"report-{WORKLOAD}.md"
+    path = os.path.join(os.path.dirname(OUT), fname)
     with open(path, "w") as f:
         f.write("\n".join(lines))
     print(f"wrote {path}")

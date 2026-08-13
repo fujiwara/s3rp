@@ -18,7 +18,8 @@ Measures PUT / GET / multipart throughput and latency with
 ## Run
 
 ```console
-$ bash bench/run.sh
+$ bash bench/run.sh          # large objects (default)
+$ bash bench/run.sh small    # small objects
 ```
 
 This will:
@@ -26,14 +27,18 @@ This will:
 1. create the backend bucket `s3rp-bench` on RGW if missing
 2. build s3rp and start it on `:8090` with `bench/config.yml`
    (front bucket `warp-benchmark-bucket` → backend bucket `s3rp-bench`)
-3. run warp scenarios (each sampled by `pidstat 1`):
-   - `put` 1MiB objects, `get` 1MiB objects, `multipart-put` 5MiB parts
-     (MPU write path) — first via s3rp, then directly against RGW as the
-     baseline
-4. write the aggregated report to `bench/report.md` (raw data in `bench/out/`)
+3. run warp scenarios (each sampled by `pidstat 1`), first via s3rp,
+   then directly against RGW as the baseline:
+   - `large`: `put`/`get` 1MiB objects plus `multipart-put` 5MiB parts
+     (MPU write path) — byte-throughput bound
+   - `small`: `put`/`get` 16KiB objects, no multipart (parts must be
+     ≥ 5MiB) — request-rate bound, surfaces the per-request proxy cost
+4. write the aggregated report to `bench/report.md`
+   (`bench/report-small.md` for the small workload; raw data in `bench/out/`)
 
-Tunables (env vars): `DURATION` (20s), `CONCURRENT` (8), `OBJ_SIZE` (1MiB),
-`GET_OBJECTS` (500), `PART_SIZE` (5MiB), `PARTS` (50, per client),
+Tunables (env vars, overriding the workload presets): `DURATION` (20s),
+`CONCURRENT` (8), `OBJ_SIZE` (1MiB large / 16KiB small),
+`GET_OBJECTS` (500 large / 2000 small), `PART_SIZE` (5MiB), `PARTS` (50, per client),
 `S3RP_LOG_LEVEL` (warn — set `info` to include access-log formatting cost),
 `RGW_ENDPOINT` (127.0.0.1:7490), `WARP` (path to warp binary).
 

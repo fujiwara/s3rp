@@ -3,18 +3,39 @@
 # Runs warp (put / get / multipart) through the proxy and directly against
 # RGW as a baseline, sampling CPU usage (s3rp / radosgw / warp) with pidstat.
 # Results are aggregated into bench/report.md by report.py.
+#
+# usage: run.sh [large|small]
+#   large (default): 1MiB objects + 5MiB-part multipart — byte-throughput bound
+#   small:           16KiB objects, no multipart (parts must be >= 5MiB) —
+#                    request-rate bound, surfaces the per-request proxy cost
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT=$(cd .. && pwd)
 OUT=out
 
+WORKLOAD=${1:-large}
+case "$WORKLOAD" in
+large)
+    OBJ_SIZE=${OBJ_SIZE:-1MiB}
+    GET_OBJECTS=${GET_OBJECTS:-500}
+    ;;
+small)
+    OBJ_SIZE=${OBJ_SIZE:-16KiB}
+    GET_OBJECTS=${GET_OBJECTS:-2000}
+    ;;
+*)
+    echo "usage: $0 [large|small]" >&2
+    exit 1
+    ;;
+esac
+
 WARP=${WARP:-$HOME/bin/warp}
 DURATION=${DURATION:-20s}
 CONCURRENT=${CONCURRENT:-8}
-OBJ_SIZE=${OBJ_SIZE:-1MiB}
-GET_OBJECTS=${GET_OBJECTS:-500}
 PART_SIZE=${PART_SIZE:-5MiB}
 PARTS=${PARTS:-50}
+# report.py reads the effective values back from the environment
+export WORKLOAD DURATION CONCURRENT OBJ_SIZE GET_OBJECTS PART_SIZE PARTS
 
 RGW_ENDPOINT=${RGW_ENDPOINT:-127.0.0.1:7490}
 S3RP_ENDPOINT=${S3RP_ENDPOINT:-127.0.0.1:8090}
@@ -46,7 +67,7 @@ echo "==> building s3rp"
 (cd "$ROOT" && go build -o bench/out/s3rp ./cmd/s3rp)
 
 echo "==> starting s3rp on $S3RP_ENDPOINT"
-S3RP_LOG_LEVEL=${S3RP_LOG_LEVEL:-warn}
+export S3RP_LOG_LEVEL=${S3RP_LOG_LEVEL:-warn}
 ./out/s3rp --config config.yml --log-level "$S3RP_LOG_LEVEL" >"$OUT/s3rp.log" 2>&1 &
 S3RP_PID=$!
 cleanup() {
@@ -93,16 +114,20 @@ MPU_ARGS=(multipart-put --part.size "$PART_SIZE" --parts "$PARTS" --part.concurr
 
 run_bench put-proxy proxy "${PUT_ARGS[@]}"
 run_bench get-proxy proxy "${GET_ARGS[@]}"
-run_bench multipart-proxy proxy "${MPU_ARGS[@]}"
+if [ "$WORKLOAD" = large ]; then
+    run_bench multipart-proxy proxy "${MPU_ARGS[@]}"
+fi
 
 run_bench put-direct direct "${PUT_ARGS[@]}"
 run_bench get-direct direct "${GET_ARGS[@]}"
-run_bench multipart-direct direct "${MPU_ARGS[@]}"
+if [ "$WORKLOAD" = large ]; then
+    run_bench multipart-direct direct "${MPU_ARGS[@]}"
+fi
 
 kill "$S3RP_PID" 2>/dev/null || true
 wait "$S3RP_PID" 2>/dev/null || true
 S3RP_PID=
 
-echo "==> generating report.md"
+echo "==> generating report"
 python3 report.py
-echo "done: bench/report.md"
+
