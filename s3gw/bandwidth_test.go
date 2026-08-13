@@ -129,6 +129,44 @@ func TestBandwidthLimitPacesWithRateLimiter(t *testing.T) {
 	}
 }
 
+// A download handed to io.Copy as a single large Write (a WriterTo source
+// short-circuits the 32 KiB copy loop) is still paced: the writer waits and
+// sends in slices instead of waiting once and bursting the whole buffer.
+func TestBandwidthLimitPacesSingleLargeWrite(t *testing.T) {
+	body := bytes.Repeat([]byte("y"), 256<<10)
+	// bytes.Reader implements WriterTo and io.NopCloser forwards it, so
+	// io.Copy delivers the whole body to the response writer in one Write
+	stub := &stubBackend{getOut: &s3.GetObjectOutput{
+		Body:          io.NopCloser(bytes.NewReader(body)),
+		ContentLength: aws.Int64(int64(len(body))),
+	}}
+	client, _, app := newTestProxyWithGateway(t, stub)
+
+	// 1 MiB/s with a 64 KiB burst: 256 KiB needs at least ~187ms
+	limiter := rate.NewLimiter(1<<20, 64<<10)
+	app.SetBandwidthLimit(func(op *s3gw.Op) (s3gw.BandwidthLimiter, s3gw.BandwidthLimiter) {
+		return nil, limiter
+	})
+
+	start := time.Now()
+	got, err := client.GetObject(t.Context(), &s3.GetObjectInput{
+		Bucket: aws.String("testbucket"), Key: aws.String("a.txt"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := io.Copy(io.Discard, got.Body)
+	got.Body.Close()
+	if err != nil || n != int64(len(body)) {
+		t.Fatalf("expect the full body, got %d bytes, err %v", n, err)
+	}
+	// measured at the client: the bytes must arrive paced, not in one
+	// burst after a server-side wait
+	if elapsed := time.Since(start); elapsed < 90*time.Millisecond {
+		t.Errorf("expect a paced download to take at least ~187ms, took %v", elapsed)
+	}
+}
+
 // A limiter failure aborts the request instead of letting it through unpaced.
 func TestBandwidthLimitFailureAborts(t *testing.T) {
 	const body = "should not be fully served"
