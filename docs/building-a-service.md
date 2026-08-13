@@ -329,17 +329,34 @@ func main() {
   ```
 - A client that retries sends a **new request**, which is verified, authorized and metered on its own. That is what the server served; whether a retry should count toward a quota or an invoice is the application's decision, not the gateway's.
 - `Op.BytesIn` / `BytesOut` count bytes on the wire, so an `aws-chunked` upload includes its framing. They measure transfer, not storage: a quota over bytes at rest needs the backend's inventory (deletes, overwrites and versions carry no sizes through the hooks).
+- **Bandwidth limiting** is the one thing the Authorizer/Interceptor shape cannot do — they gate admission, not the stream. `SetBandwidthLimit` installs a hook that picks pacing limiters per operation, called after the policies and the Authorizer allow it; `in` paces the request body as read off the wire (the same bytes `BytesIn` counts), `out` the response body, `nil` means unlimited. The hook only *selects* — sharing is what makes it a limit, and the keying is yours: returning one limiter per tenant caps that tenant's aggregate bandwidth across all its concurrent requests. Key on `Op.User` rather than an access key (keys rotate, and during a rotation two are live — a per-key budget would double), and note `Op.Tenant` is the **requester's** tenant: on a cross-tenant request, whether the bandwidth bill belongs to the requester (`KeyMetadata` side) or the bucket owner (`BucketMetadata` side) is your business rule. `*rate.Limiter` satisfies the interface; the gateway waits in chunks of at most 32 KiB, so any burst ≥ 32 KiB works, but the burst is also how far a stream runs ahead of the rate — 256 KiB to 1 MiB is a practical range. A pacing failure aborts the request rather than letting it through unpaced.
+
+  ```go
+  var limiters sync.Map // tenant -> *rate.Limiter; eviction is yours too
+  gw.SetBandwidthLimit(func(op *s3gw.Op) (in, out s3gw.BandwidthLimiter) {
+  	plan := op.KeyMetadata.(*Plan) // loaded by your store with the key
+  	if plan.BytesPerSec == 0 {
+  		return nil, nil // unlimited
+  	}
+  	l, _ := limiters.LoadOrStore(op.Tenant,
+  		rate.NewLimiter(rate.Limit(plan.BytesPerSec), 1<<20))
+  	lim := l.(*rate.Limiter)
+  	return lim, lim // one budget for both directions
+  })
+  ```
 
 **Do**
 
 - Meter after `next()` — the byte counts are final by then, in any layer.
 - Refuse a request by returning **without** calling `next`; read what the store already loaded from `Op.BucketMetadata` / `Op.KeyMetadata`.
 - Use `context.WithoutCancel(ctx)` for your own I/O after `next`, or hand the self-contained `Op` to a queue.
+- Share bandwidth limiters at the granularity you mean to cap (per tenant/user/bucket), with a burst of 256 KiB–1 MiB.
 
 **Don't**
 
 - Don't query the store again in a hook for data `Metadata` already carries.
 - Don't use the request context as-is for post-`next` writes — it is canceled exactly for disconnected clients, so their usage silently vanishes.
+- Don't key bandwidth limiters on access key ids — keys rotate, and two are live during a rotation.
 - Don't read `BytesOut` as stored bytes (it is wire transfer), and don't expect the gateway to de-duplicate client retries — each retry is a new, separately metered request.
 
 ## Observation

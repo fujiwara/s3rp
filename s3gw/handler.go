@@ -44,6 +44,8 @@ type statusWriter struct {
 	http.ResponseWriter
 	status  int
 	written int64
+	limiter BandwidthLimiter
+	ctx     context.Context // the request's context, set with limiter
 }
 
 func (w *statusWriter) WriteHeader(status int) {
@@ -52,6 +54,14 @@ func (w *statusWriter) WriteHeader(status int) {
 }
 
 func (w *statusWriter) Write(p []byte) (int, error) {
+	// wait before sending: pacing the write is the point, and a pacing
+	// failure (the client is gone, or the limiter cannot grant a chunk)
+	// must abort the response rather than let it through unpaced
+	if w.limiter != nil && len(p) > 0 {
+		if err := waitBandwidth(w.limiter, w.ctx, len(p)); err != nil {
+			return 0, err
+		}
+	}
 	n, err := w.ResponseWriter.Write(p)
 	w.written += int64(n)
 	return n, err
