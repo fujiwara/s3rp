@@ -43,7 +43,6 @@ func TestLoadConfig(t *testing.T) {
 		t.Errorf("expect photos-prod, got %s", photos.Backend.Bucket)
 	}
 	logs := acme.Buckets[1]
-	// defaults
 	if logs.Backend.Region != s3rp.DefaultRegion {
 		t.Errorf("expect default region, got %s", logs.Backend.Region)
 	}

@@ -48,7 +48,6 @@ func corsNotAllowed() *s3err.Error {
 		"CORSResponse: This CORS request is not allowed.")
 }
 
-// getBucketCors returns the CORS configuration of the bucket as XML.
 func (g *Gateway) getBucketCors(c *opCtx) error {
 	w, rt := c.w, c.rt
 	if len(rt.cfg.CORS) == 0 {

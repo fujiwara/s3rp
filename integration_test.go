@@ -481,7 +481,6 @@ func TestIntegration(t *testing.T) {
 		if ver.Status != types.BucketVersioningStatusEnabled {
 			t.Fatalf("expect Enabled, got %v", ver.Status)
 		}
-		// two versions of the same key
 		for _, content := range []string{"version one", "version two"} {
 			if _, err := client.PutObject(t.Context(), &s3.PutObjectInput{
 				Bucket: aws.String("it-bucket"),
