@@ -1,11 +1,7 @@
-// Command bwlimit is the bench variant of s3rp with the bandwidth-limit hook
-// installed, for measuring the hook's overhead and its throttling.
-//
-// It accepts the same flags run.sh passes to the stock binary (--config,
-// --log-level). S3RP_BWLIMIT sets the per-tenant rate in bytes/sec shared by
-// both directions; 0 or unset arms the hook with an infinite-rate shared
-// limiter, so what is measured is the pacing plumbing (a WaitN on a shared
-// mutex-guarded limiter per 32KiB) with no actual throttling.
+// Command bwlimit is s3rp with the bandwidth-limit hook installed, for
+// benchmarking it. It takes the same flags run.sh passes to the stock
+// binary; S3RP_BWLIMIT is the shared per-tenant rate in bytes/sec, 0 or
+// unset arms the hook at an infinite rate (overhead only, no throttling).
 package main
 
 import (

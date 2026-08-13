@@ -204,8 +204,6 @@ func (cr *chunkedReader) readChunkHeader() (int64, error) {
 	sizeStr, ext, hasExt := strings.Cut(line, ";")
 	size, err := strconv.ParseInt(sizeStr, 16, 64)
 	if err != nil || size < 0 {
-		// truncate: the value is client-controlled and this reaches the
-		// observer as the cause
 		return 0, fmt.Errorf("malformed chunk size %q", truncateForError(sizeStr))
 	}
 	cr.chunkSig = ""

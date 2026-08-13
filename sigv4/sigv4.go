@@ -420,7 +420,6 @@ func (v *Verifier) verifyPresignedRequest(r *http.Request, lookup SecretLookup) 
 	if err != nil {
 		return nil, s3err.New(http.StatusBadRequest, "InvalidRequest", err.Error())
 	}
-	// drop the auth params; the signer adds them back when presigning
 	cloneQuery := clone.URL.Query()
 	for _, p := range presignAuthParams {
 		cloneQuery.Del(p)

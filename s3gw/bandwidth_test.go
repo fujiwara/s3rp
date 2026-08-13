@@ -32,9 +32,8 @@ func (l *recordingLimiter) WaitN(ctx context.Context, n int) error {
 	return l.err
 }
 
-// The limiters see exactly the bytes the hooks account: what the in limiter
-// passed is Op.BytesIn (the wire form, aws-chunked framing included), what
-// the out limiter passed is Op.BytesOut.
+// The limiters see exactly the bytes the hooks account: Op.BytesIn and
+// Op.BytesOut, the wire form with aws-chunked framing included.
 func TestBandwidthLimitSeesTheAccountedBytes(t *testing.T) {
 	const body = "hello bandwidth"
 	stub := &stubBackend{
@@ -160,8 +159,7 @@ func TestBandwidthLimitPacesSingleLargeWrite(t *testing.T) {
 	if err != nil || n != int64(len(body)) {
 		t.Fatalf("expect the full body, got %d bytes, err %v", n, err)
 	}
-	// measured at the client: the bytes must arrive paced, not in one
-	// burst after a server-side wait
+	// measured at the client, where a post-wait burst would arrive early
 	if elapsed := time.Since(start); elapsed < 90*time.Millisecond {
 		t.Errorf("expect a paced download to take at least ~187ms, took %v", elapsed)
 	}

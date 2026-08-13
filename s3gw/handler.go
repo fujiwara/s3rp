@@ -59,12 +59,9 @@ func (w *statusWriter) Write(p []byte) (int, error) {
 		w.written += int64(n)
 		return n, err
 	}
-	// pace and send in waitChunk slices, waiting before each send: waiting
-	// for the whole of p up front and then writing it in one call would
-	// defeat the pacing for exactly the writes large enough to need it
-	// (io.Copy can hand a WriterTo source over in a single Write), and a
-	// pacing failure (the client is gone, or the limiter cannot grant a
-	// chunk) must abort the response rather than let it through unpaced.
+	// wait before each slice, not once for all of p: a single Write can
+	// carry a whole WriterTo source, which must neither burst out after
+	// one big wait nor be sent at all when pacing fails
 	var total int
 	for total < len(p) {
 		end := min(total+waitChunk, len(p))
