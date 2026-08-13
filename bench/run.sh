@@ -63,8 +63,17 @@ echo "==> ensuring backend bucket $BACKEND_BUCKET exists on RGW"
 rgw_aws s3api head-bucket --bucket "$BACKEND_BUCKET" 2>/dev/null ||
     rgw_aws s3api create-bucket --bucket "$BACKEND_BUCKET"
 
-echo "==> building s3rp"
-(cd "$ROOT" && go build -o bench/out/s3rp ./cmd/s3rp)
+if [ -n "${BWLIMIT:-}" ]; then
+    # bench/bwlimit is the stock proxy plus the bandwidth-limit hook: a
+    # shared per-tenant limiter at BWLIMIT bytes/sec, or an infinite-rate
+    # one when BWLIMIT=0 (hook overhead only, no throttling)
+    echo "==> building s3rp (bandwidth-limit hook, BWLIMIT=$BWLIMIT)"
+    (cd "$ROOT" && go build -o bench/out/s3rp ./bench/bwlimit)
+    export S3RP_BWLIMIT=$BWLIMIT
+else
+    echo "==> building s3rp"
+    (cd "$ROOT" && go build -o bench/out/s3rp ./cmd/s3rp)
+fi
 
 echo "==> starting s3rp on $S3RP_ENDPOINT"
 export S3RP_LOG_LEVEL=${S3RP_LOG_LEVEL:-warn}

@@ -36,6 +36,13 @@ This will:
 4. write the aggregated report to `bench/report.md`
    (`bench/report-small.md` for the small workload; raw data in `bench/out/`)
 
+`BWLIMIT` measures the bandwidth-limit hook: when set, the proxy is built
+from `bench/bwlimit/` — the stock proxy plus `SetBandwidthLimit` with one
+shared per-tenant `rate.Limiter` for both directions. `BWLIMIT=0` arms the
+hook at an infinite rate (measures the pacing plumbing without throttling;
+observed ≤1% on GET), any other value is the rate in bytes/sec (e.g.
+`BWLIMIT=209715200` caps the tenant at 200MiB/s aggregate).
+
 Tunables (env vars, overriding the workload presets): `DURATION` (20s),
 `CONCURRENT` (8), `OBJ_SIZE` (1MiB large / 16KiB small),
 `GET_OBJECTS` (500 large / 2000 small), `PART_SIZE` (5MiB), `PARTS` (50, per client),
