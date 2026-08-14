@@ -294,9 +294,10 @@ func FuzzVerifyHeaderRoundtrip(f *testing.F) {
 			return
 		}
 		if _, verr := newVerifier().Verify(mut, lookup); verr == nil {
-			// acceptance is a finding unless the mutated URI names the very
-			// same request — query escape aliasing under canonicalization
-			if !sameRequestURI(pq, mutPQ) {
+			// The alias exception is for the URI mutation only: query
+			// escape-hex case canonicalizes to the very same request. Every
+			// other mutation changed signed material and must be refused.
+			if mutSel%6 != 0 || !sameRequestURI(pq, mutPQ) {
 				t.Fatalf("mutation %d accepted (method %s, path %q -> %q)", mutSel%6, method, pq, mutPQ)
 			}
 		}
