@@ -67,14 +67,14 @@ func TestChunkedReaderRequiresDeclaredTrailer(t *testing.T) {
 		fmt.Fprintf(buf, "%x\r\n", len(data))
 		buf.Write(data)
 		buf.WriteString("\r\n0\r\n\r\n") // final chunk, empty trailer block
-		r := sigv4.NewChunkedReader(buf, vr, "crc32", 1<<30)
+		r := sigv4.NewChunkedReader(buf, vr, "crc32", int64(len(data)))
 		if _, err := io.ReadAll(r); err == nil || !strings.Contains(err.Error(), "BadDigest") {
 			t.Errorf("expect BadDigest for the missing trailer, got %v", err)
 		}
 	})
 	t.Run("a different trailer present", func(t *testing.T) {
 		buf := encodeUnsignedTrailer(data, "x-amz-meta-note", "not the checksum")
-		r := sigv4.NewChunkedReader(buf, vr, "crc32", 1<<30)
+		r := sigv4.NewChunkedReader(buf, vr, "crc32", int64(len(data)))
 		if _, err := io.ReadAll(r); err == nil || !strings.Contains(err.Error(), "BadDigest") {
 			t.Errorf("expect BadDigest when the declared trailer is absent, got %v", err)
 		}
@@ -84,7 +84,7 @@ func TestChunkedReaderRequiresDeclaredTrailer(t *testing.T) {
 		fmt.Fprintf(buf, "%x\r\n", len(data))
 		buf.Write(data)
 		buf.WriteString("\r\n0\r\n") // EOF right after the final chunk
-		r := sigv4.NewChunkedReader(buf, vr, "crc32", 1<<30)
+		r := sigv4.NewChunkedReader(buf, vr, "crc32", int64(len(data)))
 		if _, err := io.ReadAll(r); err == nil || !strings.Contains(err.Error(), "BadDigest") {
 			t.Errorf("expect BadDigest at EOF without the trailer, got %v", err)
 		}
@@ -125,4 +125,81 @@ func TestChunkedReaderTruncatesQuotedValues(t *testing.T) {
 	if len(err.Error()) > 200 {
 		t.Errorf("error message is %d bytes; the value must be truncated", len(err.Error()))
 	}
+}
+
+// The terminal chunk and the trailers must be verified in the same Read
+// that delivers the last payload byte: a consumer stopping at the decoded
+// length (every SDK does, it bounds the body by Content-Length) never
+// issues the Read after it, so anything deferred to that Read is never
+// checked — a truncated stream would pass for a complete upload.
+func TestChunkedReaderRequiresTerminalChunk(t *testing.T) {
+	t.Run("empty stream, zero decoded length", func(t *testing.T) {
+		r := sigv4.NewChunkedReader(bytes.NewReader(nil), awsDocsVerifiedRequest(), "", 0)
+		if _, err := io.ReadAll(r); err == nil || !strings.Contains(err.Error(), "IncompleteBody") {
+			t.Errorf("expect IncompleteBody for an empty stream, got %v", err)
+		}
+	})
+
+	t.Run("stream ends after the last data chunk", func(t *testing.T) {
+		vr := awsDocsVerifiedRequest()
+		data := bytes.Repeat([]byte("a"), 20)
+		body := encodeSignedChunks(t, vr, data, 10)
+		term := bytes.Index(body, []byte("0;chunk-signature"))
+		if term < 0 {
+			t.Fatal("terminator not found")
+		}
+		r := sigv4.NewChunkedReader(bytes.NewReader(body[:term]), vr, "", int64(len(data)))
+		if _, err := io.ReadAll(r); err == nil || !strings.Contains(err.Error(), "IncompleteBody") {
+			t.Errorf("expect IncompleteBody without the terminal chunk, got %v", err)
+		}
+	})
+
+	t.Run("consumer stopping at the decoded length sees the truncation", func(t *testing.T) {
+		vr := awsDocsVerifiedRequest()
+		data := bytes.Repeat([]byte("a"), 20)
+		body := encodeSignedChunks(t, vr, data, 10)
+		term := bytes.Index(body, []byte("0;chunk-signature"))
+		if term < 0 {
+			t.Fatal("terminator not found")
+		}
+		r := sigv4.NewChunkedReader(bytes.NewReader(body[:term]), vr, "", int64(len(data)))
+		got, readErr := readUpTo(r, len(data))
+		if readErr == nil || !strings.Contains(readErr.Error(), "IncompleteBody") {
+			t.Errorf("expect IncompleteBody before the last byte, got %v", readErr)
+		}
+		if got == len(data) {
+			t.Error("the full payload was delivered despite the missing terminal chunk")
+		}
+	})
+
+	t.Run("trailer checksum verified before the last byte is delivered", func(t *testing.T) {
+		vr := awsDocsVerifiedRequest()
+		vr.PayloadHash = "STREAMING-UNSIGNED-PAYLOAD-TRAILER"
+		data := []byte("123456789")
+		buf := encodeUnsignedTrailer(data, "x-amz-checksum-crc32", "AAAAAA==") // wrong value
+		r := sigv4.NewChunkedReader(buf, vr, "crc32", int64(len(data)))
+		got, readErr := readUpTo(r, len(data))
+		if readErr == nil || !strings.Contains(readErr.Error(), "BadDigest") {
+			t.Errorf("expect BadDigest before the last byte, got %v", readErr)
+		}
+		if got == len(data) {
+			t.Error("the full payload was delivered despite the failed trailer checksum")
+		}
+	})
+}
+
+// readUpTo reads r one byte at a time until limit bytes were delivered or a
+// read fails, and never reads past the limit — the consumer shape the SDK
+// has when Content-Length bounds the body.
+func readUpTo(r io.Reader, limit int) (int, error) {
+	buf := make([]byte, 1)
+	var got int
+	for got < limit {
+		n, err := r.Read(buf)
+		got += n
+		if err != nil {
+			return got, err
+		}
+	}
+	return got, nil
 }
