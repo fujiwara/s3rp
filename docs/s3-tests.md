@@ -1,196 +1,89 @@
-# ceph/s3-tests compatibility report
+# ceph/s3-tests compatibility testing
 
-Results of running the [ceph/s3-tests](https://github.com/ceph/s3-tests)
-S3 compatibility suite against s3rp proxying to Ceph RGW. How the suite is
-made runnable at all against s3rp (which has no CreateBucket/DeleteBucket)
-is described in [s3tests/README.md](../s3tests/README.md); reproduce with
-`./s3tests/run.sh`, or in CI with the manually-triggered
+How the [ceph/s3-tests](https://github.com/ceph/s3-tests) S3
+compatibility suite is run continuously against s3rp, and how to read a
+run. The suite needs a harness because s3rp deliberately has no
+CreateBucket/DeleteBucket — [s3tests/README.md](../s3tests/README.md)
+describes it and the local run (`./s3tests/run.sh`); CI runs the same
+script via the manually-triggered
 [`s3-tests` workflow](../.github/workflows/s3tests.yml).
 
-## Methodology
+## Setup
 
-- s3-tests pinned at `5522d1c351f75bc00ae0f64f742f3f095f5939d9` (2026-08),
-  boto3 functional suite: `test_s3.py` + `test_headers.py`. Excluded
-  files: `test_iam.py`, `test_sts.py`, `test_s3select.py` (features s3rp
-  does not have).
-- Backend: the initial run used the Ceph RGW from `compose.yml`
-  (`quay.io/ceph/demo:latest-squid`, Ceph 19.2.0). The CI workflow runs
-  against a MicroCeph RGW (`s3tests/setup-microceph.sh`; the snap
-  channel is a workflow input, default `tentacle/stable`, which tracks
-  point releases — the job summary states the exact Ceph version).
-- Marker filter (see `run.sh` for the rationale per marker):
+- s3-tests pinned at `5522d1c351f75bc00ae0f64f742f3f095f5939d9`
+  (2026-08; bump deliberately — runs must stay comparable), boto3
+  functional suite: `test_s3.py` + `test_headers.py`. Excluded files:
+  `test_iam.py`, `test_sts.py`, `test_s3select.py` (features s3rp does
+  not have).
+- Marker filter (rationale per marker in `run.sh`):
   `not lifecycle_expiration/transition, cloud_*, s3website, sns,
   storage_class, fails_on_rgw, auth_aws2`.
-- On the compose backend one test is deselected because it crashes the
-  **backend RGW daemon itself** (abort in `RGWObjectCtx::set_atomic`,
-  Ceph 19.2.0): `test_upload_part_copy_percent_encoded_key` — an
-  UploadPartCopy whose copy-source key contains a percent-encoded byte;
-  running it kills RGW for the rest of the suite. Fixed upstream: on
-  20.2.1 the test stays selected (and passes), hence 798 selected there
-  vs 797 on compose.
+- Backends: locally the compose `ceph` service (frozen at Ceph 19.2.0);
+  in CI a MicroCeph RGW (`s3tests/setup-microceph.sh`; the snap channel
+  is a workflow input, default `tentacle/stable`, which tracks point
+  releases — the job summary states the exact Ceph version). On the
+  compose backend `run.sh` deselects
+  `test_upload_part_copy_percent_encoded_key`: it crashes that RGW
+  itself (abort in `RGWObjectCtx::set_atomic`; fixed in later Ceph),
+  killing the daemon for the rest of the run.
 
-## Where the current numbers live
+## Reading a run
 
-This document deliberately records no result as *current*. `triage.py`
-now encodes the hand-verified classification established here, so the
-authoritative current result is the latest
-[`s3-tests` workflow](../.github/workflows/s3tests.yml) run: its job
-summary is `triage.py`'s report (full results as artifacts). On the
-verified baseline every failure lands in a named expected category and
-only the `UNMATCHED` bucket needs hand triage after a backend or suite
-bump — the name-based rules are heuristics; caveats in
-[s3tests/CLAUDE.md](../s3tests/CLAUDE.md). The numbers can move without
-any repo change (the MicroCeph snap channel tracks Ceph point releases),
-which is why they are not mirrored here: this document needs an update
-only when a classification *decision* changes — a new deliberate
-refusal, a backend limitation verified differently — normally in the
-same commit that adjusts `triage.py`'s rules.
+`triage.py` encodes the hand-verified failure classification, so its
+report — the CI job summary, with full results as artifacts — is the
+per-test verdict: on a healthy run every failure lands in a named
+expected category and only the `UNMATCHED` bucket needs hand triage.
+The rules are partly name-based heuristics; how to verify what lands
+where, split the 501 bucket by message text, and judge
+implementable-vs-deliberate is in
+[s3tests/CLAUDE.md](../s3tests/CLAUDE.md). Run numbers move without any
+repo change (the backend tracks Ceph point releases), so this document
+records none — compare runs by diffing their junit XMLs, not by counts
+remembered from a document.
 
-For the record: the 2026-08-14 run (Ceph 20.2.1) selected 798, passed
-300, and classified all 422 failures as expected — no open s3rp bugs.
-The sections below are the dated record of how the classification was
-established: the initial run against the frozen compose RGW (19.2.0),
-the bugs it found (all since fixed), and the re-verification on 20.2.1.
+The expected-failure categories, and why each failure is expected:
 
-## Initial run (Ceph 19.2.0): summary
+- **Deliberate design surface** — the bulk of the failures.
+  Unimplemented bucket-configuration writes (501, including tests that
+  probe invalid inputs of those operations and expect 400/404/409 — the
+  refusal comes before input validation), the ACL stub, SSE-C refusal,
+  SigV4-only (no anonymous access, no SigV2 — the suite's
+  `test_post_object_*` tests sign with SigV2), the anti-probing 403 on
+  nonexistent buckets, the stricter bucket-name charset. Rationale in
+  the root CLAUDE.md; these are do-not-regress decisions, so a test
+  that starts *passing* here means a deliberate refusal disappeared —
+  investigate, don't celebrate.
+- **Platform edge cases** — Go's `net/http` answers a malformed
+  `Expect` header with 417 before the proxy runs; plain
+  `Transfer-Encoding: chunked` without Content-Length is not accepted;
+  the suite's "expired presign" sends a *negative* `X-Amz-Expires`,
+  which s3rp refuses with 400 like AWS while RGW answers 403.
+- **Backend limitations** — behavior confirmed by probing the backend
+  directly (bypassing the proxy), never assumed; the mix shifts with
+  the backend version. The frozen demo RGW (19.2.0) lacks SSE-S3
+  configuration, does not store checksums, and enforces write
+  preconditions only partially; current Ceph keeps its own semantics
+  for part ETags on `partNumber` reads and COMPOSITE-only multipart
+  checksum types, and refuses some SSE copy combinations.
+- **RGW extension APIs** — usage/account APIs, `x-rgw-*` headers,
+  `allow-unordered` listing, `x-amz-tagging-count` on HEAD: not in the
+  S3 API model; matching RGW here is a non-goal.
+- **Harness/conf artifacts** — CreateBucket-conflict semantics are
+  answered by the harness (409 `BucketAlreadyOwnedByYou`, RGW-style);
+  `GetBucketLocation` returns the gateway region while the conf's
+  `api_name` expects RGW's zonegroup name; leftover Object Lock buckets
+  (undeletable for the suite's cleaner) trip bucket-count assertions.
+- **Upstream s3-tests bug** — `test_bucket_create_exists` reads
+  `e.status` on a `ClientError`, an attribute that does not exist; it
+  fails against any backend answering 409 `BucketAlreadyOwnedByYou`,
+  including RGW directly.
 
-886 collected, 89 deselected → **797 selected: 262 passed, 76 skipped
-(suite-side), 459 failed**. Every failure was classified by hand (at the
-time `triage.py` produced only a raw first pass; the curated result
-below has since been taught back into its rules).
+## Maintaining this document
 
-| category | tests |
-|---|---:|
-| s3rp bugs and gaps (since fixed) | 27 |
-| deliberate design differences | 369 |
-| backend (demo RGW) limitations | 62 |
-| upstream s3-tests bug | 1 |
-
-The pass rate is dominated by what s3rp deliberately does not do: of the
-459 failures, 369 are the documented design surface (unimplemented
-bucket-configuration writes, the ACL stub, SigV4-only authentication, the
-anti-probing 403). The suite's value was the remaining slice: it found
-**one crash-class bug** (a backend transport failure carries a zero HTTP
-status, which panicked the handler — while the backend was down, every
-request died), **one fail-open bug** (write preconditions — `If-Match`
-and friends on PutObject, DeleteObject/DeleteObjects,
-CompleteMultipartUpload — were silently dropped and the write proceeded
-unconditionally), and a handful of response-fidelity issues (user
-metadata keys MIME-canonicalized, missing entity headers on 304 and
-error responses, ListObjectsV2/ListBuckets completeness, empty
-`Content-MD5` accepted). All were fixed in
-[PR #83](https://github.com/fujiwara/s3rp/pull/83), one commit per
-finding, verified by rerunning the affected tests. Two findings first
-counted as bugs turned out deliberate on closer inspection and are
-listed under design differences: the negative-`X-Amz-Expires` "expired
-presign" case and `x-amz-tagging-count` on HeadObject.
-
-## Deliberate design differences (369)
-
-Expected failures, matching README/CLAUDE.md; the suite confirms they
-fail *loudly* rather than silently.
-
-- **Unimplemented operations → 501 (250)**: bucket policy/CORS/
-  lifecycle/website/logging/encryption/replication/public-access-block/
-  ownership-controls/versioning/object-lock-configuration writes, RGW's
-  `allow-unordered` listing extension, `partNumber` GET (since
-  implemented, with GetObjectAttributes), GetBucketTagging,
-  and SSE-C. Includes ~30 tests that probe *invalid inputs* of those
-  operations and expect 400/404/409 — s3rp refuses the whole operation
-  with 501 before input validation.
-- **ACL model (79)**: writes get `AccessControlListNotSupported` (67,
-  including two canned-ACL upload tests that then fail at the denied
-  cross-tenant PUT); reads see the fixed FULL_CONTROL stub (12).
-- **SigV4-only, no anonymous access (26)**: every `test_post_object_*`
-  authenticated case in this suite revision signs with SigV2
-  (`AWSAccessKeyId` + HMAC-SHA1) → 400; anonymous POST/list/read → no
-  anonymous principal exists.
-- **Anti-probing / cross-tenant 403 (6)**: operations on nonexistent
-  buckets return `AccessDenied` instead of `NoSuchBucket` by design
-  (no bucket-name probing).
-- **Bucket-name charset (1)**: names s3rp's stricter charset refuses
-  (dots) → `InvalidBucketName` at the harness.
-- **Others (7)**: Go's `net/http` answers a malformed `Expect` header
-  with 417 before the proxy runs (2); plain
-  `Transfer-Encoding: chunked` without Content-Length is not accepted
-  (1); harness CreateBucket-conflict semantics (409
-  `BucketAlreadyOwnedByYou`, RGW-style) (1); `GetBucketLocation` returns
-  the gateway region while the conf's `api_name` expects RGW's zonegroup
-  name (1, conf artifact); the expired-presign test sends a *negative*
-  `X-Amz-Expires`, which s3rp refuses with 400 like AWS while RGW
-  answers 403 — a genuinely expired presign already gets AWS's 403
-  "Request has expired" (1); `x-amz-tagging-count` on HeadObject is an
-  RGW extension the S3 API model does not have — the gateway returns it
-  on GetObject only, following the model (1).
-
-## Backend limitations (62) — ceph/demo RGW, not s3rp
-
-- **SSE-S3 not configured (44)**: the demo RGW has only the `testing`
-  KMS backend; `x-amz-server-side-encryption: AES256` gets
-  `InvalidArgument` even directly against RGW. (SSE-KMS with
-  `testkey-1` works and those tests pass through s3rp.)
-- **Checksums not stored (11)**: this RGW build does not store
-  `x-amz-checksum-*` (known; the integration suite skips the same).
-- **RGW extension APIs (5)**: `x-rgw-object-count` headers, usage/account
-  APIs, bucket logging with IAM roles.
-- **RGW quirks (2)**: CompleteMultipartUpload with a bogus uploadId
-  returns 500 "completion already in progress" (AWS: 404
-  `NoSuchUpload`); tagging passed on CreateMultipartUpload is not
-  persisted (verified directly against RGW).
-- **Partial conditional-write enforcement**: with the proxy now
-  forwarding every precondition, Ceph 19.2.0 RGW enforces `If-Match` and
-  `If-None-Match: *` on PUT (412 through the proxy) but ignores the
-  DeleteObject/DeleteObjects preconditions and a specific-ETag
-  `If-None-Match`, answers 304 where AWS answers 412 for a matching
-  `x-amz-copy-source-if-none-match`, and does not emit
-  `x-amz-delete-marker` on a non-versioned 404 — all verified directly
-  against RGW, so the remaining conditional-write test failures are the
-  backend's, not the proxy's.
-- **RGW crash (deselected)**: see Methodology — also the reason Object
-  Lock test buckets linger: retained objects make them undeletable for
-  the suite's cleaner, which then trips unrelated bucket-count
-  assertions.
-
-## Re-verification against Ceph 20.2.1 (Tentacle, MicroCeph)
-
-A follow-up run against a current Ceph (`s3tests/setup-microceph.sh`,
-2026-08-11: MicroCeph `tentacle/stable` = 20.2.1) confirms the
-backend-limitation classification above — the limitations are the
-19.2.0 image's, not s3rp's:
-
-- **Conditional-write enforcement is complete**: the 11 remaining
-  precondition tests now pass through the proxy (all DeleteObject/
-  DeleteObjects preconditions, specific-ETag `If-None-Match` on PUT) —
-  verified 412/`PreconditionFailed` end to end.
-- **The UploadPartCopy crasher is fixed**: a percent-encoded copy-source
-  key returns a normal `CopyPartResult` and the daemon survives (probed
-  directly); `run.sh` keeps the test deselected only for the frozen
-  compose backend.
-- CreateMultipartUpload **tagging is persisted** and multipart **SHA256
-  checksums are stored** (the checksum-limitation bucket shrank from 12
-  to 5).
-- The SSE-KMS tests need the `testing` KMS configuration the compose
-  service carries; the setup script applies the same three RGW crypt
-  options (on `client.radosgw.gateway` — MicroCeph's RGW daemon name,
-  which `client.rgw.*`-targeted config does not reach). Verified: the
-  SSE-KMS tests that failed without it pass afterwards.
-
-Implementing GetObjectAttributes and `partNumber` reads on this baseline
-surfaced two more RGW interop quirks, both fixed on the proxy side: RGW
-rejects the signature of requests carrying repeated header lines (the Go
-SDK sends one `x-amz-object-attributes` line per attribute — merged into
-one before signing), and it stores a precomputed `x-amz-checksum-*` value
-only when `x-amz-sdk-checksum-algorithm` accompanies it (the algorithm is
-now named alongside forwarded checksums). With those, a full run against
-a fresh MicroCeph 20.2.1 passes 300 of 798 with no regressions; the
-remaining conditional/checksum failures are RGW semantics (part ETags on
-`partNumber` reads, COMPOSITE-only multipart checksum types).
-
-## Upstream s3-tests bug (1)
-
-`test_bucket_create_exists` reads `e.status` on a `ClientError`, an
-attribute that does not exist — it fails on any backend answering 409
-`BucketAlreadyOwnedByYou`, including RGW directly.
+Update it only when a classification *decision* changes — a new
+deliberate refusal, a backend limitation verified (or fixed) upstream —
+in the same commit that adjusts `triage.py`'s rules. A re-run that
+merely moves counts never requires an edit here.
 
 ## Artifacts
 
