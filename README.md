@@ -152,6 +152,12 @@ Unit tests run without any backend:
 $ go test -race ./...
 ```
 
+The auth path is fuzzed: the aws-chunked decoder, SigV4 header and presigned verification, and POST policy verification carry property-based targets in `sigv4/`. Their seed corpora and every crasher found so far replay as regressions in the command above; exploring for new inputs is a nightly workflow, or locally:
+
+```console
+$ go test ./sigv4 -run '^$' -fuzz FuzzVerifyHeaderRoundtrip -fuzztime 60s
+```
+
 Signature verification and policy evaluation run on every request, so when changing either, check the benchmarks that guard them — watch allocations as well as time, since a regression usually shows there first:
 
 ```console
