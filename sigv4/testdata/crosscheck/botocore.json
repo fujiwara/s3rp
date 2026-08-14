@@ -1,0 +1,2550 @@
+{
+ "generator": "sigv4/testdata/crosscheck/generate.py",
+ "botocore_version": "1.43.71",
+ "seed": 20260815,
+ "vectors": [
+  {
+   "name": "000-header-GET",
+   "type": "header",
+   "method": "GET",
+   "host": "s3.example.com",
+   "uri": "/./trailing./a/%7F?response-content-type&q%20k=a%20b",
+   "headers": [
+    [
+     "x-amz-meta-empty",
+     "no-cache, no-store"
+    ],
+    [
+     "Cache-Control",
+     "hello world"
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Security-Token",
+     "Iss=z6SsNZguxChY0EGwUk3c6T/txrwNOYhqCjoN6s2h9t1b"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID4CSD72EAMTTJV7LN/20260801/us-east-1/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty;x-amz-security-token, Signature=5a1cd4dcefc76c24216ff5f9d4056e185d0e7397f622628b859dda57e3943c71"
+    ]
+   ],
+   "access_key_id": "AKID4CSD72EAMTTJV7LN",
+   "secret_access_key": "YSPKC8GLCUcEN1pmEBBM79I/zavjcLQ7L3WG4CjC",
+   "session_token": "Iss=z6SsNZguxChY0EGwUk3c6T/txrwNOYhqCjoN6s2h9t1b",
+   "region": "us-east-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "001-presigned-PUT",
+   "type": "presigned",
+   "method": "PUT",
+   "host": "storage.internal",
+   "uri": "/&z/!x/trailing./%2Fnested%2Fkey?prefix=a%2Fb&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDEAB1GW8LIWW8ZR4T%2F20260801%2Feu-central-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=147983&X-Amz-SignedHeaders=host&X-Amz-Security-Token=uG53Q5ky5zfMJjW%3DBBZ%3Dqu4HUbtrNmHQGdJvAaiW%2Fxihn9S%2BW4sWYH%3DX4%2BDozvuFSzOzcoXdMeqjxpqYZRNu%2BnqrMTaekmkvCGJyonv1%3Dp&X-Amz-Signature=72aaf921ad9bed579bc45fd6d84f4e2aa1f046443d96c6bc8cd1f1b2eea0d187",
+   "headers": [],
+   "access_key_id": "AKIDEAB1GW8LIWW8ZR4T",
+   "secret_access_key": "UgTh5Cs67ev2oCKr0ZcAk953C3/seWrJa/raQGaM",
+   "session_token": "uG53Q5ky5zfMJjW=BBZ=qu4HUbtrNmHQGdJvAaiW/xihn9S+W4sWYH=X4+DozvuFSzOzcoXdMeqjxpqYZRNu+nqrMTaekmkvCGJyonv1=p",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "002-header-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "s3.example.com",
+   "uri": "/(1)/photos/a'b?list-type=%E3%81%82&empty=text%2Fplain&a=a%20b&list-type=%E3%81%82",
+   "headers": [
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Security-Token",
+     "I+Tpq0sNnIUmXQEnEfDm5xB0CFR/7=xgcHwf84563QaeB4OH8C0wA3vpxrToHyT7wkwgEzYYDYG8YEDZEvadOKS+P6rmxlNnMFOy8FbWzwt=z4zOJWzxKX=lxrzxHS+gKL=rS4WSQ3oTJxkNnUUE4V1MvfiAsJ0KiI8/iX4IVFOnB5PvWujhL"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID2FP11YSJNJ4SRO8J/20260801/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-security-token, Signature=bf1a6029e80fc8b547ce3e9ddcdf9cf6be5f99ef3218a203f57f6e188ad899f8"
+    ]
+   ],
+   "access_key_id": "AKID2FP11YSJNJ4SRO8J",
+   "secret_access_key": "Vj+Jlrv6D1QEDf+v6ryipQpqwKn2hyv0GIJKwfhH",
+   "session_token": "I+Tpq0sNnIUmXQEnEfDm5xB0CFR/7=xgcHwf84563QaeB4OH8C0wA3vpxrToHyT7wkwgEzYYDYG8YEDZEvadOKS+P6rmxlNnMFOy8FbWzwt=z4zOJWzxKX=lxrzxHS+gKL=rS4WSQ3oTJxkNnUUE4V1MvfiAsJ0KiI8/iX4IVFOnB5PvWujhL",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "003-presigned-DELETE",
+   "type": "presigned",
+   "method": "DELETE",
+   "host": "s3.example.com",
+   "uri": "/&z/-lead?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDCVZ2VBQB0HWMZ7NA%2F20260801%2Fmoon-crater-7%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=114509&X-Amz-SignedHeaders=host%3Bx-amz-meta-note%3Bx-amz-meta-tag&X-Amz-Signature=f407fb102c874abc1fe99ba1298d5faf6f964f373a069d94873635b638d0a7a2",
+   "headers": [
+    [
+     "x-amz-meta-note",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     ""
+    ]
+   ],
+   "access_key_id": "AKIDCVZ2VBQB0HWMZ7NA",
+   "secret_access_key": "ABl/vCKWAry99OSMc7XFew1TGNlbvDeQ97xXyWpM",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "004-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "storage.internal",
+   "uri": "/0/backup-2026/?empty=photos%2F&response-content-type=100%25",
+   "headers": [
+    [
+     "Cache-Control",
+     "text/plain; charset=utf-8"
+    ],
+    [
+     "Content-Type",
+     "text/plain; charset=utf-8"
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Security-Token",
+     "JRX=tSPwK5W3mXFQ=na4VvV99PZcvq7cbPn+9qJjeq3K6Dm+wyh7lks+ELW4VUgNb+xg6yE=NWLSnTjQ8jrVFRgL6LeEHU+Zf0r4Ltvl9uscX5FWc3mYKOp=PN=wkr0d"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDGNFMR1LAWUXATSD3/20260801/eu-central-1/s3/aws4_request, SignedHeaders=cache-control;content-type;host;x-amz-content-sha256;x-amz-date;x-amz-security-token, Signature=53912ce29a51fbfda8521d4a8cf3e561cb243ec1e89dbfa914da9a5d11fec2ab"
+    ]
+   ],
+   "access_key_id": "AKIDGNFMR1LAWUXATSD3",
+   "secret_access_key": "AmtVb6O5kX0lsn8lybiB3Ya0xVrOxd0VtLRwqc4W",
+   "session_token": "JRX=tSPwK5W3mXFQ=na4VvV99PZcvq7cbPn+9qJjeq3K6Dm+wyh7lks+ELW4VUgNb+xg6yE=NWLSnTjQ8jrVFRgL6LeEHU+Zf0r4Ltvl9uscX5FWc3mYKOp=PN=wkr0d",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "005-presigned-GET",
+   "type": "presigned",
+   "method": "GET",
+   "host": "storage.internal",
+   "uri": "/$y?q%20k=~&list-type=%2A&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDBDT6IEXGJQZR6T6V%2F20260801%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=328350&X-Amz-SignedHeaders=host%3Bx-amz-meta-note%3Bx-amz-meta-tag&X-Amz-Security-Token=xYLyI90khrD88mwrPzDnifx6JPtljInzcNUPR2ashmp%2B1Q%3D2oQUBUYfNtV%2F6AoOJC8FyYArnT5g6Sv&X-Amz-Signature=6fb24b50b5fa77f3e70d7567d30ee0ab31cc4aaccc0e6ad046be66b5eab6d082",
+   "headers": [
+    [
+     "x-amz-meta-note",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "a  b   c"
+    ]
+   ],
+   "access_key_id": "AKIDBDT6IEXGJQZR6T6V",
+   "secret_access_key": "hasRyNKC6Omu4wuju2SX51lihRe4TEq0ripfSI3j",
+   "session_token": "xYLyI90khrD88mwrPzDnifx6JPtljInzcNUPR2ashmp+1Q=2oQUBUYfNtV/6AoOJC8FyYArnT5g6Sv",
+   "region": "us-east-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "006-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "storage.internal",
+   "uri": "/a'b/_x",
+   "headers": [
+    [
+     "X-Amz-Meta-Tag",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Security-Token",
+     "X72KBZYmr3fBTyij=g9CstQDXa1oy4gZH5gbKqAKTbMZk1gZKmz5YFIcVZ53kEvf8VX6wLQnAc2VIolT/9C890vEwqw3mwPgPh38TXSxdE2Zw1YPUbKOnF4jRYj=xq6DE4SD=ETzcAWkkwSQCFhS4qCIxczC9f53ISCav8ESEYpNMGwdXVxXRV/d1+6zISrcHl8/KnP/"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDJ4ZX3UH8JOMC80PA/20260801/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-tag;x-amz-security-token, Signature=214a11f06ad3a4ce7aaa208ec489f50bb0839106e80cb291d5275e8317f807a6"
+    ]
+   ],
+   "access_key_id": "AKIDJ4ZX3UH8JOMC80PA",
+   "secret_access_key": "pGs3mkaR2u8nbr/Frl+kb3ZKy25q27guPTDdhZ6a",
+   "session_token": "X72KBZYmr3fBTyij=g9CstQDXa1oy4gZH5gbKqAKTbMZk1gZKmz5YFIcVZ53kEvf8VX6wLQnAc2VIolT/9C890vEwqw3mwPgPh38TXSxdE2Zw1YPUbKOnF4jRYj=xq6DE4SD=ETzcAWkkwSQCFhS4qCIxczC9f53ISCav8ESEYpNMGwdXVxXRV/d1+6zISrcHl8/KnP/",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "007-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "storage.internal",
+   "uri": "/../backup-2026/.../backup-2026",
+   "headers": [
+    [
+     "Cache-Control",
+     ""
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDG0Z34IAQ62IUASO6/20260801/moon-crater-7/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date, Signature=a6511bca1dc6b10a7ca8fbcb01f9e7d3b9bade79cc44284fcf8450af37f79a6c"
+    ]
+   ],
+   "access_key_id": "AKIDG0Z34IAQ62IUASO6",
+   "secret_access_key": "0XbGgpIGnOuDhQMja4bx8F6L1JA261yzJTbCAVtI",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "008-presigned-GET",
+   "type": "presigned",
+   "method": "GET",
+   "host": "s3.example.com:8080",
+   "uri": "/%2F/:c?empty=~&q%20k=a%2Fb&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDNNT5XXTH34LLTDO1%2F20260801%2Fmoon-crater-7%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=410838&X-Amz-SignedHeaders=host&X-Amz-Security-Token=vXTzoXWqt2da5B%2BhE0V9K%3D5U6YB2kFUuJGXJtBvaF9Q%3Dv0SkzTOVaeeOLSgEG7nHBQ54I4Z0H13QooHE8qGabiaEYZvPYXw6GmFMh4aN2vr0rvd5lIsNSewxnFrHa31blwRZe%3D29V%2BNvxrDn9hS%3DQLPa4R93qCN%2BhNP5JJ8gew27YTBufeaUpJTIHzt%3DWzBxMVi&X-Amz-Signature=678d79c8fa082e12f47713a77a1f0b710fcbee0449fac2dbb9a8725d2a150c5e",
+   "headers": [],
+   "access_key_id": "AKIDNNT5XXTH34LLTDO1",
+   "secret_access_key": "lz8VS/u119UJbUoIviwgXoRhBwN/x0MKMaANLFZv",
+   "session_token": "vXTzoXWqt2da5B+hE0V9K=5U6YB2kFUuJGXJtBvaF9Q=v0SkzTOVaeeOLSgEG7nHBQ54I4Z0H13QooHE8qGabiaEYZvPYXw6GmFMh4aN2vr0rvd5lIsNSewxnFrHa31blwRZe=29V+NvxrDn9hS=QLPa4R93qCN+hNP5JJ8gew27YTBufeaUpJTIHzt=WzBxMVi",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "009-presigned-PUT",
+   "type": "presigned",
+   "method": "PUT",
+   "host": "storage.internal",
+   "uri": "/:c//.../-lead?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDQFENRH5Z7ZA094DG%2F20260801%2Fap-northeast-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=99885&X-Amz-SignedHeaders=host&X-Amz-Security-Token=TwDorItMZFAdXmDpmjpjH6Yqwh2Wdw8NsnMHjkUFEvq28Srlh53ixCqsMY0BZlLMXXF3muOPvMqtAYglkcR2U1PYIlwSCh5wRpABwxaHJquXWSGL%2BY9gctmEuiLU0VFm5KIR4qsRbj4pYExMj&X-Amz-Signature=c7ba0b6a0d7195c4dbc1a48cb1a6a1617cbc848164f57b6db19c030091544ca3",
+   "headers": [],
+   "access_key_id": "AKIDQFENRH5Z7ZA094DG",
+   "secret_access_key": "LgsFRyTQ56RryWv6hkUw0gzHn4F0cctQFb91FbYN",
+   "session_token": "TwDorItMZFAdXmDpmjpjH6Yqwh2Wdw8NsnMHjkUFEvq28Srlh53ixCqsMY0BZlLMXXF3muOPvMqtAYglkcR2U1PYIlwSCh5wRpABwxaHJquXWSGL+Y9gctmEuiLU0VFm5KIR4qsRbj4pYExMj",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "010-header-GET",
+   "type": "header",
+   "method": "GET",
+   "host": "s3.example.com:8080",
+   "uri": "/a+b/~user/a'b?prefix=~",
+   "headers": [
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Security-Token",
+     "nkSwEX9Cw6yD9tmIPiLrWLcf6Pc5coaeqpiHUTSkpIL/WmCZwGcQuqI1lE/jd9m4d3Q73b9JUa0AU+RpYQj/kWbLwKUmNFVWBFAj84=Fyny8cdVlZHdgONvKVuk"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID5AMRIK48TPR7FCR2/20260801/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-security-token, Signature=c1bb32b33d685e0bed6227a510f7366c6dbcbbd9b990049035eaf1fcde5b69a5"
+    ]
+   ],
+   "access_key_id": "AKID5AMRIK48TPR7FCR2",
+   "secret_access_key": "o36LDRfJ6CRrErNmdocRfKu+hg+Hb1QfXVpkOt6E",
+   "session_token": "nkSwEX9Cw6yD9tmIPiLrWLcf6Pc5coaeqpiHUTSkpIL/WmCZwGcQuqI1lE/jd9m4d3Q73b9JUa0AU+RpYQj/kWbLwKUmNFVWBFAj84=Fyny8cdVlZHdgONvKVuk",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "011-presigned-DELETE",
+   "type": "presigned",
+   "method": "DELETE",
+   "host": "s3.example.com:8080",
+   "uri": "/trailing./%20/a/%7F?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDOS9P4QQU3IKNINLY%2F20260801%2Fmoon-crater-7%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=155766&X-Amz-SignedHeaders=host&X-Amz-Security-Token=ntvokhz%2B95R%2Bgxjkhfa%2BQ88fV0yUoKZxpcgXew45EDbxQjaVo6DUj%2Bknad%2B5ykVnC0oD7Q4wThbHyHAOJ51%2BYdlFC2ODC4IfI4v3CDkw2fheWV%2F%2Fo%2FST&X-Amz-Signature=37d8ea4675c6178526068d1b0906af91c42de300c1bb7f600c2c617e06462810",
+   "headers": [],
+   "access_key_id": "AKIDOS9P4QQU3IKNINLY",
+   "secret_access_key": "ycj4Wpi8+kgXn1jbB7kZFI22dG6Z2pQxO9lsdbgv",
+   "session_token": "ntvokhz+95R+gxjkhfa+Q88fV0yUoKZxpcgXew45EDbxQjaVo6DUj+knad+5ykVnC0oD7Q4wThbHyHAOJ51+YdlFC2ODC4IfI4v3CDkw2fheWV//o/ST",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "012-presigned-HEAD",
+   "type": "presigned",
+   "method": "HEAD",
+   "host": "s3.example.com",
+   "uri": "/%20//..?q%20k=%2A&empty=100%25&list-type=100%25&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDDWKSTMQEC99O2MH0%2F20260801%2Fap-northeast-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=207015&X-Amz-SignedHeaders=content-type%3Bhost&X-Amz-Security-Token=wZXTA%2BqWST1RFagq8QnTeYKH2gruU2ctB5h55fPvPSv0zYpI3wdld&X-Amz-Signature=596e42db6e094bfb958ac682702f9bce67d1f684703505e83ed8b7f9b185d9dc",
+   "headers": [
+    [
+     "Content-Type",
+     " padded "
+    ]
+   ],
+   "access_key_id": "AKIDDWKSTMQEC99O2MH0",
+   "secret_access_key": "vyJe0eJweQNN+RHIWWiliARnCDf5ZF71uJLb/H9D",
+   "session_token": "wZXTA+qWST1RFagq8QnTeYKH2gruU2ctB5h55fPvPSv0zYpI3wdld",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "013-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com",
+   "uri": "/%20?q%20k=text%2Fplain",
+   "headers": [
+    [
+     "x-amz-meta-note",
+     "hello world"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     ""
+    ],
+    [
+     "Cache-Control",
+     "no-cache, no-store"
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Security-Token",
+     "42JjEVDI6xIYlg2lzLesvdBKuPWg8"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID4U9EUXPMRKTQ51N8/20260801/eu-central-1/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date;x-amz-meta-note;x-amz-meta-tag;x-amz-security-token, Signature=ecc79921120dfde05a31349d69ce144ddef878f9b5fb2d37c6a1a9989133f41f"
+    ]
+   ],
+   "access_key_id": "AKID4U9EUXPMRKTQ51N8",
+   "secret_access_key": "/xuDNz1wdjPdREr0hSNMAJWe42nUD7rUmPFrpko4",
+   "session_token": "42JjEVDI6xIYlg2lzLesvdBKuPWg8",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "014-header-GET",
+   "type": "header",
+   "method": "GET",
+   "host": "storage.internal",
+   "uri": "/$y/!x?marker=a%2Bb&marker=a%2Bb",
+   "headers": [
+    [
+     "X-Amz-Meta-Tag",
+     " padded "
+    ],
+    [
+     "Cache-Control",
+     "a  b   c"
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDZZ0S1PQU0OH3TAW1/20260801/moon-crater-7/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date;x-amz-meta-tag, Signature=0c60566c27ec1f1cc40a1c763c05a2c7ed8047d5fa38f6ca28efb78d21e5217f"
+    ]
+   ],
+   "access_key_id": "AKIDZZ0S1PQU0OH3TAW1",
+   "secret_access_key": "dLK3gvf2xWqK/1+mQ68riERNlXHwiKLNHvRQYLT2",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "015-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "storage.internal",
+   "uri": "//backup-2026",
+   "headers": [
+    [
+     "Content-Type",
+     "hello world"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "a  b   c"
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID58I7HTB1L1UGI3J5/20260801/moon-crater-7/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-tag, Signature=22d6fb8d54cc3a7da906d4a1605c51d52f94f105a015aab1e03ceee3d2b0117d"
+    ]
+   ],
+   "access_key_id": "AKID58I7HTB1L1UGI3J5",
+   "secret_access_key": "MrUafTtCJ1yWxHoykFqRbuLw2F/AqxAeB/TUAuLd",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "016-presigned-PUT",
+   "type": "presigned",
+   "method": "PUT",
+   "host": "s3.example.com:8080",
+   "uri": "/(1)/../%00?q%20k=a%2Fb&empty=a%2Bb&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKID93Z16O8IBOJH9DUK%2F20260801%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=556477&X-Amz-SignedHeaders=host%3Bx-amz-meta-empty&X-Amz-Security-Token=zBQKfudW%3D2PiNQKQwpQDoDj9mKZSLKtTSZgAVZvsNCcSl1%3DsWxLBT9uktdhfwOR9ol9n1iisgprje6cWLPxrB5mEY0qmCU%2B56P89O&X-Amz-Signature=cfa4b2122c61c5661cca00025bc8c4cfe5e2d05b23584c313bbae348eea8d768",
+   "headers": [
+    [
+     "x-amz-meta-empty",
+     ""
+    ]
+   ],
+   "access_key_id": "AKID93Z16O8IBOJH9DUK",
+   "secret_access_key": "AuBCA2PXKgPixR4yWAeIk1umf0PCDeA+0Z/MgHtr",
+   "session_token": "zBQKfudW=2PiNQKQwpQDoDj9mKZSLKtTSZgAVZvsNCcSl1=sWxLBT9uktdhfwOR9ol9n1iisgprje6cWLPxrB5mEY0qmCU+56P89O",
+   "region": "us-east-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "017-presigned-DELETE",
+   "type": "presigned",
+   "method": "DELETE",
+   "host": "s3.example.com",
+   "uri": "/file.txt?prefix=photos%2F&empty=2&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDBIZY3CC6XJF3S3GL%2F20260801%2Fmoon-crater-7%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=181105&X-Amz-SignedHeaders=content-type%3Bhost%3Bx-amz-meta-empty%3Bx-amz-meta-tag&X-Amz-Security-Token=wqAFYrGX%2BHc%2FF6cT4oY%2FaYibWlRoj8MKNbfQAUbquECrRtsuaxBfiI7v6KAvqx%2BFMVjVBSwWLt%2BrRcxtohEg%2BKUzE0HZzbR4gJy6nFnqfw%2FpsWbSvKZtzLTzihEz2dUGf29RMbiLHb0HNizl2b8wUdkT0ZwuvStiXRp%2B9%2BacLp1pSNXgMiDnh7S1PQ&X-Amz-Signature=6802560b28248aed8f96320491b6875992e7a74e18f6d768a28c6d60f78e968a",
+   "headers": [
+    [
+     "X-Amz-Meta-Tag",
+     "no-cache, no-store"
+    ],
+    [
+     "x-amz-meta-empty",
+     "text/plain; charset=utf-8"
+    ],
+    [
+     "Content-Type",
+     ""
+    ]
+   ],
+   "access_key_id": "AKIDBIZY3CC6XJF3S3GL",
+   "secret_access_key": "2cruzGB2tK0zcCNlyBG7D3487NF7Hr3rMAWXuqRa",
+   "session_token": "wqAFYrGX+Hc/F6cT4oY/aYibWlRoj8MKNbfQAUbquECrRtsuaxBfiI7v6KAvqx+FMVjVBSwWLt+rRcxtohEg+KUzE0HZzbR4gJy6nFnqfw/psWbSvKZtzLTzihEz2dUGf29RMbiLHb0HNizl2b8wUdkT0ZwuvStiXRp+9+acLp1pSNXgMiDnh7S1PQ",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "018-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "storage.internal",
+   "uri": "/0",
+   "headers": [
+    [
+     "Content-Type",
+     ""
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "a  b   c"
+    ],
+    [
+     "x-amz-meta-note",
+     ""
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDW81UA5VCS84KBQK8/20260801/ap-northeast-1/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-note;x-amz-meta-tag, Signature=bd78b17219fb93915e0a5bf42744453bd9695ba9481c87fc89239f0332a3cb79"
+    ]
+   ],
+   "access_key_id": "AKIDW81UA5VCS84KBQK8",
+   "secret_access_key": "Fnge9AKj3VDwBoLGNPJs7gtTI2S6Gx6ztWtabKyx",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "019-presigned-POST",
+   "type": "presigned",
+   "method": "POST",
+   "host": "storage.internal",
+   "uri": "/(1)/-lead/%2F/~user?response-content-type=100%25&empty=2&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKID9GLAYHASPYNVRNSD%2F20260801%2Fap-northeast-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=473085&X-Amz-SignedHeaders=content-type%3Bhost%3Bx-amz-meta-note&X-Amz-Security-Token=QE%2FgxZyZ9D1srtskbCuPJa4MBw%2Fd2tYxATm%2FGzzZxhHlH9sUgTQrMdUzU54zvd0wZigj%3DaMPCgml%2FLnrHmEFVDKBOOnDiF9NsQWA2Uhfv7Rd4RMTFE6GKspt4m0tYezvhxBe4g4qI&X-Amz-Signature=36a10618c72cba3ba19a6033b7d1437cf92259bcd1875633b37faa0d93efa815",
+   "headers": [
+    [
+     "x-amz-meta-note",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "Content-Type",
+     "=?utf-8?B?44GC?="
+    ]
+   ],
+   "access_key_id": "AKID9GLAYHASPYNVRNSD",
+   "secret_access_key": "zThjyXLvG8EkWioLfvDjYzPUPxXW/08GEg07+Nl4",
+   "session_token": "QE/gxZyZ9D1srtskbCuPJa4MBw/d2tYxATm/GzzZxhHlH9sUgTQrMdUzU54zvd0wZigj=aMPCgml/LnrHmEFVDKBOOnDiF9NsQWA2Uhfv7Rd4RMTFE6GKspt4m0tYezvhxBe4g4qI",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "020-presigned-PUT",
+   "type": "presigned",
+   "method": "PUT",
+   "host": "s3.example.com",
+   "uri": "//file.txt/photos/a+b?list-type=%2A&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDU3AM8FS03OYFGMYM%2F20260801%2Feu-central-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=88295&X-Amz-SignedHeaders=host%3Bx-amz-meta-note&X-Amz-Security-Token=f46YIn2ErE5lDQP2YxnCwAy74CxLV8d2r070XZkcWPwu6KyH52VPwTyYsVBm7toEkW5w0je%2BYMJUyc8mDof2poeb2vFtSGf7aG0Zfb3uiFydBAHxBrIvjXeQp2IJ5tEWCGMa0qFryrBXj%2FQKaLJ8FicSbfNebxuSB0Tx%3DKynrzgXUy&X-Amz-Signature=0cab5e39802070f860cf27f04d3fd92ee67e597e98082026014ab0e8e3180d85",
+   "headers": [
+    [
+     "x-amz-meta-note",
+     ""
+    ]
+   ],
+   "access_key_id": "AKIDU3AM8FS03OYFGMYM",
+   "secret_access_key": "buZ7ZEbH/F1oIbggMUHOK/7dqABnOHrX+vhNA6PS",
+   "session_token": "f46YIn2ErE5lDQP2YxnCwAy74CxLV8d2r070XZkcWPwu6KyH52VPwTyYsVBm7toEkW5w0je+YMJUyc8mDof2poeb2vFtSGf7aG0Zfb3uiFydBAHxBrIvjXeQp2IJ5tEWCGMa0qFryrBXj/QKaLJ8FicSbfNebxuSB0Tx=KynrzgXUy",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "021-presigned-HEAD",
+   "type": "presigned",
+   "method": "HEAD",
+   "host": "s3.example.com",
+   "uri": "/a*b/!x/=eq/file.txt?prefix=a%2Fb&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKID08YA8U6WQ1789WVT%2F20260801%2Fap-northeast-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=125694&X-Amz-SignedHeaders=host&X-Amz-Security-Token=6pRrr3QqnK7sjhn7KSdtdu%2B060Eg36gF5l06ahXI3RWA%3DQyq%2Fqvr0d73sCxzpQ51PDM90stiY%2FfLFhYU5BULsABsdY9AZzB20ErR&X-Amz-Signature=d91cc45ef77028fdae8d52523595dbc3dcf65f4b11dac716f6d064456fd9d0e7",
+   "headers": [],
+   "access_key_id": "AKID08YA8U6WQ1789WVT",
+   "secret_access_key": "DwL27Qo5GRnmHmuGnV34Z74Yur+l+X7onkWhfk5Q",
+   "session_token": "6pRrr3QqnK7sjhn7KSdtdu+060Eg36gF5l06ahXI3RWA=Qyq/qvr0d73sCxzpQ51PDM90stiY/fLFhYU5BULsABsdY9AZzB20ErR",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "022-presigned-POST",
+   "type": "presigned",
+   "method": "POST",
+   "host": "storage.internal",
+   "uri": "/a+b/(1)?marker=a%2Fb&empty=%2A&response-content-type=%E3%81%82&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKID5Y4Z9V0XV79W179L%2F20260801%2Fap-northeast-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=223180&X-Amz-SignedHeaders=cache-control%3Bhost%3Bx-amz-meta-empty&X-Amz-Signature=47151120a32902cf109ad4330ee7a2f4594a1a96480ac11d6c773d96d459574d",
+   "headers": [
+    [
+     "Cache-Control",
+     "text/plain; charset=utf-8"
+    ],
+    [
+     "x-amz-meta-empty",
+     ""
+    ]
+   ],
+   "access_key_id": "AKID5Y4Z9V0XV79W179L",
+   "secret_access_key": "S4J0e3t+Op3zbN2RVACOjMXupeiIGT9mtehr0LE1",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "023-presigned-HEAD",
+   "type": "presigned",
+   "method": "HEAD",
+   "host": "s3.example.com",
+   "uri": "/%25?empty=photos%2F&response-content-type=~&prefix=photos%2F&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDALEBZQJV3TLMPCHX%2F20260801%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=204442&X-Amz-SignedHeaders=host%3Bx-amz-meta-empty%3Bx-amz-meta-tag&X-Amz-Signature=2bed30ba91ebcf50b436aa917f9098d2133dbb0e64f0de0aecc936745f65e6fb",
+   "headers": [
+    [
+     "X-Amz-Meta-Tag",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "x-amz-meta-empty",
+     "=?utf-8?B?44GC?="
+    ]
+   ],
+   "access_key_id": "AKIDALEBZQJV3TLMPCHX",
+   "secret_access_key": "f8hI6tk+LCx4kzuXDGB+5qoG3glsEFlXY7BCcabS",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "024-presigned-HEAD",
+   "type": "presigned",
+   "method": "HEAD",
+   "host": "s3.example.com:8080",
+   "uri": "/%E3%81%82/%2F?a=%2A&response-content-type=%E3%81%82&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDEPA5G2ENOMDG1IEO%2F20260801%2Fap-northeast-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=595484&X-Amz-SignedHeaders=cache-control%3Bhost&X-Amz-Signature=e003155138adaa0276d005bafaac031ee5137185418b61eb7fe9e3bee1284d76",
+   "headers": [
+    [
+     "Cache-Control",
+     "=?utf-8?B?44GC?="
+    ]
+   ],
+   "access_key_id": "AKIDEPA5G2ENOMDG1IEO",
+   "secret_access_key": "Gn4ZqC3AjdicNv9CnzdSWqcEtQ/WWgjetB9JbxEo",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "025-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com:8080",
+   "uri": "/backup-2026?prefix=%E3%81%82",
+   "headers": [
+    [
+     "x-amz-meta-note",
+     ""
+    ],
+    [
+     "Content-Type",
+     "text/plain; charset=utf-8"
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Security-Token",
+     "FP5a+IiDkivpUs8p=Psi0ACvRQnDFc9AGKV8lWF2G56LZqle7+NYoI3Ro6=KWG9gEA6d9GqiGhOaaqYp2jNtKBN=j"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDFUX984YMMN5PZLOH/20260801/moon-crater-7/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-note;x-amz-security-token, Signature=952a97b8b515259c971beaf885497dd27451e06c8e9e842f3571a80bddfaec34"
+    ]
+   ],
+   "access_key_id": "AKIDFUX984YMMN5PZLOH",
+   "secret_access_key": "q2AzRAECScHWMergVUJqW72AcKE4gkhB2ImJJPK0",
+   "session_token": "FP5a+IiDkivpUs8p=Psi0ACvRQnDFc9AGKV8lWF2G56LZqle7+NYoI3Ro6=KWG9gEA6d9GqiGhOaaqYp2jNtKBN=j",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "026-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com:8080",
+   "uri": "/-lead/%25/%2Fnested%2Fkey?q%20k=a%2Fb&prefix=text%2Fplain&marker=photos%2F",
+   "headers": [
+    [
+     "Content-Type",
+     "a  b   c"
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDBN36TDI0IMLS3HDH/20260801/moon-crater-7/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date, Signature=28b019615c5ac3cfb57f786af47a1a852b8c77704fedfca0ab862e2e48252f40"
+    ]
+   ],
+   "access_key_id": "AKIDBN36TDI0IMLS3HDH",
+   "secret_access_key": "/iBk1QC+0RwnPcziKM0tmwZg8bX5gc5gT0m7mK1W",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "027-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "storage.internal",
+   "uri": "/photos?q%20k=~&a=photos%2F",
+   "headers": [
+    [
+     "x-amz-meta-empty",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "Cache-Control",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDN0P4QZMY674U5KGX/20260801/us-east-1/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty, Signature=37c110d79a4ad48cdbaa1f28edf41e6f9d065828967a1a093c260321257af4e6"
+    ]
+   ],
+   "access_key_id": "AKIDN0P4QZMY674U5KGX",
+   "secret_access_key": "cYmb1gJ8rNkwpX+r2DKRGZ95PdGZ5XQDduN5/tLZ",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "028-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com:8080",
+   "uri": "/&z/!x/trailing.?a=2",
+   "headers": [
+    [
+     "x-amz-meta-empty",
+     ""
+    ],
+    [
+     "Content-Type",
+     "no-cache, no-store"
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID3M2VBMSS2ZMY7B0A/20260801/moon-crater-7/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty, Signature=053a07c934fbbf051eccfb4225f95db0fb0b6c5750d4ff564d33daf548af4182"
+    ]
+   ],
+   "access_key_id": "AKID3M2VBMSS2ZMY7B0A",
+   "secret_access_key": "0440u0hR2H784VwTJPKI3RhwXV1kNUEhFjQbrvhn",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "029-presigned-POST",
+   "type": "presigned",
+   "method": "POST",
+   "host": "storage.internal",
+   "uri": "/=eq/a?list-type=%E3%81%82&empty=%E3%81%82&response-content-type=100%25&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDK21DC1TJPA4JODIG%2F20260801%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=583097&X-Amz-SignedHeaders=cache-control%3Bhost%3Bx-amz-meta-note&X-Amz-Signature=1afb9f047459faf7350b99db95e4822f1487b1ed1117d79df3768dd940f0bfde",
+   "headers": [
+    [
+     "Cache-Control",
+     "text/plain; charset=utf-8"
+    ],
+    [
+     "x-amz-meta-note",
+     "=?utf-8?B?44GC?="
+    ]
+   ],
+   "access_key_id": "AKIDK21DC1TJPA4JODIG",
+   "secret_access_key": "I8I6gOVp3mCnZ7AxmGAXR3K/+2eDnWxR9fjdxK8D",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "030-presigned-HEAD",
+   "type": "presigned",
+   "method": "HEAD",
+   "host": "storage.internal",
+   "uri": "/trailing./%E3%81%82?marker=%2A&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKID2T6GFAX4PZ66YFLB%2F20260801%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=189806&X-Amz-SignedHeaders=cache-control%3Bcontent-type%3Bhost%3Bx-amz-meta-note&X-Amz-Signature=6cd96a7793f522b9f646ce70dada6e297c410e1d5acfc01ae422aabcbfdbde6c",
+   "headers": [
+    [
+     "Cache-Control",
+     ""
+    ],
+    [
+     "x-amz-meta-note",
+     " padded "
+    ],
+    [
+     "Content-Type",
+     "a  b   c"
+    ]
+   ],
+   "access_key_id": "AKID2T6GFAX4PZ66YFLB",
+   "secret_access_key": "recrUXpxtbgVx/x/ro5/rHX9Pq60HNjYdLvMWdd1",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "031-presigned-PUT",
+   "type": "presigned",
+   "method": "PUT",
+   "host": "storage.internal",
+   "uri": "/trailing./a/%E3%81%82?list-type=%E3%81%82&q%20k=a%2Fb&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDAOE0HYQCSGB2TPYE%2F20260801%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=152450&X-Amz-SignedHeaders=host%3Bx-amz-meta-empty&X-Amz-Security-Token=UZA%2Bah1CSRr9HBVAEnW9aKeeLBxNVv79kxtk0nD9oKMsw6WJoHW7BhiC1KudLUyI%2BwfS%2BQ9wCntcAxYK2xhTBNBK6B%3D4Jkawpdn5eGVEY4yn9rJ3L2H5AYMRwbusb4Tzd&X-Amz-Signature=db13a8b9af83b651054781d24a31ac79dc226b7fa4fc0ee43cc8dc06e54b6f88",
+   "headers": [
+    [
+     "x-amz-meta-empty",
+     "text/plain; charset=utf-8"
+    ]
+   ],
+   "access_key_id": "AKIDAOE0HYQCSGB2TPYE",
+   "secret_access_key": "XG4d/3H0IOtrs6hUhd3KyP0W7zi1ihBpGvgb3Wfp",
+   "session_token": "UZA+ah1CSRr9HBVAEnW9aKeeLBxNVv79kxtk0nD9oKMsw6WJoHW7BhiC1KudLUyI+wfS+Q9wCntcAxYK2xhTBNBK6B=4Jkawpdn5eGVEY4yn9rJ3L2H5AYMRwbusb4Tzd",
+   "region": "us-east-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "032-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "s3.example.com:8080",
+   "uri": "/(1)/!x/%25/...",
+   "headers": [
+    [
+     "x-amz-meta-empty",
+     "a  b   c"
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Security-Token",
+     "fhX+WBDiYb5A6ug3eWE86w2RDNig+"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID3QBPVOPPHRJ7J715/20260801/eu-central-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty;x-amz-security-token, Signature=e43e84512e9972f946f27628b6c426e051ba76c163d52e1ffcc9b2222cc3e8dc"
+    ]
+   ],
+   "access_key_id": "AKID3QBPVOPPHRJ7J715",
+   "secret_access_key": "FGUmim2XlKIzeoTolu7yzzL1VGm8yK+i7Yhr7cLd",
+   "session_token": "fhX+WBDiYb5A6ug3eWE86w2RDNig+",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "033-header-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "s3.example.com",
+   "uri": "/%2Fnested%2Fkey",
+   "headers": [
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Security-Token",
+     "ffilMKfYNgfvCVnzfQZYg9E81CJKYw1OsrobdUWCxNpageC7Qe8gV=qJQ/79ADAiFQAjJUYrst6+87SN5WlDnG3hWnvDczAk4p2tv9wTxkTsmkSa5AM45e+RvZbIXdiuT/CTue1uD4fktPEUZyGHQShrMlG9ONDdkyNET"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDKNB3924BMN8OTBSE/20260801/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-security-token, Signature=e54978251d186606e4943d431b8183e790f14bd888bd408e9e7a8fd92aef6438"
+    ]
+   ],
+   "access_key_id": "AKIDKNB3924BMN8OTBSE",
+   "secret_access_key": "VSJ5ljezguPscgYgvquZng7DY1XCocOAu2fOVlnp",
+   "session_token": "ffilMKfYNgfvCVnzfQZYg9E81CJKYw1OsrobdUWCxNpageC7Qe8gV=qJQ/79ADAiFQAjJUYrst6+87SN5WlDnG3hWnvDczAk4p2tv9wTxkTsmkSa5AM45e+RvZbIXdiuT/CTue1uD4fktPEUZyGHQShrMlG9ONDdkyNET",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "034-header-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "s3.example.com:8080",
+   "uri": "/%25?list-type=a%20b&prefix=~&a=a%20b",
+   "headers": [
+    [
+     "Cache-Control",
+     "no-cache, no-store"
+    ],
+    [
+     "x-amz-meta-empty",
+     "no-cache, no-store"
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDE5R637D8GNFCCBA8/20260801/moon-crater-7/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty, Signature=f2b6938760f579e7283e9347a593b4b2e301cc0982679e19dfaaecc7835735a1"
+    ]
+   ],
+   "access_key_id": "AKIDE5R637D8GNFCCBA8",
+   "secret_access_key": "cUSrHROOOHKuSgbkp/5NAQzY6P7RyUZpTve3Renj",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "035-presigned-HEAD",
+   "type": "presigned",
+   "method": "HEAD",
+   "host": "s3.example.com",
+   "uri": "/a+b?response-content-type=~&empty=photos%2F&prefix=a%2Fb&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKID56L6Q7UWXCOD8F6V%2F20260801%2Fap-northeast-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=16856&X-Amz-SignedHeaders=cache-control%3Bhost&X-Amz-Signature=26dbe1ca0fa6f107eabc95dcbd6d5a1a450b39e5fbe2e19897c03aaff12f2dd8",
+   "headers": [
+    [
+     "Cache-Control",
+     "hello world"
+    ]
+   ],
+   "access_key_id": "AKID56L6Q7UWXCOD8F6V",
+   "secret_access_key": "wgJLm5MskqinrKwmYxIMN1KuOdbe4hDP1xkzu+sF",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "036-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "storage.internal",
+   "uri": "/../%7F?list-type=%2A&marker=~&list-type=%2A",
+   "headers": [
+    [
+     "x-amz-meta-empty",
+     "a  b   c"
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDG308H6K9U7UTWVS1/20260801/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty, Signature=7f75a11854283c60519495dae94588d4a3535f425109067f711c94c97f7dd043"
+    ]
+   ],
+   "access_key_id": "AKIDG308H6K9U7UTWVS1",
+   "secret_access_key": "9m1vSPmBk9ia2Yeeh89ebw/1v4b+8VB340qAYO7C",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "037-presigned-DELETE",
+   "type": "presigned",
+   "method": "DELETE",
+   "host": "s3.example.com:8080",
+   "uri": "/./=eq/photos/%20?a=~&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDWUJL6945EQME6NA2%2F20260801%2Feu-central-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=437067&X-Amz-SignedHeaders=host&X-Amz-Signature=95dac11da01bd4f65e3c848eed47735bb633a03bf1f605fac0c0bdb108c8709d",
+   "headers": [],
+   "access_key_id": "AKIDWUJL6945EQME6NA2",
+   "secret_access_key": "Bymwf3Grb+YXjdbiBvPNOkY6/Gc2YtnZ3bT1cAoo",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "038-header-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "s3.example.com",
+   "uri": "/%25?response-content-type=&empty=a%20b&marker=2",
+   "headers": [
+    [
+     "X-Amz-Meta-Tag",
+     " padded "
+    ],
+    [
+     "x-amz-meta-empty",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "Content-Type",
+     "a  b   c"
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID08097IHBDKGOCQ7I/20260801/ap-northeast-1/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty;x-amz-meta-tag, Signature=0d6c1122f37dd99c733084a679b9745f07b19a96a3a4e1b6e9a0bcd49b7afffa"
+    ]
+   ],
+   "access_key_id": "AKID08097IHBDKGOCQ7I",
+   "secret_access_key": "CofCN0+bm+DbT3AztbU+YUEAJmnCiDSdpG08XLEQ",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "039-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com:8080",
+   "uri": "/%25/~user/",
+   "headers": [
+    [
+     "x-amz-meta-empty",
+     ""
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDBZLPAHTTZBM6N4BZ/20260801/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty, Signature=ccf46983721d0ad957904d1f0772d30fde70450b0069a6e19e0ce6b6f5075469"
+    ]
+   ],
+   "access_key_id": "AKIDBZLPAHTTZBM6N4BZ",
+   "secret_access_key": "gVFXdhaNcMgP0i2lfgq2ljIC+A1QtDzNGtpvax4W",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "040-presigned-GET",
+   "type": "presigned",
+   "method": "GET",
+   "host": "s3.example.com:8080",
+   "uri": "/-lead/%20/a*b?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDG0JUF7YCZPN2B36R%2F20260801%2Fap-northeast-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=126214&X-Amz-SignedHeaders=host%3Bx-amz-meta-note&X-Amz-Signature=7d23be5d8e84c15614964887c08a7d9b9c9cacf3c70fec7ff77fdf59dd64f799",
+   "headers": [
+    [
+     "x-amz-meta-note",
+     ""
+    ]
+   ],
+   "access_key_id": "AKIDG0JUF7YCZPN2B36R",
+   "secret_access_key": "x7xpzGBiOQBV9nh6jm1IdAau2xzWLzo+lGao7xJU",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "041-presigned-GET",
+   "type": "presigned",
+   "method": "GET",
+   "host": "s3.example.com:8080",
+   "uri": "/~user/_x/%2F?list-type=photos%2F&q%20k=~&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDMP7ELKVXTOW24P3J%2F20260801%2Feu-central-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=332534&X-Amz-SignedHeaders=cache-control%3Bhost&X-Amz-Signature=d62fbb5d27284d5eeaeab1909aae54376b07c5952af377af0fd7af34dbf8f6b5",
+   "headers": [
+    [
+     "Cache-Control",
+     "=?utf-8?B?44GC?="
+    ]
+   ],
+   "access_key_id": "AKIDMP7ELKVXTOW24P3J",
+   "secret_access_key": "ZyyNk3l5RcFhdwQXgRrh0ODZWYZVY3Rq9SELpDZ9",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "042-presigned-PUT",
+   "type": "presigned",
+   "method": "PUT",
+   "host": "storage.internal",
+   "uri": "/../photos/file.txt?response-content-type=~&list-type=100%25&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDMMI6ONWKYYRKCPYB%2F20260801%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=514748&X-Amz-SignedHeaders=content-type%3Bhost&X-Amz-Signature=9274695c024db6598a6d904080c361c58b9c44257737d9f5009dc7dd368703d4",
+   "headers": [
+    [
+     "Content-Type",
+     "=?utf-8?B?44GC?="
+    ]
+   ],
+   "access_key_id": "AKIDMMI6ONWKYYRKCPYB",
+   "secret_access_key": "KxmFBSvxlExkgA94Pe8hlIHyX3J+JmKRaUKBL5zj",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "043-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "s3.example.com",
+   "uri": "/../.../_x/%E3%81%82?q%20k=text%2Fplain&prefix=%E3%81%82",
+   "headers": [
+    [
+     "Cache-Control",
+     "a  b   c"
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDVKUH0PJQWLURTZTL/20260801/eu-central-1/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date, Signature=b1859fc6b89286aaed0cb8def1c6c0f81da69a126acb7e9cfe218848ca4542bc"
+    ]
+   ],
+   "access_key_id": "AKIDVKUH0PJQWLURTZTL",
+   "secret_access_key": "Hxly0RpSIVaiLf1Kbb35/6+F6v4MPxO7jGD++KDZ",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "044-header-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "s3.example.com",
+   "uri": "/file.txt/(1)/(1)/?list-type=100%25&list-type=100%25",
+   "headers": [
+    [
+     "x-amz-meta-note",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "Cache-Control",
+     "text/plain; charset=utf-8"
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDG45RV8Y8WYMQXGSO/20260801/us-east-1/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date;x-amz-meta-note, Signature=5af63e0257b430d539bf6eb115c65b95b607cc48605a9c43cc2c5e7d4687b1c1"
+    ]
+   ],
+   "access_key_id": "AKIDG45RV8Y8WYMQXGSO",
+   "secret_access_key": "mbcuuss+56QXh9wum/5uNIaNI93VMryCns0GEMYK",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "045-presigned-DELETE",
+   "type": "presigned",
+   "method": "DELETE",
+   "host": "s3.example.com",
+   "uri": "/:c?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDR95V03PGD746T7YC%2F20260801%2Feu-central-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=289330&X-Amz-SignedHeaders=cache-control%3Bhost%3Bx-amz-meta-empty%3Bx-amz-meta-tag&X-Amz-Signature=c2d8fa422ced15be9e83b4c744bfe79712833772cbee8ae32f4caf366ff1d8f5",
+   "headers": [
+    [
+     "Cache-Control",
+     "hello world"
+    ],
+    [
+     "x-amz-meta-empty",
+     "text/plain; charset=utf-8"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     " padded "
+    ]
+   ],
+   "access_key_id": "AKIDR95V03PGD746T7YC",
+   "secret_access_key": "Y6gInX7ha5i/P48CxQd+Ahm22i+rJcihkHHkBzSC",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "046-presigned-DELETE",
+   "type": "presigned",
+   "method": "DELETE",
+   "host": "s3.example.com:8080",
+   "uri": "/(1)/&z/../?response-content-type=text%2Fplain&prefix=2&empty=100%25&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDF62R5Z6472WGT49C%2F20260801%2Fap-northeast-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=420163&X-Amz-SignedHeaders=host&X-Amz-Signature=86529dcf74520312ec679981c4cd2375f115adf7fc2ce035953e6f7a429116e4",
+   "headers": [],
+   "access_key_id": "AKIDF62R5Z6472WGT49C",
+   "secret_access_key": "Q25SBDgbHQScIMMUAPLEFuQCyomC/+8izWDgeqCU",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "047-presigned-HEAD",
+   "type": "presigned",
+   "method": "HEAD",
+   "host": "s3.example.com",
+   "uri": "/a/:c/%00?a=text%2Fplain&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDE08ZAHIDMKZBAU87%2F20260801%2Fmoon-crater-7%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=599673&X-Amz-SignedHeaders=host%3Bx-amz-meta-empty&X-Amz-Security-Token=ngy8HXL51%2FATwW0xHNfdUX9ayE%3DeLD%3DZecBxvKlPws4tvhsSJ%3DuxO%3DqBkYgVtH2XjGXeghwrxfe6wOBcOOqbJbyACUfB5h0jOnnwKjf54Fk0js95b%2BCalwMuq&X-Amz-Signature=54f84378ecea7fde58da9e178dd1b56ff8a4c72fb8aae00c761cccc8bdea1446",
+   "headers": [
+    [
+     "x-amz-meta-empty",
+     " padded "
+    ]
+   ],
+   "access_key_id": "AKIDE08ZAHIDMKZBAU87",
+   "secret_access_key": "bFRaq0LCjMiQUyfljcEADJDy4W0/boBbXdtXO5P8",
+   "session_token": "ngy8HXL51/ATwW0xHNfdUX9ayE=eLD=ZecBxvKlPws4tvhsSJ=uxO=qBkYgVtH2XjGXeghwrxfe6wOBcOOqbJbyACUfB5h0jOnnwKjf54Fk0js95b+CalwMuq",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "048-presigned-HEAD",
+   "type": "presigned",
+   "method": "HEAD",
+   "host": "s3.example.com",
+   "uri": "/backup-2026?list-type=a%20b&empty=a%20b&response-content-type=text%2Fplain&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKID2546VETAWNIBK3ND%2F20260801%2Feu-central-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=584047&X-Amz-SignedHeaders=host%3Bx-amz-meta-empty%3Bx-amz-meta-tag&X-Amz-Security-Token=VW1uhqtStSs4JkrrX2iKmJzpMPkK3rRiKeQBKkMc1FRynsQstI19GhS72a85TVIVB5fkK2Aza%2B%3DhbRh3tsHyNxDRVoJA8e%2BCwP2bg%3DTrZzZBCQkXjsiwSHR4d1Fe%3DfnMqtL%2BJAdB%3DlXevrPcIe3jgZwEcod36&X-Amz-Signature=cf129a620ac4bb0a9a0e6362acefbc28988fc8aa0170571edb04528e7158e879",
+   "headers": [
+    [
+     "X-Amz-Meta-Tag",
+     "a  b   c"
+    ],
+    [
+     "x-amz-meta-empty",
+     "a  b   c"
+    ]
+   ],
+   "access_key_id": "AKID2546VETAWNIBK3ND",
+   "secret_access_key": "5DXLvPs4PqpnrDCiNAT4oI/w4IDAyyjujKXa/2g8",
+   "session_token": "VW1uhqtStSs4JkrrX2iKmJzpMPkK3rRiKeQBKkMc1FRynsQstI19GhS72a85TVIVB5fkK2Aza+=hbRh3tsHyNxDRVoJA8e+CwP2bg=TrZzZBCQkXjsiwSHR4d1Fe=fnMqtL+JAdB=lXevrPcIe3jgZwEcod36",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "049-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "storage.internal",
+   "uri": "//.../a'b?list-type=100%25",
+   "headers": [
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDZHMTRKS8TFOS3TG5/20260801/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=df86b2d5a52cdd6a00e822a8e186e863ea7a03ac2318117400fcd9b9af1fca93"
+    ]
+   ],
+   "access_key_id": "AKIDZHMTRKS8TFOS3TG5",
+   "secret_access_key": "xcz61Tj2TroXstOhCv+sfvdQWtN/A5DFXS6tp1MU",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "050-presigned-DELETE",
+   "type": "presigned",
+   "method": "DELETE",
+   "host": "s3.example.com:8080",
+   "uri": "/file.txt/%2Fnested%2Fkey?marker=~&prefix=photos%2F&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDLAKILSS125FTOJP4%2F20260801%2Fmoon-crater-7%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=199355&X-Amz-SignedHeaders=cache-control%3Bhost%3Bx-amz-meta-empty%3Bx-amz-meta-note&X-Amz-Security-Token=oR7K%3DPghhHve8DAUNc2%2BLAnTufPmll8aZxsgj1OAVfgnXrJ5Ufnywhq7iX%2BAXGlyd1rV7hqcGdk%3DeOW&X-Amz-Signature=970349d73d1d31229f1c24e355fd83380bbce59347017c2a13eb604e8c9c5b0d",
+   "headers": [
+    [
+     "x-amz-meta-empty",
+     " padded "
+    ],
+    [
+     "x-amz-meta-note",
+     "text/plain; charset=utf-8"
+    ],
+    [
+     "Cache-Control",
+     "hello world"
+    ]
+   ],
+   "access_key_id": "AKIDLAKILSS125FTOJP4",
+   "secret_access_key": "CX7q4GNdwE3A9uljuLLUrs6oRToD9CIBi6sOIf9Z",
+   "session_token": "oR7K=PghhHve8DAUNc2+LAnTufPmll8aZxsgj1OAVfgnXrJ5Ufnywhq7iX+AXGlyd1rV7hqcGdk=eOW",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "051-presigned-DELETE",
+   "type": "presigned",
+   "method": "DELETE",
+   "host": "s3.example.com",
+   "uri": "/(1)/?list-type=100%25&empty=%2A&response-content-type=%2A&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDUN9LNQZUC58WBDVK%2F20260801%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=559224&X-Amz-SignedHeaders=host&X-Amz-Signature=af417a7a52d28d8c69ce130904375b646ab4394ef801f22c5b3ee30817991fe5",
+   "headers": [],
+   "access_key_id": "AKIDUN9LNQZUC58WBDVK",
+   "secret_access_key": "lWVQPqz12wwPSnpoTdEX4ZWTwCrbUJT/hq7wPYZR",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "052-header-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "storage.internal",
+   "uri": "/./%E3%81%82/../a",
+   "headers": [
+    [
+     "x-amz-meta-note",
+     " padded "
+    ],
+    [
+     "Cache-Control",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDCIA04YDQG71ISAIY/20260801/moon-crater-7/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date;x-amz-meta-note, Signature=ab928faa58824091b0aa97f2a9783a006869a7bf37690873143684083aa97e18"
+    ]
+   ],
+   "access_key_id": "AKIDCIA04YDQG71ISAIY",
+   "secret_access_key": "bsA7bDW9Ffa6DeVzDS11KXzrJ7y3goNtl8mYpkWR",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "053-presigned-GET",
+   "type": "presigned",
+   "method": "GET",
+   "host": "s3.example.com:8080",
+   "uri": "/_x?marker=&response-content-type=&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDQ18XFIA1DE3ZZDHS%2F20260801%2Feu-central-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=318400&X-Amz-SignedHeaders=content-type%3Bhost%3Bx-amz-meta-note%3Bx-amz-meta-tag&X-Amz-Signature=d645ccfdee1eabcc396070dda47378fb39b74cc5d94d39543f8cd6c67349acec",
+   "headers": [
+    [
+     "Content-Type",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "x-amz-meta-note",
+     "text/plain; charset=utf-8"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "=?utf-8?B?44GC?="
+    ]
+   ],
+   "access_key_id": "AKIDQ18XFIA1DE3ZZDHS",
+   "secret_access_key": "F7VSSd//vEsvo/2lgK/SaoyckHQGi6uqaHql1cSW",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "054-presigned-DELETE",
+   "type": "presigned",
+   "method": "DELETE",
+   "host": "storage.internal",
+   "uri": "/$y/_x/-lead/&z?a=100%25&prefix=text%2Fplain&q%20k=2&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDCTOFQOK6CMHG6RX1%2F20260801%2Fap-northeast-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=272420&X-Amz-SignedHeaders=host&X-Amz-Signature=2b83137108e8ddaaf42accc0e115e5da442b3e508c4e7fc5564fb9d040c971f7",
+   "headers": [],
+   "access_key_id": "AKIDCTOFQOK6CMHG6RX1",
+   "secret_access_key": "RR4J1RehVTkSDxV3WG+n7VrUO0d1bNDV0L8IqVWc",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "055-header-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "s3.example.com:8080",
+   "uri": "/%00/-lead?empty=~&a=%2A",
+   "headers": [
+    [
+     "Content-Type",
+     "no-cache, no-store"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "text/plain; charset=utf-8"
+    ],
+    [
+     "x-amz-meta-empty",
+     "no-cache, no-store"
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Security-Token",
+     "8gDzpV0eDl1XhqNQvXaStJbbXV4B/CG=W+MpN5shUp40Pd8kqTM2jZjHerZrGt/z=xYvsA7SUPA3Cyrh3gq0SEzF1ihkqu+Ku4HV0RT2Bbx5mBdWihQpWEjOgrzQ5RAFluyXF4SxiBy5dZCq0Sc6"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDRCO2SGB0KISQL2YK/20260801/ap-northeast-1/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty;x-amz-meta-tag;x-amz-security-token, Signature=b8bd15ac7e02315fcd8576f251cfbb3976a0863b2d9835051380b9b3f42059e1"
+    ]
+   ],
+   "access_key_id": "AKIDRCO2SGB0KISQL2YK",
+   "secret_access_key": "MNmrkP8vuxeb40rXR1JuYIhHqLQroc0SomBF40je",
+   "session_token": "8gDzpV0eDl1XhqNQvXaStJbbXV4B/CG=W+MpN5shUp40Pd8kqTM2jZjHerZrGt/z=xYvsA7SUPA3Cyrh3gq0SEzF1ihkqu+Ku4HV0RT2Bbx5mBdWihQpWEjOgrzQ5RAFluyXF4SxiBy5dZCq0Sc6",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "056-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "storage.internal",
+   "uri": "/trailing./%20",
+   "headers": [
+    [
+     "Content-Type",
+     "no-cache, no-store"
+    ],
+    [
+     "x-amz-meta-empty",
+     "text/plain; charset=utf-8"
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID4SFOU6BF4QI1H9ZY/20260801/moon-crater-7/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty, Signature=113b559bf6458d79fe3c2d8cb12f1e1e1dd8d2cf09f28e615401903d2980154d"
+    ]
+   ],
+   "access_key_id": "AKID4SFOU6BF4QI1H9ZY",
+   "secret_access_key": "32rLSBkbrhNN/LPsuxF6Pp2jA/NBLMAQ3PiSlVsn",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "057-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com:8080",
+   "uri": "/backup-2026?list-type=%2A&prefix=100%25&empty=&list-type=%2A",
+   "headers": [
+    [
+     "x-amz-meta-note",
+     ""
+    ],
+    [
+     "x-amz-meta-empty",
+     "hello world"
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Security-Token",
+     "owC+cIlbCC=lAuA/Ijh7Apc=UrJu6mVyzvK9SsXl=u73G=li8okdcBS1L+IIXGaVVhYjCh/qUniTjk=KOiqYWiz5mbUNzpXctB+B3rW6/RzQfBwmN8uxu1/du+/HYPmDrNSLYTQF5a/xU4A1avIbvU2ibTcm+QuUexAzg8fGWK92MZpG3Ta2G6DXHMFc"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDEGXZR6SJUF3RJXYX/20260801/eu-central-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty;x-amz-meta-note;x-amz-security-token, Signature=4157c4ebef1a29c2102657789e0a4df58a05c3619d89ea96108ead7cd9388c9c"
+    ]
+   ],
+   "access_key_id": "AKIDEGXZR6SJUF3RJXYX",
+   "secret_access_key": "O31FIRrCZLtzHV52v2+ojtrBauztjSRu9zz+yHYw",
+   "session_token": "owC+cIlbCC=lAuA/Ijh7Apc=UrJu6mVyzvK9SsXl=u73G=li8okdcBS1L+IIXGaVVhYjCh/qUniTjk=KOiqYWiz5mbUNzpXctB+B3rW6/RzQfBwmN8uxu1/du+/HYPmDrNSLYTQF5a/xU4A1avIbvU2ibTcm+QuUexAzg8fGWK92MZpG3Ta2G6DXHMFc",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "058-header-GET",
+   "type": "header",
+   "method": "GET",
+   "host": "s3.example.com",
+   "uri": "/%00/%20/0/backup-2026",
+   "headers": [
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Security-Token",
+     "14TctgwYPyONAQ69OLAmedVbsHV+dzZjexdcD8w15P1Sdc9HqPhHpMEBojsMfObKUiry07Busv/"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDHG0FIJ28A98BIXOC/20260801/eu-central-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-security-token, Signature=671dc62a4a717f8b0fdad4aa4c817666e4c615e5b36dcffaa5850a218d5fc7e8"
+    ]
+   ],
+   "access_key_id": "AKIDHG0FIJ28A98BIXOC",
+   "secret_access_key": "ERNHhXKGHZ0CUG0QoFMhZBym/QO4LmjEQVn70Lxj",
+   "session_token": "14TctgwYPyONAQ69OLAmedVbsHV+dzZjexdcD8w15P1Sdc9HqPhHpMEBojsMfObKUiry07Busv/",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "059-presigned-DELETE",
+   "type": "presigned",
+   "method": "DELETE",
+   "host": "storage.internal",
+   "uri": "/-lead/@h/%2F?prefix=~&a=100%25&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKID2EYO53DQLYCGBRHC%2F20260801%2Feu-central-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=120314&X-Amz-SignedHeaders=cache-control%3Bhost&X-Amz-Security-Token=8%2BUF7cfDsZx%2FHu%2B76IcpO5%2B&X-Amz-Signature=6eea27d328b5cd509b31c5bccfe1a320d6a751e8bf9c3c9f903bfe08b66b3fdc",
+   "headers": [
+    [
+     "Cache-Control",
+     ""
+    ]
+   ],
+   "access_key_id": "AKID2EYO53DQLYCGBRHC",
+   "secret_access_key": "G0eHGgYk6DePFOA7MuHp7Y8QB0pyBriVs6TiTgk6",
+   "session_token": "8+UF7cfDsZx/Hu+76IcpO5+",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "060-presigned-PUT",
+   "type": "presigned",
+   "method": "PUT",
+   "host": "s3.example.com",
+   "uri": "/%25/a?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDJ1U8XP95OWVRZ9QY%2F20260801%2Fmoon-crater-7%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=273238&X-Amz-SignedHeaders=cache-control%3Bhost&X-Amz-Security-Token=T24C8TeNZMKa6%2Fdz%2B7LtaM12m36gH3%2BEN9QZxdq6Hhw2%2FkMiBdCRuqRozc1EfSBVKkKJF%3DEebiDzaNJcVHTpKZuq%2FqfMZZ%2FnPit%2BV75HIQZkNQzDNYn%3DD4kMuD5XSmQy1SoQhLsYCtkx9PvWkPO2wtOo75WZbskQhgETzTgAS%3DGhyevjWJQ&X-Amz-Signature=b27f63efb3b74d3303387f5ea3f7982b710d27f1611580fbd555b040010f7d65",
+   "headers": [
+    [
+     "Cache-Control",
+     "text/plain; charset=utf-8"
+    ]
+   ],
+   "access_key_id": "AKIDJ1U8XP95OWVRZ9QY",
+   "secret_access_key": "km/xf87B/rANmLJ7d3KRhStQfohv0qA7OUEPcoCH",
+   "session_token": "T24C8TeNZMKa6/dz+7LtaM12m36gH3+EN9QZxdq6Hhw2/kMiBdCRuqRozc1EfSBVKkKJF=EebiDzaNJcVHTpKZuq/qfMZZ/nPit+V75HIQZkNQzDNYn=D4kMuD5XSmQy1SoQhLsYCtkx9PvWkPO2wtOo75WZbskQhgETzTgAS=GhyevjWJQ",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "061-header-GET",
+   "type": "header",
+   "method": "GET",
+   "host": "s3.example.com",
+   "uri": "/~user",
+   "headers": [
+    [
+     "Cache-Control",
+     "a  b   c"
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDVPEQGDIEBWN7RPUZ/20260801/eu-central-1/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date, Signature=ae7a6c1d75933b59dd54088a83ac0d29e2088f7146c350488e0a557560c55083"
+    ]
+   ],
+   "access_key_id": "AKIDVPEQGDIEBWN7RPUZ",
+   "secret_access_key": "sgFjHFEdKJ/YX2arjsM1j7wOS0miHnRZUu5BUKTm",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "062-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "storage.internal",
+   "uri": "/./%20",
+   "headers": [
+    [
+     "Content-Type",
+     " padded "
+    ],
+    [
+     "x-amz-meta-empty",
+     " padded "
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDE3MS3E5WB3MULV4S/20260801/ap-northeast-1/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty, Signature=5751b3db80d9d894c63a885704951ee4c8d82afe3b064c0796c5b45064b5e1a8"
+    ]
+   ],
+   "access_key_id": "AKIDE3MS3E5WB3MULV4S",
+   "secret_access_key": "kO20x4ly+GGBG+WjUpj04Jv2mYg5Eio7ykCtIayA",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "063-header-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "s3.example.com",
+   "uri": "/%25/_x/$y/&z?response-content-type=a%2Fb&list-type=%E3%81%82",
+   "headers": [
+    [
+     "Cache-Control",
+     "no-cache, no-store"
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Security-Token",
+     "qrEcMFsLO78uoR+OwNz6Mez2pcRMKO8NmzPeQZVmlREaTIwImzF/APOmMAfe9zYTwZ7QUhalbKPk=/EM=XLWsApPfnr3UGemBRJ1hzXFQrY273oe"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDBGCCD9OLO67WLAQF/20260801/moon-crater-7/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date;x-amz-security-token, Signature=f4514b970d3d3f0b8fb30afb5ab69c821b7d8655545700a4d542adef205cd6f2"
+    ]
+   ],
+   "access_key_id": "AKIDBGCCD9OLO67WLAQF",
+   "secret_access_key": "qSOEFG6rjP8rnLT2mksWgbYKzXtIMgAS9ic77YMp",
+   "session_token": "qrEcMFsLO78uoR+OwNz6Mez2pcRMKO8NmzPeQZVmlREaTIwImzF/APOmMAfe9zYTwZ7QUhalbKPk=/EM=XLWsApPfnr3UGemBRJ1hzXFQrY273oe",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "064-presigned-HEAD",
+   "type": "presigned",
+   "method": "HEAD",
+   "host": "s3.example.com",
+   "uri": "/(1)?q%20k=~&a=%2A&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDN8NGTSG3QN69ZRQL%2F20260801%2Fmoon-crater-7%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=534584&X-Amz-SignedHeaders=cache-control%3Bcontent-type%3Bhost%3Bx-amz-meta-empty&X-Amz-Security-Token=rH3aZWpN%2BhDfkcnNyV4lOaZFRfABBw3%3D5bXsRrykEt3%2BMV8RrAno22MdaMNOxqSyayXXWc8fDR1lbmMKs2Au6a3zHGt&X-Amz-Signature=5bf02738572e6416e601e61efb5cfbf9b6f7078679a711fc505e33f11bb228b1",
+   "headers": [
+    [
+     "Cache-Control",
+     " padded "
+    ],
+    [
+     "Content-Type",
+     "no-cache, no-store"
+    ],
+    [
+     "x-amz-meta-empty",
+     ""
+    ]
+   ],
+   "access_key_id": "AKIDN8NGTSG3QN69ZRQL",
+   "secret_access_key": "wOv7/BCLBYJVR3VIECKF5H1VEjkhEKmuOi+pVbOo",
+   "session_token": "rH3aZWpN+hDfkcnNyV4lOaZFRfABBw3=5bXsRrykEt3+MV8RrAno22MdaMNOxqSyayXXWc8fDR1lbmMKs2Au6a3zHGt",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "065-presigned-POST",
+   "type": "presigned",
+   "method": "POST",
+   "host": "s3.example.com",
+   "uri": "/a'b/photos?marker=%2A&list-type=2&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDT7MF59QTPZL4CT56%2F20260801%2Fmoon-crater-7%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=460818&X-Amz-SignedHeaders=content-type%3Bhost%3Bx-amz-meta-note&X-Amz-Security-Token=7baZZ5h88i7BFLy9D%3DCdrXwzH7SBnDsnyh8aNnCzEHhsngge%2FlqP6lTXEj%2Fg2KhjfiNbO34mxFGHlfvU9lInTuh59oRhsAPceIMWL2nCAvfXzKLY%2B1%3DtQT%2FX13vzl0w8Y2Xw2m%2B&X-Amz-Signature=46d2f5f60ed80b6b7c45f90bca7ccc967d23cf38f8709425a1dd022b9b483436",
+   "headers": [
+    [
+     "x-amz-meta-note",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "Content-Type",
+     " padded "
+    ]
+   ],
+   "access_key_id": "AKIDT7MF59QTPZL4CT56",
+   "secret_access_key": "aesqzvV03NRHhZ579pXcCRcpurTD9Eyzoxy+tID8",
+   "session_token": "7baZZ5h88i7BFLy9D=CdrXwzH7SBnDsnyh8aNnCzEHhsngge/lqP6lTXEj/g2KhjfiNbO34mxFGHlfvU9lInTuh59oRhsAPceIMWL2nCAvfXzKLY+1=tQT/X13vzl0w8Y2Xw2m+",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "066-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "s3.example.com",
+   "uri": "/%00?prefix=",
+   "headers": [
+    [
+     "x-amz-meta-empty",
+     ""
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     ""
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Security-Token",
+     "FP=CvYezlEEoi+82CUuq+YW4Ym"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID1H03THY9HMLQF93R/20260801/eu-central-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty;x-amz-meta-tag;x-amz-security-token, Signature=bb1b78c775183f3a9efa1e9d76e35dfd598d0106fbf746b7d7c4bf4b7da93927"
+    ]
+   ],
+   "access_key_id": "AKID1H03THY9HMLQF93R",
+   "secret_access_key": "N1fK7h1pjCsqvZjmaWdg+ci96+4f97dIlVWaiAT5",
+   "session_token": "FP=CvYezlEEoi+82CUuq+YW4Ym",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "067-presigned-DELETE",
+   "type": "presigned",
+   "method": "DELETE",
+   "host": "storage.internal",
+   "uri": "/=eq/$y?empty=a%2Bb&prefix=text%2Fplain&q%20k=100%25&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDEV35VY44LXVBNVD8%2F20260801%2Fmoon-crater-7%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=364731&X-Amz-SignedHeaders=cache-control%3Bcontent-type%3Bhost%3Bx-amz-meta-note&X-Amz-Signature=3029b28d0a5f918ee7a5e8d88f272a203ec5ff70287cc47683ca390370788cae",
+   "headers": [
+    [
+     "Cache-Control",
+     " padded "
+    ],
+    [
+     "Content-Type",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "x-amz-meta-note",
+     ""
+    ]
+   ],
+   "access_key_id": "AKIDEV35VY44LXVBNVD8",
+   "secret_access_key": "GghY3M+3cXRo5pZHDlOFGX+EwMAqcluTWQBUmJU5",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "068-header-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "s3.example.com",
+   "uri": "/%25/..",
+   "headers": [
+    [
+     "x-amz-meta-empty",
+     " padded "
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Security-Token",
+     "IXMwNQR9mH0=6+vGWY8ZTRjxlQ7cFqjBt1q9N88LteYaooUOZjf=QIAa2LefQZ0NBwJGy3lugsWNrcOAvz9TLDr0Iw/XPff1qd"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDTCDOTUWR7JU1FC34/20260801/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty;x-amz-security-token, Signature=db3a2d63b5228f710f8e281039932b3c7f8a6e280b17d83e1aab13054b4a9cf3"
+    ]
+   ],
+   "access_key_id": "AKIDTCDOTUWR7JU1FC34",
+   "secret_access_key": "j/dSfGw38K2vHPj/aXrLqaC9DQwNx0a5qMvDRTND",
+   "session_token": "IXMwNQR9mH0=6+vGWY8ZTRjxlQ7cFqjBt1q9N88LteYaooUOZjf=QIAa2LefQZ0NBwJGy3lugsWNrcOAvz9TLDr0Iw/XPff1qd",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "069-presigned-DELETE",
+   "type": "presigned",
+   "method": "DELETE",
+   "host": "s3.example.com:8080",
+   "uri": "/_x/%25/../a+b?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDR8WVIOQYAJL1OTEW%2F20260801%2Fmoon-crater-7%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=114394&X-Amz-SignedHeaders=host&X-Amz-Signature=ea20881a8f8275416ce511b82b980b24ad76f89f56a1c656506989fdd9b1c771",
+   "headers": [],
+   "access_key_id": "AKIDR8WVIOQYAJL1OTEW",
+   "secret_access_key": "I6Or4UVJNMoSuK064sRXtsdD7LiFG/yIqGADi20s",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "070-header-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "storage.internal",
+   "uri": "/%00/%25?response-content-type=%2A&q%20k=%2A&marker=&response-content-type=%2A",
+   "headers": [
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID7E3XM0TM8G8YSN2L/20260801/eu-central-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=896c616b24f8094e92862e86d0740b9d0dc93235fb4e91c99c6acdda2ed0405f"
+    ]
+   ],
+   "access_key_id": "AKID7E3XM0TM8G8YSN2L",
+   "secret_access_key": "CSINNTaqdUs1ELctZ0/vCFKe8R4n3Wx1m3I3W3rS",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "071-presigned-DELETE",
+   "type": "presigned",
+   "method": "DELETE",
+   "host": "storage.internal",
+   "uri": "/backup-2026/0?marker=a%2Bb&response-content-type=%2A&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKID8PYUMR4V02NBNFUR%2F20260801%2Fap-northeast-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=87078&X-Amz-SignedHeaders=host&X-Amz-Security-Token=IU1wJ5DkF0%2BGjyN0qfFxW4igKXBQNS%2Bm5gjRScpsTRgJO1KxYd5kFQqu0hl5UjFBChe8dfiCHEyS%2FIbaL%2BqWXHXHKqpG7Ef5IgreMvZghpGQ9d4%2BSnjJARHljtTBbWSnQ5i6v3%3D9L0dJz82Hdplb5xnFfEPL%2BZdSE1kAg8R1NZDUFMyFMNtAcQlfBB3g&X-Amz-Signature=bb2c85f0af399efa13c046809e6fc6517e9ada3f8b324c54fd90268cd3a3133f",
+   "headers": [],
+   "access_key_id": "AKID8PYUMR4V02NBNFUR",
+   "secret_access_key": "FnUUAkxUyz/wf4KzF5Mma/dzVLjaDezRQ6cNtPM0",
+   "session_token": "IU1wJ5DkF0+GjyN0qfFxW4igKXBQNS+m5gjRScpsTRgJO1KxYd5kFQqu0hl5UjFBChe8dfiCHEyS/IbaL+qWXHXHKqpG7Ef5IgreMvZghpGQ9d4+SnjJARHljtTBbWSnQ5i6v3=9L0dJz82Hdplb5xnFfEPL+ZdSE1kAg8R1NZDUFMyFMNtAcQlfBB3g",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "072-presigned-HEAD",
+   "type": "presigned",
+   "method": "HEAD",
+   "host": "s3.example.com",
+   "uri": "/(1)/:c/photos?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKID8BAT9A09RRYVBN3H%2F20260801%2Fap-northeast-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=288696&X-Amz-SignedHeaders=content-type%3Bhost%3Bx-amz-meta-note&X-Amz-Signature=9c8d1977c96443928669d2f8a387c0783722dc39ae6baa41cb378eb545c2ca42",
+   "headers": [
+    [
+     "Content-Type",
+     "text/plain; charset=utf-8"
+    ],
+    [
+     "x-amz-meta-note",
+     " padded "
+    ]
+   ],
+   "access_key_id": "AKID8BAT9A09RRYVBN3H",
+   "secret_access_key": "V2PVPGJZG/g84pMM47jO44nVoLTwMeXTmrapIC6B",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "073-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com:8080",
+   "uri": "/.?a=text%2Fplain&marker=~",
+   "headers": [
+    [
+     "X-Amz-Meta-Tag",
+     "a  b   c"
+    ],
+    [
+     "x-amz-meta-note",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDCZE7DUIZ8P46KL4T/20260801/eu-central-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-note;x-amz-meta-tag, Signature=c108a576b45d60d2dad4d329a5daf7492588fafb03a19270f944bdb2f380611e"
+    ]
+   ],
+   "access_key_id": "AKIDCZE7DUIZ8P46KL4T",
+   "secret_access_key": "WaXTMZt8NNpwBo8SSKK6VnGEI66dVRPhC1ZCiRgf",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "074-presigned-HEAD",
+   "type": "presigned",
+   "method": "HEAD",
+   "host": "storage.internal",
+   "uri": "/.../&z/../%20?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDX7EV5SQUTGRCEEBP%2F20260801%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=530864&X-Amz-SignedHeaders=content-type%3Bhost%3Bx-amz-meta-empty%3Bx-amz-meta-note&X-Amz-Security-Token=%3Dk9WCnJ34fE0U1BB7Vv6ZjWXlOystt7N7NRTyq1LXfrQkA320YuE4iuRp5oYKGH0Q9q70VOJybvKrypDuwesTOiR0PuiR54sogZ%2Fqz3IabQdRi2NYAD08PTyn4rnIAnLGL4iYyNdUFWVdqkSvpQI10NU5%2FIDddvKf%2BmLHPcqvGPKkDXhvp7d2KVHgQ&X-Amz-Signature=ea7e3d17034f1aa53c33fb83d87419363ad2413e66f5b3d3a2cb04088ee0f3ad",
+   "headers": [
+    [
+     "x-amz-meta-note",
+     "hello world"
+    ],
+    [
+     "Content-Type",
+     " padded "
+    ],
+    [
+     "x-amz-meta-empty",
+     "no-cache, no-store"
+    ]
+   ],
+   "access_key_id": "AKIDX7EV5SQUTGRCEEBP",
+   "secret_access_key": "X4IIRU+p206GgvH4AtQaP4FbGU4h52evT3WuTe9b",
+   "session_token": "=k9WCnJ34fE0U1BB7Vv6ZjWXlOystt7N7NRTyq1LXfrQkA320YuE4iuRp5oYKGH0Q9q70VOJybvKrypDuwesTOiR0PuiR54sogZ/qz3IabQdRi2NYAD08PTyn4rnIAnLGL4iYyNdUFWVdqkSvpQI10NU5/IDddvKf+mLHPcqvGPKkDXhvp7d2KVHgQ",
+   "region": "us-east-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "075-presigned-POST",
+   "type": "presigned",
+   "method": "POST",
+   "host": "storage.internal",
+   "uri": "/_x/%25/!x?empty=%2A&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDM7TDXQ6ZZ185W773%2F20260801%2Feu-central-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=87396&X-Amz-SignedHeaders=cache-control%3Bhost%3Bx-amz-meta-note&X-Amz-Signature=ba2f85838f627732e2c7b72648d151f6ebc9bc6c73bc2774603542d2cec3c900",
+   "headers": [
+    [
+     "x-amz-meta-note",
+     "hello world"
+    ],
+    [
+     "Cache-Control",
+     ""
+    ]
+   ],
+   "access_key_id": "AKIDM7TDXQ6ZZ185W773",
+   "secret_access_key": "BUQKXvwahur0K9dSev9NglJDbhw2BGyOt03PkW+5",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "076-presigned-HEAD",
+   "type": "presigned",
+   "method": "HEAD",
+   "host": "s3.example.com",
+   "uri": "/%00/file.txt/%E3%81%82/trailing.?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKID2EJKFJNCJDG6IRA3%2F20260801%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=468872&X-Amz-SignedHeaders=content-type%3Bhost&X-Amz-Signature=2d4b792fabdc723d0520dc1ae51f2cd3dd375989e4d9238edfdc36a37829b0f6",
+   "headers": [
+    [
+     "Content-Type",
+     "a  b   c"
+    ]
+   ],
+   "access_key_id": "AKID2EJKFJNCJDG6IRA3",
+   "secret_access_key": "kfH/3OVPbc0lPHNro/DvqKY+CCK9zZnTFkHyOFsf",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "077-presigned-DELETE",
+   "type": "presigned",
+   "method": "DELETE",
+   "host": "storage.internal",
+   "uri": "/(1)/:c?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKID6WNXM8VB1ASU4JSZ%2F20260801%2Fmoon-crater-7%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=217971&X-Amz-SignedHeaders=host&X-Amz-Signature=69917575958ed9fcde80a1c270c14e464fb527da0c94a5602de726b82f8b49bd",
+   "headers": [],
+   "access_key_id": "AKID6WNXM8VB1ASU4JSZ",
+   "secret_access_key": "MvtRFRpMbtLFZm5oksohQaUpyz9F+aMNuHPgG8ft",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "078-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com",
+   "uri": "/!x",
+   "headers": [
+    [
+     "Content-Type",
+     "no-cache, no-store"
+    ],
+    [
+     "x-amz-meta-note",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Security-Token",
+     "FCFUDU4NOEj42qmcfsLvzWQzc6Ch9eVI63Ksno6uh3fiFmitlVm=vvIvfQCTLmlzYz++zRzP"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDZE1BIXXU1UKWEGID/20260801/eu-central-1/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-note;x-amz-security-token, Signature=52da9283b95888c309cdc0d670a3b20501ad00d8b1cff0cfe1409aab8f837a9f"
+    ]
+   ],
+   "access_key_id": "AKIDZE1BIXXU1UKWEGID",
+   "secret_access_key": "QMzjbhCRxiGnJ3pchD3nLcwl28ZTUP3lM1jr8DIX",
+   "session_token": "FCFUDU4NOEj42qmcfsLvzWQzc6Ch9eVI63Ksno6uh3fiFmitlVm=vvIvfQCTLmlzYz++zRzP",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "079-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "storage.internal",
+   "uri": "/%00/backup-2026?q%20k=photos%2F&response-content-type=photos%2F&marker=photos%2F",
+   "headers": [
+    [
+     "x-amz-meta-empty",
+     "no-cache, no-store"
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDL2UAC9670ML9WDSL/20260801/eu-central-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty, Signature=94c7f9f6cceb534171bab4ac2930e969f1bbc561159eec93dd87345f55966be5"
+    ]
+   ],
+   "access_key_id": "AKIDL2UAC9670ML9WDSL",
+   "secret_access_key": "eFee04UcqlZt3xgso00FC9RtxVRUuGWNnxsNVrAW",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "080-presigned-HEAD",
+   "type": "presigned",
+   "method": "HEAD",
+   "host": "storage.internal",
+   "uri": "/a'b?prefix=photos%2F&empty=&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKID00G4LSW7YXDWZUN0%2F20260801%2Feu-central-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=339525&X-Amz-SignedHeaders=host%3Bx-amz-meta-note&X-Amz-Security-Token=ktNEwH2ONEgOU4LXw8v0ItIF5kWEdeJVUsd2xY43BvJD8vZsBOxWOodh%2FrSuTzpUMbqm6yQoxXLipth9zuD&X-Amz-Signature=b10172ad778352caa568c07af020fe409430ad1c615c9f5ee01a2b46ab9880a6",
+   "headers": [
+    [
+     "x-amz-meta-note",
+     "no-cache, no-store"
+    ]
+   ],
+   "access_key_id": "AKID00G4LSW7YXDWZUN0",
+   "secret_access_key": "iQIedNVQ7ubb0BVXMpIydmx4pqWOjeKf4AairRQs",
+   "session_token": "ktNEwH2ONEgOU4LXw8v0ItIF5kWEdeJVUsd2xY43BvJD8vZsBOxWOodh/rSuTzpUMbqm6yQoxXLipth9zuD",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "081-presigned-PUT",
+   "type": "presigned",
+   "method": "PUT",
+   "host": "s3.example.com:8080",
+   "uri": "/%E3%81%82/%20/a+b?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDNNNI4J1TE900Z4EM%2F20260801%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=441235&X-Amz-SignedHeaders=cache-control%3Bhost%3Bx-amz-meta-note%3Bx-amz-meta-tag&X-Amz-Signature=22ec9a87b23e7d8ae1e4918e3bcab9e10a86b07f489c58486dc773b2b8d944f9",
+   "headers": [
+    [
+     "X-Amz-Meta-Tag",
+     " padded "
+    ],
+    [
+     "x-amz-meta-note",
+     " padded "
+    ],
+    [
+     "Cache-Control",
+     ""
+    ]
+   ],
+   "access_key_id": "AKIDNNNI4J1TE900Z4EM",
+   "secret_access_key": "KelqGDspQR+LXP4jGB0XcL1xCEWsTUWDeUQ7La7G",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "082-presigned-GET",
+   "type": "presigned",
+   "method": "GET",
+   "host": "storage.internal",
+   "uri": "/$y/&z?list-type=100%25&a=text%2Fplain&q%20k=%E3%81%82&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDKK4CCQPYKFLAJY01%2F20260801%2Fap-northeast-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=482169&X-Amz-SignedHeaders=content-type%3Bhost&X-Amz-Security-Token=%2BIqSC%2Bpz0xbwiqT%2BZHrk3aFy3KhgPVEwU7%2BfprVHTyyVt0erUWOToHuwCcXx4iLn%3D5S7Plgn%2F%2FxOL%2BYdnXcsx6V24fgOmDshOQ2frJyhGbmBGYdtA2fJGwYvaYIvFgSEtrPR4AZ2ubN1KajL%2BK1cJpF3RLs302%3DdnUQDCV2%2FnR2Inry&X-Amz-Signature=2f9e35276ab11f24bfe5c193da7d1c8cfe6c78044b9d0883ac9e1a07384cac21",
+   "headers": [
+    [
+     "Content-Type",
+     "text/plain; charset=utf-8"
+    ]
+   ],
+   "access_key_id": "AKIDKK4CCQPYKFLAJY01",
+   "secret_access_key": "n5PEwXkEog+6ClhND8Kn7fqYNakS6gYJ0v7tvCYr",
+   "session_token": "+IqSC+pz0xbwiqT+ZHrk3aFy3KhgPVEwU7+fprVHTyyVt0erUWOToHuwCcXx4iLn=5S7Plgn//xOL+YdnXcsx6V24fgOmDshOQ2frJyhGbmBGYdtA2fJGwYvaYIvFgSEtrPR4AZ2ubN1KajL+K1cJpF3RLs302=dnUQDCV2/nR2Inry",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "083-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com:8080",
+   "uri": "/%00?a=%E3%81%82&prefix=100%25&response-content-type=text%2Fplain",
+   "headers": [
+    [
+     "x-amz-meta-empty",
+     ""
+    ],
+    [
+     "x-amz-meta-note",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "a  b   c"
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Security-Token",
+     "Aw2BS23=YKVcwggKheJ/KWy3"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDPSR88G3MZGEF5Z3M/20260801/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty;x-amz-meta-note;x-amz-meta-tag;x-amz-security-token, Signature=50ccd8a23a5904fa42cbc639c949686b523df7a6a4818654aeda4fd006d62659"
+    ]
+   ],
+   "access_key_id": "AKIDPSR88G3MZGEF5Z3M",
+   "secret_access_key": "vGtsTJ6HjBcwqh7XHj3wGlAn1zgOPGHZTa7TJIU8",
+   "session_token": "Aw2BS23=YKVcwggKheJ/KWy3",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "084-presigned-PUT",
+   "type": "presigned",
+   "method": "PUT",
+   "host": "storage.internal",
+   "uri": "/%E3%81%82//./~user?list-type=2&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDT2WD945CQ77ZP9WR%2F20260801%2Fmoon-crater-7%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=80079&X-Amz-SignedHeaders=host&X-Amz-Signature=53c1c4762be056227840562ff889891f032bea0d5ff95e9cf7ea5c686ead8cb2",
+   "headers": [],
+   "access_key_id": "AKIDT2WD945CQ77ZP9WR",
+   "secret_access_key": "QaBzBna3QH3abWnmZhqX4peMRawIN0Y7SSv5z7Ae",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "085-presigned-HEAD",
+   "type": "presigned",
+   "method": "HEAD",
+   "host": "storage.internal",
+   "uri": "/@h/=eq/-lead/-lead?list-type=&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKID3OL3Y3UKDIHWH19T%2F20260801%2Feu-central-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=125988&X-Amz-SignedHeaders=content-type%3Bhost%3Bx-amz-meta-empty&X-Amz-Signature=e458896ec51a2adcddfe39ec843fec81926e6a3aa9d286d64990d618a4d8dd8e",
+   "headers": [
+    [
+     "x-amz-meta-empty",
+     ""
+    ],
+    [
+     "Content-Type",
+     "text/plain; charset=utf-8"
+    ]
+   ],
+   "access_key_id": "AKID3OL3Y3UKDIHWH19T",
+   "secret_access_key": "4OfEbUKyuTlDdMn7eVXEbxOQxEsME3M+6T8HYzsW",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "086-presigned-PUT",
+   "type": "presigned",
+   "method": "PUT",
+   "host": "storage.internal",
+   "uri": "/~user/-lead?list-type=a%2Bb&empty=photos%2F&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDS8QFBR9D2S9NZITP%2F20260801%2Fap-northeast-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=283900&X-Amz-SignedHeaders=content-type%3Bhost%3Bx-amz-meta-empty&X-Amz-Signature=a14e7ddc22b2a0d4030c800305afd955623b0548c7645877dc8e2f5b851f8d1c",
+   "headers": [
+    [
+     "x-amz-meta-empty",
+     "text/plain; charset=utf-8"
+    ],
+    [
+     "Content-Type",
+     " padded "
+    ]
+   ],
+   "access_key_id": "AKIDS8QFBR9D2S9NZITP",
+   "secret_access_key": "4Q/1Pdk8YeF9wiAEWWx+RvdkFJWTcsNxiBv8qVpJ",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "087-presigned-GET",
+   "type": "presigned",
+   "method": "GET",
+   "host": "storage.internal",
+   "uri": "/?marker=%E3%81%82&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDWLCKU0B390N6GU52%2F20260801%2Fmoon-crater-7%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=85034&X-Amz-SignedHeaders=cache-control%3Bhost%3Bx-amz-meta-note&X-Amz-Security-Token=JEb54Su14Wkj4QJYth4JLg5sRWg2&X-Amz-Signature=40b9b7e38297ab3f2d92c1e67b01ad866c699d265366a25c725232aa0254f4e0",
+   "headers": [
+    [
+     "Cache-Control",
+     "no-cache, no-store"
+    ],
+    [
+     "x-amz-meta-note",
+     "no-cache, no-store"
+    ]
+   ],
+   "access_key_id": "AKIDWLCKU0B390N6GU52",
+   "secret_access_key": "35l5CPsorWqeEpeEJDSP0wf2X3LBXKFAGvvZu4jP",
+   "session_token": "JEb54Su14Wkj4QJYth4JLg5sRWg2",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "088-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com:8080",
+   "uri": "/trailing./%25/(1)?list-type=%E3%81%82",
+   "headers": [
+    [
+     "Content-Type",
+     " padded "
+    ],
+    [
+     "Cache-Control",
+     "no-cache, no-store"
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDPPUD52E9ZLE8564W/20260801/eu-central-1/s3/aws4_request, SignedHeaders=cache-control;content-type;host;x-amz-content-sha256;x-amz-date, Signature=2c9ca001ead4de75f6bf8a2e0639c6338cf7dd5a5fac9d95054af32857eaa382"
+    ]
+   ],
+   "access_key_id": "AKIDPPUD52E9ZLE8564W",
+   "secret_access_key": "ENHdIU62gxgrpzwUmRBQK3jIUvPRb5xPzO7ChxYg",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "089-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com:8080",
+   "uri": "/a+b/backup-2026?empty=~",
+   "headers": [
+    [
+     "x-amz-meta-empty",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "a  b   c"
+    ],
+    [
+     "Content-Type",
+     ""
+    ],
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Security-Token",
+     "NkEWb8rnqyCPvFQZzSWO2wHhIlclO/IV2U7oIotUuXoYNwAtOrOBlRJlLNrWb7oD"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDUXPK4NZOTMXOTO0O/20260801/moon-crater-7/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty;x-amz-meta-tag;x-amz-security-token, Signature=e3563fa122181168a57261e925330dc42a4c7bde2cd1260a23bb1091ed306e74"
+    ]
+   ],
+   "access_key_id": "AKIDUXPK4NZOTMXOTO0O",
+   "secret_access_key": "3mGL3oC3fji57BJ/AnORa46beM9I1ClAmJi5jkUJ",
+   "session_token": "NkEWb8rnqyCPvFQZzSWO2wHhIlclO/IV2U7oIotUuXoYNwAtOrOBlRJlLNrWb7oD",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "090-presigned-DELETE",
+   "type": "presigned",
+   "method": "DELETE",
+   "host": "storage.internal",
+   "uri": "/a'b?response-content-type=100%25&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDG0J5IZKWCR1D28LX%2F20260801%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=331266&X-Amz-SignedHeaders=content-type%3Bhost%3Bx-amz-meta-empty&X-Amz-Security-Token=5R93f1FuM2AczjXPX6vGMAyugduqjYusbhDawsZ7k%3DzjJODAL64%2FjbzszzN2gp8NUeZLNPvIs8H5D5yiGGQmJIJG6Zl85GIhwHmEraVV8%2BRh8WY2cZT2KUKgrvv6z%2FU5VjUXAjg8rjCXDXw4za3y7Q8Q%3DAdoJifB%3D&X-Amz-Signature=6d3aa7b74c2a5bb761991b7703f119c857e64acf1d2a52bab0c06f8628a615a0",
+   "headers": [
+    [
+     "x-amz-meta-empty",
+     "hello world"
+    ],
+    [
+     "Content-Type",
+     "text/plain; charset=utf-8"
+    ]
+   ],
+   "access_key_id": "AKIDG0J5IZKWCR1D28LX",
+   "secret_access_key": "3ODHg/D0ZW3EJDbs8IAdrcEZxEnDxD2aA21sJjEE",
+   "session_token": "5R93f1FuM2AczjXPX6vGMAyugduqjYusbhDawsZ7k=zjJODAL64/jbzszzN2gp8NUeZLNPvIs8H5D5yiGGQmJIJG6Zl85GIhwHmEraVV8+Rh8WY2cZT2KUKgrvv6z/U5VjUXAjg8rjCXDXw4za3y7Q8Q=AdoJifB=",
+   "region": "us-east-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "091-presigned-HEAD",
+   "type": "presigned",
+   "method": "HEAD",
+   "host": "storage.internal",
+   "uri": "/%7F/..//a*b?empty=~&a=%2A&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDWJZDZ5PHKOU1RG3J%2F20260801%2Fap-northeast-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=58393&X-Amz-SignedHeaders=host%3Bx-amz-meta-empty&X-Amz-Security-Token=DaWKRu3MM%2FjLNhaRcAmKnqzs1av3K%3DqvDnwr83d3ojNX2WqkiYaOv%3DW2%2B0x7zh3YLyR%3D9LgCeCigAOcN&X-Amz-Signature=894865612a38f681352279b2cb830e078f87abcabf226e984a8f87e69f24aa96",
+   "headers": [
+    [
+     "x-amz-meta-empty",
+     "no-cache, no-store"
+    ]
+   ],
+   "access_key_id": "AKIDWJZDZ5PHKOU1RG3J",
+   "secret_access_key": "5tggHMIUgDbNxnEhXcEbwDEyEFADFiBZDvCBctE5",
+   "session_token": "DaWKRu3MM/jLNhaRcAmKnqzs1av3K=qvDnwr83d3ojNX2WqkiYaOv=W2+0x7zh3YLyR=9LgCeCigAOcN",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "092-presigned-DELETE",
+   "type": "presigned",
+   "method": "DELETE",
+   "host": "s3.example.com",
+   "uri": "/a?a=%E3%81%82&q%20k=a%2Fb&empty=100%25&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKID2QFXEZLD6RKMT1UJ%2F20260801%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=206797&X-Amz-SignedHeaders=host%3Bx-amz-meta-empty&X-Amz-Security-Token=1Wz8AoyMNDFmfjEiKfnqu8qSv%3DR%2Ff%2FdNiv5HF%3DPWR4Z0T2eP2rKazaIXmX2ejs5IEWgxEzx0QNhL&X-Amz-Signature=82fb81b5471818591164145d78584f2ab9ed3b217cf67b148575501fbfc7a7d8",
+   "headers": [
+    [
+     "x-amz-meta-empty",
+     ""
+    ]
+   ],
+   "access_key_id": "AKID2QFXEZLD6RKMT1UJ",
+   "secret_access_key": "vtmFlpYqvX11lCHJ5UKmPmX+RRx4E62RAyP/hq6r",
+   "session_token": "1Wz8AoyMNDFmfjEiKfnqu8qSv=R/f/dNiv5HF=PWR4Z0T2eP2rKazaIXmX2ejs5IEWgxEzx0QNhL",
+   "region": "us-east-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "093-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "s3.example.com",
+   "uri": "/photos/%2F/!x/backup-2026?list-type=2&response-content-type=2",
+   "headers": [
+    [
+     "X-Amz-Date",
+     "20260801T120000Z"
+    ],
+    [
+     "X-Amz-Content-SHA256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDUHXL79MDADQ2BJDU/20260801/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=3543da0fe25316894e4e936c4b39af77adc8e4b9e210bcf72a97d8febaedf34f"
+    ]
+   ],
+   "access_key_id": "AKIDUHXL79MDADQ2BJDU",
+   "secret_access_key": "ouXGRxhFdh83zYDKr/eFkBK1AtoOX5i5MxiGz1Fu",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "094-presigned-DELETE",
+   "type": "presigned",
+   "method": "DELETE",
+   "host": "s3.example.com:8080",
+   "uri": "/=eq/%7F/:c?q%20k=%2A&prefix=2&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIDX22PZYQJLMM4AQT4%2F20260801%2Fmoon-crater-7%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=218096&X-Amz-SignedHeaders=cache-control%3Bhost&X-Amz-Signature=0c49da3f7d88bf2e1371ac904869d4bcc40882ee9629816607e0be7e2207438f",
+   "headers": [
+    [
+     "Cache-Control",
+     " padded "
+    ]
+   ],
+   "access_key_id": "AKIDX22PZYQJLMM4AQT4",
+   "secret_access_key": "3uRvlD/ETEx/Y9FpfWva1arkxxpwLRK5c6gSBNOx",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "095-presigned-HEAD",
+   "type": "presigned",
+   "method": "HEAD",
+   "host": "s3.example.com",
+   "uri": "/%25/photos/=eq/=eq?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKID3VBF8AZF3FGOLAUO%2F20260801%2Fmoon-crater-7%2Fs3%2Faws4_request&X-Amz-Date=20260801T120000Z&X-Amz-Expires=69959&X-Amz-SignedHeaders=host%3Bx-amz-meta-empty%3Bx-amz-meta-note&X-Amz-Signature=540bd3366d9f8373b3cebe70933dcb6ce4c6afdd82c14a85b15db9bf45692b7e",
+   "headers": [
+    [
+     "x-amz-meta-empty",
+     " padded "
+    ],
+    [
+     "x-amz-meta-note",
+     ""
+    ]
+   ],
+   "access_key_id": "AKID3VBF8AZF3FGOLAUO",
+   "secret_access_key": "1SPEt4YlN+ROhUqpx7sgjMsPIafO4CJEsXIAHy8z",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-01T12:00:00Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  }
+ ]
+}
