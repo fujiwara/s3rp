@@ -17,7 +17,7 @@ import (
 
 // maxXMLBodySize limits XML request bodies (CompleteMultipartUpload,
 // DeleteObjects); the maximum entries of both fit well within this.
-const maxXMLBodySize = 16 << 20
+const maxXMLBodySize = 16 * mib
 
 func (g *Gateway) createMultipartUpload(c *opCtx) error {
 	w, r, rt, key := c.w, c.r, c.rt, c.key

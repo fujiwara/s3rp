@@ -21,6 +21,13 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
+// Byte-size units, so size constants read with their unit instead of as a
+// bare shift.
+const (
+	kib = 1 << 10
+	mib = 1 << 20
+)
+
 // Gateway serves the S3 API: it verifies the SigV4 signature of each request
 // with the front-side access key, authorizes the operation against the bucket
 // and user policies, and re-executes it against the bucket's backend.

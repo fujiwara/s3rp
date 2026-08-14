@@ -28,7 +28,7 @@ import (
 const (
 	// maxPostFieldBytes bounds one form field value. The largest legitimate
 	// field is the base64 policy, capped separately at 20 KB decoded.
-	maxPostFieldBytes = 32 << 10
+	maxPostFieldBytes = 32 * kib
 	// maxPostFields bounds the number of form fields before the file.
 	maxPostFields = 64
 )
