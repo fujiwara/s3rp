@@ -100,6 +100,14 @@ func FuzzChunkedReaderRoundtrip(f *testing.F) {
 		if err == nil && !bytes.Equal(decoded, payload) {
 			t.Fatalf("stream with bit %d of byte %d flipped accepted with altered payload", mutBit%8, pos)
 		}
+
+		// and no truncation may be accepted with anything but the full
+		// payload — the terminal chunk authenticates the end of the stream
+		r = sigv4.NewChunkedReader(bytes.NewReader(enc[:pos]), vr, "", int64(len(payload)))
+		decoded, err = io.ReadAll(r)
+		if err == nil && !bytes.Equal(decoded, payload) {
+			t.Fatalf("stream truncated to %d of %d bytes accepted with altered payload", pos, len(enc))
+		}
 	})
 }
 
@@ -138,6 +146,12 @@ func FuzzChunkedReaderTrailerRoundtrip(f *testing.F) {
 		decoded, err = io.ReadAll(r)
 		if err == nil && !bytes.Equal(decoded, payload) {
 			t.Fatalf("stream with bit %d of byte %d flipped accepted with altered payload", mutBit%8, pos)
+		}
+
+		r = sigv4.NewChunkedReader(bytes.NewReader(enc[:pos]), vr, alg, int64(len(payload)))
+		decoded, err = io.ReadAll(r)
+		if err == nil && !bytes.Equal(decoded, payload) {
+			t.Fatalf("stream truncated to %d of %d bytes accepted with altered payload", pos, len(enc))
 		}
 	})
 }

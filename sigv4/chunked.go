@@ -193,8 +193,41 @@ func (cr *chunkedReader) Read(p []byte) (int, error) {
 		if verr := cr.verifyChunk(); verr != nil {
 			return 0, cr.fail(verr)
 		}
+		// The declared decoded length is exhausted, so the terminal chunk
+		// and the trailers must be consumed and verified now, in the same
+		// Read: the consumer is entitled to stop at the decoded length (the
+		// SDK bounds the body by ContentLength), so a following Read that
+		// would otherwise do this may never come.
+		if cr.undecoded == 0 {
+			if terr := cr.readTerminal(); terr != nil {
+				return 0, cr.fail(terr)
+			}
+		}
 	}
 	return n, nil
+}
+
+// readTerminal consumes the zero-size terminal chunk and the trailers after
+// the last data chunk, verifying both, and marks the stream complete.
+func (cr *chunkedReader) readTerminal() error {
+	if err := cr.readCRLF(); err != nil {
+		return err
+	}
+	size, err := cr.readChunkHeader()
+	if err != nil {
+		return err
+	}
+	if size != 0 {
+		return fmt.Errorf("chunk size %d exceeds the remaining x-amz-decoded-content-length 0", size)
+	}
+	if err := cr.verifyChunk(); err != nil {
+		return err
+	}
+	if err := cr.discardTrailers(); err != nil {
+		return err
+	}
+	cr.eof = true
+	return nil
 }
 
 // truncateForError bounds a client-controlled value quoted in an error, so
