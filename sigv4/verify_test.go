@@ -149,3 +149,30 @@ func TestIsStreaming(t *testing.T) {
 		}
 	}
 }
+
+// A key may begin with a slash, so a presigned URL's path may begin with
+// "//". The verifier used to re-parse the re-signed URI — scheme-less, so
+// url.Parse read "//key/..." as an authority — and answered InternalError.
+// Found by the botocore cross-check.
+func TestVerifyPresignedLeadingSlashKey(t *testing.T) {
+	const target = "http://s3.example.com//spaced%20key/a?X-Amz-Expires=300"
+	req, err := http.NewRequest("GET", target, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer := v4.NewSigner(func(o *v4.SignerOptions) { o.DisableURIPathEscaping = true })
+	creds := aws.Credentials{AccessKeyID: testAccessKeyID, SecretAccessKey: testSecret}
+	signedURI, _, err := signer.PresignHTTP(context.Background(), creds, req, "UNSIGNED-PAYLOAD", "s3", "us-east-1", testTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sr := httptest.NewRequest("GET", signedURI, nil)
+	sr.Host = req.Host
+	got, s3e := newVerifier().Verify(sr, lookup)
+	if s3e != nil {
+		t.Fatalf("presigned URL with a leading-slash key refused: %v", s3e)
+	}
+	if got.AccessKeyID != testAccessKeyID {
+		t.Errorf("unexpected access key %q", got.AccessKeyID)
+	}
+}

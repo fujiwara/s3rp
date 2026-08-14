@@ -438,11 +438,15 @@ func (v *Verifier) verifyPresignedRequest(r *http.Request, lookup SecretLookup) 
 	if err != nil {
 		return nil, s3err.Internal(err, "signing failed")
 	}
-	signedURL, err := url.Parse(signedURI)
+	// Only the query is wanted from the signed URI, so cut it out instead of
+	// re-parsing the whole URI: the clone has no scheme or host, and a path
+	// starting with "//" (a key beginning with a slash) would make url.Parse
+	// read the URI as scheme-relative and fail on the "authority".
+	_, rawSignedQuery, _ := strings.Cut(signedURI, "?")
+	signedQuery, err := url.ParseQuery(rawSignedQuery)
 	if err != nil {
 		return nil, s3err.Internal(err, "signing failed")
 	}
-	signedQuery := signedURL.Query()
 	sigOK := subtle.ConstantTimeCompare(
 		[]byte(signedQuery.Get("X-Amz-Signature")), []byte(query.Get("X-Amz-Signature"))) == 1
 	headersOK := signedQuery.Get("X-Amz-SignedHeaders") == query.Get("X-Amz-SignedHeaders")
