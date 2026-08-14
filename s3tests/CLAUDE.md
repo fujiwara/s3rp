@@ -3,7 +3,10 @@
 How to read a suite run and, in particular, how to find operations that
 are *implementable but not implemented* — as opposed to deliberately
 refused. README.md here covers running the suite; docs/s3-tests.md holds
-the curated baseline report.
+the classification rationale and the dated history, **not** current
+numbers (those live in the latest run's report). Update it only when a
+classification decision changes — same commit as the `triage.py` rule
+change — never just because a re-run moved the counts.
 
 ## Where results are
 
