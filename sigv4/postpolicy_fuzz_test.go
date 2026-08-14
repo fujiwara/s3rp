@@ -88,6 +88,21 @@ func signPostFields(fields map[string]string, startsWith map[string]bool, expira
 	fields["x-amz-signature"] = signPostPolicy(testSecret, fuzzPostDate, fuzzPostRegion, b64)
 }
 
+// freshPostField returns a field name the form does not already carry.
+// Absence from a form that verifies is absence from its policy: every
+// condition is checked against the form and fails on a missing field, so a
+// verified form carries every field its policy names — a name it lacks is
+// therefore covered by nothing, whatever the document says.
+func freshPostField(fields map[string]string) string {
+	name := "zz-uncovered"
+	for {
+		if _, taken := fields[name]; !taken {
+			return name
+		}
+		name += "z"
+	}
+}
+
 // authPostFields is the authentication the driver always supplies, matching
 // testTime and the key the shared lookup knows.
 func authPostFields() map[string]string {
@@ -152,8 +167,10 @@ func FuzzVerifyPostRoundtrip(f *testing.F) {
 		case 1:
 			mut["policy"] = flipBit(mut["policy"], mutPos, mutBit)
 		case 2:
-			// a field no condition covers: the two-way rule must refuse it
-			mut["zz-uncovered"] = "anything"
+			// a field no condition covers — the form above verified, so a
+			// name it lacks is named by no condition: the two-way rule must
+			// refuse it
+			mut[freshPostField(fields)] = "anything"
 		case 3:
 			// break a value an eq condition pins; starts-with fields and the
 			// empty value are skipped, appending cannot break either
@@ -192,10 +209,14 @@ func mutPos2(pos, n int) int {
 }
 
 // FuzzVerifyPostDocument signs an arbitrary document, which is the only way
-// to reach the policy parser at all, and asserts what must hold however the
-// document reads: an uncovered form field is always refused, the parser
-// never panics, and a verified policy always reports a usable length range.
+// to reach the policy parser at all: every input exercises the parser, and
+// the documents that do verify must neither report an unusable length range
+// nor accept a form field their policy never named.
 func FuzzVerifyPostDocument(f *testing.F) {
+	// documents that cover exactly the authentication fields, so the form
+	// verifies and the extra-field property below is reached
+	f.Add(`{"expiration":"2026-08-01T13:00:00Z","conditions":[["starts-with","$x-amz-credential",""],["starts-with","$x-amz-algorithm",""],["starts-with","$x-amz-date",""]]}`)
+	f.Add(`{"expiration":"2026-08-01T13:00:00Z","conditions":[{"x-amz-credential":"` + testAccessKeyID + `/20260801/us-east-1/s3/aws4_request"},{"x-amz-algorithm":"AWS4-HMAC-SHA256"},{"x-amz-date":"20260801T120000Z"},["content-length-range",0,100]]}`)
 	f.Add(`{"expiration":"2026-08-01T13:00:00Z","conditions":[{"key":"a"}]}`)
 	f.Add(`{"expiration":"2026-08-01T13:00:00Z","conditions":[["starts-with","$key",""],["content-length-range",0,100]]}`)
 	f.Add(`{"expiration":"2026-08-01T13:00:00Z","conditions":[["content-length-range",-1,-2]]}`)
@@ -214,20 +235,25 @@ func FuzzVerifyPostDocument(f *testing.F) {
 		base["x-amz-signature"] = signPostPolicy(testSecret, fuzzPostDate, fuzzPostRegion, b64)
 		r := httptest.NewRequest("POST", "http://s3.example.com/bucket", nil)
 
-		// whatever the document says, a field it cannot have covered is
-		// refused: a signed policy must not be replayable with extras
-		withExtra := maps.Clone(base)
-		withExtra["zz-uncovered"] = "anything"
-		if _, _, s3e := postVerifier(testTime).VerifyPost(r, withExtra, lookup); s3e == nil {
-			t.Fatalf("uncovered field accepted for document %q", doc)
+		// every document runs through the parser here — the panic surface
+		_, pp, s3e := postVerifier(testTime).VerifyPost(r, maps.Clone(base), lookup)
+		if s3e != nil {
+			// a refused form says nothing about the extra field below: a
+			// condition on a field the form lacks refuses it, and supplying
+			// that very field could satisfy the condition instead
+			return
 		}
-
-		// and the plain form must not panic; if it verifies, the range it
-		// reports has to be usable
-		_, pp, s3e := postVerifier(testTime).VerifyPost(r, base, lookup)
-		if s3e == nil && pp.MinLength > pp.MaxLength {
+		if pp.MinLength > pp.MaxLength {
 			t.Fatalf("verified policy reports an empty range [%d, %d] for document %q",
 				pp.MinLength, pp.MaxLength, doc)
+		}
+		// this form verified, so its policy names no field it lacks: adding
+		// one must be refused, whatever the document says — a signed policy
+		// must not be replayable with extras bolted on
+		withExtra := maps.Clone(base)
+		withExtra[freshPostField(base)] = "anything"
+		if _, _, s3e := postVerifier(testTime).VerifyPost(r, withExtra, lookup); s3e == nil {
+			t.Fatalf("uncovered field accepted for document %q", doc)
 		}
 	})
 }
