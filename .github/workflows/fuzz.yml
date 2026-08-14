@@ -73,6 +73,10 @@ jobs:
           go-version: '1.26'
 
       - name: Generate vectors with the latest botocore
+        # explicit bash so pipefail is on: without it a generator failure
+        # would vanish into tee's exit status and the replay would pass on
+        # the committed corpus alone, testing nothing fresh
+        shell: bash
         run: |
           python3 -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install --quiet botocore
@@ -85,6 +89,7 @@ jobs:
 
       - name: Replay against the verifier
         run: |
+          test -s "$S3RP_CROSSCHECK_DIR/generated.json" # fresh vectors exist
           go test ./sigv4 -run TestCrossCheckBotocore
         env:
           S3RP_CROSSCHECK_DIR: ${{ runner.temp }}/crosscheck
