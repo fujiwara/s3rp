@@ -51,7 +51,12 @@ PATH_TOKENS = [
 # differently raw vs decoded (?a=%E3%81%82&a=~) verify under one SDK's
 # scheme and not the other. No mainstream client serializer emits those
 # forms — every S3 SDK sends the canonical encoding — and s3rp sides with
-# its own signer, aws-sdk-go-v2.
+# its own signer, aws-sdk-go-v2. Measured against real implementations in
+# docs/sigv4-canonicalization.md (probe.py next to this file): AWS,
+# versitygw and RGW all reject the raw-reserved-character forms too; the
+# duplicate-key ordering is where the ecosystem disagrees, and s3rp's one
+# accepted ordering sits between versitygw (rejects all) and AWS
+# (accepts all).
 QUERY_KEYS = ["prefix", "list-type", "marker", "a", "response-content-type", "q k", "empty"]
 QUERY_VALUES = ["", "2", "photos/", "a/b", "あ", "text/plain", "a+b", "*", "~", "100%", "a b"]
 HEADER_NAMES = ["x-amz-meta-note", "X-Amz-Meta-Tag", "Content-Type", "Cache-Control", "x-amz-meta-empty"]
