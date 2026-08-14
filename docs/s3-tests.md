@@ -61,7 +61,7 @@ below has since been taught back into its rules).
 
 | category | tests |
 |---|---:|
-| s3rp bugs and gaps (details below) | 27 |
+| s3rp bugs and gaps (since fixed) | 27 |
 | deliberate design differences | 369 |
 | backend (demo RGW) limitations | 62 |
 | upstream s3-tests bug | 1 |
@@ -70,67 +70,20 @@ The pass rate is dominated by what s3rp deliberately does not do: of the
 459 failures, 369 are the documented design surface (unimplemented
 bucket-configuration writes, the ACL stub, SigV4-only authentication, the
 anti-probing 403). The suite's value was the remaining slice: it found
-**one crash-class bug, one fail-open bug, and a handful of response
-fidelity bugs**, all listed below.
-
-## s3rp bugs found (to fix)
-
-> **Status**: every item in this section has since been fixed (one commit
-> per item, same branch as this correction), verified by rerunning the
-> affected tests against RGW — 21 of them now pass; the rest fail on RGW
-> 19.2.0's own partial enforcement (see Backend limitations). Two
-> findings originally listed here turned out not to be bugs on closer
-> inspection and moved to the design-differences section: the "expired
-> presign answers 400" case and `x-amz-tagging-count` on HeadObject.
-
-### 1. Backend transport errors panic the request handler
-
-`s3err.FromSDKError` takes the HTTP status from an
-`*awshttp.ResponseError` found in the SDK error chain. For a *transport*
-failure (backend unreachable, connection refused) the SDK still puts a
-`ResponseError` in the chain — with `HTTPStatusCode() == 0`. The zero
-status reaches `s3err.Write` → `WriteHeader(0)` → panic, killing the
-connection. While the backend is down, **every** proxied request panics
-(the client sees a closed connection instead of a 5xx). Found when RGW
-died mid-run: 660 handler panics. Fix: treat a non-positive (or <100)
-status as absent and keep the 502 default.
-
-### 2. Conditional writes are silently dropped (fail-open)
-
-`If-Match`/`If-None-Match` are forwarded on GetObject/HeadObject, but
-**not** on PutObject, DeleteObject/DeleteObjects (`x-amz-if-match-*`) or
-CompleteMultipartUpload. The precondition the client asked for is
-silently discarded and the write proceeds unconditionally. Verified
-directly: `PUT` with a wrong `If-Match` returns 412 against RGW, but
-**200 via s3rp** — the same fail-open shape the SSE-C rule exists to
-prevent. 12 tests (`*_if_match*`, `*ifmatch*`, `*ifnonmatch*`).
-
-### 3. User metadata keys are returned in canonical header case
-
-`x-amz-meta-meta1` comes back as metadata key `Meta1` via s3rp (Go's
-`http.Header` MIME canonicalization) where AWS and RGW return `meta1`.
-Clients doing `response['Metadata']['meta1']` break. Affects PutObject,
-multipart and CopyObject paths. 9 tests.
-
-### 4. 304 Not Modified carries no entity headers
-
-A conditional GET answered with 304 omits `ETag` (AWS includes the entity
-headers on 304). 2 tests.
-
-### 5. Response completeness / status details (1 test each)
-
-- ListObjectsV2 does not echo `ContinuationToken` when the request
-  supplied one.
-- ListBuckets ignores `max-buckets`/`continuation-token` instead of
-  paginating — and silently, which also breaks the "unknown query
-  parameters 501 loudly" rule for `GET /`. (The test also trips over
-  leftover Object Lock buckets that the suite's cleaner cannot delete;
-  see Backend notes.)
-- Error responses do not relay informational backend headers
-  (`x-amz-delete-marker` on a 404 HEAD).
-- An empty `Content-MD5` header is not rejected (AWS: 400
-  `InvalidDigest`); `Header.Get` cannot tell the empty header from an
-  absent one, so it silently vanished.
+**one crash-class bug** (a backend transport failure carries a zero HTTP
+status, which panicked the handler — while the backend was down, every
+request died), **one fail-open bug** (write preconditions — `If-Match`
+and friends on PutObject, DeleteObject/DeleteObjects,
+CompleteMultipartUpload — were silently dropped and the write proceeded
+unconditionally), and a handful of response-fidelity issues (user
+metadata keys MIME-canonicalized, missing entity headers on 304 and
+error responses, ListObjectsV2/ListBuckets completeness, empty
+`Content-MD5` accepted). All were fixed in
+[PR #83](https://github.com/fujiwara/s3rp/pull/83), one commit per
+finding, verified by rerunning the affected tests. Two findings first
+counted as bugs turned out deliberate on closer inspection and are
+listed under design differences: the negative-`X-Amz-Expires` "expired
+presign" case and `x-amz-tagging-count` on HeadObject.
 
 ## Deliberate design differences (369)
 
