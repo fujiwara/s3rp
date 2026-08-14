@@ -144,11 +144,11 @@ func TestChunkedReaderRequiresTerminalChunk(t *testing.T) {
 		vr := awsDocsVerifiedRequest()
 		data := bytes.Repeat([]byte("a"), 20)
 		body := encodeSignedChunks(t, vr, data, 10)
-		term := bytes.Index(body, []byte("0;chunk-signature"))
-		if term < 0 {
+		before, _, ok := bytes.Cut(body, []byte("0;chunk-signature"))
+		if !ok {
 			t.Fatal("terminator not found")
 		}
-		r := sigv4.NewChunkedReader(bytes.NewReader(body[:term]), vr, "", int64(len(data)))
+		r := sigv4.NewChunkedReader(bytes.NewReader(before), vr, "", int64(len(data)))
 		if _, err := io.ReadAll(r); err == nil || !strings.Contains(err.Error(), "IncompleteBody") {
 			t.Errorf("expect IncompleteBody without the terminal chunk, got %v", err)
 		}
@@ -158,11 +158,11 @@ func TestChunkedReaderRequiresTerminalChunk(t *testing.T) {
 		vr := awsDocsVerifiedRequest()
 		data := bytes.Repeat([]byte("a"), 20)
 		body := encodeSignedChunks(t, vr, data, 10)
-		term := bytes.Index(body, []byte("0;chunk-signature"))
-		if term < 0 {
+		before, _, ok := bytes.Cut(body, []byte("0;chunk-signature"))
+		if !ok {
 			t.Fatal("terminator not found")
 		}
-		r := sigv4.NewChunkedReader(bytes.NewReader(body[:term]), vr, "", int64(len(data)))
+		r := sigv4.NewChunkedReader(bytes.NewReader(before), vr, "", int64(len(data)))
 		got, readErr := readUpTo(r, len(data))
 		if readErr == nil || !strings.Contains(readErr.Error(), "IncompleteBody") {
 			t.Errorf("expect IncompleteBody before the last byte, got %v", readErr)
