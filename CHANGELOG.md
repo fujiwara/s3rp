@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.0.7](https://github.com/fujiwara/s3rp/compare/v0.0.6...v0.0.7) - 2026-08-14
+
+- Trim comments that restate the code by @fujiwara in https://github.com/fujiwara/s3rp/pull/96
+- Restructure documentation by audience by @fujiwara in https://github.com/fujiwara/s3rp/pull/98
+- Fuzz the aws-chunked decoder; refuse truncated streams by @fujiwara in https://github.com/fujiwara/s3rp/pull/99
+- Fuzz SigV4 verification in both directions by @fujiwara in https://github.com/fujiwara/s3rp/pull/100
+- Fuzz browser-based POST upload verification by @fujiwara in https://github.com/fujiwara/s3rp/pull/101
+- Explore the fuzz targets nightly by @fujiwara in https://github.com/fujiwara/s3rp/pull/102
+- Cross-check SigV4 verification against botocore by @fujiwara in https://github.com/fujiwara/s3rp/pull/103
+- Document the measured SigV4 canonicalization landscape by @fujiwara in https://github.com/fujiwara/s3rp/pull/104
+
 ## [v0.0.6](https://github.com/fujiwara/s3rp/compare/v0.0.5...v0.0.6) - 2026-08-13
 
 - Add performance benchmark harness (bench/) by @fujiwara in https://github.com/fujiwara/s3rp/pull/91
