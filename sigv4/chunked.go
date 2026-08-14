@@ -75,7 +75,9 @@ type chunkedReader struct {
 // are HTTP header lines, so this is generous; without it a client could send
 // an unterminated line and make the reader buffer without limit — on a server
 // that deliberately sets no body read timeout.
-const maxChunkLineLen = 8 << 10
+const maxChunkLineLen = 8 * kib
+
+const kib = 1 << 10
 
 // NewChunkedReader returns a reader that decodes an aws-chunked request body.
 // When vr's payload hash declares signed chunks, each chunk signature is

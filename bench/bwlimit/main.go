@@ -19,6 +19,8 @@ import (
 	"golang.org/x/time/rate"
 )
 
+const mib = 1 << 20
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -54,7 +56,7 @@ func run(ctx context.Context) error {
 	}
 	var limiters sync.Map // tenant -> *rate.Limiter
 	a.SetBandwidthLimit(func(op *s3gw.Op) (in, out s3gw.BandwidthLimiter) {
-		l, _ := limiters.LoadOrStore(op.Tenant, rate.NewLimiter(limit, 1<<20))
+		l, _ := limiters.LoadOrStore(op.Tenant, rate.NewLimiter(limit, mib)) // burst
 		lim := l.(*rate.Limiter)
 		return lim, lim // one shared budget per tenant, both directions
 	})

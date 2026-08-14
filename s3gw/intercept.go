@@ -87,7 +87,7 @@ type BandwidthLimiter interface {
 
 // waitChunk caps one WaitN request: read and write sizes are
 // consumer-controlled and must not exceed a limiter's burst.
-const waitChunk = 32 << 10
+const waitChunk = 32 * kib
 
 func waitBandwidth(l BandwidthLimiter, ctx context.Context, n int) error {
 	for n > 0 {
