@@ -55,6 +55,47 @@ jobs:
                   summary.write(f"- `{t['target']}` ({t['pkg']})\n")
           EOF
 
+  # botocore is an independent SigV4 implementation: requests it signs are
+  # what non-Go clients send, and the verifier shares no signing code with
+  # it. Fresh vectors from the latest botocore — deliberately unpinned —
+  # mean a botocore behavior change fails a nightly here, not a customer.
+  crosscheck:
+    name: botocore cross-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26'
+
+      - name: Generate vectors with the latest botocore
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet botocore
+          mkdir -p "$RUNNER_TEMP/crosscheck"
+          "$RUNNER_TEMP/venv/bin/python" sigv4/testdata/crosscheck/generate.py \
+            --seed "$SEED" --count 512 --out "$RUNNER_TEMP/crosscheck/generated.json" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+        env:
+          SEED: ${{ github.run_id }}
+
+      - name: Replay against the verifier
+        run: |
+          go test ./sigv4 -run TestCrossCheckBotocore
+        env:
+          S3RP_CROSSCHECK_DIR: ${{ runner.temp }}/crosscheck
+
+      - name: Upload the failing vectors
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: crosscheck-vectors
+          path: ${{ runner.temp }}/crosscheck/
+
   fuzz:
     name: ${{ matrix.target }}
     needs: discover
