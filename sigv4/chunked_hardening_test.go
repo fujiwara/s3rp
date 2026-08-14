@@ -67,14 +67,14 @@ func TestChunkedReaderRequiresDeclaredTrailer(t *testing.T) {
 		fmt.Fprintf(buf, "%x\r\n", len(data))
 		buf.Write(data)
 		buf.WriteString("\r\n0\r\n\r\n") // final chunk, empty trailer block
-		r := sigv4.NewChunkedReader(buf, vr, "crc32", 1<<30)
+		r := sigv4.NewChunkedReader(buf, vr, "crc32", int64(len(data)))
 		if _, err := io.ReadAll(r); err == nil || !strings.Contains(err.Error(), "BadDigest") {
 			t.Errorf("expect BadDigest for the missing trailer, got %v", err)
 		}
 	})
 	t.Run("a different trailer present", func(t *testing.T) {
 		buf := encodeUnsignedTrailer(data, "x-amz-meta-note", "not the checksum")
-		r := sigv4.NewChunkedReader(buf, vr, "crc32", 1<<30)
+		r := sigv4.NewChunkedReader(buf, vr, "crc32", int64(len(data)))
 		if _, err := io.ReadAll(r); err == nil || !strings.Contains(err.Error(), "BadDigest") {
 			t.Errorf("expect BadDigest when the declared trailer is absent, got %v", err)
 		}
@@ -84,7 +84,7 @@ func TestChunkedReaderRequiresDeclaredTrailer(t *testing.T) {
 		fmt.Fprintf(buf, "%x\r\n", len(data))
 		buf.Write(data)
 		buf.WriteString("\r\n0\r\n") // EOF right after the final chunk
-		r := sigv4.NewChunkedReader(buf, vr, "crc32", 1<<30)
+		r := sigv4.NewChunkedReader(buf, vr, "crc32", int64(len(data)))
 		if _, err := io.ReadAll(r); err == nil || !strings.Contains(err.Error(), "BadDigest") {
 			t.Errorf("expect BadDigest at EOF without the trailer, got %v", err)
 		}

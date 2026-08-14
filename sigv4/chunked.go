@@ -70,6 +70,15 @@ type chunkedReader struct {
 	err       error
 }
 
+// incompleteBody is the error for an aws-chunked stream that ends before
+// delivering the signed x-amz-decoded-content-length: a truncated stream
+// must not read as a complete shorter upload, because the terminal chunk —
+// and with it the end of the signature chain — was never verified.
+func incompleteBody(cause error) error {
+	return s3err.New(http.StatusBadRequest, "IncompleteBody",
+		"You did not provide the number of bytes specified by the x-amz-decoded-content-length HTTP header.").WithCause(cause)
+}
+
 // maxChunkLineLen bounds a chunk header or trailer line. Headers are about a
 // hundred bytes (hex size, "chunk-signature=" and 64 hex digits) and trailers
 // are HTTP header lines, so this is generous; without it a client could send
@@ -143,6 +152,12 @@ func (cr *chunkedReader) Read(p []byte) (int, error) {
 			if err := cr.verifyChunk(); err != nil {
 				return 0, cr.fail(err)
 			}
+			// the terminal chunk closes the stream, so anything short of the
+			// declared decoded length is a truncated body, not a shorter one
+			if cr.undecoded != 0 {
+				return 0, cr.fail(incompleteBody(fmt.Errorf(
+					"stream complete with %d bytes of x-amz-decoded-content-length undelivered", cr.undecoded)))
+			}
 			if err := cr.discardTrailers(); err != nil {
 				return 0, cr.fail(err)
 			}
@@ -165,7 +180,7 @@ func (cr *chunkedReader) Read(p []byte) (int, error) {
 		}
 	}
 	if err == io.EOF && cr.remaining > 0 {
-		err = io.ErrUnexpectedEOF
+		err = incompleteBody(io.ErrUnexpectedEOF)
 	}
 	if err != nil && err != io.EOF {
 		return n, cr.fail(err)
@@ -201,6 +216,11 @@ func (cr *chunkedReader) fail(err error) error {
 func (cr *chunkedReader) readChunkHeader() (int64, error) {
 	line, err := cr.readLine()
 	if err != nil {
+		// a stream ending where a chunk header belongs never reached its
+		// terminal chunk; io.EOF here would read as a clean end of body
+		if err == io.EOF {
+			err = incompleteBody(io.ErrUnexpectedEOF)
+		}
 		return 0, err
 	}
 	sizeStr, ext, hasExt := strings.Cut(line, ";")
@@ -288,7 +308,10 @@ func (cr *chunkedReader) discardTrailers() error {
 func (cr *chunkedReader) readCRLF() error {
 	b := make([]byte, 2)
 	if _, err := io.ReadFull(cr.r, b); err != nil {
-		return err
+		if err == io.EOF {
+			err = io.ErrUnexpectedEOF
+		}
+		return incompleteBody(err)
 	}
 	if b[0] != '\r' || b[1] != '\n' {
 		return fmt.Errorf("malformed chunk: expected CRLF")
