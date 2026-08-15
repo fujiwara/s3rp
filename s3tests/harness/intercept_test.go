@@ -354,9 +354,8 @@ func TestFallThrough(t *testing.T) {
 }
 
 func TestBackendTransportErrorDoesNotPanic(t *testing.T) {
-	// s3err.FromSDKError reports status 0 for SDK transport failures (a
-	// known s3rp bug, see docs/s3-tests.md); the interceptor's guard must
-	// turn that into a 502 instead of panicking in WriteHeader.
+	// SDK transport failures carry a ResponseError with HTTP status 0;
+	// the interceptor must answer 502, never hand 0 to WriteHeader.
 	transportErr := &awshttp.ResponseError{
 		ResponseError: &smithyhttp.ResponseError{
 			Response: &smithyhttp.Response{Response: &http.Response{StatusCode: 0, Header: http.Header{}}},

@@ -3,7 +3,11 @@
 How to read a suite run and, in particular, how to find operations that
 are *implementable but not implemented* — as opposed to deliberately
 refused. README.md here covers running the suite; docs/s3-tests.md holds
-the curated baseline report.
+the rationale for each expected-failure category, **not** run numbers or
+history (numbers live in the latest run's report, past findings in git
+history). Update it only when a classification decision changes — same
+commit as the `triage.py` rule change — never just because a re-run
+moved the counts.
 
 ## Where results are
 
@@ -12,7 +16,7 @@ the curated baseline report.
   correlate by bucket name / `x-amz-request-id`).
 - CI run: `gh run download <run-id> -n s3tests-results`. The job summary
   shows the backend Ceph version — always note it; the failure mix
-  changes with the backend (see the 19.2.0 vs 20.2.1 sections of
+  changes with the backend (see the backend-limitations category in
   docs/s3-tests.md).
 
 ## triage.py is a first pass, not the answer

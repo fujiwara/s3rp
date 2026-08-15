@@ -2,7 +2,8 @@
 
 Runs the [ceph/s3-tests](https://github.com/ceph/s3-tests) S3 compatibility
 suite against s3rp, proxying to the Ceph RGW backend from `compose.yml`.
-The curated results live in [docs/s3-tests.md](../docs/s3-tests.md).
+How to read a run — the expected-failure categories and why each is
+expected — lives in [docs/s3-tests.md](../docs/s3-tests.md).
 
 ## Why a harness
 
