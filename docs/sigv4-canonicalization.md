@@ -2,7 +2,7 @@
 
 How S3 implementations verify requests whose query string is not in
 canonical encoding — measured, because it is specified nowhere. This
-records what the [botocore cross-check](../sigv4/testdata/crosscheck/generate.py)
+records what the [signer cross-checks](../sigv4/testdata/crosscheck/)
 surfaced, what probing real implementations showed, and why s3rp's behavior
 is deliberately left as it is.
 
@@ -76,6 +76,20 @@ Readings:
   wire-order-dependent subset. s3rp accepts exactly one ordering (sorted by
   decoded value — what aws-sdk-go-v2's signer computes).
 
+## aws4's own divergences (2026-08-15)
+
+Adding the [aws4](https://github.com/mhart/aws4) (npm) generator to the
+cross-check surfaced a third school, on the signer side. For S3, aws4 does
+not sign the path as sent: it decodes each segment and re-encodes it to
+the strict RFC 3986 set (a raw `:`, `*` or `+` on the wire signs as its
+escaped form), and it collapses an encoded `%2F` back to a literal slash.
+It also signs only the first value of a duplicated query key while sending
+every pair. Requests carrying those shapes verify under no as-sent
+verifier — that is aws4 disagreeing with the ecosystem, not s3rp — and
+real aws4 clients send canonically encoded paths, where the schemes agree.
+The aws4 corpus generator therefore emits only canonical path encodings
+and no duplicate keys, the same rule the query already follows.
+
 ## Why s3rp stays as it is
 
 - **No real client reaches the divergence.** Every SDK serializer emits
@@ -95,9 +109,10 @@ Readings:
   reimplement canonicalization. s3rp sits between versitygw (rejects all)
   and AWS (accepts all), well inside ecosystem norms.
 
-The [botocore cross-check corpus](../sigv4/testdata/crosscheck/) —
-committed vectors replayed in `go test` and fresh ones generated nightly —
-only ever emits canonical encodings, matching what real clients send. If a
+The [cross-check corpora](../sigv4/testdata/crosscheck/) — botocore, curl
+`--aws-sigv4` and aws4 vectors committed and replayed in `go test`, with
+fresh ones generated nightly — only ever emit canonical encodings,
+matching what real clients send. If a
 real client ever surfaces on the wrong side of this table, the revisit path
 is a second verification pass against the alternative ordering, applied
 only when the first fails.
