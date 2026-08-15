@@ -55,12 +55,14 @@ jobs:
                   summary.write(f"- `{t['target']}` ({t['pkg']})\n")
           EOF
 
-  # botocore is an independent SigV4 implementation: requests it signs are
-  # what non-Go clients send, and the verifier shares no signing code with
-  # it. Fresh vectors from the latest botocore — deliberately unpinned —
-  # mean a botocore behavior change fails a nightly here, not a customer.
+  # botocore, curl --aws-sigv4 and aws4 (npm) are independent SigV4
+  # implementations: requests they sign are what non-Go clients send, and
+  # the verifier shares no signing code with any of them. Fresh vectors
+  # from the latest botocore and aws4 — deliberately unpinned — and the
+  # runner's distro curl mean a signer behavior change fails a nightly
+  # here, not a customer.
   crosscheck:
-    name: botocore cross-check
+    name: signer cross-check
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -82,15 +84,37 @@ jobs:
           "$RUNNER_TEMP/venv/bin/pip" install --quiet botocore
           mkdir -p "$RUNNER_TEMP/crosscheck"
           "$RUNNER_TEMP/venv/bin/python" sigv4/testdata/crosscheck/generate.py \
-            --seed "$SEED" --count 512 --out "$RUNNER_TEMP/crosscheck/generated.json" \
+            --seed "$SEED" --count 512 --out "$RUNNER_TEMP/crosscheck/botocore-generated.json" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+        env:
+          SEED: ${{ github.run_id }}
+
+      - name: Generate vectors with the system curl
+        shell: bash
+        run: |
+          python3 sigv4/testdata/crosscheck/generate_curl.py \
+            --seed "$SEED" --count 256 --out "$RUNNER_TEMP/crosscheck/curl-generated.json" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+        env:
+          SEED: ${{ github.run_id }}
+
+      - name: Generate vectors with the latest aws4
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/aws4"
+          npm install --prefix "$RUNNER_TEMP/aws4" aws4
+          NODE_PATH="$RUNNER_TEMP/aws4/node_modules" node sigv4/testdata/crosscheck/generate_aws4.js \
+            --seed "$SEED" --count 512 --out "$RUNNER_TEMP/crosscheck/aws4-generated.json" \
             | tee -a "$GITHUB_STEP_SUMMARY"
         env:
           SEED: ${{ github.run_id }}
 
       - name: Replay against the verifier
         run: |
-          test -s "$S3RP_CROSSCHECK_DIR/generated.json" # fresh vectors exist
-          go test ./sigv4 -run TestCrossCheckBotocore
+          for f in botocore curl aws4; do
+            test -s "$S3RP_CROSSCHECK_DIR/$f-generated.json" # fresh vectors exist
+          done
+          go test ./sigv4 -run TestCrossCheck
         env:
           S3RP_CROSSCHECK_DIR: ${{ runner.temp }}/crosscheck
 

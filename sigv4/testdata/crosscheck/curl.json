@@ -1,0 +1,3843 @@
+{
+ "generator": "sigv4/testdata/crosscheck/generate_curl.py",
+ "curl_version": "curl 8.5.0 (x86_64-pc-linux-gnu) libcurl/8.5.0 OpenSSL/3.0.13 zlib/1.3 brotli/1.1.0 zstd/1.5.5 libidn2/2.3.7 libpsl/0.21.2 (+libidn2/2.3.7) libssh/0.10.6/openssl/zlib nghttp2/1.59.0 librtmp/2.3 OpenLDAP/2.6.10",
+ "seed": 20260815,
+ "vectors": [
+  {
+   "name": "000-header-GET",
+   "type": "header",
+   "method": "GET",
+   "host": "s3.example.com",
+   "uri": "/%20/a/a'b/:c?response-content-type&q%20k=a%20b",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID4CSD72EAMTTJV7LN/20260815/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-tag, Signature=2e61c49eb3f17275d38494431e4ae273388941afc0129be4b03b1d61ba464c44"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     ""
+    ]
+   ],
+   "access_key_id": "AKID4CSD72EAMTTJV7LN",
+   "secret_access_key": "YSPKC8GLCUcEN1pmEBBM79I/zavjcLQ7L3WG4CjC",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "001-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "s3.example.com:8080",
+   "uri": "/file.txt/%20/%2Fnested%2Fkey?prefix=100%25&response-content-type=100%25&marker=a%20b",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID62JY434KRBF4OCUZ/20260815/us-east-1/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty, Signature=80be93fb44292bef4ae788942511f7453f285ee148609a13a963b9ccf7ef9f15"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-empty",
+     "hello world"
+    ],
+    [
+     "Cache-Control",
+     "hello world"
+    ]
+   ],
+   "access_key_id": "AKID62JY434KRBF4OCUZ",
+   "secret_access_key": "Ukc3sksO158Kcem2E3w3WPxK80fx8M3DO3Mln4Rt",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "002-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com",
+   "uri": "/%20/%25?prefix=a%20b&prefix=a%20b",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDZR4T0DZE6PK77CL4/20260815/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=b53301d536c237929c4be6311de41980ef4935db308236919b59071588ce82c0"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKIDZR4T0DZE6PK77CL4",
+   "secret_access_key": "oCKr0ZcAk953C3/seWrJa/raQGaMkwGHz6pYy+Gu",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "003-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "s3.example.com",
+   "uri": "/file.txt/%25/a'b/trailing.?marker=%E3%81%82&prefix=100%25",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDZBKJVGSXRCTMOAE0/20260815/eu-central-1/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date, Signature=c82be16267b9a59264d2034db43346c36cbe40ef24b423d5a756ccdf29f334d3"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Content-Type",
+     "=?utf-8?B?44GC?="
+    ]
+   ],
+   "access_key_id": "AKIDZBKJVGSXRCTMOAE0",
+   "secret_access_key": "+xihn8R9W3sWXG/W39DozvuERzNycoWdLepixpqX",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "004-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "storage.internal",
+   "uri": "/file.txt/%2F/?q%20k=photos%2F&response-content-type&q%20k=photos%2F",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDXM2JYMLH2BIBKTMF/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty, Signature=ce6ff4f211582b95ade6eccd7c0a9b5ef2fa59cdd0adb957283a7575dfbd9f02"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Content-Type",
+     ""
+    ],
+    [
+     "x-amz-meta-empty",
+     ""
+    ]
+   ],
+   "access_key_id": "AKIDXM2JYMLH2BIBKTMF",
+   "secret_access_key": "j0PX8aWUDl4x5f/mpYbFIGmMGNzY6I3/9lRYqaCp",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "005-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com:8080",
+   "uri": "/%2Fnested%2Fkey?marker=a%2Fb&a=a%2Bb&empty=photos%2F&marker=a%2Fb",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID99ASX60PWJTYFX0G/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=f125d08443d4fb06dbde40adaa03fbb6671ac3c4164f27f8db63e5a007c12aca"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKID99ASX60PWJTYFX0G",
+   "secret_access_key": "G7ADuI9SppZrMnIUlXQDnEfCm4wBZCFR+6/xgcGw",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "006-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "s3.example.com:8080",
+   "uri": "/photos/%E3%81%82/a?list-type=~&marker=a%2Fb&a=~",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDMO4LIMJZHSNZ6MFM/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty;x-amz-meta-note;x-amz-meta-tag, Signature=05d67061476bd9a1724d32d26e46815abc4f23db6f1aef843d4a5c1492041fed"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     ""
+    ],
+    [
+     "x-amz-meta-empty",
+     ""
+    ],
+    [
+     "x-amz-meta-note",
+     "no-cache, no-store"
+    ]
+   ],
+   "access_key_id": "AKIDMO4LIMJZHSNZ6MFM",
+   "secret_access_key": "gDzXXDXF7XDCYEuadOJR9O6rlxlMnLENy7FbVzwt",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "007-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com:8080",
+   "uri": "/%2Fnested%2Fkey/(1)/_x/_x?prefix=text%2Fplain&marker=a%2Bb",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDSY8DUV9JY50YX4HZ/20260815/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty;x-amz-meta-note, Signature=5f9f37f6b01068a54bffbb86abbcdc71e481a3a94a7503ad354af96211c45cc8"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-empty",
+     "hello world"
+    ],
+    [
+     "x-amz-meta-note",
+     "=?utf-8?B?44GC?="
+    ]
+   ],
+   "access_key_id": "AKIDSY8DUV9JY50YX4HZ",
+   "secret_access_key": "IxjNnTTE3U0LvfhzrJZJiH7+iW3HUFOnB4OvVujg",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "008-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com",
+   "uri": "/@h/$y",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDCVZ2VBQB0HWMZ7NA/20260815/moon-crater-7/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty, Signature=4b2b78d1cd72b9081dec7b02a4f29255144b9f2dcadb7756e9ff2640461a60c2"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Content-Type",
+     "a  b   c"
+    ],
+    [
+     "x-amz-meta-empty",
+     "hello world"
+    ]
+   ],
+   "access_key_id": "AKIDCVZ2VBQB0HWMZ7NA",
+   "secret_access_key": "ABl/vCKWAry99OSMc7XFew1TGNlbvDeQ97xXyWpM",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "009-header-GET",
+   "type": "header",
+   "method": "GET",
+   "host": "storage.internal",
+   "uri": "/0/backup-2026/%E3%81%82?empty=photos%2F&response-content-type=100%25",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDGNFMR1LAWUXATSD3/20260815/eu-central-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=af245f92d579c4a9acd706c7b26925835f6459830d7e7865048bd607ccfdfb63"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKIDGNFMR1LAWUXATSD3",
+   "secret_access_key": "AmtVb6O5kX0lsn8lybiB3Ya0xVrOxd0VtLRwqc4W",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "010-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "storage.internal",
+   "uri": "/a*b/%20?q%20k=a%20b&marker=text%2Fplain",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID04H1RX9HA50M088X/20260815/moon-crater-7/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date, Signature=bec0e79b8c29554fe7f12aa1c7708298c5310bb3854975b79800e15c8b716ad2"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Cache-Control",
+     "text/plain; charset=utf-8"
+    ]
+   ],
+   "access_key_id": "AKID04H1RX9HA50M088X",
+   "secret_access_key": "Zcuq6cbPn98qJjeq2K5Dm9vxh6ljs9EKV3UTgMb9",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "011-header-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "storage.internal",
+   "uri": "/%2Fnested%2Fkey",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDHZFX7FJ0RYDU6UCQ/20260815/moon-crater-7/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-note, Signature=e3eb03065577c811bad6126f706f914c002b3225839f6638817be78fcf9de07e"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-note",
+     "=?utf-8?B?44GC?="
+    ]
+   ],
+   "access_key_id": "AKIDHZFX7FJ0RYDU6UCQ",
+   "secret_access_key": "GT9YfZr4Ltul8trcW4FWc2mXKOo/OM/wkrZdR3CA",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "012-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "storage.internal",
+   "uri": "/(1)/a*b?prefix=",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDIEXGJQZR6T6VEAKY/20260815/eu-central-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty;x-amz-meta-note, Signature=79a9ff8608540d3bd2136733dd1ba3617fb16a8544e480e165062732447d85fd"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-empty",
+     ""
+    ],
+    [
+     "x-amz-meta-note",
+     "a  b   c"
+    ]
+   ],
+   "access_key_id": "AKIDIEXGJQZR6T6VEAKY",
+   "secret_access_key": "yNKC6Omu4wuju2SX51lihRe4TEq0ripfSI3japg0",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "013-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com:8080",
+   "uri": "/(1)/%00/@h/file.txt?marker=&prefix=a%2Bb&empty=a%20b",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDTMYPZ4Q1EF7WEFAC/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty, Signature=45e9297f90bc01b88a07a350fffaa068d77b39c970cb48c249d2a8dd6349ca5f"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-empty",
+     "text/plain; charset=utf-8"
+    ]
+   ],
+   "access_key_id": "AKIDTMYPZ4Q1EF7WEFAC",
+   "secret_access_key": "dkYtwGaRl6pRPGiJTmrti9dMJXcw40Vf/P7xnvo3",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "014-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com:8080",
+   "uri": "/trailing./%2Fnested%2Fkey/photos?list-type=text%2Fplain",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDUAF4STBEF45ITITL/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=64b284f7cd89450cb9248962fb6e3e4de50496818813ca8f47a96f288621f594"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKIDUAF4STBEF45ITITL",
+   "secret_access_key": "3ClbUTnF73YnHfp/zsWlugVoYb3V9xPVe5MhA6s0",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "015-header-GET",
+   "type": "header",
+   "method": "GET",
+   "host": "s3.example.com",
+   "uri": "/-lead/$y",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDSTVGO4I9EIYN4BPQ/20260815/moon-crater-7/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date;x-amz-meta-note, Signature=eec5df4579442dbfeb6f256c84adaa7af2c5656386b154491e529f8c25e62cd2"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Cache-Control",
+     ""
+    ],
+    [
+     "x-amz-meta-note",
+     "text/plain; charset=utf-8"
+    ]
+   ],
+   "access_key_id": "AKIDSTVGO4I9EIYN4BPQ",
+   "secret_access_key": "Egs+FY9luibdwca31R6xvnHOCir52/3QWcOnwbIo",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "016-header-GET",
+   "type": "header",
+   "method": "GET",
+   "host": "s3.example.com",
+   "uri": "/%E3%81%82?q%20k=~",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDVF4LEXC5ISIGI7YJ/20260815/moon-crater-7/s3/aws4_request, SignedHeaders=cache-control;content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty, Signature=0e071b72bca9af8fb2961273279384d628bf9a59aed84910f08fbd59daf35c13"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-empty",
+     ""
+    ],
+    [
+     "Content-Type",
+     ""
+    ],
+    [
+     "Cache-Control",
+     "hello world"
+    ]
+   ],
+   "access_key_id": "AKIDVF4LEXC5ISIGI7YJ",
+   "secret_access_key": "/O55CSfoY3s+QA0NbX/ZAa6ow16e7B04nma8FCv1",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "017-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com",
+   "uri": "/_x?marker=text%2Fplain&q%20k=a%20b",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDREY5JPTMBOP7D64T/20260815/eu-central-1/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date, Signature=c344a33908b7220e2e42c7c34185c2d4b94a8a847a011213289a28a49fd56ecb"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Content-Type",
+     "a  b   c"
+    ]
+   ],
+   "access_key_id": "AKIDREY5JPTMBOP7D64T",
+   "secret_access_key": "RCau7ESEXpNLGvdXVxXQU+d095zIRrcHl7+JnO+R",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "018-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com:8080",
+   "uri": "/",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID5Q6PW4VEVTKXFS4E/20260815/us-east-1/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date;x-amz-meta-tag, Signature=00e61ac235ec2083d38e1e3e8461051bd8cb1afcc91426667379febb017329c4"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "Cache-Control",
+     "no-cache, no-store"
+    ]
+   ],
+   "access_key_id": "AKID5Q6PW4VEVTKXFS4E",
+   "secret_access_key": "tshrejedq8N0M2xYEmvND7e+DoKW8yE7LPCoYqEV",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "019-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com:8080",
+   "uri": "/a'b?marker=%E3%81%82",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDW9NNT5XXTH34LLTD/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-tag, Signature=aeac4a77e33e94c0c122bcb502e149658209632e2b54397d268f8646150c099b"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "text/plain; charset=utf-8"
+    ],
+    [
+     "Content-Type",
+     "hello world"
+    ]
+   ],
+   "access_key_id": "AKIDW9NNT5XXTH34LLTD",
+   "secret_access_key": "AWlz8VS/u119UJbUoIviwgXoRhBwN/x0MKMaANLF",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "020-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "storage.internal",
+   "uri": "/@h/photos/%7F",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDLA8FY2R9M914VWW6/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty;x-amz-meta-tag, Signature=684846273a1534bb62cbd3efb1b8d9cd167ab1d446520f23c077cbb6069abf54"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "x-amz-meta-empty",
+     "=?utf-8?B?44GC?="
+    ]
+   ],
+   "access_key_id": "AKIDLA8FY2R9M914VWW6",
+   "secret_access_key": "D413uDXOyMZw8ldZPTiSCtHyUxwOePkbc+mHmmXI",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "021-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com:8080",
+   "uri": "/a+b/%E3%81%82/(1)?empty=~&marker=2",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDP5WCB4SYY7O2B7SN/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty, Signature=e101d36155e194349e7895fd7454f32ebfb2ed7329c1938a1580a3569e95165e"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-empty",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "Content-Type",
+     "text/plain; charset=utf-8"
+    ]
+   ],
+   "access_key_id": "AKIDP5WCB4SYY7O2B7SN",
+   "secret_access_key": "V0qJs4LidIff0NNkJgfq3lmas0ZS05ATl3GCYJal",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "022-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "s3.example.com:8080",
+   "uri": "/%00/%2F/backup-2026/a*b?prefix=photos%2F&prefix=photos%2F",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDUWA5Y74JPV8EVX6T/20260815/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-tag, Signature=2b3e9c0db4aeea613662d257f1407ff3e532006511795a24740056dd66f9ca63"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     ""
+    ]
+   ],
+   "access_key_id": "AKIDUWA5Y74JPV8EVX6T",
+   "secret_access_key": "I7gew16XSAtfeaTpJTIGzt/VyAxLUirbO2jAu7Nc",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "023-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com",
+   "uri": "/photos/a'b/file.txt?q%20k=&list-type",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDR7EC0EUXLQ2YN1SY/20260815/us-east-1/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date, Signature=98192a251aa746d448bd2e2ec922351781edca04f2e4e1af6d2da231bdafafce"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Cache-Control",
+     ""
+    ]
+   ],
+   "access_key_id": "AKIDR7EC0EUXLQ2YN1SY",
+   "secret_access_key": "2DMJP2xiW42ynteWtI180VxhhkjTvDoqItMYEzdX",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "024-header-GET",
+   "type": "header",
+   "method": "GET",
+   "host": "s3.example.com",
+   "uri": "/trailing./~user?list-type=photos%2F",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID1JME40BM7VKHVSFG/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=bcbf499e15eb6c3618010c1b3e56bab5098df01b8174f55bf4aead1bda9356af"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKID1JME40BM7VKHVSFG",
+   "secret_access_key": "UEEuq17Rrlh42ixBqrMYZBYlLMXWE2muNPvLqsAY",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "025-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com",
+   "uri": "/~user",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID3X2TGMYQD5MXIOPM/20260815/eu-central-1/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty;x-amz-meta-tag, Signature=76a1241a467e2723b689661752b2d0c09e41a2ff8512ebbcf735f944a1cae989"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Content-Type",
+     ""
+    ],
+    [
+     "x-amz-meta-empty",
+     "no-cache, no-store"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "a  b   c"
+    ]
+   ],
+   "access_key_id": "AKID3X2TGMYQD5MXIOPM",
+   "secret_access_key": "xaHIpuWWRGL9Y8gctmDtiKTZUEm4JHR3psQbj3oX",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "026-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com",
+   "uri": "/0",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID70KF5EJS5AMRIK48/20260815/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-tag, Signature=1caf77bf194579ec7682afca1b8a1e8615e7814a541661187544a1f4fa894268"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "a  b   c"
+    ]
+   ],
+   "access_key_id": "AKID70KF5EJS5AMRIK48",
+   "secret_access_key": "JCE7jeEZo36LDRfJ6CRrErNmdocRfKu+hg+Hb1Qf",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "027-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com:8080",
+   "uri": "/~user/%2F/@h/%25?empty=photos%2F",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDMQ17QM6NQ8LGTWEU/20260815/moon-crater-7/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-note, Signature=27f3a9334adb6cbdf015f9924fad06f94305331dd7f3a3e7001838004c9416d1"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-note",
+     "hello world"
+    ]
+   ],
+   "access_key_id": "AKIDMQ17QM6NQ8LGTWEU",
+   "secret_access_key": "rVKcf6Pc4cnaeqpiGUSSjoHL+VmCYvGcQuqI0lD+",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "028-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "s3.example.com:8080",
+   "uri": "/%25/backup-2026",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDX64A7TZA2OZ8YI1X/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-note, Signature=69b57d900ad771ffeb74590a552ec8c37a49462f98a297ea290082220a26e5d7"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-note",
+     "hello world"
+    ]
+   ],
+   "access_key_id": "AKIDX64A7TZA2OZ8YI1X",
+   "secret_access_key": "j+kVbKwKUmMFVVBFzj74/Fxny7cdUlYHdgONvKUt",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "029-header-GET",
+   "type": "header",
+   "method": "GET",
+   "host": "s3.example.com:8080",
+   "uri": "/a'b/%E3%81%82/%25?prefix=a%20b&a=100%25&empty=~",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDPFF24O2SS64YM2N1/20260815/moon-crater-7/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-note;x-amz-meta-tag, Signature=dd59ea3bcadc084dca797a72f1d3a3e3c514afaf2e60d819e71fe316077e7c95"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-note",
+     "a  b   c"
+    ],
+    [
+     "Content-Type",
+     "text/plain; charset=utf-8"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "no-cache, no-store"
+    ]
+   ],
+   "access_key_id": "AKIDPFF24O2SS64YM2N1",
+   "secret_access_key": "WO/+vePEUxPmTXQdlLWP2XeDe9pjmbgKDB00Ywxx",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "030-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com",
+   "uri": "/%7F?prefix=&prefix=",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDGSXBSGX29M2EE08W/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-note, Signature=9de95b8ea4199dd4dd78aca46d412b46f1c37100cc29c3180e1552f9ff3c3e93"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-note",
+     "hello world"
+    ]
+   ],
+   "access_key_id": "AKIDGSXBSGX29M2EE08W",
+   "secret_access_key": "Z3QEHXSONCUkP5iRcqqiCftvyNR2t6sN4n+SX5z+",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "031-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "storage.internal",
+   "uri": "/a*b/(1)/&z/%25?response-content-type=a%2Fb",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID2CGRP4WQP5TDS5L4/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty;x-amz-meta-note, Signature=32bd60d2b46a5f10c920867f53047eec4a6996f2d984bce430882073e671a23d"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-note",
+     "hello world"
+    ],
+    [
+     "x-amz-meta-empty",
+     "text/plain; charset=utf-8"
+    ]
+   ],
+   "access_key_id": "AKID2CGRP4WQP5TDS5L4",
+   "secret_access_key": "CCjv2fheVU++o+RSt4hj+JSXXGyqUoCNXNgNsGIv",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "032-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com:8080",
+   "uri": "/:c/a+b?list-type=%E3%81%82&a=~",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDS0WMUO3OE382JY9T/20260815/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=7b0282a47bac4438a198dff660ec5857b28e59d866ce2fc9639f4bd816e901c6"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKIDS0WMUO3OE382JY9T",
+   "secret_access_key": "kycWyt2+/vep34Z/Dxk8wYXSA9qVRS0REagp7PnS",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "033-header-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "storage.internal",
+   "uri": "/(1)",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDUIO8R8LYE3O9W2I0/20260815/us-east-1/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty, Signature=4adf3d75f8a7c6e94df03c4e8c983e50e56a0acd004f8ee19d84483351a000b9"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Cache-Control",
+     "no-cache, no-store"
+    ],
+    [
+     "x-amz-meta-empty",
+     "text/plain; charset=utf-8"
+    ]
+   ],
+   "access_key_id": "AKIDUIO8R8LYE3O9W2I0",
+   "secret_access_key": "kfXqPVysKf+HRwq5uhOTxP1L/hKPAwEsIC4Wx9/x",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "034-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "storage.internal",
+   "uri": "/%00",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDFXBYRJ3EZWVOU1C5/20260815/eu-central-1/s3/aws4_request, SignedHeaders=cache-control;content-type;host;x-amz-content-sha256;x-amz-date, Signature=a5e82edcf4a8fa2abb308d6255a22052e4348f337d2370254a862aa330c148fc"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Cache-Control",
+     "hello world"
+    ],
+    [
+     "Content-Type",
+     "=?utf-8?B?44GC?="
+    ]
+   ],
+   "access_key_id": "AKIDFXBYRJ3EZWVOU1C5",
+   "secret_access_key": "2nUD7rUmPFrpko4ldBXGdL70dtk6GLdy9JNfqnT3",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "035-header-GET",
+   "type": "header",
+   "method": "GET",
+   "host": "storage.internal",
+   "uri": "/:c/%7F/0",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDYLWTYW5IP1ZZ0S1P/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=6efdd3c27b87648fa9125da1636abbffc3700c5b58dc4c61dd029c5f8b7c2608"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKIDYLWTYW5IP1ZZ0S1P",
+   "secret_access_key": "CKUzm1IaOWdLK3gvf2xWqK/1+mQ68riERNlXHwiK",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "036-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "s3.example.com",
+   "uri": "//:c/%7F?q%20k=a%20b&response-content-type=100%25&empty=%E3%81%82",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDQ0SM5XD58I7HTB1L/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date;x-amz-meta-note;x-amz-meta-tag, Signature=8f423981c3732c72788f750117ac7fd0dd09326438f1643503cfe7a4c410f65c"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Cache-Control",
+     "text/plain; charset=utf-8"
+    ],
+    [
+     "x-amz-meta-note",
+     "no-cache, no-store"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "hello world"
+    ]
+   ],
+   "access_key_id": "AKIDQ0SM5XD58I7HTB1L",
+   "secret_access_key": "XLmpZr4MrUafTtCJ1yWxHoykFqRbuLw2F/AqxAeB",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "037-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "storage.internal",
+   "uri": "/%E3%81%82/backup-2026/%20/?a=photos%2F",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDVPK0OC93Z16O8IBO/20260815/eu-central-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=813f38745052d6a3124bb219d8819922370ba857df2bb3950568cd28ee5d969c"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKIDVPK0OC93Z16O8IBO",
+   "secret_access_key": "rn/gKtAuBCA2PXKgPixR4yWAeIk1umf0PCDeA+0Z",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "038-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "s3.example.com",
+   "uri": "/:c",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDMG6OPXUCLC094WEW/20260815/eu-central-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-tag, Signature=827500712bd2ba57832fd59904d1dcc2bdef9bf5f353f3d802556f69b238bff2"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "text/plain; charset=utf-8"
+    ]
+   ],
+   "access_key_id": "AKIDMG6OPXUCLC094WEW",
+   "secret_access_key": "PJPvpQDoCj8mKYRKKtSRYgAUZvsMCcSk0/rWxKBS",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "039-header-GET",
+   "type": "header",
+   "method": "GET",
+   "host": "storage.internal",
+   "uri": "/%2F",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDMWY8HG8H3EEKDIJF/20260815/moon-crater-7/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=dee5a328fd5b3b267d0e737eca0a6d2ea19d28522d5484372d93ea29c7561961"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKIDMWY8HG8H3EEKDIJF",
+   "secret_access_key": "e5cWKPxrB4mEY0qmCT946O78ND6JtHcmfiKzftjH",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "040-header-GET",
+   "type": "header",
+   "method": "GET",
+   "host": "s3.example.com:8080",
+   "uri": "/%E3%81%82",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID1T8V3UQCUGHQFQJU/20260815/eu-central-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-tag, Signature=d9196493393c173587caf586142b8435b144aa6d8a575008ddf7f52ded543b49"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "no-cache, no-store"
+    ]
+   ],
+   "access_key_id": "AKID1T8V3UQCUGHQFQJU",
+   "secret_access_key": "msDcujj78D9u8sfPLfd6JAHAaPPvFJVGwqAEXrGX",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "041-header-GET",
+   "type": "header",
+   "method": "GET",
+   "host": "s3.example.com",
+   "uri": "/trailing./backup-2026/backup-2026/:c?empty=a%2Fb",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID9A2EA0GXHF7VUVAC/20260815/moon-crater-7/s3/aws4_request, SignedHeaders=cache-control;content-type;host;x-amz-content-sha256;x-amz-date, Signature=388a356544b8550c8252cf2f471b5484d2b04546d1e8d97deb990da8dacab3d2"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Cache-Control",
+     "a  b   c"
+    ],
+    [
+     "Content-Type",
+     "hello world"
+    ]
+   ],
+   "access_key_id": "AKID9A2EA0GXHF7VUVAC",
+   "secret_access_key": "PzTbptEBqRtsuaxBfiH6u5KAvqw9FLUjUBRwVKs9",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "042-header-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "s3.example.com:8080",
+   "uri": "//$y",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDZF6RNA1ZGWFRNIUP/20260815/moon-crater-7/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-note, Signature=9578a2c7df80c90172c4052acdcbb9c887c49da1d43421bb474aa5d20f82c99e"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-note",
+     "a  b   c"
+    ]
+   ],
+   "access_key_id": "AKIDZF6RNA1ZGWFRNIUP",
+   "secret_access_key": "c21KJ4BaQzaVQw/1bRtzBcahqoOUMKkpCnhDRxVy",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "043-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com:8080",
+   "uri": "/-lead/%2Fnested%2Fkey",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDMZBFZ32MLLYKE1YI/20260815/eu-central-1/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty, Signature=cf872b3a4e020e74ec88cabd3e7ece7e2e554be5272e3a26dbf0d66d816391d8"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-empty",
+     ""
+    ],
+    [
+     "Content-Type",
+     "hello world"
+    ]
+   ],
+   "access_key_id": "AKIDMZBFZ32MLLYKE1YI",
+   "secret_access_key": "989acKp0pRMXgLiDnh6S0OPCLyPjI2OlHhPlMpUw",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "044-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "s3.example.com:8080",
+   "uri": "/%20/%20/backup-2026?a=photos%2F&list-type=%2A&marker=text%2Fplain",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDU3H12YLZXDNL9UNQ/20260815/us-east-1/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date, Signature=6db295fa70f0059b88109c814cf98ee3619cdbefabc6070907031c7f6a48d81d"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Content-Type",
+     "=?utf-8?B?44GC?="
+    ]
+   ],
+   "access_key_id": "AKIDU3H12YLZXDNL9UNQ",
+   "secret_access_key": "GVVCNSlsn5ops5HWgAm0WRZdM1oGWezTNx8wJM1J",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "045-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com",
+   "uri": "/:c/%25/file.txt/%2F",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDPYNVRNSDOZEFN1UM/20260815/moon-crater-7/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=5c5c58b8a809f77d5701254635aad59823b74462f6420da8719f3bb203cc5f7b"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKIDPYNVRNSDOZEFN1UM",
+   "secret_access_key": "G8EkWioLfvDjYzPUPxXW/08GEg07+Nl4eEryZ9Pa",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "046-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "storage.internal",
+   "uri": "/%2F/trailing./%20?marker=a%2Fb&marker=a%2Fb",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDMERQJMLVO3OXJ7B4/20260815/us-east-1/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-tag, Signature=24b5f3f01e7e2fda8bd5b4e3ba7904a43d02f0924041907e60bf12b574fbf23c"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Content-Type",
+     "hello world"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "a  b   c"
+    ]
+   ],
+   "access_key_id": "AKIDMERQJMLVO3OXJ7B4",
+   "secret_access_key": "VstaOIbe5fRbE2MucSB61942YjMe0ln+FrSycRXG",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "047-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "storage.internal",
+   "uri": "/file.txt/@h?response-content-type=a%2Fb&empty=a%20b",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDDQ8CGK88SQDNEJIA/20260815/moon-crater-7/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=1e120ceb045f8ea17371d8cc2a130ed5534e0b3fcb471a6fa25f05d7ce243ded"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKIDDQ8CGK88SQDNEJIA",
+   "secret_access_key": "z2zzdvwgXeL9U+03TUOtWrOZf2ujGpcx0BxrmsHF",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "048-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com",
+   "uri": "/a*b/=eq?list-type=a%2Bb",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID87ISMI1J6YM6LGWA/20260815/us-east-1/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty;x-amz-meta-note, Signature=75b44af4cad1bc570eb3cffd7d24fcd0fa719410cbbf88421573aaee2f6f6235"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Cache-Control",
+     "no-cache, no-store"
+    ],
+    [
+     "x-amz-meta-note",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "x-amz-meta-empty",
+     "hello world"
+    ]
+   ],
+   "access_key_id": "AKID87ISMI1J6YM6LGWA",
+   "secret_access_key": "USB2kqCLyopvW+VNyVKgCMPb7ehNxI7HOcQZ8/0U",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "049-header-GET",
+   "type": "header",
+   "method": "GET",
+   "host": "s3.example.com:8080",
+   "uri": "/a'b/trailing./:c/!x",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDN1BNCXSOSJ6CPNP1/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date, Signature=a0f5a6bdd7f1cd76ab283957f192ad2d8c213700e4e61f34530e2c4eb67d2043"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Content-Type",
+     "a  b   c"
+    ]
+   ],
+   "access_key_id": "AKIDN1BNCXSOSJ6CPNP1",
+   "secret_access_key": "6zzAYaSAB3J7gACTTn209M6/zuQ6szrO8oG8fafU",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "050-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com:8080",
+   "uri": "/@h/a+b?response-content-type=a%2Bb&marker=%E3%81%82&response-content-type=a%2Bb",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDBM34304NVFM39S8D/20260815/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=5a10a1b4b52b7cf1edf8ac714487203ee21f7cd95bcd282982f4805d6cafc8aa"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKIDBM34304NVFM39S8D",
+   "secret_access_key": "rGwKokLQN4AC7uLodjZZa8PQs3F8Rl13IDv1heWe",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "051-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "storage.internal",
+   "uri": "/trailing.",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID27CSPZE2LTFQJSNF/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=f58959aaf6b11d0e55852a5c07327e3f8033a9cf324af81f82cbdd15f4dff46e"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKID27CSPZE2LTFQJSNF",
+   "secret_access_key": "AoUUyMaxv3xuCJXKmZjQyiPH5H5/hgNMnIUXcXoI",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "052-header-GET",
+   "type": "header",
+   "method": "GET",
+   "host": "s3.example.com",
+   "uri": "/backup-2026/&z/a'b/%2Fnested%2Fkey?marker=text%2Fplain",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDTQMU47YI6SYHHSGL/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-note, Signature=d19149c26c6505663fabc05ca3d4cf4d6bcbbce60c0639d2d68fbad535078e56"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-note",
+     "no-cache, no-store"
+    ]
+   ],
+   "access_key_id": "AKIDTQMU47YI6SYHHSGL",
+   "secret_access_key": "GnV34Z74Yur+l+X7onkWhfk5QovF0sFGz7pqUW+G",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "053-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "s3.example.com:8080",
+   "uri": "/backup-2026/(1)/%20/photos?empty=a%2Bb",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDCB8PR7GDAY3KL0YH/20260815/moon-crater-7/s3/aws4_request, SignedHeaders=cache-control;content-type;host;x-amz-content-sha256;x-amz-date, Signature=cc976d414111c96000b0904f3e833fe68eb578ecc0a4287d9d5c6e5030cb5697"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Content-Type",
+     "no-cache, no-store"
+    ],
+    [
+     "Cache-Control",
+     ""
+    ]
+   ],
+   "access_key_id": "AKIDCB8PR7GDAY3KL0YH",
+   "secret_access_key": "zS02xByU38hprMh1twrbYiyz9nIVW9x6nsn0X2Md",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "054-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com:8080",
+   "uri": "/trailing.",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDWQZBOYO5A045E2V3/20260815/moon-crater-7/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty, Signature=d2c84260df5b22ce2018db5fa69ffc384fd48bb3bf98bb95b384f23fcfe57672"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Content-Type",
+     "no-cache, no-store"
+    ],
+    [
+     "x-amz-meta-empty",
+     "a  b   c"
+    ]
+   ],
+   "access_key_id": "AKIDWQZBOYO5A045E2V3",
+   "secret_access_key": "Ms27EWkEpBC0BhJ+UWEdrr/+yj9jPuyp9P9C712a",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "055-header-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "s3.example.com",
+   "uri": "/%2F/!x?response-content-type=100%25",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDZHHP8S5VLOQ4QTW3/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date, Signature=3df340b603364dc7d2cd436d631bd34051c06662beacd006993cc90cf4ff59ff"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Cache-Control",
+     "text/plain; charset=utf-8"
+    ]
+   ],
+   "access_key_id": "AKIDZHHP8S5VLOQ4QTW3",
+   "secret_access_key": "WYNiJfT1bHjTf74Iue44iBleFCOvuz69+x3ZjlC9",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "056-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com:8080",
+   "uri": "/@h/(1)/%25/a'b?marker=a%20b",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID2WK249G5IIW6BI7S/20260815/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=eb79f5adc51b0992abf8ec69bfa96e8d885756e7c68db9872bea49cb2b8d1c4c"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKID2WK249G5IIW6BI7S",
+   "secret_access_key": "UCn+XqYmyBtZDV2iCb3kXixzwgkWphzGn4ZqC3Aj",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "057-header-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "s3.example.com",
+   "uri": "/&z/(1)/%E3%81%82/a'b?prefix=&list-type=%E3%81%82&a=a%2Fb&prefix=",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDZZPNBVUGNNOPPO9G/20260815/moon-crater-7/s3/aws4_request, SignedHeaders=cache-control;content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-note, Signature=3465a6252491a1f93b92dcc451c56f920c7fa6fd15e42cb06c37393ed4f2c779"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Content-Type",
+     ""
+    ],
+    [
+     "x-amz-meta-note",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "Cache-Control",
+     "no-cache, no-store"
+    ]
+   ],
+   "access_key_id": "AKIDZZPNBVUGNNOPPO9G",
+   "secret_access_key": "JZk/ddXzM7LVKtchXWjLP/91Rwwy4ATvznq2AzRA",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "058-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "s3.example.com:8080",
+   "uri": "/%2F?prefix=~&q%20k=2&list-type=%E3%81%82",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID74OBUR5DGEP4THTT/20260815/us-east-1/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date, Signature=4fe030197e22d68faeeaf782272371db9ff790563e9e4e2abd4f7fdfd63e647d"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Content-Type",
+     "a  b   c"
+    ]
+   ],
+   "access_key_id": "AKID74OBUR5DGEP4THTT",
+   "secret_access_key": "PK0ssrXLNjfmGytDthxvAgetasea5JPygHxz3c95",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "059-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "storage.internal",
+   "uri": "/%20/$y//trailing.?a=photos%2F",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID8V2IT4YI69U0R8DR/20260815/moon-crater-7/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty;x-amz-meta-tag, Signature=17afb21d54a738343a67a4475c50e0394b9e55d76763fb16583799d0f23dedd2"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Cache-Control",
+     "hello world"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "text/plain; charset=utf-8"
+    ],
+    [
+     "x-amz-meta-empty",
+     "=?utf-8?B?44GC?="
+    ]
+   ],
+   "access_key_id": "AKID8V2IT4YI69U0R8DR",
+   "secret_access_key": "A5d8GqiFhNaaqYo1jMtKBN/iOEgMEEY/ZwHBa7/Z",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "060-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "s3.example.com",
+   "uri": "//%2Fnested%2Fkey?q%20k=text%2Fplain",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDX92C8CDG96GVD76E/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=057d0cfb3a6000fc89f066aa8ef3a64ce0556e60624c66c384f62ff0bffce1d2"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKIDX92C8CDG96GVD76E",
+   "secret_access_key": "ysmStZZELgWX+XDnk7v2Ly/GkNgU7nvXKarWJ5OV",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "061-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com",
+   "uri": "/a*b?empty=text%2Fplain&a=photos%2F",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDKGXB2HA4DT7JWFMI/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=6aa3b95c3e71eeb82e12e9debad92c27df3a2cdf9114fd0d82d4ddbc42d56a17"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKIDKGXB2HA4DT7JWFMI",
+   "secret_access_key": "X+r2DKRGZ95PdGZ5XQDduN5/tLZxLUZX1wqrtPm/",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "062-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com",
+   "uri": "/trailing./_x/%E3%81%82/trailing.",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDXMQRXNG0Q2B4PCPK/20260815/eu-central-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-note;x-amz-meta-tag, Signature=c17237eb5fda8cf2e3170ac4b483d7b15bef0310824ca2c29703669ba84913b0"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "x-amz-meta-note",
+     "=?utf-8?B?44GC?="
+    ]
+   ],
+   "access_key_id": "AKIDXMQRXNG0Q2B4PCPK",
+   "secret_access_key": "UEuatcX2ZX5Xcbp2fKxZHjZD50K9MPGRtq8XqrGt",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "063-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "s3.example.com:8080",
+   "uri": "/~user/trailing.?marker=&response-content-type=%2A",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDUWSDR2B8JYQJ0STE/20260815/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=02456ecf498af0de1dc499431a35dac19240203925457963b03a8241d6a2dc37"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043254Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKIDUWSDR2B8JYQJ0STE",
+   "secret_access_key": "GBUToWUvRGHmOVcEI3TQxzUPVc8UtZ+fAeJhMzdy",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:54Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "064-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com:8080",
+   "uri": "/%25/_x?empty=photos%2F&a=a%2Fb",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID2T6GFAX4PZ66YFLB/20260815/us-east-1/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date, Signature=0a6be6f46e79ed5434162144613c2de89d78c9ec1095b683f26ac1055949bdf6"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Cache-Control",
+     "no-cache, no-store"
+    ]
+   ],
+   "access_key_id": "AKID2T6GFAX4PZ66YFLB",
+   "secret_access_key": "recrUXpxtbgVx/x/ro5/rHX9Pq60HNjYdLvMWdd1",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "065-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com",
+   "uri": "/%2F/_x?list-type=100%25",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDPI1I9DDKHRX7F0YT/20260815/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-tag, Signature=4ac861cec71d1ff7c74c0e97b830447a78958e9550f443a6b2dfcfcc543b8cc1"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "hello world"
+    ]
+   ],
+   "access_key_id": "AKIDPI1I9DDKHRX7F0YT",
+   "secret_access_key": "51f8lNzaSnbf56IcSEvkuXz3hhuksJgFM1dxb3Oc",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "066-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com:8080",
+   "uri": "/@h/a+b/trailing./(1)?q%20k=a%2Bb&prefix=%2A&empty=a%20b",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDJ7SP0ORH18AUCCUP/20260815/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=6fe5ba4e977ba30e143b9bce5a97745d126629baf3adb1f39c7c55f4654b0dcd"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKIDJ7SP0ORH18AUCCUP",
+   "secret_access_key": "wNUu68kwtkZnD8oJMsw5WJnHV6BhiB0KudKTyH9w",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "067-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "storage.internal",
+   "uri": "/%20/=eq?marker=a%2Bb&a=a%2Fb",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDBON1U4MEZPVPT6P9/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty;x-amz-meta-tag, Signature=e7413f609b9892fc4a1f19a44347b6fd6cfe63ac4b72345176c0e136840c73b7"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-empty",
+     "no-cache, no-store"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "Cache-Control",
+     "no-cache, no-store"
+    ]
+   ],
+   "access_key_id": "AKIDBON1U4MEZPVPT6P9",
+   "secret_access_key": "3Ikavpdn4eGVEX3yn8rJ2K1H4AYLQvbusb3Syddw",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "068-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "storage.internal",
+   "uri": "/=eq/@h",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID3QBPVOPPHRJ7J715/20260815/eu-central-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-note, Signature=95365a40d62e0be605517ca59a629b0b18891b00cfce9d33f751e6000237dd4b"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-note",
+     "hello world"
+    ]
+   ],
+   "access_key_id": "AKID3QBPVOPPHRJ7J715",
+   "secret_access_key": "FGUmim2XlKIzeoTolu7yzzL1VGm8yK+i7Yhr7cLd",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "069-header-GET",
+   "type": "header",
+   "method": "GET",
+   "host": "s3.example.com:8080",
+   "uri": "/@h?a=a%2Bb&list-type=%2A",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID2A5O6LD4C0Q76M4Y/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-note, Signature=12b8155a356e5686ed62f411030e59e79f2b489b1634271625606716ae6a7403"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-note",
+     "=?utf-8?B?44GC?="
+    ]
+   ],
+   "access_key_id": "AKID2A5O6LD4C0Q76M4Y",
+   "secret_access_key": "CMhg94j7J9aKeXkznSBeb6K2DRis+C+7UYY6I1yb",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "070-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com",
+   "uri": "/%E3%81%82?list-type=~&marker=a%2Fb",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDQ231QIBWOL4DW0GH/20260815/eu-central-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=9b9158637bf3bef5f61146455058caeef9fb98e3dbb3f1a6ae1c4a4e2bb6508b"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKIDQ231QIBWOL4DW0GH",
+   "secret_access_key": "pj9WffilMKfXMgfvBVnzfPYXg8E70BJKXv0Orrob",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "071-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "storage.internal",
+   "uri": "/=eq/%00/&z/",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDDCP6XC7D09JTX978/20260815/eu-central-1/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date, Signature=f57e0faabf4584c2449bdedd11e7079cd45b3349d9f6bb55adfe701bce5e4079"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Content-Type",
+     "no-cache, no-store"
+    ]
+   ],
+   "access_key_id": "AKIDDCP6XC7D09JTX978",
+   "secret_access_key": "ACzhFPzjJTXqrt5976SN4VkDmG3hVnvDcyzk4p1s",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "072-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com",
+   "uri": "/%20/a*b?response-content-type=photos%2F",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDA5OV55C8YL2BS1CE/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=6f55235127258d16f74685e883ee57da64a5a2e550f609cd33f05a22ba81c1ff"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKIDA5OV55C8YL2BS1CE",
+   "secret_access_key": "uS+CTue0uD3ektPDTYyGGPShrMlF8NMDckxMES+9",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "073-header-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "s3.example.com",
+   "uri": "/=eq/photos/(1)/a*b?prefix=a%2Bb",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDXE5R637D8GNFCCBA/20260815/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-tag, Signature=5f47f76056f5140f3658df892a2c46aea57f76e3eb03bd9d5978e55a5aef56b8"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "hello world"
+    ]
+   ],
+   "access_key_id": "AKIDXE5R637D8GNFCCBA",
+   "secret_access_key": "8cUSrHROOOHKuSgbkp/5NAQzY6P7RyUZpTve3Ren",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "074-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "storage.internal",
+   "uri": "/:c/%25/@h?response-content-type&prefix=~",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID98Z2GGRU8YSFJKCI/20260815/us-east-1/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty;x-amz-meta-note, Signature=bdadab564d9bd6a290dcd6291e3bc2cbaebfb3d80254136fbef189ae569b5302"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Cache-Control",
+     "text/plain; charset=utf-8"
+    ],
+    [
+     "x-amz-meta-note",
+     "text/plain; charset=utf-8"
+    ],
+    [
+     "x-amz-meta-empty",
+     ""
+    ]
+   ],
+   "access_key_id": "AKID98Z2GGRU8YSFJKCI",
+   "secret_access_key": "7CgRuUiRs5ALvg2+ZkrVhQI6dRsen9FJlQ2yh8kL",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "075-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com",
+   "uri": "/%2Fnested%2Fkey/a+b/a'b",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID43NIRHR5GC9ARWN3/20260815/moon-crater-7/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=5d3dd6869af3240eee1ba00ed0c66e2e37609cff50e7fe356d9a9b98471b1ba2"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKID43NIRHR5GC9ARWN3",
+   "secret_access_key": "oXsNZeDlqMTZWHWsjfiOZLuvQNdgRjimR18g3IMb",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "076-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "storage.internal",
+   "uri": "/_x/trailing./a/=eq?prefix=photos%2F&q%20k=photos%2F&marker=~",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID3R0O1I6L3MN6GVJ7/20260815/moon-crater-7/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty, Signature=7084ae9d8168b9f64eb4d0e62ad50faaa7f98789563e1bb43fc85f663cfb28c2"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-empty",
+     "hello world"
+    ]
+   ],
+   "access_key_id": "AKID3R0O1I6L3MN6GVJ7",
+   "secret_access_key": "fHTON52bsltaJc/FWdJbKLlAssSrNa6o0OzllRvV",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "077-header-GET",
+   "type": "header",
+   "method": "GET",
+   "host": "s3.example.com:8080",
+   "uri": "//%2Fnested%2Fkey//a+b?prefix=2&list-type=&prefix=2",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDSK9Q3CHGPK0WM2UG/20260815/moon-crater-7/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-note, Signature=66bcaca218c7a33aea3d868764a089b3776ba32367b4e5989bff3f2eac83fa7a"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-note",
+     "no-cache, no-store"
+    ]
+   ],
+   "access_key_id": "AKIDSK9Q3CHGPK0WM2UG",
+   "secret_access_key": "eZA4CS3h3SDp/00NJuRWEh/pIty1A55/8N2TVqIx",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "078-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com",
+   "uri": "/a'b/$y?a=%E3%81%82&list-type=a%2Fb&empty=100%25",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDJPKX0XSLUFS7PO10/20260815/eu-central-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-note, Signature=d4fc715d98f198b739c7245ef1a184b9b59ff70d27a44531a835b5d231293126"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-note",
+     "no-cache, no-store"
+    ]
+   ],
+   "access_key_id": "AKIDJPKX0XSLUFS7PO10",
+   "secret_access_key": "HHiaVRt9A0EPG9IqdST9XrQ2g8rNqmU/wkwzDwaR",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "079-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com:8080",
+   "uri": "/a'b/%E3%81%82?prefix=text%2Fplain&q%20k=text%2Fplain",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDWJCJNCGYU4QI0I7B/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=9d32fbdafb6ff6b89f1af1c6b9bb43f922ce5f8eaf628b7b126a8c5e2adc99b4"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKIDWJCJNCGYU4QI0I7B",
+   "secret_access_key": "ryu1ITRXHuBosbC6rOxfzKkxhmLOj/6eMyWZ0JbS",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "080-header-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "s3.example.com",
+   "uri": "/%00/backup-2026/!x",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDDY8AD8RF9NJ5GS2M/20260815/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-note, Signature=18264de1352e50a822f990b941d3012434fa7586cc591879660b4bc618bba76c"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-note",
+     "no-cache, no-store"
+    ]
+   ],
+   "access_key_id": "AKIDDY8AD8RF9NJ5GS2M",
+   "secret_access_key": "B8htsMOIANZ1B1qZyyNk3l5RcFhdwQXgRrh0ODZW",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "081-header-GET",
+   "type": "header",
+   "method": "GET",
+   "host": "s3.example.com:8080",
+   "uri": "/%2F/$y/&z/?a=a%2Fb&list-type=%E3%81%82",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDD02RFLGKAZZV93GU/20260815/us-east-1/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date, Signature=f50701fe9bda577688521379eda2abe824e24b8f3fc79a6a04e307ff32822d70"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Cache-Control",
+     "a  b   c"
+    ]
+   ],
+   "access_key_id": "AKIDD02RFLGKAZZV93GU",
+   "secret_access_key": "W8NObnospHcB3ngO+TIaE3VZ4YCK50RSbkvyxT6D",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "082-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "s3.example.com:8080",
+   "uri": "/photos/%2Fnested%2Fkey/%00/%7F?list-type=100%25&response-content-type=a%20b",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDUPV6OFUHSTIWARH0/20260815/eu-central-1/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date;x-amz-meta-note, Signature=391430e6c31125bb2d0033cf2f6f6f86be82c3bc6442b7dbe57b2db354cdf69c"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-note",
+     "hello world"
+    ],
+    [
+     "Cache-Control",
+     "=?utf-8?B?44GC?="
+    ]
+   ],
+   "access_key_id": "AKIDUPV6OFUHSTIWARH0",
+   "secret_access_key": "3BpBRwtZSTMsJmUCrCNvKFISIuHxly0RpSIVaiLf",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "083-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "s3.example.com:8080",
+   "uri": "/%E3%81%82/~user",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDC5N59YOW4CBNOLGG/20260815/eu-central-1/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty;x-amz-meta-note, Signature=80df338e09713e0f4de74a9b74d8afa19bfc9f3492936f25a9291a96e873f41a"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Content-Type",
+     "a  b   c"
+    ],
+    [
+     "x-amz-meta-empty",
+     "text/plain; charset=utf-8"
+    ],
+    [
+     "x-amz-meta-note",
+     "no-cache, no-store"
+    ]
+   ],
+   "access_key_id": "AKIDC5N59YOW4CBNOLGG",
+   "secret_access_key": "j0mNZjceiYw3CimE48cJmgWKmEKhwaPccpt4K+uj",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "084-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "storage.internal",
+   "uri": "/!x//a/%2Fnested%2Fkey?response-content-type=a%2Bb&a=photos%2F&marker=%2A&response-content-type=a%2Bb",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDYOUI6QR2LL40ERF2/20260815/eu-central-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=c49782c6f574607d20a0d84d8ba0a444ac4d90e5bd20ad4ac04964321fcbdbb0"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKIDYOUI6QR2LL40ERF2",
+   "secret_access_key": "ZgcF/3LUZBmf725I6QeY6gInX7ha5i/P48CxQd+A",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "085-header-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "s3.example.com",
+   "uri": "/~user?empty=%E3%81%82",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID2GRJUN9U0PAEHDRT/20260815/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=2da616b089d894f26333e155b72e431ddfd56b7892613a475477921f22ac898c"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKID2GRJUN9U0PAEHDRT",
+   "secret_access_key": "peBwNMrvGS6+f8o+sTkE/jmExXO8lB/jW3RT6giZ",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "086-header-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "storage.internal",
+   "uri": "/&z/%00/&z/(1)?list-type=a%2Bb&q%20k=%2A&response-content-type=%E3%81%82",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDZSCCNOX0QKQ4ABZW/20260815/eu-central-1/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty, Signature=d06d0dd92b3d314bb91f87f3160f59624511d3efc99deb839f9f58dc22ecf29a"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-empty",
+     "no-cache, no-store"
+    ],
+    [
+     "Cache-Control",
+     "a  b   c"
+    ]
+   ],
+   "access_key_id": "AKIDZSCCNOX0QKQ4ABZW",
+   "secret_access_key": "rKDNIZRS68VKwWlvMA0lAcnCwEibcFbcEZKpZjyX",
+   "session_token": "",
+   "region": "eu-central-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "087-header-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "s3.example.com",
+   "uri": "/=eq/~user?prefix=%2A&prefix=%2A",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDWL1XV163397YTT26/20260815/moon-crater-7/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty, Signature=b7f65e120b3e533c769393cb572462eb516b482a560170c9949d7ef2c501237b"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Content-Type",
+     "=?utf-8?B?44GC?="
+    ],
+    [
+     "x-amz-meta-empty",
+     "no-cache, no-store"
+    ]
+   ],
+   "access_key_id": "AKIDWL1XV163397YTT26",
+   "secret_access_key": "HEsTgmgy7HWL40+ASwV0xHMfdTW8ayD/eKC/YecB",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "088-header-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "s3.example.com",
+   "uri": "/=eq/%25?q%20k=~&marker=%E3%81%82",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID884CSDHS1MXP0W8N/20260815/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=9654aff5fc00192ce28aa0c7abd2f8676bd948b557c4e976569fa7dcf8e8d8cf"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKID884CSDHS1MXP0W8N",
+   "secret_access_key": "N9PDAGv4PNqdW7fFUD6lN6eaFRM+5RHzhOTnJr2R",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "089-header-GET",
+   "type": "header",
+   "method": "GET",
+   "host": "storage.internal",
+   "uri": "/a'b/%00/~user/trailing.?list-type=%E3%81%82",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID6A8PAGMVLJFXFSZW/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=cache-control;content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-tag, Signature=60b035b93f7af3acfe6ed5a5fcb184788b57af938da8daf4af5c2b1ee5d6dd04"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Cache-Control",
+     "a  b   c"
+    ],
+    [
+     "Content-Type",
+     "no-cache, no-store"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     ""
+    ]
+   ],
+   "access_key_id": "AKID6A8PAGMVLJFXFSZW",
+   "secret_access_key": "S1h9EmPw6wBdyw7QhK/vIysC0cN9RZsm9W9zHnzs",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "090-header-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "s3.example.com",
+   "uri": "/file.txt?a=~&marker=a%2Bb",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDN9GUJRCZ7QEB2901/20260815/moon-crater-7/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-tag, Signature=788c6019c74b887bae38f9c5071ccdd91654a192ad121ddff0453f53f857cb1a"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     "a  b   c"
+    ],
+    [
+     "Content-Type",
+     "text/plain; charset=utf-8"
+    ]
+   ],
+   "access_key_id": "AKIDN9GUJRCZ7QEB2901",
+   "secret_access_key": "0uhpsRsRs3IjrrW1iKmIzpLOkK2rQiJePBKkLc0E",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "091-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "storage.internal",
+   "uri": "/_x/!x/backup-2026?a=~&a=~",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKID73A75Z0T0P6DGU3O/20260815/moon-crater-7/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date, Signature=8d48356f684a11c8366aa9c8407803d0df0a24078dc2e140b266bf9223f563cc"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Content-Type",
+     "text/plain; charset=utf-8"
+    ]
+   ],
+   "access_key_id": "AKID73A75Z0T0P6DGU3O",
+   "secret_access_key": "za9/hbRh2trHyNxDRUoJA7e9BwO1bg/SrYzYACPk",
+   "session_token": "",
+   "region": "moon-crater-7",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "092-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com",
+   "uri": "/%E3%81%82//@h/%7F?prefix=a%2Bb&empty=2&a=a%20b",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDROWZBX735EZLTHQ3/20260815/us-east-1/s3/aws4_request, SignedHeaders=cache-control;content-type;host;x-amz-content-sha256;x-amz-date, Signature=e86376549d95138dd18c1f9ebac0ce6a34eddc87ede73e627b7b1ee84c69a8a9"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Cache-Control",
+     "a  b   c"
+    ],
+    [
+     "Content-Type",
+     ""
+    ]
+   ],
+   "access_key_id": "AKIDROWZBX735EZLTHQ3",
+   "secret_access_key": "+QPaQEdKEvIgc8XL1sR8kLtTvqp6m90bsdx5v0RV",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "093-header-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "s3.example.com:8080",
+   "uri": "/%00/a*b?q%20k=a%20b&prefix=a%2Bb",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDJSJ3QTKMLM3WJJWN/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-meta-empty, Signature=76609215485edcb72d97d795ca554216e4de5e083c5577f12e4fa2f2848c26fb"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "x-amz-meta-empty",
+     "no-cache, no-store"
+    ]
+   ],
+   "access_key_id": "AKIDJSJ3QTKMLM3WJJWN",
+   "secret_access_key": "y91btCPfp+tO1FJa+E9VeaDGmWQHxGj5BNQUW1/r",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "094-header-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "s3.example.com:8080",
+   "uri": "/%2F?prefix=~&q%20k=2&a=%E3%81%82",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDSWBMR5O8LGFLVV0J/20260815/us-east-1/s3/aws4_request, SignedHeaders=cache-control;host;x-amz-content-sha256;x-amz-date;x-amz-meta-tag, Signature=42418ad1332e40613ba98b4add6904c758159eb1e3b7a79d64fe10efadbbe4a2"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ],
+    [
+     "Cache-Control",
+     "no-cache, no-store"
+    ],
+    [
+     "X-Amz-Meta-Tag",
+     ""
+    ]
+   ],
+   "access_key_id": "AKIDSWBMR5O8LGFLVV0J",
+   "secret_access_key": "s6oRToD9CIBi6sOIf9ZkZoQ6J/OghhGue7CATMc1",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "name": "095-header-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "s3.example.com",
+   "uri": "/0?marker=photos%2F",
+   "headers": [
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDA2NKDF3WO0DDH1JT/20260815/ap-northeast-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=bf58d996a0e180c8258db350d8d498b3321acf83056097380f81c09b6f6a4502"
+    ],
+    [
+     "X-Amz-Date",
+     "20260815T043255Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    [
+     "User-Agent",
+     "curl/8.5.0"
+    ],
+    [
+     "Accept",
+     "*/*"
+    ]
+   ],
+   "access_key_id": "AKIDA2NKDF3WO0DDH1JT",
+   "secret_access_key": "4Tfnxwhp6hX9AWGkyd1rU6gqcFdk/eOWwTu/JT+X",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-08-15T04:32:55Z",
+   "payload_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+ ]
+}
