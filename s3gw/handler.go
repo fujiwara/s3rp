@@ -129,14 +129,15 @@ func (g *Gateway) wrapHandler(h handlerFunc) http.HandlerFunc {
 					// only description we have
 					s3e = s3err.Internal(err, "We encountered an internal error. Please try again.")
 				}
-				code = s3e.Code
 				// the cause never reaches the client, so handing it to the
 				// observer is the only way it can be seen
 				cause = errors.Unwrap(s3e)
 				// a response already under way cannot be replaced by an error
 				// document: appending one would leave the client a body that
-				// parses as neither
+				// parses as neither. Code stays empty then because it records
+				// what the client was told, and it was told nothing.
 				if !sw.started {
+					code = s3e.Code
 					s3err.Write(sw, r, s3e, requestID)
 				}
 			}

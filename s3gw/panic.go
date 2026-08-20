@@ -8,9 +8,13 @@ import "fmt"
 // The gateway recovers at the request boundary rather than leaving it to
 // net/http, which would answer the client with a dropped connection and
 // write the panic to its own ErrorLog, outside everything the service
-// installed. A recovered panic is an InternalError to the client and an
-// ordinary failure to the observer, so it lands in the same log line, under
-// the same x-amz-request-id, as every other failure.
+// installed. What the client gets depends on how far the response had come:
+// an InternalError when nothing had been written yet, and an aborted
+// connection when it had, since a half-sent response cannot be replaced by
+// an error document (RequestInfo.Code is then empty, and Status is what was
+// already sent). Either way it is an ordinary failure to the observer, so it
+// lands in the same log line, under the same x-amz-request-id, as every
+// other failure.
 //
 // Only the message is rendered by RequestInfo's JSON, since a stack does not
 // belong in an access log line by default. A service that wants it asks for

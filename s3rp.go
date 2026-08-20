@@ -39,14 +39,22 @@ func NewWithStore(_ context.Context, cfg *Config, st store.Store) (*S3RP, error)
 // decided here: a server-side fault is an error, a refusal the client caused
 // is routine but still worth being able to explain afterwards.
 func logRequest(ctx context.Context, info *s3gw.RequestInfo) {
-	if info.Code != "" {
+	// a failure discovered after the response had started carries no code —
+	// the client could not be told one — so the cause is the other half of
+	// the condition, not just an attribute
+	if info.Code != "" || info.Err != nil {
 		level := slog.LevelInfo
-		if info.Status >= http.StatusInternalServerError {
+		var pe *s3gw.PanicError
+		if info.Status >= http.StatusInternalServerError || errors.As(info.Err, &pe) {
 			level = slog.LevelError
 		}
 		attrs := []any{"code", info.Code, "status", info.Status, "request_id", info.RequestID}
 		if info.Err != nil {
 			attrs = append(attrs, "error", info.Err)
+		}
+		if pe != nil {
+			// nothing else prints it now that the gateway recovered the panic
+			attrs = append(attrs, "stack", string(pe.Stack))
 		}
 		slog.Log(ctx, level, "request failed", attrs...)
 	}

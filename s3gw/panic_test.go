@@ -112,9 +112,13 @@ func TestPanicAfterResponseStartedAborts(t *testing.T) {
 	if len(seen) != 1 {
 		t.Fatalf("expect one observation, got %d", len(seen))
 	}
-	// the status the client was actually given, not a 500 that was never sent
+	// the record says what the client was actually told: the status already
+	// sent, and no code, since the error document could not be written
 	if seen[0].Status != http.StatusOK {
 		t.Errorf("expect the status already sent, got %d", seen[0].Status)
+	}
+	if seen[0].Code != "" {
+		t.Errorf("expect no code for an error the client was never told, got %q", seen[0].Code)
 	}
 	var pe *s3gw.PanicError
 	if !errors.As(seen[0].Err, &pe) {
