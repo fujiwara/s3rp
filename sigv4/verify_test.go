@@ -233,6 +233,44 @@ func TestVerifiedSignedHeaders(t *testing.T) {
 	})
 }
 
+// A duplicated hoisted query key must promote a value the signature binds.
+// The SDK signer sorts each key's values before canonicalizing, so both wire
+// orderings of the same values verify — promoting the wire-first value would
+// let the URL holder pick which duplicate takes effect by reordering. The
+// promotion must therefore be order-independent: all values, sorted.
+func TestPresignedDuplicateHoistedParam(t *testing.T) {
+	const target = "http://s3.example.com/bucket/key.txt?X-Amz-Expires=300&x-amz-meta-dup=aaa&x-amz-meta-dup=bbb"
+	req, err := http.NewRequest("GET", target, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer := v4.NewSigner(func(o *v4.SignerOptions) { o.DisableURIPathEscaping = true })
+	creds := aws.Credentials{AccessKeyID: testAccessKeyID, SecretAccessKey: testSecret}
+	signedURI, _, err := signer.PresignHTTP(context.Background(), creds, req, "UNSIGNED-PAYLOAD", "s3", "us-east-1", testTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const asSigned = "x-amz-meta-dup=aaa&x-amz-meta-dup=bbb"
+	const reordered = "x-amz-meta-dup=bbb&x-amz-meta-dup=aaa"
+	if !strings.Contains(signedURI, asSigned) {
+		t.Fatalf("fixture: expected adjacent sorted duplicates in %s", signedURI)
+	}
+	for name, uri := range map[string]string{
+		"as signed": signedURI,
+		"reordered": strings.Replace(signedURI, asSigned, reordered, 1),
+	} {
+		sr := httptest.NewRequest("GET", uri, nil)
+		sr.Host = req.Host
+		if _, s3e := newVerifier().Verify(sr, lookup); s3e != nil {
+			t.Fatalf("%s: %v", name, s3e)
+		}
+		got := sr.Header.Values("x-amz-meta-dup")
+		if len(got) != 2 || got[0] != "aaa" || got[1] != "bbb" {
+			t.Errorf("%s: promoted values must be order-independent and complete, got %v", name, got)
+		}
+	}
+}
+
 // a lookup failure that is not ErrUnknownKey must not be reported as a bad
 // key, since that would tell a client its credentials are wrong when the
 // service is merely broken

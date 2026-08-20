@@ -506,6 +506,12 @@ func (v *Verifier) verifyPresignedRequest(r *http.Request, lookup SecretLookup) 
 // them from headers. A name already present as a header was necessarily
 // signed (requireSignedAmzHeaders ran before this), so reporting it promoted
 // is sound either way.
+//
+// A duplicated key's values are promoted all, in sorted order, because that
+// is what the signature commits to: the SDK signer sorts each key's values
+// before canonicalizing, so any wire ordering of the same values verifies.
+// Promoting the wire-first value would let a URL holder pick which duplicate
+// takes effect by reordering — a choice the signature does not bind.
 func promoteHoistedQueryParams(r *http.Request) []string {
 	authParams := make(map[string]bool, len(presignAuthParams)+1)
 	for _, p := range presignAuthParams {
@@ -519,7 +525,10 @@ func promoteHoistedQueryParams(r *http.Request) []string {
 			continue
 		}
 		if r.Header.Get(k) == "" {
-			r.Header.Set(k, vs[0])
+			vals := make([]string, len(vs))
+			copy(vals, vs)
+			sort.Strings(vals)
+			r.Header[http.CanonicalHeaderKey(k)] = vals
 		}
 		promoted = append(promoted, lk)
 	}
