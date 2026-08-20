@@ -3,8 +3,10 @@ package s3gw
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/url"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -42,7 +44,10 @@ func (g *Gateway) Handler() http.Handler {
 
 type statusWriter struct {
 	http.ResponseWriter
-	status  int
+	status int
+	// started records that the response has begun, so a failure discovered
+	// afterwards knows an error document can no longer replace it.
+	started bool
 	written int64
 	limiter BandwidthLimiter
 	ctx     context.Context // the request's context, set with limiter
@@ -50,10 +55,12 @@ type statusWriter struct {
 
 func (w *statusWriter) WriteHeader(status int) {
 	w.status = status
+	w.started = true
 	w.ResponseWriter.WriteHeader(status)
 }
 
 func (w *statusWriter) Write(p []byte) (int, error) {
+	w.started = true // an implicit 200 is a started response too
 	if w.limiter == nil {
 		n, err := w.ResponseWriter.Write(p)
 		w.written += int64(n)
@@ -103,33 +110,83 @@ func (g *Gateway) wrapHandler(h handlerFunc) http.HandlerFunc {
 			body.ReadCloser = r.Body
 			r.Body = body
 		}
-		err := h(sw, r)
-		var code string
-		var cause error
-		if err != nil {
-			var s3e *s3err.Error
-			if !errors.As(err, &s3e) {
-				// an error that is not an S3 error at all: the operation
-				// layer should not produce these, so the error itself is the
-				// only description we have
-				s3e = s3err.Internal(err, "We encountered an internal error. Please try again.")
+
+		// report answers the client and hands the record to the observer,
+		// exactly once per request whether the handler returned or panicked.
+		reported := false
+		report := func(err error) {
+			if reported {
+				return
 			}
-			code = s3e.Code
-			// the cause never reaches the client, so handing it to the
-			// observer is the only way it can be seen
-			cause = errors.Unwrap(s3e)
-			s3err.Write(sw, r, s3e, requestID)
+			reported = true
+			var code string
+			var cause error
+			if err != nil {
+				var s3e *s3err.Error
+				if !errors.As(err, &s3e) {
+					// an error that is not an S3 error at all: the operation
+					// layer should not produce these, so the error itself is the
+					// only description we have
+					s3e = s3err.Internal(err, "We encountered an internal error. Please try again.")
+				}
+				code = s3e.Code
+				// the cause never reaches the client, so handing it to the
+				// observer is the only way it can be seen
+				cause = errors.Unwrap(s3e)
+				// a response already under way cannot be replaced by an error
+				// document: appending one would leave the client a body that
+				// parses as neither
+				if !sw.started {
+					s3err.Write(sw, r, s3e, requestID)
+				}
+			}
+			if info == nil {
+				return
+			}
+			info.RawQuery = redactQuery(r.URL.Query())
+			info.Status = sw.status
+			info.Code = code
+			info.Err = cause
+			info.Duration = time.Since(start)
+			info.BytesIn, info.BytesOut = body.n, sw.written
+			// the observer is the channel failures are reported through, so
+			// when it is the thing that failed there is nowhere left to
+			// report it but here — and its panic must not cost the client
+			// the response that is already written
+			defer func() {
+				if p := recover(); p != nil {
+					slog.WarnContext(r.Context(), "observer panicked",
+						"request_id", requestID, "panic", p)
+				}
+			}()
+			g.observer(r.Context(), info)
 		}
-		if info == nil {
-			return
-		}
-		info.RawQuery = redactQuery(r.URL.Query())
-		info.Status = sw.status
-		info.Code = code
-		info.Err = cause
-		info.Duration = time.Since(start)
-		info.BytesIn, info.BytesOut = body.n, sw.written
-		g.observer(r.Context(), info)
+
+		defer func() {
+			p := recover()
+			if p == nil {
+				return
+			}
+			if p == http.ErrAbortHandler {
+				// net/http's own signal for a deliberate silent abort: pass
+				// it on untouched, including the silence
+				panic(p)
+			}
+			// net/http would recover this too, but by dropping the
+			// connection: the client gets no response at all (not even one
+			// already written, which is still buffered), the panic goes to
+			// its ErrorLog instead of the observer, and the client's retry
+			// runs the whole operation again. Answer and record it here
+			// instead.
+			started := sw.started
+			report(&PanicError{Value: p, Stack: debug.Stack()})
+			if started {
+				// there is a half-sent response the client must not read as
+				// a complete one, and no way to take it back
+				panic(http.ErrAbortHandler)
+			}
+		}()
+		report(h(sw, r))
 	}
 }
 
