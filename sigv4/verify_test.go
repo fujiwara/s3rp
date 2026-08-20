@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -114,6 +115,79 @@ func TestVerifyRejects(t *testing.T) {
 				t.Errorf("expect %s, got %s (%s)", tc.code, err.Code, err.Message)
 			}
 		})
+	}
+}
+
+// presignedRequest builds a server-side presigned GET request signed like a
+// real S3 client. target must carry X-Amz-Expires; the signer does not add it.
+func presignedRequest(t *testing.T, target string) *http.Request {
+	t.Helper()
+	req, err := http.NewRequest("GET", target, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer := v4.NewSigner(func(o *v4.SignerOptions) { o.DisableURIPathEscaping = true })
+	creds := aws.Credentials{AccessKeyID: testAccessKeyID, SecretAccessKey: testSecret}
+	signedURI, _, err := signer.PresignHTTP(context.Background(), creds, req, "UNSIGNED-PAYLOAD", "s3", "us-east-1", testTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sr := httptest.NewRequest("GET", signedURI, nil)
+	sr.Host = req.Host
+	return sr
+}
+
+// An x-amz-* header outside SignedHeaders is attacker-controllable: the
+// signature does not commit to it, so honoring it would let a presigned-URL
+// holder attach semantics (storage class, object-lock retention, an SSE mode,
+// a copy source, metadata) the grantor never authorized — the Ceph RGW
+// CVE-2026-54330 class. The verifier must refuse it with AccessDenied on both
+// the header and the presigned auth paths.
+func TestVerifyRejectsUnsignedAmzHeader(t *testing.T) {
+	t.Run("header auth", func(t *testing.T) {
+		r := signedRequest(t, testSecret)
+		r.Header.Set("x-amz-storage-class", "GLACIER") // not in SignedHeaders
+		_, err := newVerifier().Verify(r, lookup)
+		if err == nil {
+			t.Fatal("expect the unsigned x-amz header to be refused")
+		}
+		if err.Code != "AccessDenied" {
+			t.Errorf("expect AccessDenied, got %s (%s)", err.Code, err.Message)
+		}
+	})
+	t.Run("presigned auth", func(t *testing.T) {
+		r := presignedRequest(t, "http://s3.example.com/bucket/key.txt?X-Amz-Expires=300")
+		r.Header.Set("x-amz-acl", "public-read") // not signed; presign hoists to query
+		_, err := newVerifier().Verify(r, lookup)
+		if err == nil {
+			t.Fatal("expect the unsigned x-amz header to be refused")
+		}
+		if err.Code != "AccessDenied" {
+			t.Errorf("expect AccessDenied, got %s (%s)", err.Code, err.Message)
+		}
+	})
+	t.Run("message lists headers sorted", func(t *testing.T) {
+		r := signedRequest(t, testSecret)
+		r.Header.Set("x-amz-tagging", "k=v")
+		r.Header.Set("x-amz-meta-foo", "bar")
+		_, err := newVerifier().Verify(r, lookup)
+		if err == nil {
+			t.Fatal("expect refusal")
+		}
+		if want := "x-amz-meta-foo, x-amz-tagging"; !strings.Contains(err.Message, want) {
+			t.Errorf("expect message to list %q, got %q", want, err.Message)
+		}
+	})
+}
+
+// A standard (non-x-amz) header left unsigned is legitimate: S3 requires only
+// x-amz-* headers to be signed, and presigners deliberately leave headers such
+// as Content-Type off a presigned PUT's signature. The gate must not touch it.
+func TestVerifyAllowsUnsignedStandardHeader(t *testing.T) {
+	r := signedRequest(t, testSecret)
+	r.Header.Set("Content-Type", "text/plain") // not signed, but not x-amz-*
+	if _, err := newVerifier().Verify(r, lookup); err != nil {
+		t.Fatalf("an unsigned standard header must be allowed, got %v", err)
 	}
 }
 

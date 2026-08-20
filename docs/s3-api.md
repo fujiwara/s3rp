@@ -225,6 +225,8 @@ The gateway behaves like a bucket with ACLs disabled (Object Ownership = bucket 
 
 Presigned URLs (SigV4 query string authentication) generated with front-side keys against the gateway's endpoint are supported for the operations above. Expiry (`X-Amz-Expires`, up to 7 days) is enforced.
 
+Every `x-amz-*` request header must be covered by the signature, exactly as Amazon S3 requires. A request carrying an `x-amz-*` header outside `SignedHeaders` (for either header or presigned authentication) is refused with `403 AccessDenied`: the signature does not commit to such a header, so honoring it would let a presigned-URL holder attach storage class, object-lock retention, an SSE mode and key, a copy source, tagging or metadata the URL grantor never signed. Standard headers left unsigned (for example `Content-Type` on a presigned PUT) are unaffected, as on AWS.
+
 ```console
 $ aws --endpoint-url http://localhost:8080 s3 presign s3://photos/foo.jpg
 http://localhost:8080/photos/foo.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&...
