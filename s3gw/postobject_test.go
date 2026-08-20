@@ -194,6 +194,15 @@ func TestPostObject(t *testing.T) {
 	if op.BytesIn <= int64(len("hello post")) {
 		t.Errorf("expect the form framing to be counted, got %d", op.BytesIn)
 	}
+	// the x-amz-meta-* form field reaches the hooks as Op.Request.Metadata,
+	// exactly as the header would on a PUT: a hook must not have to know
+	// which of the two upload mechanisms was used
+	if op.Request == nil || op.Request.Metadata["color"] != "blue" {
+		t.Errorf("expect the form's metadata on the op, got %+v", op.Request)
+	}
+	if op.Response == nil || op.Response.ETag != `"post-etag"` {
+		t.Errorf("expect the backend's answer on the op, got %+v", op.Response)
+	}
 }
 
 func TestPostObjectDefaultStatusAndRedirect(t *testing.T) {

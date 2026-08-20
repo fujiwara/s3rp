@@ -311,6 +311,33 @@ Your `store.Store` implementation — and the control plane's write path that fe
   ```
 - A client that retries sends a **new request**, which is verified, authorized and metered on its own. That is what the server served; whether a retry should count toward a quota or an invoice is the application's decision, not the gateway's.
 - `Op.BytesIn` / `BytesOut` count bytes on the wire, so an `aws-chunked` upload includes its framing. They measure transfer, not storage: a quota over bytes at rest needs the backend's inventory (deletes, overwrites and versions carry no sizes through the hooks).
+- `Op.Request` is what the client asked for about the object, `Op.Response` what the backend reported. Both are nil when there is nothing to report, so a hook never has to tell a zero value from an absent one, and their `Metadata` maps are excluded from the JSON like the store's.
+
+  | | `Op.Request` | `Op.Response` |
+  |---|---|---|
+  | filled | before the `Authorizer` | once `next` returns — nil in an `Authorizer`, nil for a failed operation |
+  | worth | a client claim | what the backend says it did |
+  | `SSE`, `SSEKMSKeyID` | the mode and key id asked for | the encryption applied; absent after a request that asked for it = a backend that ignored it |
+  | `StorageClass` | the class asked for — refuse one this tenant may not use | the class the object is in now, lifecycle transitions included. Reads only |
+  | `Metadata` | the `x-amz-meta-*` sent with the write | the object's stored metadata. Reads only |
+
+  A non-nil `Request` or `Response` means **at least one** of its fields is set, never all of them: `Metadata` is nil whenever there is none, even next to a filled storage class. Reading a nil map is safe in Go, so `op.Request.Metadata["plan"]` needs no guard — writing to it would panic, and hooks must not mutate `Op` anyway.
+
+  | `ETag`, `VersionID` | — | the version this operation read or created |
+
+  Which operations fill them:
+
+  | operation | `Request` | `Response` |
+  |---|---|---|
+  | `GET`, `HEAD` | — | class, metadata, ETag, version id, SSE |
+  | `GetObjectAttributes` | — | class, ETag, version id |
+  | `PutObject`, POST upload, `CopyObject` | SSE, class, metadata | SSE, ETag, version id |
+  | `CreateMultipartUpload` | SSE, class, metadata | SSE |
+  | `CompleteMultipartUpload` | — | SSE, ETag, version id |
+  | `UploadPart`, `DeleteObject`, listings | — | — |
+
+- **Per-class billing must use the response side.** Nothing verifies a requested storage class — Ceph RGW refuses one it does not define with `InvalidArgument`, versitygw stores the object as `STANDARD` without a word, and no S3 write returns the class it landed in — so `Request.StorageClass` is for authorization and nothing else.
+- **Storage per class cannot come from the hooks at all**, because lifecycle transitions and expirations happen inside the backend and no request reaches the gateway. Sweep the backend buckets periodically instead: `ListObjectsV2` reports `Size` and `StorageClass` per object, `ListObjectVersions` the noncurrent versions, and incomplete multipart parts appear in neither. User metadata and tags are not in a listing at all, so an attribute you want to aggregate storage by belongs in the storage class — otherwise the sweep needs a `HEAD` per object.
 - **Bandwidth limiting** is the one thing the Authorizer/Interceptor shape cannot do — they gate admission, not the stream. `SetBandwidthLimit` installs a hook that picks pacing limiters per operation, called after the policies and the Authorizer allow it; `in` paces the request body as read off the wire (the same bytes `BytesIn` counts), `out` the response body, `nil` means unlimited. The hook only *selects* — sharing is what makes it a limit, and the keying is yours: returning one limiter per tenant caps that tenant's aggregate bandwidth across all its concurrent requests. Key on `Op.User` rather than an access key: keys rotate — two are live during a rotation — and temporary keys can be minted in any number under one user (a self-contained token is not even a row anywhere), so a per-key budget is not a cap but a multiplier the client controls. Note `Op.Tenant` is the **requester's** tenant: on a cross-tenant request, whether the bandwidth bill belongs to the requester (`KeyMetadata` side) or the bucket owner (`BucketMetadata` side) is your business rule. `*rate.Limiter` satisfies the interface; the gateway waits in chunks of at most 32 KiB, so any burst ≥ 32 KiB works, but the burst is also how far a stream runs ahead of the rate — 256 KiB to 1 MiB is a practical range. A pacing failure aborts the request rather than letting it through unpaced.
 
   ```go

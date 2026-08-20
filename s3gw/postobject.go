@@ -90,7 +90,7 @@ var postFieldMapped = map[string]bool{
 	"content-type": true, "content-md5": true, "cache-control": true,
 	"content-disposition": true, "content-encoding": true,
 	"content-language": true, "expires": true,
-	"x-amz-storage-class": true, "x-amz-tagging": true,
+	hdrStorageClass: true, "x-amz-tagging": true,
 	hdrSSE: true, hdrSSEKMSKeyID: true,
 	"x-amz-algorithm": true, "x-amz-credential": true,
 	"x-amz-date": true, "x-amz-signature": true, "policy": true,
@@ -189,17 +189,48 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, bucke
 		User:           vr.User,
 		Bucket:         b.Name,
 		Key:            key,
-		SSE:            fields[hdrSSE],
-		SSEKMSKeyID:    fields[hdrSSEKMSKeyID],
+		Request:        postObjectRequest(fields),
 		BucketMetadata: b.Metadata,
 		KeyMetadata:    vr.KeyMetadata,
 	}
+	c.op = op
 	if info := recordOf(r.Context()); info != nil {
 		info.Op = op
 	}
 	return g.runOp(r.Context(), op, c, func() error {
 		return g.postPutObject(c, fields, file, pp)
 	})
+}
+
+// postObjectRequest is opCtx.objectRequest for a POST upload, whose values
+// arrive as form fields rather than headers. Hooks see the same Op either
+// way, which is the point of normalizing here rather than in each hook.
+func postObjectRequest(fields map[string]string) *OpRequest {
+	req := OpRequest{
+		SSE:          fields[hdrSSE],
+		SSEKMSKeyID:  fields[hdrSSEKMSKeyID],
+		StorageClass: fields[hdrStorageClass],
+		Metadata:     postFieldMeta(fields),
+	}
+	if req.empty() {
+		return nil
+	}
+	return &req
+}
+
+// postFieldMeta collects the x-amz-meta-* form fields, prefix removed, the
+// way signedHeader.AmzMeta does for headers.
+func postFieldMeta(fields map[string]string) map[string]string {
+	var md map[string]string
+	for name, v := range fields {
+		if meta, ok := strings.CutPrefix(name, "x-amz-meta-"); ok {
+			if md == nil {
+				md = make(map[string]string)
+			}
+			md[meta] = v
+		}
+	}
+	return md
 }
 
 // lengthBoundedBody enforces the policy's content-length-range maximum
@@ -252,7 +283,7 @@ func (g *Gateway) postPutObject(c *opCtx, fields map[string]string, file *multip
 			in.Expires = aws.Time(t)
 		}
 	}
-	if v := fields["x-amz-storage-class"]; v != "" {
+	if v := fields[hdrStorageClass]; v != "" {
 		in.StorageClass = types.StorageClass(v)
 	}
 	if v := fields["x-amz-tagging"]; v != "" {
@@ -261,13 +292,7 @@ func (g *Gateway) postPutObject(c *opCtx, fields map[string]string, file *multip
 	if s3e := applySSE(postFieldHeader(fields), &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
 		return s3e
 	}
-	md := make(map[string]string)
-	for name, v := range fields {
-		if meta, ok := strings.CutPrefix(name, "x-amz-meta-"); ok {
-			md[meta] = v
-		}
-	}
-	if len(md) > 0 {
+	if md := postFieldMeta(fields); len(md) > 0 {
 		in.Metadata = md
 	}
 
@@ -288,6 +313,13 @@ func (g *Gateway) postPutObject(c *opCtx, fields map[string]string, file *multip
 		return s3err.New(http.StatusBadRequest, "EntityTooSmall",
 			"Your proposed upload is smaller than the minimum allowed size")
 	}
+
+	c.setResponse(OpResponse{
+		SSE:         string(out.ServerSideEncryption),
+		SSEKMSKeyID: aws.ToString(out.SSEKMSKeyId),
+		ETag:        aws.ToString(out.ETag),
+		VersionID:   aws.ToString(out.VersionId),
+	})
 
 	etag := aws.ToString(out.ETag)
 	w.Header().Set("ETag", etag)

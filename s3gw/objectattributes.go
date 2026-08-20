@@ -49,6 +49,12 @@ func (g *Gateway) getObjectAttributes(c *opCtx) error {
 		return s3err.FromSDKError(err, r.URL.Path)
 	}
 
+	c.setResponse(OpResponse{
+		StorageClass: string(out.StorageClass),
+		ETag:         aws.ToString(out.ETag),
+		VersionID:    aws.ToString(out.VersionId),
+	})
+
 	h := w.Header()
 	if out.LastModified != nil {
 		h.Set("Last-Modified", out.LastModified.UTC().Format(http.TimeFormat))

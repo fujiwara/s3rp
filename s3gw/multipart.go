@@ -45,7 +45,7 @@ func (g *Gateway) createMultipartUpload(c *opCtx) error {
 			in.Expires = aws.Time(t)
 		}
 	}
-	if v := c.signed("x-amz-storage-class"); v != "" {
+	if v := c.signed(hdrStorageClass); v != "" {
 		in.StorageClass = types.StorageClass(v)
 	}
 	if v := c.signed("x-amz-tagging"); v != "" {
@@ -68,6 +68,10 @@ func (g *Gateway) createMultipartUpload(c *opCtx) error {
 	if err != nil {
 		return s3err.FromSDKError(err, r.URL.Path)
 	}
+	c.setResponse(OpResponse{
+		SSE:         string(out.ServerSideEncryption),
+		SSEKMSKeyID: aws.ToString(out.SSEKMSKeyId),
+	})
 	if out.ChecksumAlgorithm != "" {
 		w.Header().Set("x-amz-checksum-algorithm", string(out.ChecksumAlgorithm))
 	}
@@ -210,6 +214,12 @@ func (g *Gateway) completeMultipartUpload(c *opCtx) error {
 		Host:   r.Host,
 		Path:   "/" + rt.cfg.Name + "/" + key,
 	}).String()
+	c.setResponse(OpResponse{
+		SSE:         string(out.ServerSideEncryption),
+		SSEKMSKeyID: aws.ToString(out.SSEKMSKeyId),
+		ETag:        aws.ToString(out.ETag),
+		VersionID:   aws.ToString(out.VersionId),
+	})
 	if out.VersionId != nil {
 		w.Header().Set("x-amz-version-id", *out.VersionId)
 	}

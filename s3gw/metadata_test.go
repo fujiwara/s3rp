@@ -86,6 +86,16 @@ func TestOpMetadataStaysOutOfJSON(t *testing.T) {
 		Bucket: "testbucket", Key: "a.txt",
 		BucketMetadata: &quota{limit: 42},
 		KeyMetadata:    "billing-tier-secret",
+		// the object's own metadata is client-supplied and excluded for the
+		// same reason
+		Request: &s3gw.OpRequest{
+			StorageClass: "PLAN_COLD",
+			Metadata:     map[string]string{"plan": "requested-tier-secret"},
+		},
+		Response: &s3gw.OpResponse{
+			StorageClass: "PLAN_COLD",
+			Metadata:     map[string]string{"plan": "stored-tier-secret"},
+		},
 	}
 	b, err := json.Marshal(op)
 	if err != nil {
@@ -100,7 +110,14 @@ func TestOpMetadataStaysOutOfJSON(t *testing.T) {
 			t.Errorf("expect %s to be excluded from JSON: %s", key, b)
 		}
 	}
-	if s := string(b); strings.Contains(s, "billing-tier-secret") || strings.Contains(s, "42") {
+	if s := string(b); strings.Contains(s, "tier-secret") || strings.Contains(s, "42") {
 		t.Errorf("metadata leaked into JSON: %s", s)
+	}
+	// the rest of Request/Response is the gateway's own view of the
+	// operation and is emitted
+	for _, want := range []string{`"request":{"storage_class":"PLAN_COLD"}`, `"response":{"storage_class":"PLAN_COLD"}`} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("expect %s in the JSON: %s", want, b)
+		}
 	}
 }
