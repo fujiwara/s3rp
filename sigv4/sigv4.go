@@ -233,6 +233,27 @@ type Verified struct {
 	Scope           string
 	Region          string
 	PayloadHash     string
+	// SignedHeaders holds the lower-cased names of the request headers whose
+	// values the signature covers: the SignedHeaders list itself, plus — for
+	// presigned requests — the x-amz-* query parameters promoted into
+	// headers, whose values arrived in the signed query string. A caller
+	// deciding anything beyond the object's own attributes from a header
+	// must check membership here (headers absent from the map may have been
+	// sent unsigned). Nil for POST policy uploads, which carry no signed
+	// headers — their inputs are form fields covered by the policy document.
+	SignedHeaders map[string]bool
+}
+
+// signedHeaderSet builds the Verified.SignedHeaders map from the signed
+// header names and, for presigned requests, the promoted query parameters.
+func signedHeaderSet(names ...[]string) map[string]bool {
+	set := make(map[string]bool)
+	for _, ns := range names {
+		for _, n := range ns {
+			set[strings.ToLower(n)] = true
+		}
+	}
+	return set
 }
 
 // Verify authenticates an incoming request, either by the
@@ -345,6 +366,7 @@ func (v *Verifier) verifyHeaderRequest(r *http.Request, lookup SecretLookup) (*V
 		Scope:           auth.scope(),
 		Region:          auth.Region,
 		PayloadHash:     payloadHash,
+		SignedHeaders:   signedHeaderSet(auth.SignedHeaders),
 	}, nil
 }
 
@@ -462,7 +484,7 @@ func (v *Verifier) verifyPresignedRequest(r *http.Request, lookup SecretLookup) 
 			"presigned signature mismatch: client signed headers %q, re-signed %q",
 			query.Get("X-Amz-SignedHeaders"), signedQuery.Get("X-Amz-SignedHeaders")))
 	}
-	promoteHoistedQueryParams(r)
+	promoted := promoteHoistedQueryParams(r)
 	return &Verified{
 		AccessKeyID:     akid,
 		SecretAccessKey: cred.SecretAccessKey,
@@ -471,28 +493,46 @@ func (v *Verifier) verifyPresignedRequest(r *http.Request, lookup SecretLookup) 
 		Scope:           strings.Join([]string{scopeDate, region, service, "aws4_request"}, "/"),
 		Region:          region,
 		PayloadHash:     payloadHash,
+		// the promoted params' values arrived in the signed query string,
+		// so they are signature-covered like the listed headers
+		SignedHeaders: signedHeaderSet(signedHeaders, promoted),
 	}, nil
 }
 
 // promoteHoistedQueryParams copies x-amz-* query parameters (except the auth
-// parameters) into the request headers. SDK presigners hoist headers such as
-// x-amz-meta-* and x-amz-storage-class into the query string, and the
-// operation handlers read them from headers.
-func promoteHoistedQueryParams(r *http.Request) {
+// parameters) into the request headers and returns the lower-cased names it
+// promoted. SDK presigners hoist headers such as x-amz-meta-* and
+// x-amz-storage-class into the query string, and the operation handlers read
+// them from headers. A name already present as a header was necessarily
+// signed (requireSignedAmzHeaders ran before this), so reporting it promoted
+// is sound either way.
+//
+// A duplicated key's values are promoted all, in sorted order, because that
+// is what the signature commits to: the SDK signer sorts each key's values
+// before canonicalizing, so any wire ordering of the same values verifies.
+// Promoting the wire-first value would let a URL holder pick which duplicate
+// takes effect by reordering — a choice the signature does not bind.
+func promoteHoistedQueryParams(r *http.Request) []string {
 	authParams := make(map[string]bool, len(presignAuthParams)+1)
 	for _, p := range presignAuthParams {
 		authParams[strings.ToLower(p)] = true
 	}
 	authParams["x-amz-expires"] = true
+	var promoted []string
 	for k, vs := range r.URL.Query() {
 		lk := strings.ToLower(k)
 		if !strings.HasPrefix(lk, "x-amz-") || authParams[lk] || len(vs) == 0 {
 			continue
 		}
 		if r.Header.Get(k) == "" {
-			r.Header.Set(k, vs[0])
+			vals := make([]string, len(vs))
+			copy(vals, vs)
+			sort.Strings(vals)
+			r.Header[http.CanonicalHeaderKey(k)] = vals
 		}
+		promoted = append(promoted, lk)
 	}
+	return promoted
 }
 
 // requireSignedAmzHeaders enforces AWS's rule that every x-amz-* request

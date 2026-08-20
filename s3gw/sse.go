@@ -26,27 +26,30 @@ const (
 )
 
 // checkSSEC rejects SSE-C requests. The algorithm header is what activates
-// SSE-C on AWS; the key headers without it are inert there too.
-func checkSSEC(r *http.Request) *s3err.Error {
-	if r.Header.Get(hdrSSECAlgo) != "" || r.Header.Get(hdrCopySSECAlgo) != "" {
+// SSE-C on AWS; the key headers without it are inert there too. Attribute,
+// not Signed, and inside this function rather than chosen by the caller:
+// a refusal must see the value signed or not — treating an unsigned SSE-C
+// header as absent would be the silent drop this refusal exists to prevent.
+func checkSSEC(hdr signedHeader) *s3err.Error {
+	if hdr.Attribute(hdrSSECAlgo) != "" || hdr.Attribute(hdrCopySSECAlgo) != "" {
 		return s3err.NotImplemented("SSE-C")
 	}
 	return nil
 }
 
 // checkSSE validates the SSE request fields without mapping them. It runs
-// before the hooks, so Op.SSE only ever carries a supported value. get
-// looks a field up by its lower-case header name, so the same check serves
-// headers (case-insensitive by http.Header) and POST form fields.
-func checkSSE(get func(string) string) *s3err.Error {
-	v := get(hdrSSE)
+// before the hooks, so Op.SSE only ever carries a supported value. Signed,
+// because what is validated is what applySSE will honor. POST uploads run
+// the same check over their form fields via postFieldHeader.
+func checkSSE(hdr signedHeader) *s3err.Error {
+	v := hdr.Signed(hdrSSE)
 	switch v {
 	case "", "AES256", "aws:kms":
 	default:
 		return s3err.New(http.StatusBadRequest, "InvalidArgument",
 			"The encryption method specified is not supported")
 	}
-	if get(hdrSSEKMSKeyID) != "" && v != "aws:kms" {
+	if hdr.Signed(hdrSSEKMSKeyID) != "" && v != "aws:kms" {
 		return s3err.New(http.StatusBadRequest, "InvalidArgument",
 			hdrSSEKMSKeyID+" can only be used with aws:kms")
 	}
@@ -55,14 +58,14 @@ func checkSSE(get func(string) string) *s3err.Error {
 
 // applySSE maps the SSE request fields onto an upload operation's input,
 // validating them for the paths that do not pass through dispatch.
-func applySSE(get func(string) string, enc *types.ServerSideEncryption, kmsKeyID **string) *s3err.Error {
-	if s3e := checkSSE(get); s3e != nil {
+func applySSE(hdr signedHeader, enc *types.ServerSideEncryption, kmsKeyID **string) *s3err.Error {
+	if s3e := checkSSE(hdr); s3e != nil {
 		return s3e
 	}
-	if v := get(hdrSSE); v != "" {
+	if v := hdr.Signed(hdrSSE); v != "" {
 		*enc = types.ServerSideEncryption(v)
 	}
-	if id := get(hdrSSEKMSKeyID); id != "" {
+	if id := hdr.Signed(hdrSSEKMSKeyID); id != "" {
 		*kmsKeyID = aws.String(id)
 	}
 	return nil

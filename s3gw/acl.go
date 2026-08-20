@@ -22,9 +22,10 @@ func errACLNotSupported() *s3err.Error {
 }
 
 // checkACLHeader rejects canned ACLs other than the ones an ACL-disabled
-// bucket accepts.
-func checkACLHeader(r *http.Request) *s3err.Error {
-	switch r.Header.Get("x-amz-acl") {
+// bucket accepts. Attribute, decided here and not by the caller: a refusal
+// must see the value signed or not, never treat the header as absent.
+func checkACLHeader(hdr signedHeader) *s3err.Error {
+	switch hdr.Attribute("x-amz-acl") {
 	case "", "private", "bucket-owner-full-control":
 		return nil
 	}

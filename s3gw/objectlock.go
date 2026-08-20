@@ -73,9 +73,9 @@ func (g *Gateway) getObjectRetention(c *opCtx) error {
 }
 
 func (g *Gateway) putObjectRetention(c *opCtx) error {
-	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
+	w, r, rt, key := c.w, c.r, c.rt, c.key
 	var req s3xml.ObjectLockRetention
-	if err := readXMLBody(r, vr, &req); err != nil {
+	if err := readXMLBody(c, &req); err != nil {
 		return err
 	}
 	in := &s3.PutObjectRetentionInput{
@@ -96,7 +96,7 @@ func (g *Gateway) putObjectRetention(c *opCtx) error {
 	if v := r.URL.Query().Get(qpVersionID); v != "" {
 		in.VersionId = aws.String(v)
 	}
-	if bypassGovernanceRetention(r) {
+	if bypassGovernanceRetention(c.hdr) {
 		in.BypassGovernanceRetention = aws.Bool(true)
 	}
 	if _, err := rt.client.PutObjectRetention(r.Context(), in); err != nil {
@@ -127,9 +127,9 @@ func (g *Gateway) getObjectLegalHold(c *opCtx) error {
 }
 
 func (g *Gateway) putObjectLegalHold(c *opCtx) error {
-	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
+	w, r, rt, key := c.w, c.r, c.rt, c.key
 	var req s3xml.ObjectLockLegalHold
-	if err := readXMLBody(r, vr, &req); err != nil {
+	if err := readXMLBody(c, &req); err != nil {
 		return err
 	}
 	in := &s3.PutObjectLegalHoldInput{
@@ -147,22 +147,22 @@ func (g *Gateway) putObjectLegalHold(c *opCtx) error {
 	return nil
 }
 
-func bypassGovernanceRetention(r *http.Request) bool {
-	return r.Header.Get("x-amz-bypass-governance-retention") == "true"
+func bypassGovernanceRetention(hdr signedHeader) bool {
+	return hdr.Signed("x-amz-bypass-governance-retention") == "true"
 }
 
 // applyObjectLockHeaders copies the object-lock upload headers onto a
 // PutObject/CreateMultipartUpload-style input via the provided setters.
-func applyObjectLockHeaders(r *http.Request, mode *types.ObjectLockMode, retainUntil **time.Time, legalHold *types.ObjectLockLegalHoldStatus) {
-	if v := r.Header.Get("x-amz-object-lock-mode"); v != "" {
+func applyObjectLockHeaders(hdr signedHeader, mode *types.ObjectLockMode, retainUntil **time.Time, legalHold *types.ObjectLockLegalHoldStatus) {
+	if v := hdr.Signed("x-amz-object-lock-mode"); v != "" {
 		*mode = types.ObjectLockMode(v)
 	}
-	if v := r.Header.Get("x-amz-object-lock-retain-until-date"); v != "" {
+	if v := hdr.Signed("x-amz-object-lock-retain-until-date"); v != "" {
 		if t, err := time.Parse(time.RFC3339, v); err == nil {
 			*retainUntil = aws.Time(t)
 		}
 	}
-	if v := r.Header.Get("x-amz-object-lock-legal-hold"); v != "" {
+	if v := hdr.Signed("x-amz-object-lock-legal-hold"); v != "" {
 		*legalHold = types.ObjectLockLegalHoldStatus(v)
 	}
 }

@@ -264,9 +264,16 @@ type opCtx struct {
 	r     *http.Request
 	rt    *bucketRT
 	vr    *verifiedRequest
+	hdr   signedHeader
 	query url.Values
 	key   string
 }
+
+// signed and attr forward to the request's signedHeader (headers.go), so
+// handler bodies read c.signed("x-amz-...") / c.attr("Content-Type") without
+// aliasing the accessor. c.signed is also the getter checkSSE/applySSE take.
+func (c *opCtx) signed(name string) string { return c.hdr.Signed(name) }
+func (c *opCtx) attr(name string) string   { return c.hdr.Attribute(name) }
 
 // authorize evaluates the bucket policy for the operation's resource
 // (the bucket, or bucket/key for object operations).
@@ -298,10 +305,10 @@ func (c *opCtx) dispatch(routes []route) error {
 	// security expectation violated without a word — refuse it up front.
 	// SSE values are validated here too, before the hooks, so Op.SSE only
 	// ever carries a supported value.
-	if err := checkSSEC(c.r); err != nil {
+	if err := checkSSEC(c.hdr); err != nil {
 		return err
 	}
-	if err := checkSSE(c.r.Header.Get); err != nil {
+	if err := checkSSE(c.hdr); err != nil {
 		return err
 	}
 	for _, rt := range routes {
@@ -314,11 +321,11 @@ func (c *opCtx) dispatch(routes []route) error {
 			}
 		}
 		if rt.aclHdr {
-			if err := checkACLHeader(c.r); err != nil {
+			if err := checkACLHeader(c.hdr); err != nil {
 				return err
 			}
 		}
-		if rt.bypass && bypassGovernanceRetention(c.r) {
+		if rt.bypass && bypassGovernanceRetention(c.hdr) {
 			if err := c.authorize("s3:BypassGovernanceRetention"); err != nil {
 				return err
 			}
@@ -335,8 +342,8 @@ func (c *opCtx) dispatch(routes []route) error {
 			User:           c.vr.User,
 			Bucket:         c.rt.cfg.Name,
 			Key:            c.key,
-			SSE:            c.r.Header.Get(hdrSSE),
-			SSEKMSKeyID:    c.r.Header.Get(hdrSSEKMSKeyID),
+			SSE:            c.signed(hdrSSE),
+			SSEKMSKeyID:    c.signed(hdrSSEKMSKeyID),
 			BucketMetadata: c.rt.cfg.Metadata,
 			KeyMetadata:    c.vr.KeyMetadata,
 		}
@@ -355,7 +362,7 @@ func (g *Gateway) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt
 	if !ok {
 		return s3err.NotImplemented("this bucket operation")
 	}
-	return (&opCtx{g: g, w: w, r: r, rt: rt, vr: vr, query: query}).dispatch(routes)
+	return (&opCtx{g: g, w: w, r: r, rt: rt, vr: vr, hdr: newSignedHeader(r, vr.SignedHeaders), query: query}).dispatch(routes)
 }
 
 func (g *Gateway) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt *bucketRT, vr *verifiedRequest, query url.Values, key string) error {
@@ -364,7 +371,7 @@ func (g *Gateway) handleObjectRequest(w http.ResponseWriter, r *http.Request, rt
 		return s3err.New(http.StatusMethodNotAllowed, "MethodNotAllowed",
 			"The specified method is not allowed against this resource.")
 	}
-	return (&opCtx{g: g, w: w, r: r, rt: rt, vr: vr, query: query, key: key}).dispatch(routes)
+	return (&opCtx{g: g, w: w, r: r, rt: rt, vr: vr, hdr: newSignedHeader(r, vr.SignedHeaders), query: query, key: key}).dispatch(routes)
 }
 
 func has(key string) func(url.Values) bool {
@@ -386,14 +393,14 @@ func rejectACL(*Gateway, *opCtx) error { return errACLNotSupported() }
 // putObjectOrCopy and uploadPartOrCopy pick the copy variant when the
 // request carries an x-amz-copy-source header.
 func (g *Gateway) putObjectOrCopy(c *opCtx) error {
-	if c.r.Header.Get("x-amz-copy-source") != "" {
+	if c.signed("x-amz-copy-source") != "" {
 		return g.copyObject(c)
 	}
 	return g.putObject(c)
 }
 
 func (g *Gateway) uploadPartOrCopy(c *opCtx) error {
-	if c.r.Header.Get("x-amz-copy-source") != "" {
+	if c.signed("x-amz-copy-source") != "" {
 		return g.uploadPartCopy(c)
 	}
 	return g.uploadPart(c)
