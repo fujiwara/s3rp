@@ -5,6 +5,11 @@ import (
 	"strings"
 )
 
+// hdrStorageClass names the storage class an upload asks for. It is read
+// through Signed: the class decides where the object physically lands and
+// what it costs, which is semantics beyond the object's own attributes.
+const hdrStorageClass = "x-amz-storage-class"
+
 // signedHeader reads request headers in view of what the SigV4 signature
 // covers. Operation handlers must not read r.Header directly: which method a
 // value is read through records — and enforces — whether it is allowed to
@@ -87,13 +92,18 @@ func (s signedHeader) SignedValues(name string) []string {
 }
 
 // AmzMeta collects the x-amz-meta-* headers into the metadata map an upload
-// stores. Metadata is covered by the unsigned-x-amz-* gate like any other
-// x-amz-* header; the signed-set check mirrors Signed's defense in depth.
+// stores, and is nil when the request carries none — Op.Request uses that to
+// tell "no metadata" from "empty metadata". Metadata is covered by the
+// unsigned-x-amz-* gate like any other x-amz-* header; the signed-set check
+// mirrors Signed's defense in depth.
 func (s signedHeader) AmzMeta() map[string]string {
-	md := make(map[string]string)
+	var md map[string]string
 	for k, vs := range s.h {
 		lk := strings.ToLower(k)
 		if name, ok := strings.CutPrefix(lk, "x-amz-meta-"); ok && len(vs) > 0 && s.signed[lk] {
+			if md == nil {
+				md = make(map[string]string)
+			}
 			md[name] = vs[0]
 		}
 	}

@@ -75,6 +75,14 @@ func (g *Gateway) getObject(c *opCtx) error {
 		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	defer out.Body.Close()
+	c.setResponse(OpResponse{
+		SSE:          string(out.ServerSideEncryption),
+		SSEKMSKeyID:  aws.ToString(out.SSEKMSKeyId),
+		StorageClass: string(out.StorageClass),
+		Metadata:     out.Metadata,
+		ETag:         aws.ToString(out.ETag),
+		VersionID:    aws.ToString(out.VersionId),
+	})
 
 	h := w.Header()
 	setObjectHeaders(h, objectHeaderValues{
@@ -147,6 +155,14 @@ func (g *Gateway) headObject(c *opCtx) error {
 		relayErrorHeaders(w.Header(), err)
 		return s3err.FromSDKError(err, r.URL.Path)
 	}
+	c.setResponse(OpResponse{
+		SSE:          string(out.ServerSideEncryption),
+		SSEKMSKeyID:  aws.ToString(out.SSEKMSKeyId),
+		StorageClass: string(out.StorageClass),
+		Metadata:     out.Metadata,
+		ETag:         aws.ToString(out.ETag),
+		VersionID:    aws.ToString(out.VersionId),
+	})
 	setObjectHeaders(w.Header(), objectHeaderValues{
 		ContentType:        out.ContentType,
 		ContentLength:      out.ContentLength,
@@ -227,7 +243,7 @@ func (g *Gateway) putObject(c *opCtx) error {
 			in.Expires = aws.Time(t)
 		}
 	}
-	if v := c.signed("x-amz-storage-class"); v != "" {
+	if v := c.signed(hdrStorageClass); v != "" {
 		in.StorageClass = types.StorageClass(v)
 	}
 	if v := c.signed("x-amz-tagging"); v != "" {
@@ -264,6 +280,12 @@ func (g *Gateway) putObject(c *opCtx) error {
 	if err != nil {
 		return s3err.FromSDKError(err, r.URL.Path)
 	}
+	c.setResponse(OpResponse{
+		SSE:         string(out.ServerSideEncryption),
+		SSEKMSKeyID: aws.ToString(out.SSEKMSKeyId),
+		ETag:        aws.ToString(out.ETag),
+		VersionID:   aws.ToString(out.VersionId),
+	})
 	if out.ETag != nil {
 		w.Header().Set("ETag", *out.ETag)
 	}

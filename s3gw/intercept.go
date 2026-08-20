@@ -16,6 +16,14 @@ import (
 
 // Op describes the operation a request is performing: what is being done, by
 // whom, to what, and — once it has run — how much data moved.
+//
+// The fields fall into three groups by the moment they are known: the
+// identity of the operation, which is settled before any hook runs; Request,
+// what the client asked for, also settled before the hooks but never more
+// than a claim; and Response, what the backend reported, which does not
+// exist until the operation has run. Request and Response are pointers so
+// that "not asked for" and "asked for nothing" are the same nil, and so an
+// Authorizer cannot mistake an unfilled Response for an empty one.
 type Op struct {
 	// Method distinguishes operations that share an action, notably
 	// HeadObject from GetObject.
@@ -30,16 +38,19 @@ type Op struct {
 	// deliberately not exposed: nothing outside the proxy should depend on it.
 	Bucket string `json:"bucket"`
 	Key    string `json:"key,omitempty"`
-	// SSE is the server-side encryption the request asks for ("AES256" or
-	// "aws:kms", empty when none), and SSEKMSKeyID the KMS key id it
-	// names, when it does. The gateway forwards both to the backend
-	// untouched; whether this identity may use this key — or whether this
-	// bucket's backend supports encryption at all — is the service's
-	// decision, made in an Authorizer. Nothing else in the request path
-	// knows which tenant owns which key, and a backend that lacks SSE may
-	// ignore the request silently rather than refuse it.
-	SSE         string `json:"sse,omitempty"`
-	SSEKMSKeyID string `json:"sse_kms_key_id,omitempty"`
+
+	// Request is what the client asked for about the object itself, set
+	// before the Authorizer runs so it can refuse on it. Nil when the
+	// request asked for none of it — and nil as well for an operation that
+	// carries no object attributes at all, so a header an operation would
+	// ignore is never reported as something the client asked for.
+	Request *OpRequest `json:"request,omitempty"`
+	// Response is what the backend reported about the object. It is nil
+	// until the operation has run — always nil in an Authorizer, and still
+	// nil for an operation that failed — and an Interceptor sees it once
+	// next returns, as with the byte counts. Operations that report none of
+	// it (UploadPart, DeleteObject, the listings) leave it nil.
+	Response *OpResponse `json:"response,omitempty"`
 
 	// BytesIn and BytesOut count the request and response bodies as seen on
 	// the wire, so an upload sent with aws-chunked framing counts the frames
@@ -56,6 +67,86 @@ type Op struct {
 	// the service's decision, not the gateway's.
 	BucketMetadata any `json:"-"`
 	KeyMetadata    any `json:"-"`
+}
+
+// OpRequest is what a request asked for about the object it writes or reads.
+// Every value here is the client's, and beyond what the gateway validates
+// itself (dispatch checks the SSE fields) none of it is a statement about
+// what the backend did — that is Response.
+type OpRequest struct {
+	// SSE is the server-side encryption the request asks for ("AES256" or
+	// "aws:kms", empty when none), and SSEKMSKeyID the KMS key id it
+	// names, when it does. The gateway forwards both to the backend
+	// untouched; whether this identity may use this key — or whether this
+	// bucket's backend supports encryption at all — is the service's
+	// decision, made in an Authorizer. Nothing else in the request path
+	// knows which tenant owns which key, and a backend that lacks SSE may
+	// ignore the request silently rather than refuse it, which is what
+	// comparing this with Response.SSE reveals.
+	SSE         string `json:"sse,omitempty"`
+	SSEKMSKeyID string `json:"sse_kms_key_id,omitempty"`
+	// StorageClass is the class the request names. Backends disagree on an
+	// undefined one — Ceph RGW refuses the write with InvalidArgument,
+	// versitygw stores the object as STANDARD without a word — and the S3
+	// API returns no class on a write, so this is what was asked for and
+	// there is no gateway-side way to learn what it became. An Authorizer
+	// is the place to refuse a class this tenant may not use.
+	StorageClass string `json:"storage_class,omitempty"`
+	// Metadata is the user metadata the request carries (the x-amz-meta-*
+	// names, prefix removed), which is where a service's own per-object
+	// attribute travels. Only writes carry it, and a copy that keeps the
+	// source's metadata carries none of its own.
+	//
+	// It is nil when the request carried none, including when the rest of
+	// OpRequest is filled: a non-nil OpRequest means at least one of its
+	// fields is set, not all of them. Reading a nil map is safe; a hook
+	// must not write to it.
+	//
+	// Excluded from JSON for the same reason as the store metadata on Op:
+	// it is client-supplied, and whether it belongs in a log is the
+	// service's decision.
+	Metadata map[string]string `json:"-"`
+}
+
+// empty reports whether the request asked for nothing about the object, in
+// which case Op.Request stays nil rather than pointing at a blank struct.
+func (r *OpRequest) empty() bool {
+	return r.SSE == "" && r.SSEKMSKeyID == "" && r.StorageClass == "" && len(r.Metadata) == 0
+}
+
+// OpResponse is what the backend reported about the object, which is the
+// only side of the operation that is a fact rather than a request.
+type OpResponse struct {
+	// SSE and SSEKMSKeyID are the encryption the backend says it applied.
+	// A write that asked for SSE and comes back without it was served by a
+	// backend that ignored the request rather than refusing it.
+	SSE         string `json:"sse,omitempty"`
+	SSEKMSKeyID string `json:"sse_kms_key_id,omitempty"`
+	// StorageClass is the class the object is actually in, so it accounts
+	// for a lifecycle transition the gateway never saw and is what storage
+	// or retrieval billing must be based on. Reads only — no S3 write
+	// returns a storage class. Empty means the backend named none, which
+	// is what S3 does for an object left in the default class; it does not
+	// mean the class is unknown.
+	StorageClass string `json:"storage_class,omitempty"`
+	// Metadata is the object's stored user metadata (prefix removed), on
+	// reads only, and nil when the object has none — same rule as the
+	// request's, down to it being nil while the rest of OpResponse is
+	// filled. Excluded from JSON like the request's, and for the same
+	// reason.
+	Metadata map[string]string `json:"-"`
+	// ETag and VersionID identify the object version this operation read or
+	// created, for a service that has to be able to say afterwards which
+	// one it served.
+	ETag      string `json:"etag,omitempty"`
+	VersionID string `json:"version_id,omitempty"`
+}
+
+// empty reports whether the backend said nothing worth recording, in which
+// case Op.Response stays nil rather than pointing at a blank struct.
+func (r *OpResponse) empty() bool {
+	return r.SSE == "" && r.SSEKMSKeyID == "" && r.StorageClass == "" &&
+		r.ETag == "" && r.VersionID == "" && len(r.Metadata) == 0
 }
 
 // Authorizer is consulted for every operation, after the bucket and user

@@ -80,7 +80,7 @@ func (g *Gateway) copyObject(c *opCtx) error {
 	if v := c.attr("Content-Type"); v != "" {
 		in.ContentType = aws.String(v)
 	}
-	if v := c.signed("x-amz-storage-class"); v != "" {
+	if v := c.signed(hdrStorageClass); v != "" {
 		in.StorageClass = types.StorageClass(v)
 	}
 	if v := c.signed("x-amz-tagging-directive"); v != "" {
@@ -115,6 +115,15 @@ func (g *Gateway) copyObject(c *opCtx) error {
 	if err != nil {
 		return s3err.FromSDKError(err, r.URL.Path)
 	}
+	res := OpResponse{
+		SSE:         string(out.ServerSideEncryption),
+		SSEKMSKeyID: aws.ToString(out.SSEKMSKeyId),
+		VersionID:   aws.ToString(out.VersionId),
+	}
+	if out.CopyObjectResult != nil {
+		res.ETag = aws.ToString(out.CopyObjectResult.ETag)
+	}
+	c.setResponse(res)
 	if out.VersionId != nil {
 		w.Header().Set("x-amz-version-id", *out.VersionId)
 	}

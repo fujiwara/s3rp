@@ -203,11 +203,13 @@ func TestProxySSEKMSPassThrough(t *testing.T) {
 	if len(ops) != 2 {
 		t.Fatalf("expect two ops, got %d", len(ops))
 	}
-	if ops[0].SSE != "aws:kms" || ops[0].SSEKMSKeyID != "tenant-key-1" {
-		t.Errorf("expect the encryption request on the put op, got %q %q", ops[0].SSE, ops[0].SSEKMSKeyID)
+	if ops[0].Request == nil || ops[0].Request.SSE != "aws:kms" || ops[0].Request.SSEKMSKeyID != "tenant-key-1" {
+		t.Errorf("expect the encryption request on the put op, got %+v", ops[0].Request)
 	}
-	if ops[1].SSE != "" || ops[1].SSEKMSKeyID != "" {
-		t.Errorf("expect no encryption request on the get op, got %q %q", ops[1].SSE, ops[1].SSEKMSKeyID)
+	// a request that asked for nothing about the object has no Request at
+	// all, so a hook never reads a zero value as an answer
+	if ops[1].Request != nil {
+		t.Errorf("expect no encryption request on the get op, got %+v", ops[1].Request)
 	}
 }
 

@@ -267,6 +267,9 @@ type opCtx struct {
 	hdr   signedHeader
 	query url.Values
 	key   string
+	// op is the operation the hooks were given, set by dispatch. Handlers
+	// record the backend's answer on it through setResponse.
+	op *Op
 }
 
 // signed and attr forward to the request's signedHeader (headers.go), so
@@ -274,6 +277,49 @@ type opCtx struct {
 // aliasing the accessor. c.signed is also the getter checkSSE/applySSE take.
 func (c *opCtx) signed(name string) string { return c.hdr.Signed(name) }
 func (c *opCtx) attr(name string) string   { return c.hdr.Attribute(name) }
+
+// objectRequest collects what the client asked for about the object itself,
+// or nil when it asked for none of it: on Op that nil is what tells a hook
+// "nothing was requested" apart from "requested empty".
+//
+// withAttrs is the route's own answer to whether this operation carries
+// object attributes at all. Only those routes are read, so a read does not
+// pay for scanning the headers, and — the reason this covers the SSE fields
+// too — an operation that would ignore the header does not report it as a
+// request the client made. The gateway still validates the SSE fields on
+// every route (dispatch), it just does not hand an inert header to a hook.
+func (c *opCtx) objectRequest(withAttrs bool) *OpRequest {
+	if !withAttrs {
+		return nil
+	}
+	req := OpRequest{
+		SSE:          c.signed(hdrSSE),
+		SSEKMSKeyID:  c.signed(hdrSSEKMSKeyID),
+		StorageClass: c.signed(hdrStorageClass),
+		Metadata:     c.hdr.AmzMeta(),
+	}
+	if req.empty() {
+		return nil
+	}
+	return &req
+}
+
+// setResponse records what the backend reported about the object, for the
+// hooks that run after next and for the observer. Like transferred, it is a
+// no-op for a handler invoked outside dispatch, and it leaves Op.Response nil
+// when the backend reported nothing.
+func (c *opCtx) setResponse(res OpResponse) {
+	if c.op == nil || res.empty() {
+		return
+	}
+	// an empty map and no map at all mean the same thing here, and the
+	// documented rule is that absent metadata is nil — the SDK allocates
+	// only when a header is present, but that is its behavior, not a promise
+	if len(res.Metadata) == 0 {
+		res.Metadata = nil
+	}
+	c.op.Response = &res
+}
 
 // authorize evaluates the bucket policy for the operation's resource
 // (the bucket, or bucket/key for object operations).
@@ -293,6 +339,7 @@ type route struct {
 	params paramSet              // allowed query parameters (nil = skip the check)
 	aclHdr bool                  // reject unsupported canned ACL headers first
 	bypass bool                  // also require s3:BypassGovernanceRetention when the bypass header is set
+	attrs  bool                  // the operation carries the object's own attributes (SSE, storage class, user metadata)
 	action string                // s3:* action to authorize ("" = handler authorizes itself)
 	handle func(*Gateway, *opCtx) error
 }
@@ -342,11 +389,11 @@ func (c *opCtx) dispatch(routes []route) error {
 			User:           c.vr.User,
 			Bucket:         c.rt.cfg.Name,
 			Key:            c.key,
-			SSE:            c.signed(hdrSSE),
-			SSEKMSKeyID:    c.signed(hdrSSEKMSKeyID),
+			Request:        c.objectRequest(rt.attrs),
 			BucketMetadata: c.rt.cfg.Metadata,
 			KeyMetadata:    c.vr.KeyMetadata,
 		}
+		c.op = op
 		if info := recordOf(c.r.Context()); info != nil {
 			info.Op = op
 		}
@@ -466,7 +513,7 @@ var objectRoutes = map[string][]route{
 		{match: has(subRetention), params: retentionParams, bypass: true, action: "s3:PutObjectRetention", handle: (*Gateway).putObjectRetention},
 		{match: has(subLegalHold), params: legalHoldParams, action: "s3:PutObjectLegalHold", handle: (*Gateway).putObjectLegalHold},
 		{match: hasUploadPart, params: uploadPartParams, action: "s3:PutObject", handle: (*Gateway).uploadPartOrCopy},
-		{params: noParams, aclHdr: true, action: "s3:PutObject", handle: (*Gateway).putObjectOrCopy},
+		{params: noParams, aclHdr: true, attrs: true, action: "s3:PutObject", handle: (*Gateway).putObjectOrCopy},
 	},
 	http.MethodDelete: {
 		{match: has(qpUploadID), params: uploadIDOnlyParams, action: "s3:AbortMultipartUpload", handle: (*Gateway).abortMultipartUpload},
@@ -474,7 +521,7 @@ var objectRoutes = map[string][]route{
 		{params: versionIDOnlyParams, bypass: true, action: "s3:DeleteObject", handle: (*Gateway).deleteObject},
 	},
 	http.MethodPost: {
-		{match: has(subUploads), params: uploadsOnlyParams, aclHdr: true, action: "s3:PutObject", handle: (*Gateway).createMultipartUpload},
+		{match: has(subUploads), params: uploadsOnlyParams, aclHdr: true, attrs: true, action: "s3:PutObject", handle: (*Gateway).createMultipartUpload},
 		{match: has(qpUploadID), params: uploadIDOnlyParams, action: "s3:PutObject", handle: (*Gateway).completeMultipartUpload},
 		notImplemented(nil, "this operation"),
 	},
