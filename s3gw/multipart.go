@@ -20,48 +20,48 @@ import (
 const maxXMLBodySize = 16 * mib
 
 func (g *Gateway) createMultipartUpload(c *opCtx) error {
-	w, r, rt, key, hdr := c.w, c.r, c.rt, c.key, c.hdr
+	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.CreateMultipartUploadInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
 	}
-	if v := hdr.Attribute("Content-Type"); v != "" {
+	if v := c.attr("Content-Type"); v != "" {
 		in.ContentType = aws.String(v)
 	}
-	if v := hdr.Attribute("Cache-Control"); v != "" {
+	if v := c.attr("Cache-Control"); v != "" {
 		in.CacheControl = aws.String(v)
 	}
-	if v := hdr.Attribute("Content-Disposition"); v != "" {
+	if v := c.attr("Content-Disposition"); v != "" {
 		in.ContentDisposition = aws.String(v)
 	}
-	if v := contentEncodingWithoutAWSChunked(hdr.Attribute("Content-Encoding")); v != "" {
+	if v := contentEncodingWithoutAWSChunked(c.attr("Content-Encoding")); v != "" {
 		in.ContentEncoding = aws.String(v)
 	}
-	if v := hdr.Attribute("Content-Language"); v != "" {
+	if v := c.attr("Content-Language"); v != "" {
 		in.ContentLanguage = aws.String(v)
 	}
-	if v := hdr.Attribute("Expires"); v != "" {
+	if v := c.attr("Expires"); v != "" {
 		if t, err := http.ParseTime(v); err == nil {
 			in.Expires = aws.Time(t)
 		}
 	}
-	if v := hdr.Signed("x-amz-storage-class"); v != "" {
+	if v := c.signed("x-amz-storage-class"); v != "" {
 		in.StorageClass = types.StorageClass(v)
 	}
-	if v := hdr.Signed("x-amz-tagging"); v != "" {
+	if v := c.signed("x-amz-tagging"); v != "" {
 		in.Tagging = aws.String(v)
 	}
-	applyObjectLockHeaders(hdr, &in.ObjectLockMode, &in.ObjectLockRetainUntilDate, &in.ObjectLockLegalHoldStatus)
-	if md := hdr.AmzMeta(); len(md) > 0 {
+	applyObjectLockHeaders(c.hdr, &in.ObjectLockMode, &in.ObjectLockRetainUntilDate, &in.ObjectLockLegalHoldStatus)
+	if md := c.hdr.AmzMeta(); len(md) > 0 {
 		in.Metadata = md
 	}
-	if v := hdr.Signed("x-amz-checksum-algorithm"); v != "" {
+	if v := c.signed("x-amz-checksum-algorithm"); v != "" {
 		in.ChecksumAlgorithm = types.ChecksumAlgorithm(strings.ToUpper(v))
 	}
-	if v := hdr.Signed("x-amz-checksum-type"); v != "" {
+	if v := c.signed("x-amz-checksum-type"); v != "" {
 		in.ChecksumType = types.ChecksumType(strings.ToUpper(v))
 	}
-	if s3e := applySSE(hdr.Signed, &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
+	if s3e := applySSE(c.signed, &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
 		return s3e
 	}
 	out, err := rt.client.CreateMultipartUpload(r.Context(), in)
@@ -84,7 +84,7 @@ func (g *Gateway) createMultipartUpload(c *opCtx) error {
 }
 
 func (g *Gateway) uploadPart(c *opCtx) error {
-	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
+	w, r, rt, key := c.w, c.r, c.rt, c.key
 	query := r.URL.Query()
 	partNumber, err := strconv.ParseInt(query.Get("partNumber"), 10, 32)
 	if err != nil {
@@ -97,7 +97,7 @@ func (g *Gateway) uploadPart(c *opCtx) error {
 		UploadId:   aws.String(query.Get("uploadId")),
 		PartNumber: aws.Int32(int32(partNumber)),
 	}
-	body, length, s3e := requestBody(r, c.hdr, vr)
+	body, length, s3e := requestBody(c)
 	if s3e != nil {
 		return s3e
 	}
@@ -177,13 +177,13 @@ func (g *Gateway) completeMultipartUpload(c *opCtx) error {
 	}
 	// write preconditions: dropping them would make the completion
 	// unconditional while the client believes it is protected
-	if v := c.hdr.Attribute("If-Match"); v != "" {
+	if v := c.attr("If-Match"); v != "" {
 		in.IfMatch = aws.String(v)
 	}
-	if v := c.hdr.Attribute("If-None-Match"); v != "" {
+	if v := c.attr("If-None-Match"); v != "" {
 		in.IfNoneMatch = aws.String(v)
 	}
-	if v := c.hdr.Signed("x-amz-checksum-type"); v != "" {
+	if v := c.signed("x-amz-checksum-type"); v != "" {
 		in.ChecksumType = types.ChecksumType(strings.ToUpper(v))
 	}
 	cs := checksum.FromHeaders(r.Header)
@@ -192,7 +192,7 @@ func (g *Gateway) completeMultipartUpload(c *opCtx) error {
 	in.ChecksumCRC64NVME = cs.CRC64NVME
 	in.ChecksumSHA1 = cs.SHA1
 	in.ChecksumSHA256 = cs.SHA256
-	if v := c.hdr.Signed("x-amz-mp-object-size"); v != "" {
+	if v := c.signed("x-amz-mp-object-size"); v != "" {
 		if size, err := strconv.ParseInt(v, 10, 64); err == nil {
 			in.MpuObjectSize = aws.Int64(size)
 		}

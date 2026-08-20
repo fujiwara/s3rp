@@ -30,16 +30,16 @@ import (
 )
 
 func (g *Gateway) getObject(c *opCtx) error {
-	w, r, rt, key, hdr := c.w, c.r, c.rt, c.key, c.hdr
+	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.GetObjectInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
 	}
-	applyConditionalHeaders(hdr, &in.IfMatch, &in.IfNoneMatch, &in.IfModifiedSince, &in.IfUnmodifiedSince)
-	if v := hdr.Attribute("Range"); v != "" {
+	applyConditionalHeaders(c.hdr, &in.IfMatch, &in.IfNoneMatch, &in.IfModifiedSince, &in.IfUnmodifiedSince)
+	if v := c.attr("Range"); v != "" {
 		in.Range = aws.String(v)
 	}
-	if strings.EqualFold(hdr.Signed("x-amz-checksum-mode"), "enabled") {
+	if strings.EqualFold(c.signed("x-amz-checksum-mode"), "enabled") {
 		in.ChecksumMode = types.ChecksumModeEnabled
 	}
 	query := r.URL.Query()
@@ -124,13 +124,13 @@ func (g *Gateway) getObject(c *opCtx) error {
 }
 
 func (g *Gateway) headObject(c *opCtx) error {
-	w, r, rt, key, hdr := c.w, c.r, c.rt, c.key, c.hdr
+	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.HeadObjectInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
 	}
-	applyConditionalHeaders(hdr, &in.IfMatch, &in.IfNoneMatch, &in.IfModifiedSince, &in.IfUnmodifiedSince)
-	if v := hdr.Attribute("Range"); v != "" {
+	applyConditionalHeaders(c.hdr, &in.IfMatch, &in.IfNoneMatch, &in.IfModifiedSince, &in.IfUnmodifiedSince)
+	if v := c.attr("Range"); v != "" {
 		in.Range = aws.String(v)
 	}
 	if v := r.URL.Query().Get(qpVersionID); v != "" {
@@ -139,7 +139,7 @@ func (g *Gateway) headObject(c *opCtx) error {
 	if s3e := applyPartNumber(r.URL.Query(), &in.PartNumber); s3e != nil {
 		return s3e
 	}
-	if strings.EqualFold(hdr.Signed("x-amz-checksum-mode"), "enabled") {
+	if strings.EqualFold(c.signed("x-amz-checksum-mode"), "enabled") {
 		in.ChecksumMode = types.ChecksumModeEnabled
 	}
 	out, err := rt.client.HeadObject(r.Context(), in)
@@ -182,12 +182,12 @@ func (g *Gateway) headObject(c *opCtx) error {
 }
 
 func (g *Gateway) putObject(c *opCtx) error {
-	w, r, rt, key, vr, hdr := c.w, c.r, c.rt, c.key, c.vr, c.hdr
+	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.PutObjectInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
 	}
-	body, length, s3e := requestBody(r, hdr, vr)
+	body, length, s3e := requestBody(c)
 	if s3e != nil {
 		return s3e
 	}
@@ -196,48 +196,48 @@ func (g *Gateway) putObject(c *opCtx) error {
 
 	// write preconditions: dropping them would make the write unconditional
 	// while the client believes it is protected
-	if v := hdr.Attribute("If-Match"); v != "" {
+	if v := c.attr("If-Match"); v != "" {
 		in.IfMatch = aws.String(v)
 	}
-	if v := hdr.Attribute("If-None-Match"); v != "" {
+	if v := c.attr("If-None-Match"); v != "" {
 		in.IfNoneMatch = aws.String(v)
 	}
-	if v := hdr.Attribute("Content-Type"); v != "" {
+	if v := c.attr("Content-Type"); v != "" {
 		in.ContentType = aws.String(v)
 	}
-	if md5v, s3e := contentMD5Header(hdr); s3e != nil {
+	if md5v, s3e := contentMD5Header(c.hdr); s3e != nil {
 		return s3e
 	} else if md5v != nil {
 		in.ContentMD5 = md5v
 	}
-	if v := hdr.Attribute("Cache-Control"); v != "" {
+	if v := c.attr("Cache-Control"); v != "" {
 		in.CacheControl = aws.String(v)
 	}
-	if v := hdr.Attribute("Content-Disposition"); v != "" {
+	if v := c.attr("Content-Disposition"); v != "" {
 		in.ContentDisposition = aws.String(v)
 	}
-	if v := contentEncodingWithoutAWSChunked(hdr.Attribute("Content-Encoding")); v != "" {
+	if v := contentEncodingWithoutAWSChunked(c.attr("Content-Encoding")); v != "" {
 		in.ContentEncoding = aws.String(v)
 	}
-	if v := hdr.Attribute("Content-Language"); v != "" {
+	if v := c.attr("Content-Language"); v != "" {
 		in.ContentLanguage = aws.String(v)
 	}
-	if v := hdr.Attribute("Expires"); v != "" {
+	if v := c.attr("Expires"); v != "" {
 		if t, err := http.ParseTime(v); err == nil {
 			in.Expires = aws.Time(t)
 		}
 	}
-	if v := hdr.Signed("x-amz-storage-class"); v != "" {
+	if v := c.signed("x-amz-storage-class"); v != "" {
 		in.StorageClass = types.StorageClass(v)
 	}
-	if v := hdr.Signed("x-amz-tagging"); v != "" {
+	if v := c.signed("x-amz-tagging"); v != "" {
 		in.Tagging = aws.String(v)
 	}
-	if s3e := applySSE(hdr.Signed, &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
+	if s3e := applySSE(c.signed, &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
 		return s3e
 	}
-	applyObjectLockHeaders(hdr, &in.ObjectLockMode, &in.ObjectLockRetainUntilDate, &in.ObjectLockLegalHoldStatus)
-	if md := hdr.AmzMeta(); len(md) > 0 {
+	applyObjectLockHeaders(c.hdr, &in.ObjectLockMode, &in.ObjectLockRetainUntilDate, &in.ObjectLockLegalHoldStatus)
+	if md := c.hdr.AmzMeta(); len(md) > 0 {
 		in.Metadata = md
 	}
 	cs := checksum.FromHeaders(r.Header)
@@ -283,7 +283,7 @@ func (g *Gateway) putObject(c *opCtx) error {
 }
 
 func (g *Gateway) deleteObject(c *opCtx) error {
-	w, r, rt, key, hdr := c.w, c.r, c.rt, c.key, c.hdr
+	w, r, rt, key := c.w, c.r, c.rt, c.key
 	in := &s3.DeleteObjectInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
@@ -291,15 +291,15 @@ func (g *Gateway) deleteObject(c *opCtx) error {
 	if v := r.URL.Query().Get(qpVersionID); v != "" {
 		in.VersionId = aws.String(v)
 	}
-	if bypassGovernanceRetention(hdr) {
+	if bypassGovernanceRetention(c.hdr) {
 		in.BypassGovernanceRetention = aws.Bool(true)
 	}
 	// delete preconditions: dropped, they would make the delete
 	// unconditional while the client believes it is protected
-	if v := hdr.Attribute("If-Match"); v != "" {
+	if v := c.attr("If-Match"); v != "" {
 		in.IfMatch = aws.String(v)
 	}
-	if v := hdr.Signed("x-amz-if-match-last-modified-time"); v != "" {
+	if v := c.signed("x-amz-if-match-last-modified-time"); v != "" {
 		t, err := http.ParseTime(v)
 		if err != nil {
 			return s3err.New(http.StatusBadRequest, "InvalidArgument",
@@ -307,7 +307,7 @@ func (g *Gateway) deleteObject(c *opCtx) error {
 		}
 		in.IfMatchLastModifiedTime = aws.Time(t)
 	}
-	if v := hdr.Signed("x-amz-if-match-size"); v != "" {
+	if v := c.signed("x-amz-if-match-size"); v != "" {
 		size, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
 			return s3err.New(http.StatusBadRequest, "InvalidArgument",
@@ -708,10 +708,11 @@ func (g *Gateway) listBuckets(w http.ResponseWriter, r *http.Request, vr *verifi
 
 // requestBody returns the payload reader and its decoded length,
 // decoding aws-chunked framing when the request declares it.
-func requestBody(r *http.Request, hdr signedHeader, vr *verifiedRequest) (io.Reader, int64, *s3err.Error) {
+func requestBody(c *opCtx) (io.Reader, int64, *s3err.Error) {
+	r, vr := c.r, c.vr
 	switch {
 	case sigv4.IsStreaming(vr.PayloadHash):
-		decodedLength := hdr.Signed("x-amz-decoded-content-length")
+		decodedLength := c.signed("x-amz-decoded-content-length")
 		if decodedLength == "" {
 			return nil, 0, s3err.New(http.StatusLengthRequired, "MissingContentLength",
 				"You must provide the x-amz-decoded-content-length HTTP header.")
@@ -741,7 +742,7 @@ func requestBody(r *http.Request, hdr signedHeader, vr *verifiedRequest) (io.Rea
 
 // readXMLBody decodes an XML request body (aws-chunked aware) into v.
 func readXMLBody(c *opCtx, v any) *s3err.Error {
-	body, _, s3e := requestBody(c.r, c.hdr, c.vr)
+	body, _, s3e := requestBody(c)
 	if s3e != nil {
 		return s3e
 	}

@@ -269,6 +269,12 @@ type opCtx struct {
 	key   string
 }
 
+// signed and attr forward to the request's signedHeader (headers.go), so
+// handler bodies read c.signed("x-amz-...") / c.attr("Content-Type") without
+// aliasing the accessor. c.signed is also the getter checkSSE/applySSE take.
+func (c *opCtx) signed(name string) string { return c.hdr.Signed(name) }
+func (c *opCtx) attr(name string) string   { return c.hdr.Attribute(name) }
+
 // authorize evaluates the bucket policy for the operation's resource
 // (the bucket, or bucket/key for object operations).
 func (c *opCtx) authorize(action string) *s3err.Error {
@@ -336,8 +342,8 @@ func (c *opCtx) dispatch(routes []route) error {
 			User:           c.vr.User,
 			Bucket:         c.rt.cfg.Name,
 			Key:            c.key,
-			SSE:            c.hdr.Signed(hdrSSE),
-			SSEKMSKeyID:    c.hdr.Signed(hdrSSEKMSKeyID),
+			SSE:            c.signed(hdrSSE),
+			SSEKMSKeyID:    c.signed(hdrSSEKMSKeyID),
 			BucketMetadata: c.rt.cfg.Metadata,
 			KeyMetadata:    c.vr.KeyMetadata,
 		}
@@ -387,14 +393,14 @@ func rejectACL(*Gateway, *opCtx) error { return errACLNotSupported() }
 // putObjectOrCopy and uploadPartOrCopy pick the copy variant when the
 // request carries an x-amz-copy-source header.
 func (g *Gateway) putObjectOrCopy(c *opCtx) error {
-	if c.hdr.Signed("x-amz-copy-source") != "" {
+	if c.signed("x-amz-copy-source") != "" {
 		return g.copyObject(c)
 	}
 	return g.putObject(c)
 }
 
 func (g *Gateway) uploadPartOrCopy(c *opCtx) error {
-	if c.hdr.Signed("x-amz-copy-source") != "" {
+	if c.signed("x-amz-copy-source") != "" {
 		return g.uploadPartCopy(c)
 	}
 	return g.uploadPart(c)

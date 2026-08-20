@@ -17,8 +17,8 @@ import (
 // the response exposes no backend identity, so the output maps through
 // unchanged — except the ETag, which this API alone returns unquoted.
 func (g *Gateway) getObjectAttributes(c *opCtx) error {
-	w, r, rt, key, hdr := c.w, c.r, c.rt, c.key, c.hdr
-	attrs := objectAttributesFromHeader(hdr)
+	w, r, rt, key := c.w, c.r, c.rt, c.key
+	attrs := objectAttributesFromHeader(c.hdr)
 	if len(attrs) == 0 {
 		return s3err.New(http.StatusBadRequest, "InvalidArgument",
 			"The x-amz-object-attributes header specifying the attributes to be retrieved is required.")
@@ -31,7 +31,7 @@ func (g *Gateway) getObjectAttributes(c *opCtx) error {
 	if v := r.URL.Query().Get(qpVersionID); v != "" {
 		in.VersionId = aws.String(v)
 	}
-	if v := hdr.Signed("x-amz-max-parts"); v != "" {
+	if v := c.signed("x-amz-max-parts"); v != "" {
 		n, err := strconv.ParseInt(v, 10, 32)
 		if err != nil {
 			return s3err.New(http.StatusBadRequest, "InvalidArgument",
@@ -39,7 +39,7 @@ func (g *Gateway) getObjectAttributes(c *opCtx) error {
 		}
 		in.MaxParts = aws.Int32(int32(n))
 	}
-	if v := hdr.Signed("x-amz-part-number-marker"); v != "" {
+	if v := c.signed("x-amz-part-number-marker"); v != "" {
 		in.PartNumberMarker = aws.String(v)
 	}
 
