@@ -30,6 +30,22 @@ func newSignedHeader(r *http.Request, signed map[string]bool) signedHeader {
 	return signedHeader{h: r.Header, signed: signed}
 }
 
+// postFieldHeader wraps a POST upload's form fields as a signedHeader on
+// which every value is covered, so the checks shared with the header paths
+// (checkSSE, applySSE) run unchanged over fields. The coverage claim is the
+// POST policy's two-way rule — every submitted field must be bound by a
+// condition of the signed policy document — so this must only be built after
+// verifyPostRequest has succeeded.
+func postFieldHeader(fields map[string]string) signedHeader {
+	h := make(http.Header, len(fields))
+	signed := make(map[string]bool, len(fields))
+	for k, v := range fields {
+		h.Set(k, v)
+		signed[strings.ToLower(k)] = true
+	}
+	return signedHeader{h: h, signed: signed}
+}
+
 // Signed returns the header's value when the signature covers it, and ""
 // otherwise. Every value that drives authorization, resource selection or
 // integrity must be read through this. For x-amz-* names the verifier has

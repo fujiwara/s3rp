@@ -67,9 +67,12 @@ func TestSignedHeaderSemantics(t *testing.T) {
 // discipline: operation code must read request headers through the accessor,
 // which records whether a value may carry semantics beyond the object's own
 // attributes. It scans the package source for reads of the conventional
-// request variable's headers. Renaming the variable would slip past this —
-// it is a tripwire for the honest mistake, not a proof; review guards the
-// rest. cors.go is exempt (unauthenticated preflight, runs before signature
+// request variable's headers, and for x-amz-* names read through Attribute —
+// those must go through Signed; the refusal checks that deliberately see
+// unsigned values (checkSSEC, checkACLHeader) live in sse.go and acl.go.
+// Renamed variables and names behind constants slip past this — it is a
+// tripwire for the honest mistake, not a proof; review guards the rest.
+// cors.go is exempt (unauthenticated preflight, runs before signature
 // verification, so no coverage set exists).
 func TestNoDirectRequestHeaderReads(t *testing.T) {
 	banned := []string{
@@ -78,7 +81,13 @@ func TestNoDirectRequestHeaderReads(t *testing.T) {
 		"r.Header[",
 		"range r.Header",
 	}
+	bannedAmzAttr := []string{
+		`attr("x-amz`,
+		`Attribute("x-amz`,
+		`AttributeValues("x-amz`,
+	}
 	exempt := map[string]bool{"cors.go": true}
+	amzAttrExempt := map[string]bool{"sse.go": true, "acl.go": true}
 	files, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)
@@ -94,7 +103,15 @@ func TestNoDirectRequestHeaderReads(t *testing.T) {
 		for i, line := range strings.Split(string(src), "\n") {
 			for _, tok := range banned {
 				if strings.Contains(line, tok) {
-					t.Errorf("%s:%d: direct request-header read %q — go through signedHeader (Signed/Attribute/Present)", f, i+1, tok)
+					t.Errorf("%s:%d: direct request-header read %q — go through signedHeader (Signed/Attribute)", f, i+1, tok)
+				}
+			}
+			if amzAttrExempt[filepath.Base(f)] {
+				continue
+			}
+			for _, tok := range bannedAmzAttr {
+				if strings.Contains(strings.ToLower(line), strings.ToLower(tok)) {
+					t.Errorf("%s:%d: x-amz-* header read via Attribute %q — x-amz values carry semantics and must be read via Signed (refusal checks belong in sse.go/acl.go)", f, i+1, tok)
 				}
 			}
 		}
@@ -110,7 +127,7 @@ func TestSSECRefusedOnPOST(t *testing.T) {
 	r := httptest.NewRequest("PUT", "http://s3.example.com/bucket/key", nil)
 	r.Header.Set("x-amz-server-side-encryption-customer-algorithm", "AES256")
 	hdr := s3gw.NewSignedHeader(r, nil) // nothing covered, header still present
-	if err := s3gw.CheckSSEC(hdr.Attribute); err == nil {
+	if err := s3gw.CheckSSEC(hdr); err == nil {
 		t.Fatal("SSE-C must be refused even when the header is not signature-covered")
 	}
 }

@@ -112,9 +112,9 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, bucke
 		return err
 	}
 	// SSE-C headers are as meaningless on a POST upload as anywhere else,
-	// and just as dangerous to drop silently. Attribute because the refusal
-	// checks presence; a POST carries no signed headers anyway.
-	if err := checkSSEC(newSignedHeader(r, nil).Attribute); err != nil {
+	// and just as dangerous to drop silently. The nil coverage set is fine:
+	// checkSSEC reads presence, signed or not.
+	if err := checkSSEC(newSignedHeader(r, nil)); err != nil {
 		return err
 	}
 	fields, file, filename, s3e := readPostForm(r)
@@ -174,7 +174,7 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, bucke
 	}
 	// validated before the hooks run, so Op.SSE only ever carries a
 	// supported value
-	if s3e := checkSSE(func(name string) string { return fields[name] }); s3e != nil {
+	if s3e := checkSSE(postFieldHeader(fields)); s3e != nil {
 		return s3e
 	}
 
@@ -258,8 +258,7 @@ func (g *Gateway) postPutObject(c *opCtx, fields map[string]string, file *multip
 	if v := fields["x-amz-tagging"]; v != "" {
 		in.Tagging = aws.String(v)
 	}
-	if s3e := applySSE(func(name string) string { return fields[name] },
-		&in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
+	if s3e := applySSE(postFieldHeader(fields), &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
 		return s3e
 	}
 	md := make(map[string]string)
