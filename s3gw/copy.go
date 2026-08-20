@@ -108,7 +108,7 @@ func (g *Gateway) copyObject(c *opCtx) error {
 			in.CopySourceIfUnmodifiedSince = aws.Time(t)
 		}
 	}
-	if s3e := applySSE(c.signed, &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
+	if s3e := applySSE(c.hdr, &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
 		return s3e
 	}
 	out, err := rt.client.CopyObject(r.Context(), in)

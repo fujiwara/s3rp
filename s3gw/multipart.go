@@ -61,7 +61,7 @@ func (g *Gateway) createMultipartUpload(c *opCtx) error {
 	if v := c.signed("x-amz-checksum-type"); v != "" {
 		in.ChecksumType = types.ChecksumType(strings.ToUpper(v))
 	}
-	if s3e := applySSE(c.signed, &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
+	if s3e := applySSE(c.hdr, &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
 		return s3e
 	}
 	out, err := rt.client.CreateMultipartUpload(r.Context(), in)

@@ -233,7 +233,7 @@ func (g *Gateway) putObject(c *opCtx) error {
 	if v := c.signed("x-amz-tagging"); v != "" {
 		in.Tagging = aws.String(v)
 	}
-	if s3e := applySSE(c.signed, &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
+	if s3e := applySSE(c.hdr, &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
 		return s3e
 	}
 	applyObjectLockHeaders(c.hdr, &in.ObjectLockMode, &in.ObjectLockRetainUntilDate, &in.ObjectLockLegalHoldStatus)
