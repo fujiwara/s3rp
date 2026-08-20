@@ -17,6 +17,7 @@ import (
 	"github.com/fujiwara/s3rp/s3err"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -272,6 +273,9 @@ func (v *Verifier) verifyHeaderRequest(r *http.Request, lookup SecretLookup) (*V
 		return nil, s3err.New(http.StatusBadRequest, "AuthorizationHeaderMalformed",
 			fmt.Sprintf("The authorization header is malformed; the region '%s' is wrong; expecting '%s'", auth.Region, v.region))
 	}
+	if s3e := requireSignedAmzHeaders(r.Header, auth.SignedHeaders); s3e != nil {
+		return nil, s3e
+	}
 	presentedToken := r.Header.Get("X-Amz-Security-Token")
 	cred, s3e := lookupSecret(r, lookup, auth.AccessKeyID, presentedToken)
 	if s3e != nil {
@@ -386,6 +390,9 @@ func (v *Verifier) verifyPresignedRequest(r *http.Request, lookup SecretLookup) 
 	if len(signedHeaders) == 0 || signedHeaders[0] == "" {
 		return nil, queryParamsError("X-Amz-SignedHeaders is required")
 	}
+	if s3e := requireSignedAmzHeaders(r.Header, signedHeaders); s3e != nil {
+		return nil, s3e
+	}
 	t, err := time.Parse(amzDateFormat, query.Get("X-Amz-Date"))
 	if err != nil {
 		return nil, queryParamsError("X-Amz-Date must be in the ISO8601 Long Format")
@@ -486,6 +493,36 @@ func promoteHoistedQueryParams(r *http.Request) {
 			r.Header.Set(k, vs[0])
 		}
 	}
+}
+
+// requireSignedAmzHeaders enforces AWS's rule that every x-amz-* request
+// header must be covered by the signature. The signature only commits to the
+// headers in SignedHeaders, so an x-amz-* header outside that set is
+// attacker-controllable: a presigned-URL holder could attach storage class,
+// object-lock retention, an SSE mode and key, a copy source, tagging or
+// metadata the URL grantor never signed and so never authorized. Amazon S3
+// refuses such a request with AccessDenied, and so do we — the headers are
+// listed sorted so the message is deterministic. Called once per request,
+// before the signature is compared, so an unsigned x-amz-* header never
+// reaches an operation handler.
+func requireSignedAmzHeaders(h http.Header, signedHeaders []string) *s3err.Error {
+	signed := make(map[string]bool, len(signedHeaders))
+	for _, s := range signedHeaders {
+		signed[strings.ToLower(s)] = true
+	}
+	var unsigned []string
+	for name := range h {
+		lname := strings.ToLower(name)
+		if strings.HasPrefix(lname, "x-amz-") && !signed[lname] {
+			unsigned = append(unsigned, lname)
+		}
+	}
+	if len(unsigned) == 0 {
+		return nil
+	}
+	sort.Strings(unsigned)
+	return s3err.New(http.StatusForbidden, "AccessDenied",
+		"There were headers present in the request which were not signed: "+strings.Join(unsigned, ", "))
 }
 
 // cloneForSigning builds a request containing only the headers the client
