@@ -25,7 +25,10 @@ type RequestInfo struct {
 	// request a user reports can be found in the log.
 	RequestID string `json:"request_id"`
 	Status    int    `json:"status"`
-	// Code is the S3 error code the client was given, empty on success.
+	// Code is the S3 error code the client was given, empty on success —
+	// and empty as well for a failure discovered after the response had
+	// started, where there was no way left to tell the client anything.
+	// Err says what happened in both cases.
 	Code string `json:"code,omitempty"`
 	// Tenant and User are the identity the signature proved, known from the
 	// moment it verifies — so they are recorded even for a request that is

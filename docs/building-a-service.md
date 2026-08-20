@@ -309,7 +309,7 @@ Your `store.Store` implementation — and the control plane's write path that fe
   	return err
   })
   ```
-- A client that retries sends a **new request**, which is verified, authorized and metered on its own. That is what the server served; whether a retry should count toward a quota or an invoice is the application's decision, not the gateway's.
+- A client that retries sends a **new request**, which is verified, authorized and metered on its own. Whether that should count toward a quota or an invoice is the application's decision — and on a write it may have left something behind: [Retries and write side effects](#retries-and-write-side-effects).
 - `Op.BytesIn` / `BytesOut` count bytes on the wire, so an `aws-chunked` upload includes its framing. They measure transfer, not storage: a quota over bytes at rest needs the backend's inventory (deletes, overwrites and versions carry no sizes through the hooks).
 - `Op.Request` is what the client asked for about the object, `Op.Response` what the backend reported. Both are nil when there is nothing to report, so a hook never has to tell a zero value from an absent one, and their `Metadata` maps are excluded from the JSON like the store's.
 
@@ -343,6 +343,16 @@ Your `store.Store` implementation — and the control plane's write path that fe
 
 - **Per-class billing must use the response side.** Nothing verifies a requested storage class — Ceph RGW refuses one it does not define with `InvalidArgument`, versitygw stores the object as `STANDARD` without a word, and no S3 write returns the class it landed in — so `Request.StorageClass` is for authorization and nothing else.
 - **Storage per class cannot come from the hooks at all**, because lifecycle transitions and expirations happen inside the backend and no request reaches the gateway. Sweep the backend buckets periodically instead: `ListObjectsV2` reports `Size` and `StorageClass` per object, `ListObjectVersions` the noncurrent versions, and incomplete multipart parts appear in neither. User metadata and tags are not in a listing at all, so an attribute you want to aggregate storage by belongs in the storage class — otherwise the sweep needs a `HEAD` per object.
+- **If your hook panics**, the gateway recovers at the request boundary: the client gets an `InternalError` when nothing has been written yet, or an aborted connection when the response was already on its way (it cannot be replaced by an error document), and the observer is called exactly once either way with a `*s3gw.PanicError` as `RequestInfo.Err`. Its message names the panic value; the stack is on the error, not in the message, so ask for it when you want it:
+
+  ```go
+  var pe *s3gw.PanicError
+  if errors.As(info.Err, &pe) {
+  	slog.Error("panic", "request_id", info.RequestID, "value", pe.Value, "stack", string(pe.Stack))
+  }
+  ```
+
+  Two things the gateway cannot do for you: a panic in a goroutine *your* hook starts is fatal to the process, as in any Go server, and a panic after `next()` still costs a retry of an operation that already ran ([Retries and write side effects](#retries-and-write-side-effects)). `panic(http.ErrAbortHandler)` keeps net/http's meaning: the request is aborted silently, with no observation.
 - **Bandwidth limiting** is the one thing the Authorizer/Interceptor shape cannot do — they gate admission, not the stream. `SetBandwidthLimit` installs a hook that picks pacing limiters per operation, called after the policies and the Authorizer allow it; `in` paces the request body as read off the wire (the same bytes `BytesIn` counts), `out` the response body, `nil` means unlimited. The hook only *selects* — sharing is what makes it a limit, and the keying is yours: returning one limiter per tenant caps that tenant's aggregate bandwidth across all its concurrent requests. Key on `Op.User` rather than an access key: keys rotate — two are live during a rotation — and temporary keys can be minted in any number under one user (a self-contained token is not even a row anywhere), so a per-key budget is not a cap but a multiplier the client controls. Note `Op.Tenant` is the **requester's** tenant: on a cross-tenant request, whether the bandwidth bill belongs to the requester (`KeyMetadata` side) or the bucket owner (`BucketMetadata` side) is your business rule. `*rate.Limiter` satisfies the interface; the gateway waits in chunks of at most 32 KiB, so any burst ≥ 32 KiB works, but the burst is also how far a stream runs ahead of the rate — 256 KiB to 1 MiB is a practical range. A pacing failure aborts the request rather than letting it through unpaced.
 
   ```go
@@ -374,6 +384,27 @@ Your `store.Store` implementation — and the control plane's write path that fe
 - Don't use the request context as-is for post-`next` writes — it is canceled exactly for disconnected clients, so their usage silently vanishes.
 - Don't key bandwidth limiters on access key ids — keys rotate (two are live during a rotation), and temporary keys can be minted in any number, so a per-key budget is a multiplier the client controls, not a cap.
 - Don't read `BytesOut` as stored bytes (it is wire transfer), and don't expect the gateway to de-duplicate client retries — each retry is a new, separately metered request.
+
+## Retries and write side effects
+
+An S3 client retries on its own — aws-sdk-go-v2 on any connection error, on **500, 502, 503 and 504**, and on the codes it knows as throttles (`SlowDown`, `Throttling*`, `RequestLimitExceeded`, ...) or as `RequestTimeout`, whatever status carries them. Codes it does not know are not retried, so a `403 QuotaExceeded` is answered once while a `503 SlowDown` is tried three times: the **code**, not the status, is what decides.
+
+The gateway cannot de-duplicate any of it. Every attempt is a separate request — verified, authorized, hooked and metered on its own — S3 has no idempotency token, and `x-amz-request-id` is per attempt.
+
+That costs nothing as long as an attempt fails *before* the backend runs it. The damage is in the narrow window where the operation succeeded but the client never learned it: a panic after `next()`, a 5xx raised on the way back, a client that gave up mid-response.
+
+| operation | what each repeated attempt leaves behind |
+|---|---|
+| `PutObject`, `CopyObject`, versioned bucket | an extra **version**, noncurrent and billable — and undeletable until expiry under Object Lock |
+| `DeleteObject` with no version id, versioned | an extra **delete marker**, stacked on the last |
+| `CreateMultipartUpload` | an orphaned upload holding its parts |
+| `CompleteMultipartUpload`, `AbortMultipartUpload` | `NoSuchUpload` — **the object exists, the client is told the upload failed** |
+| conditional write (`If-None-Match: *`, `If-Match`) | `PreconditionFailed`, for a write that did happen |
+| anything | one more count of `BytesIn`/`BytesOut`, requests, and whatever your quota decrements |
+| unversioned overwrite, `UploadPart`, tagging/retention/legal hold, `DeleteObject` with a version id | nothing — these repeat cleanly |
+
+- Keep fallible work **before** `next()`, where a failure costs an attempt and nothing else. Post-`next` code that can panic is what turns one successful write into three: recover in your own hook, or queue the work instead of doing I/O inline.
+- Put `AbortIncompleteMultipartUpload` and a noncurrent-version expiration in the operator's baseline lifecycle rules. They are the only thing that clears retry debris.
 
 ## In front of the gateway
 
