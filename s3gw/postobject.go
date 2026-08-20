@@ -99,7 +99,7 @@ var postFieldMapped = map[string]bool{
 
 func checkPostFields(fields map[string]string) *s3err.Error {
 	for name := range fields {
-		if postFieldMapped[name] || strings.HasPrefix(name, "x-amz-meta-") {
+		if postFieldMapped[name] || strings.HasPrefix(name, amzMetaPrefix) {
 			continue
 		}
 		return s3err.NotImplemented("form field " + name)
@@ -223,7 +223,7 @@ func postObjectRequest(fields map[string]string) *OpRequest {
 func postFieldMeta(fields map[string]string) map[string]string {
 	var md map[string]string
 	for name, v := range fields {
-		if meta, ok := strings.CutPrefix(name, "x-amz-meta-"); ok {
+		if meta, ok := strings.CutPrefix(name, amzMetaPrefix); ok {
 			if md == nil {
 				md = make(map[string]string)
 			}

@@ -19,6 +19,13 @@ import (
 // (chunked.go) and recomputed toward the backend via ChecksumAlgorithm,
 // and response Values pass back to the client.
 
+// HeaderPrefix is the prefix an algorithm's checksum header carries
+// ("x-amz-checksum-" + the lower-case algorithm name). It is exported because
+// the name is built in one place and parsed in another: a chunked body's
+// trailer names the header, and the caller verifying that trailer must build
+// the same name this package's TrailerAlgorithm cut off it.
+const HeaderPrefix = "x-amz-checksum-"
+
 // crc64NVMETable is the CRC64/NVMe polynomial (reversed), as used by
 // x-amz-checksum-crc64nvme.
 var crc64NVMETable = crc64.MakeTable(0x9A6C9329AC4BC9B5)
@@ -53,7 +60,7 @@ func (v Values) Algorithm() string {
 
 func FromHeaders(h http.Header) Values {
 	get := func(alg string) *string {
-		if v := h.Get("x-amz-checksum-" + alg); v != "" {
+		if v := h.Get(HeaderPrefix + alg); v != "" {
 			return &v
 		}
 		return nil
@@ -71,7 +78,7 @@ func FromHeaders(h http.Header) Values {
 func SetHeaders(h http.Header, cs Values, checksumType string) {
 	set := func(alg string, v *string) {
 		if v != nil && *v != "" {
-			h.Set("x-amz-checksum-"+alg, *v)
+			h.Set(HeaderPrefix+alg, *v)
 		}
 	}
 	set("crc32", cs.CRC32)
@@ -90,7 +97,7 @@ func SetHeaders(h http.Header, cs Values, checksumType string) {
 func TrailerAlgorithm(h http.Header) string {
 	for t := range strings.SplitSeq(h.Get("x-amz-trailer"), ",") {
 		t = strings.ToLower(strings.TrimSpace(t))
-		if alg, ok := strings.CutPrefix(t, "x-amz-checksum-"); ok {
+		if alg, ok := strings.CutPrefix(t, HeaderPrefix); ok {
 			if NewHash(alg) != nil {
 				return alg
 			}

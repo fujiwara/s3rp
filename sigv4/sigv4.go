@@ -36,6 +36,12 @@ const (
 	streamingSHA256T   = "STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER"
 )
 
+// amzPrefix is what requireSignedAmzHeaders gates on and what
+// promoteHoistedQueryParams promotes. Both are prefix matches, so a mistyped
+// literal would not fail loudly: the gate would simply stop refusing unsigned
+// headers, which is the whole of its protection.
+const amzPrefix = "x-amz-"
+
 type authHeader struct {
 	AccessKeyID   string
 	Date          string // yyyymmdd of the credential scope
@@ -521,7 +527,7 @@ func promoteHoistedQueryParams(r *http.Request) []string {
 	var promoted []string
 	for k, vs := range r.URL.Query() {
 		lk := strings.ToLower(k)
-		if !strings.HasPrefix(lk, "x-amz-") || authParams[lk] || len(vs) == 0 {
+		if !strings.HasPrefix(lk, amzPrefix) || authParams[lk] || len(vs) == 0 {
 			continue
 		}
 		if r.Header.Get(k) == "" {
@@ -553,7 +559,7 @@ func requireSignedAmzHeaders(h http.Header, signedHeaders []string) *s3err.Error
 	var unsigned []string
 	for name := range h {
 		lname := strings.ToLower(name)
-		if strings.HasPrefix(lname, "x-amz-") && !signed[lname] {
+		if strings.HasPrefix(lname, amzPrefix) && !signed[lname] {
 			unsigned = append(unsigned, lname)
 		}
 	}

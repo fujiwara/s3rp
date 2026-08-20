@@ -21,7 +21,7 @@ import (
 // Copying between different backends is not supported. The copy source names
 // another object to read, so it is only ever taken from a signed header.
 func (g *Gateway) resolveCopySource(c *opCtx) (string, *s3err.Error) {
-	raw := strings.TrimPrefix(c.signed("x-amz-copy-source"), "/")
+	raw := strings.TrimPrefix(c.signed(hdrCopySource), "/")
 	rawPath, versionID, _ := strings.Cut(raw, "?")
 	rawBucket, rawKey, ok := strings.Cut(rawPath, "/")
 	if !ok || rawKey == "" {

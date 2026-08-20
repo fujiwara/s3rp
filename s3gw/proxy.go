@@ -967,7 +967,7 @@ func setObjectHeaders(h http.Header, v objectHeaderValues) {
 		// Header.Set would canonicalize the name (turning meta1 into
 		// X-Amz-Meta-Meta1 on the wire); S3 metadata keys reach the client
 		// lowercase, and clients index the parsed metadata by that suffix
-		h["x-amz-meta-"+strings.ToLower(k)] = []string{val}
+		h[amzMetaPrefix+strings.ToLower(k)] = []string{val}
 	}
 }
 
