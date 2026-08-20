@@ -12,6 +12,14 @@ import (
 
 var RedactQuery = redactQuery
 
+type SignedHeader = signedHeader
+
+func NewSignedHeader(r *http.Request, signed map[string]bool) SignedHeader {
+	return newSignedHeader(r, signed)
+}
+
+func CheckSSEC(hdr SignedHeader) *s3err.Error { return checkSSEC(hdr) }
+
 func NewPayloadVerifier(r io.Reader, want string, length int64) io.Reader {
 	return newPayloadVerifier(r, want, length)
 }

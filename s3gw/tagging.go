@@ -38,9 +38,9 @@ func (g *Gateway) getObjectTagging(c *opCtx) error {
 }
 
 func (g *Gateway) putObjectTagging(c *opCtx) error {
-	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
+	w, r, rt, key := c.w, c.r, c.rt, c.key
 	var req s3xml.Tagging
-	if s3e := readXMLBody(r, vr, &req); s3e != nil {
+	if s3e := readXMLBody(c, &req); s3e != nil {
 		return s3e
 	}
 	tags := make([]types.Tag, 0, len(req.TagSet.Tags))

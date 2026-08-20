@@ -37,7 +37,7 @@ const (
 // POST, i.e. a browser-based upload rather than an S3 API POST
 // (?delete, ?uploads, ?uploadId).
 func isMultipartForm(r *http.Request) bool {
-	mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	mt, _, err := mime.ParseMediaType(newSignedHeader(r, nil).Attribute("Content-Type"))
 	return err == nil && mt == "multipart/form-data"
 }
 
@@ -112,8 +112,9 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, bucke
 		return err
 	}
 	// SSE-C headers are as meaningless on a POST upload as anywhere else,
-	// and just as dangerous to drop silently
-	if err := checkSSEC(r); err != nil {
+	// and just as dangerous to drop silently. A POST carries no signed
+	// headers (nil set), which is fine: the refusal checks presence.
+	if err := checkSSEC(newSignedHeader(r, nil)); err != nil {
 		return err
 	}
 	fields, file, filename, s3e := readPostForm(r)

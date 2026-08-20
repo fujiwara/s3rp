@@ -1,6 +1,7 @@
 package s3gw
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/url"
@@ -18,9 +19,10 @@ import (
 
 // resolveCopySource resolves an x-amz-copy-source header value
 // (front bucket/key) to the backend copy source of the same backend.
-// Copying between different backends is not supported.
-func (g *Gateway) resolveCopySource(r *http.Request, vr *verifiedRequest, dst *bucketRT) (string, *s3err.Error) {
-	raw := strings.TrimPrefix(r.Header.Get("x-amz-copy-source"), "/")
+// Copying between different backends is not supported. The copy source names
+// another object to read, so it is only ever taken from a signed header.
+func (g *Gateway) resolveCopySource(ctx context.Context, hdr signedHeader, vr *verifiedRequest, dst *bucketRT) (string, *s3err.Error) {
+	raw := strings.TrimPrefix(hdr.Signed("x-amz-copy-source"), "/")
 	rawPath, versionID, _ := strings.Cut(raw, "?")
 	rawBucket, rawKey, ok := strings.Cut(rawPath, "/")
 	if !ok || rawKey == "" {
@@ -38,7 +40,7 @@ func (g *Gateway) resolveCopySource(r *http.Request, vr *verifiedRequest, dst *b
 	// the source is resolved within the requesting key's tenant — deliberately
 	// not through resolveBucket — so copying from another tenant's bucket is
 	// impossible by construction even where a policy grants cross-tenant reads
-	src, err := g.store.GetBucket(r.Context(), vr.Tenant, srcBucket)
+	src, err := g.store.GetBucket(ctx, vr.Tenant, srcBucket)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			// the cause tells the observer this denial is an unresolved
@@ -63,8 +65,8 @@ func (g *Gateway) resolveCopySource(r *http.Request, vr *verifiedRequest, dst *b
 }
 
 func (g *Gateway) copyObject(c *opCtx) error {
-	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
-	copySource, s3e := g.resolveCopySource(r, vr, rt)
+	w, r, rt, key, vr, hdr := c.w, c.r, c.rt, c.key, c.vr, c.hdr
+	copySource, s3e := g.resolveCopySource(r.Context(), hdr, vr, rt)
 	if s3e != nil {
 		return s3e
 	}
@@ -73,41 +75,41 @@ func (g *Gateway) copyObject(c *opCtx) error {
 		Key:        aws.String(key),
 		CopySource: aws.String(copySource),
 	}
-	if v := r.Header.Get("x-amz-metadata-directive"); v != "" {
+	if v := hdr.Signed("x-amz-metadata-directive"); v != "" {
 		in.MetadataDirective = types.MetadataDirective(v)
 	}
-	if v := r.Header.Get("Content-Type"); v != "" {
+	if v := hdr.Attribute("Content-Type"); v != "" {
 		in.ContentType = aws.String(v)
 	}
-	if v := r.Header.Get("x-amz-storage-class"); v != "" {
+	if v := hdr.Signed("x-amz-storage-class"); v != "" {
 		in.StorageClass = types.StorageClass(v)
 	}
-	if v := r.Header.Get("x-amz-tagging-directive"); v != "" {
+	if v := hdr.Signed("x-amz-tagging-directive"); v != "" {
 		in.TaggingDirective = types.TaggingDirective(v)
 	}
-	if v := r.Header.Get("x-amz-tagging"); v != "" {
+	if v := hdr.Signed("x-amz-tagging"); v != "" {
 		in.Tagging = aws.String(v)
 	}
-	if md := metadataFromHeaders(r.Header); len(md) > 0 {
+	if md := hdr.AmzMeta(); len(md) > 0 {
 		in.Metadata = md
 	}
-	if v := r.Header.Get("x-amz-copy-source-if-match"); v != "" {
+	if v := hdr.Signed("x-amz-copy-source-if-match"); v != "" {
 		in.CopySourceIfMatch = aws.String(v)
 	}
-	if v := r.Header.Get("x-amz-copy-source-if-none-match"); v != "" {
+	if v := hdr.Signed("x-amz-copy-source-if-none-match"); v != "" {
 		in.CopySourceIfNoneMatch = aws.String(v)
 	}
-	if v := r.Header.Get("x-amz-copy-source-if-modified-since"); v != "" {
+	if v := hdr.Signed("x-amz-copy-source-if-modified-since"); v != "" {
 		if t, err := http.ParseTime(v); err == nil {
 			in.CopySourceIfModifiedSince = aws.Time(t)
 		}
 	}
-	if v := r.Header.Get("x-amz-copy-source-if-unmodified-since"); v != "" {
+	if v := hdr.Signed("x-amz-copy-source-if-unmodified-since"); v != "" {
 		if t, err := http.ParseTime(v); err == nil {
 			in.CopySourceIfUnmodifiedSince = aws.Time(t)
 		}
 	}
-	if s3e := applySSE(r.Header.Get, &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
+	if s3e := applySSE(hdr.Signed, &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
 		return s3e
 	}
 	out, err := rt.client.CopyObject(r.Context(), in)
@@ -134,8 +136,8 @@ func (g *Gateway) copyObject(c *opCtx) error {
 }
 
 func (g *Gateway) uploadPartCopy(c *opCtx) error {
-	w, r, rt, key, vr := c.w, c.r, c.rt, c.key, c.vr
-	copySource, s3e := g.resolveCopySource(r, vr, rt)
+	w, r, rt, key, vr, hdr := c.w, c.r, c.rt, c.key, c.vr, c.hdr
+	copySource, s3e := g.resolveCopySource(r.Context(), hdr, vr, rt)
 	if s3e != nil {
 		return s3e
 	}
@@ -152,7 +154,7 @@ func (g *Gateway) uploadPartCopy(c *opCtx) error {
 		PartNumber: aws.Int32(int32(partNumber)),
 		CopySource: aws.String(copySource),
 	}
-	if v := r.Header.Get("x-amz-copy-source-range"); v != "" {
+	if v := hdr.Signed("x-amz-copy-source-range"); v != "" {
 		in.CopySourceRange = aws.String(v)
 	}
 	out, err := rt.client.UploadPartCopy(r.Context(), in)

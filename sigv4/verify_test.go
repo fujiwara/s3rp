@@ -191,6 +191,48 @@ func TestVerifyAllowsUnsignedStandardHeader(t *testing.T) {
 	}
 }
 
+// Verified.SignedHeaders is what the caller's header accessor decides
+// signature coverage by, so it must name exactly what the signature commits
+// to: the SignedHeaders list, plus — presigned — the promoted x-amz-* query
+// parameters, whose values arrived in the signed query string.
+func TestVerifiedSignedHeaders(t *testing.T) {
+	t.Run("header auth", func(t *testing.T) {
+		got, err := newVerifier().Verify(signedRequest(t, testSecret), lookup)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, h := range []string{"host", "x-amz-content-sha256", "x-amz-date"} {
+			if !got.SignedHeaders[h] {
+				t.Errorf("SignedHeaders must contain %s, got %v", h, got.SignedHeaders)
+			}
+		}
+		if got.SignedHeaders["content-type"] {
+			t.Error("SignedHeaders must not contain a header the client did not sign")
+		}
+	})
+	t.Run("presigned with hoisted params", func(t *testing.T) {
+		r := presignedRequest(t, "http://s3.example.com/bucket/key.txt?X-Amz-Expires=300&x-amz-meta-foo=bar&x-amz-storage-class=GLACIER")
+		got, err := newVerifier().Verify(r, lookup)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !got.SignedHeaders["host"] {
+			t.Errorf("SignedHeaders must contain the listed signed headers, got %v", got.SignedHeaders)
+		}
+		for _, h := range []string{"x-amz-meta-foo", "x-amz-storage-class"} {
+			if !got.SignedHeaders[h] {
+				t.Errorf("SignedHeaders must cover the promoted query param %s, got %v", h, got.SignedHeaders)
+			}
+			if r.Header.Get(h) == "" {
+				t.Errorf("%s must have been promoted into the headers", h)
+			}
+		}
+		if got.SignedHeaders["x-amz-signature"] || got.SignedHeaders["x-amz-expires"] {
+			t.Error("auth params must not be reported as signed headers")
+		}
+	})
+}
+
 // a lookup failure that is not ErrUnknownKey must not be reported as a bad
 // key, since that would tell a client its credentials are wrong when the
 // service is merely broken
