@@ -773,8 +773,7 @@ func readXMLBody(c *opCtx, v any) *s3err.Error {
 		// the body reader verifies payload integrity (the signed hash, chunk
 		// signatures, trailer checksums), so a read error may be the S3 error
 		// the client must see — same unwrapping as fromSDKError
-		var s3e *s3err.Error
-		if errors.As(err, &s3e) {
+		if s3e, ok := errors.AsType[*s3err.Error](err); ok {
 			return s3e
 		}
 		return s3err.New(http.StatusBadRequest, "InvalidRequest",

@@ -113,8 +113,7 @@ func TestGetObjectAttributesErrors(t *testing.T) {
 			Key:              aws.String("k"),
 			ObjectAttributes: []types.ObjectAttributes{types.ObjectAttributesEtag},
 		})
-		var apiErr smithy.APIError
-		if !errors.As(err, &apiErr) {
+		if _, ok := errors.AsType[smithy.APIError](err); !ok {
 			t.Fatalf("expected an API error, got %v", err)
 		}
 	})

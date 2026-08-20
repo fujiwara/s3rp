@@ -40,8 +40,7 @@ func TestIntegration(t *testing.T) {
 		Bucket: aws.String(backendBucket),
 	})
 	if err != nil {
-		var exists *types.BucketAlreadyOwnedByYou
-		if !errors.As(err, &exists) {
+		if _, ok := errors.AsType[*types.BucketAlreadyOwnedByYou](err); !ok {
 			t.Fatalf("failed to create backend bucket: %v", err)
 		}
 	}
@@ -650,8 +649,7 @@ func TestIntegration(t *testing.T) {
 			Bucket:                     aws.String(lockBackendBucket),
 			ObjectLockEnabledForBucket: aws.Bool(true),
 		}); err != nil {
-			var exists *types.BucketAlreadyOwnedByYou
-			if !errors.As(err, &exists) {
+			if _, ok := errors.AsType[*types.BucketAlreadyOwnedByYou](err); !ok {
 				t.Skipf("backend does not support Object Lock buckets: %v", err)
 			}
 		}
@@ -728,8 +726,7 @@ func TestIntegration(t *testing.T) {
 		if _, err := backendClient.CreateBucket(t.Context(), &s3.CreateBucketInput{
 			Bucket: aws.String(ctBackendBucket),
 		}); err != nil {
-			var exists *types.BucketAlreadyOwnedByYou
-			if !errors.As(err, &exists) {
+			if _, ok := errors.AsType[*types.BucketAlreadyOwnedByYou](err); !ok {
 				t.Fatalf("failed to create backend bucket: %v", err)
 			}
 		}

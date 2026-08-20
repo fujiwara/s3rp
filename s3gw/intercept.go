@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"slices"
 )
 
 // Hooks a service installs to take part in each operation.
@@ -219,8 +220,8 @@ func (g *Gateway) runOp(ctx context.Context, op *Op, c *opCtx, run func() error)
 		op.BytesIn, op.BytesOut = c.transferred()
 		return err
 	}
-	for i := len(g.interceptors) - 1; i >= 0; i-- {
-		next = wrapInterceptor(g.interceptors[i], ctx, op, next)
+	for _, v := range slices.Backward(g.interceptors) {
+		next = wrapInterceptor(v, ctx, op, next)
 	}
 	return next()
 }
