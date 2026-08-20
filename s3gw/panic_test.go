@@ -120,8 +120,7 @@ func TestPanicAfterResponseStartedAborts(t *testing.T) {
 	if seen[0].Code != "" {
 		t.Errorf("expect no code for an error the client was never told, got %q", seen[0].Code)
 	}
-	var pe *s3gw.PanicError
-	if !errors.As(seen[0].Err, &pe) {
+	if _, ok := errors.AsType[*s3gw.PanicError](seen[0].Err); !ok {
 		t.Fatalf("expect the panic recorded as the cause, got %v", seen[0].Err)
 	}
 }

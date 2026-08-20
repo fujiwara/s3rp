@@ -167,8 +167,7 @@ func messageFor(code string) string {
 func FromSDKError(err error, resource string) *Error {
 	// an Error raised by the proxy itself (e.g. the chunked reader
 	// aborting on a signature or checksum mismatch) passes through
-	var own *Error
-	if errors.As(err, &own) {
+	if own, ok := errors.AsType[*Error](err); ok {
 		if own.Resource == "" {
 			own.Resource = resource
 		}
@@ -184,8 +183,7 @@ func FromSDKError(err error, resource string) *Error {
 		cause: err,
 	}
 	hasStatus := false
-	var respErr *awshttp.ResponseError
-	if errors.As(err, &respErr) {
+	if respErr, ok := errors.AsType[*awshttp.ResponseError](err); ok {
 		// a transport failure (dial error, connection reset) still carries
 		// a ResponseError, with a zero status; adopting it would make the
 		// response unwritable (WriteHeader panics below 100)
@@ -194,8 +192,7 @@ func FromSDKError(err error, resource string) *Error {
 			hasStatus = true
 		}
 	}
-	var apiErr smithy.APIError
-	if errors.As(err, &apiErr) {
+	if apiErr, ok := errors.AsType[smithy.APIError](err); ok {
 		code := apiErr.ErrorCode()
 		s3err.Code = code
 		// the backend's own wording stays in the cause (set above), which

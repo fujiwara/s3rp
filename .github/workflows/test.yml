@@ -5,8 +5,8 @@ jobs:
     strategy:
       matrix:
         go:
-          - '1.25'
           - '1.26'
+          - '1.27'
     name: Build
     runs-on: ubuntu-latest
 
@@ -34,7 +34,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26'
+          go-version: '1.27'
 
       # Each package is measured by its own tests, not the whole tree's, so
       # the number answers "how well is this package tested" — which is what
@@ -88,7 +88,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26'
+          go-version: '1.27'
 
       - name: Start backend
         run: |

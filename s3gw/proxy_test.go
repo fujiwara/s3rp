@@ -85,8 +85,7 @@ func TestProxyGetObjectNoSuchKey(t *testing.T) {
 	if err == nil {
 		t.Fatal("expect error")
 	}
-	var nsk *types.NoSuchKey
-	if !errors.As(err, &nsk) {
+	if _, ok := errors.AsType[*types.NoSuchKey](err); !ok {
 		t.Errorf("expect NoSuchKey, got %v", err)
 	}
 }

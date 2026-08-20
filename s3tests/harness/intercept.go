@@ -138,8 +138,7 @@ func (i *bucketInterceptor) createBucket(w http.ResponseWriter, r *http.Request,
 	// ACL-disabled bucket — the same stance the gateway takes on ACLs.
 	if _, err := i.backend.CreateBucket(r.Context(), in); err != nil {
 		// a leftover backend bucket from a previous harness run is fine
-		var owned *types.BucketAlreadyOwnedByYou
-		if !errors.As(err, &owned) {
+		if _, ok := errors.AsType[*types.BucketAlreadyOwnedByYou](err); !ok {
 			i.store.remove(bucket) // roll back the claim
 			i.finish(w, r, bucket, key.Tenant, requestID, s3err.FromSDKError(err, "/"+bucket))
 			return
