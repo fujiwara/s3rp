@@ -305,10 +305,10 @@ func (c *opCtx) dispatch(routes []route) error {
 	// security expectation violated without a word — refuse it up front.
 	// SSE values are validated here too, before the hooks, so Op.SSE only
 	// ever carries a supported value.
-	if err := checkSSEC(c.hdr); err != nil {
+	if err := checkSSEC(c.attr); err != nil {
 		return err
 	}
-	if err := checkSSE(c.hdr.Signed); err != nil {
+	if err := checkSSE(c.signed); err != nil {
 		return err
 	}
 	for _, rt := range routes {
@@ -321,7 +321,7 @@ func (c *opCtx) dispatch(routes []route) error {
 			}
 		}
 		if rt.aclHdr {
-			if err := checkACLHeader(c.hdr); err != nil {
+			if err := checkACLHeader(c.attr); err != nil {
 				return err
 			}
 		}

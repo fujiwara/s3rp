@@ -26,11 +26,12 @@ const (
 )
 
 // checkSSEC rejects SSE-C requests. The algorithm header is what activates
-// SSE-C on AWS; the key headers without it are inert there too. Presence is
-// checked signed or not: treating an unsigned SSE-C header as absent would
-// be the silent drop this refusal exists to prevent.
-func checkSSEC(hdr signedHeader) *s3err.Error {
-	if hdr.Present(hdrSSECAlgo) || hdr.Present(hdrCopySSECAlgo) {
+// SSE-C on AWS; the key headers without it are inert there too. get takes the
+// same shape as checkSSE's, but must see the value signed or not
+// (signedHeader.Attribute, never Signed): treating an unsigned SSE-C header
+// as absent would be the silent drop this refusal exists to prevent.
+func checkSSEC(get func(string) string) *s3err.Error {
+	if get(hdrSSECAlgo) != "" || get(hdrCopySSECAlgo) != "" {
 		return s3err.NotImplemented("SSE-C")
 	}
 	return nil

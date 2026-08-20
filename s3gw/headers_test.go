@@ -39,11 +39,8 @@ func TestSignedHeaderSemantics(t *testing.T) {
 	if got := hdr.Attribute("Content-Type"); got != "text/plain" {
 		t.Errorf("Attribute must return the value signed or not, got %q", got)
 	}
-	if !hdr.Present("x-amz-storage-class") {
-		t.Error("Present must report an uncovered header")
-	}
-	if hdr.Present("x-amz-acl") {
-		t.Error("Present must not report an absent header")
+	if got := hdr.Attribute("x-amz-storage-class"); got != "GLACIER" {
+		t.Errorf("Attribute must see an uncovered header (refusal checks depend on it), got %q", got)
 	}
 	if diff := cmp.Diff(map[string]string{"signed": "yes"}, hdr.AmzMeta()); diff != "" {
 		t.Errorf("AmzMeta must include only covered metadata (-want +got):\n%s", diff)
@@ -56,13 +53,13 @@ func TestSignedHeaderSemantics(t *testing.T) {
 	}
 
 	// nil coverage set (POST policy uploads): nothing is signature-covered,
-	// but presence and attributes still read
+	// but attributes still read
 	post := s3gw.NewSignedHeader(r, nil)
 	if got := post.Signed("x-amz-tagging"); got != "" {
 		t.Errorf("a nil set must cover nothing, got %q", got)
 	}
-	if !post.Present("x-amz-tagging") || post.Attribute("Content-Type") != "text/plain" {
-		t.Error("Present/Attribute must still work with a nil set")
+	if post.Attribute("x-amz-tagging") != "k=v" || post.Attribute("Content-Type") != "text/plain" {
+		t.Error("Attribute must still work with a nil set")
 	}
 }
 
@@ -107,12 +104,13 @@ func TestNoDirectRequestHeaderReads(t *testing.T) {
 // An SSE-C refusal must fire even for a header outside the signature's
 // coverage: SSE-C is refused because dropping it silently would store the
 // object unprotected, and an unsigned copy of the header is exactly as
-// dangerous as a signed one. Guards checkSSEC using Present, not Signed.
+// dangerous as a signed one. Guards checkSSEC reading via Attribute, not
+// Signed.
 func TestSSECRefusedOnPOST(t *testing.T) {
 	r := httptest.NewRequest("PUT", "http://s3.example.com/bucket/key", nil)
 	r.Header.Set("x-amz-server-side-encryption-customer-algorithm", "AES256")
 	hdr := s3gw.NewSignedHeader(r, nil) // nothing covered, header still present
-	if err := s3gw.CheckSSEC(hdr); err == nil {
+	if err := s3gw.CheckSSEC(hdr.Attribute); err == nil {
 		t.Fatal("SSE-C must be refused even when the header is not signature-covered")
 	}
 }

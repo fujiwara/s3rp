@@ -112,9 +112,9 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, bucke
 		return err
 	}
 	// SSE-C headers are as meaningless on a POST upload as anywhere else,
-	// and just as dangerous to drop silently. A POST carries no signed
-	// headers (nil set), which is fine: the refusal checks presence.
-	if err := checkSSEC(newSignedHeader(r, nil)); err != nil {
+	// and just as dangerous to drop silently. Attribute because the refusal
+	// checks presence; a POST carries no signed headers anyway.
+	if err := checkSSEC(newSignedHeader(r, nil).Attribute); err != nil {
 		return err
 	}
 	fields, file, filename, s3e := readPostForm(r)

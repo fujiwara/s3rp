@@ -43,12 +43,14 @@ func (s signedHeader) Signed(name string) string {
 	return s.h.Get(name)
 }
 
-// Attribute returns the header's value whether or not it was signed. Only
-// for values that become the object's own attributes (Content-Type,
+// Attribute returns the header's value whether or not it was signed. For
+// values that become the object's own attributes (Content-Type,
 // Cache-Control, ...) or shape a read (Range, If-*): S3 requires only
 // x-amz-* headers to be signed — presigners deliberately leave Content-Type
 // off a presigned PUT — and an unsigned value here cannot exceed what the
-// signature granted.
+// signature granted. Refusal checks (SSE-C, canned ACLs) also read through
+// this, deliberately: treating an unsigned copy of a refused header as
+// absent would be exactly the silent drop the refusal exists to prevent.
 func (s signedHeader) Attribute(name string) string {
 	return s.h.Get(name)
 }
@@ -66,14 +68,6 @@ func (s signedHeader) SignedValues(name string) []string {
 		return nil
 	}
 	return s.h.Values(name)
-}
-
-// Present reports whether the header was sent at all, signed or not — for
-// refusing what must never be honored (SSE-C), where treating an unsigned
-// header as absent would be exactly the silent drop the refusal exists to
-// prevent.
-func (s signedHeader) Present(name string) bool {
-	return s.h.Get(name) != ""
 }
 
 // AmzMeta collects the x-amz-meta-* headers into the metadata map an upload
