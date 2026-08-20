@@ -280,17 +280,23 @@ func (c *opCtx) attr(name string) string   { return c.hdr.Attribute(name) }
 
 // objectRequest collects what the client asked for about the object itself,
 // or nil when it asked for none of it: on Op that nil is what tells a hook
-// "nothing was requested" apart from "requested empty". withAttrs is the
-// route's own answer to whether this operation can carry object attributes
-// at all, so a read does not pay for scanning the headers for metadata.
+// "nothing was requested" apart from "requested empty".
+//
+// withAttrs is the route's own answer to whether this operation carries
+// object attributes at all. Only those routes are read, so a read does not
+// pay for scanning the headers, and — the reason this covers the SSE fields
+// too — an operation that would ignore the header does not report it as a
+// request the client made. The gateway still validates the SSE fields on
+// every route (dispatch), it just does not hand an inert header to a hook.
 func (c *opCtx) objectRequest(withAttrs bool) *OpRequest {
-	req := OpRequest{
-		SSE:         c.signed(hdrSSE),
-		SSEKMSKeyID: c.signed(hdrSSEKMSKeyID),
+	if !withAttrs {
+		return nil
 	}
-	if withAttrs {
-		req.StorageClass = c.signed(hdrStorageClass)
-		req.Metadata = c.hdr.AmzMeta()
+	req := OpRequest{
+		SSE:          c.signed(hdrSSE),
+		SSEKMSKeyID:  c.signed(hdrSSEKMSKeyID),
+		StorageClass: c.signed(hdrStorageClass),
+		Metadata:     c.hdr.AmzMeta(),
 	}
 	if req.empty() {
 		return nil
@@ -333,7 +339,7 @@ type route struct {
 	params paramSet              // allowed query parameters (nil = skip the check)
 	aclHdr bool                  // reject unsupported canned ACL headers first
 	bypass bool                  // also require s3:BypassGovernanceRetention when the bypass header is set
-	attrs  bool                  // the operation carries the object's own attributes (storage class, user metadata)
+	attrs  bool                  // the operation carries the object's own attributes (SSE, storage class, user metadata)
 	action string                // s3:* action to authorize ("" = handler authorizes itself)
 	handle func(*Gateway, *opCtx) error
 }

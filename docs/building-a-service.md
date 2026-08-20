@@ -320,10 +320,15 @@ Your `store.Store` implementation — and the control plane's write path that fe
   | `SSE`, `SSEKMSKeyID` | the mode and key id asked for | the encryption applied; absent after a request that asked for it = a backend that ignored it |
   | `StorageClass` | the class asked for — refuse one this tenant may not use | the class the object is in now, lifecycle transitions included. Reads only |
   | `Metadata` | the `x-amz-meta-*` sent with the write | the object's stored metadata. Reads only |
-
-  A non-nil `Request` or `Response` means **at least one** of its fields is set, never all of them: `Metadata` is nil whenever there is none, even next to a filled storage class. Reading a nil map is safe in Go, so `op.Request.Metadata["plan"]` needs no guard — writing to it would panic, and hooks must not mutate `Op` anyway.
-
   | `ETag`, `VersionID` | — | the version this operation read or created |
+
+  A non-nil `Request` or `Response` means **at least one** of its fields is set, never all of them: `Metadata` is nil whenever there is none, even next to a filled storage class. Guard the pointer, never the map — dereferencing a nil `*OpRequest` panics, while indexing a nil map returns the zero value:
+
+  ```go
+  if op.Request != nil {
+  	plan := op.Request.Metadata["plan"] // "" when there is no metadata at all
+  }
+  ```
 
   Which operations fill them:
 

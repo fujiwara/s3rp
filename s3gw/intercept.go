@@ -41,7 +41,9 @@ type Op struct {
 
 	// Request is what the client asked for about the object itself, set
 	// before the Authorizer runs so it can refuse on it. Nil when the
-	// request asked for none of it.
+	// request asked for none of it — and nil as well for an operation that
+	// carries no object attributes at all, so a header an operation would
+	// ignore is never reported as something the client asked for.
 	Request *OpRequest `json:"request,omitempty"`
 	// Response is what the backend reported about the object. It is nil
 	// until the operation has run — always nil in an Authorizer, and still

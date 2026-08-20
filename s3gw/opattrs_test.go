@@ -3,8 +3,11 @@ package s3gw_test
 import (
 	"context"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -134,6 +137,40 @@ func TestOpMetadataNilWhenAbsent(t *testing.T) {
 	}
 	if get.Response.Metadata != nil {
 		t.Errorf("expect no metadata map, got %v", get.Response.Metadata)
+	}
+}
+
+// An operation that ignores a header must not report it as something the
+// client asked for: GetObject does nothing with x-amz-server-side-encryption,
+// so a signed one leaves Op.Request nil rather than showing an Authorizer an
+// encryption request that will never happen. The value is still validated —
+// dispatch checks it on every route — it is just not an attribute of this
+// operation.
+func TestOpRequestIgnoresInertHeader(t *testing.T) {
+	gw := newTestGateway(t)
+	stub := &stubBackend{getOut: &s3.GetObjectOutput{
+		Body: io.NopCloser(strings.NewReader("hello")),
+	}}
+	if err := gw.SetBackend("testbucket", stub); err != nil {
+		t.Fatal(err)
+	}
+	rec := &opRecorder{}
+	gw.SetAuthorizer(rec)
+
+	req := signedRequest(t, "GET", "http://s3.example.com/testbucket/a.txt",
+		nil, emptyPayloadHash, time.Now(), testCreds(), func(r *http.Request) {
+			r.Header.Set("x-amz-server-side-encryption", "AES256")
+		})
+	w := httptest.NewRecorder()
+	gw.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("unexpected status %d: %s", w.Code, w.Body.String())
+	}
+	if len(rec.ops) != 1 {
+		t.Fatalf("expect one authorization, got %d", len(rec.ops))
+	}
+	if rec.ops[0].Request != nil {
+		t.Errorf("expect no request attributes on a download, got %+v", rec.ops[0].Request)
 	}
 }
 
