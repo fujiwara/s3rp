@@ -328,7 +328,7 @@ func (cr *chunkedReader) discardTrailers() error {
 		if !ok {
 			continue
 		}
-		if strings.EqualFold(strings.TrimSpace(name), "x-amz-checksum-"+cr.ckAlg) {
+		if strings.EqualFold(strings.TrimSpace(name), checksum.HeaderPrefix+cr.ckAlg) {
 			if strings.TrimSpace(value) != checksum.Base64(cr.ckHash) {
 				return s3err.New(http.StatusBadRequest, "BadDigest",
 					fmt.Sprintf("The %s you specified did not match the calculated checksum.", strings.ToUpper(cr.ckAlg)))

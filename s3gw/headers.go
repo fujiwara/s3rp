@@ -10,6 +10,18 @@ import (
 // what it costs, which is semantics beyond the object's own attributes.
 const hdrStorageClass = "x-amz-storage-class"
 
+// hdrCopySource is named because two distant sites must agree on it: the PUT
+// dispatch branches on its presence (handler.go) and the copy operation
+// parses it (copy.go). Were they to disagree, a copy would silently become a
+// plain upload of an empty body rather than fail.
+const hdrCopySource = "x-amz-copy-source"
+
+// amzMetaPrefix is the user-metadata header prefix, matched rather than
+// compared: a mistyped prefix would not fail a lookup loudly but would
+// silently stop collecting metadata (AmzMeta) or stop covering fields the
+// POST policy must bind (postobject.go).
+const amzMetaPrefix = "x-amz-meta-"
+
 // signedHeader reads request headers in view of what the SigV4 signature
 // covers. Operation handlers must not read r.Header directly: which method a
 // value is read through records — and enforces — whether it is allowed to
@@ -100,7 +112,7 @@ func (s signedHeader) AmzMeta() map[string]string {
 	var md map[string]string
 	for k, vs := range s.h {
 		lk := strings.ToLower(k)
-		if name, ok := strings.CutPrefix(lk, "x-amz-meta-"); ok && len(vs) > 0 && s.signed[lk] {
+		if name, ok := strings.CutPrefix(lk, amzMetaPrefix); ok && len(vs) > 0 && s.signed[lk] {
 			if md == nil {
 				md = make(map[string]string)
 			}

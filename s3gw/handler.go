@@ -498,14 +498,14 @@ func rejectACL(*Gateway, *opCtx) error { return errACLNotSupported() }
 // putObjectOrCopy and uploadPartOrCopy pick the copy variant when the
 // request carries an x-amz-copy-source header.
 func (g *Gateway) putObjectOrCopy(c *opCtx) error {
-	if c.signed("x-amz-copy-source") != "" {
+	if c.signed(hdrCopySource) != "" {
 		return g.copyObject(c)
 	}
 	return g.putObject(c)
 }
 
 func (g *Gateway) uploadPartOrCopy(c *opCtx) error {
-	if c.signed("x-amz-copy-source") != "" {
+	if c.signed(hdrCopySource) != "" {
 		return g.uploadPartCopy(c)
 	}
 	return g.uploadPart(c)
