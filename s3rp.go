@@ -78,7 +78,7 @@ func logRequest(ctx context.Context, info *s3gw.RequestInfo) {
 			"access_key_id", info.AccessKeyID)
 	}
 	if info.Op != nil {
-		attrs = append(attrs, "action", info.Op.Action, "bucket", info.Op.Bucket)
+		attrs = append(attrs, "operation", info.Op.Operation, "action", info.Op.Action, "bucket", info.Op.Bucket)
 	}
 	slog.InfoContext(ctx, "request", attrs...)
 }

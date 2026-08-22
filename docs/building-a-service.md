@@ -118,7 +118,7 @@ func main() {
 			"duration", info.Duration, "request_id", info.RequestID,
 		}
 		if info.Op != nil { // nil when the request never reached an operation
-			attrs = append(attrs, "action", info.Op.Action, "bucket", info.Op.Bucket)
+			attrs = append(attrs, "operation", info.Op.Operation, "bucket", info.Op.Bucket)
 		}
 		slog.InfoContext(ctx, "request", attrs...)
 	})
@@ -310,6 +310,7 @@ Your `store.Store` implementation — and the control plane's write path that fe
   })
   ```
 - A client that retries sends a **new request**, which is verified, authorized and metered on its own. Whether that should count toward a quota or an invoice is the application's decision — and on a write it may have left something behind: [Retries and write side effects](#retries-and-write-side-effects).
+- `Op.Operation` is the S3 API operation name (`PutObject`, `CopyObject`, `DeleteObjects`, ...) and is the field to aggregate on: `Op.Action` is the `s3:*` action that was *authorized*, which several operations share (`GetObject` and `HeadObject`, every multipart write) and which is empty where authorization happens per object (`DeleteObjects`). `Operation` is also set for the operations the gateway refuses outright — `DeleteBucket`, `PutBucketPolicy`, `PutBucketAcl` and the other `NotImplemented` / `AccessControlListNotSupported` responses — so a service can count which unsupported operations its users attempt. A request matching no known operation at all is recorded as `s3gw.OpUnknown` (`"Unknown"`).
 - `Op.BytesIn` / `BytesOut` count bytes on the wire, so an `aws-chunked` upload includes its framing. They measure transfer, not storage: a quota over bytes at rest needs the backend's inventory (deletes, overwrites and versions carry no sizes through the hooks).
 - `Op.Request` is what the client asked for about the object, `Op.Response` what the backend reported. Both are nil when there is nothing to report, so a hook never has to tell a zero value from an absent one, and their `Metadata` maps are excluded from the JSON like the store's.
 

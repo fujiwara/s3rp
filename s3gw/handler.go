@@ -398,6 +398,8 @@ type route struct {
 	aclHdr bool                  // reject unsupported canned ACL headers first
 	bypass bool                  // also require s3:BypassGovernanceRetention when the bypass header is set
 	attrs  bool                  // the operation carries the object's own attributes (SSE, storage class, user metadata)
+	name   string                // S3 operation name recorded on Op
+	copy   string                // operation name when x-amz-copy-source is present (PutObject → CopyObject)
 	action string                // s3:* action to authorize ("" = handler authorizes itself)
 	handle func(*Gateway, *opCtx) error
 }
@@ -440,8 +442,13 @@ func (c *opCtx) dispatch(routes []route) error {
 				return err
 			}
 		}
+		name := rt.name
+		if rt.copy != "" && c.signed(hdrCopySource) != "" {
+			name = rt.copy
+		}
 		op := &Op{
 			Method:         c.r.Method,
+			Operation:      name,
 			Action:         rt.action,
 			Tenant:         c.vr.Tenant,
 			User:           c.vr.User,
@@ -487,11 +494,22 @@ func hasListTypeV2(q url.Values) bool { return q.Get(qpListType) == "2" }
 
 func hasUploadPart(q url.Values) bool { return q.Has(qpUploadID) || q.Has(qpPartNumber) }
 
-// notImplemented returns a route whose handler always fails with the given
-// NotImplemented message (used for operations defined only in the store).
-func notImplemented(match func(url.Values) bool, what string) route {
-	return route{match: match, handle: func(*Gateway, *opCtx) error { return s3err.NotImplemented(what) }}
+// notImplemented returns a route for a known S3 operation the gateway
+// deliberately does not support: it is recorded on Op under its name so a
+// service can count how often it is attempted, and always fails with
+// NotImplemented.
+func notImplemented(match func(url.Values) bool, name string) route {
+	return route{match: match, name: name, handle: func(*Gateway, *opCtx) error { return s3err.NotImplemented(name) }}
 }
+
+// unknownOperation is the fallback route for a request matching no known
+// operation, recorded as OpUnknown.
+func unknownOperation(what string) route {
+	return route{name: OpUnknown, handle: func(*Gateway, *opCtx) error { return s3err.NotImplemented(what) }}
+}
+
+// noQuery matches a request with no query parameters at all.
+func noQuery(q url.Values) bool { return len(q) == 0 }
 
 func rejectACL(*Gateway, *opCtx) error { return errACLNotSupported() }
 
@@ -513,22 +531,22 @@ func (g *Gateway) uploadPartOrCopy(c *opCtx) error {
 
 var bucketRoutes = map[string][]route{
 	http.MethodGet: {
-		{match: has(subUploads), params: listMultipartUploadsParams, action: "s3:ListBucketMultipartUploads", handle: (*Gateway).listMultipartUploads},
-		{match: has(subLocation), params: locationOnlyParams, action: "s3:GetBucketLocation", handle: (*Gateway).getBucketLocation},
-		{match: has(subACL), params: aclOnlyParams, action: "s3:GetBucketAcl", handle: (*Gateway).getBucketACL},
-		{match: has(subPolicy), params: policyOnlyParams, action: "s3:GetBucketPolicy", handle: (*Gateway).getBucketPolicy},
-		{match: has(subCORS), params: corsOnlyParams, action: "s3:GetBucketCORS", handle: (*Gateway).getBucketCors},
-		{match: has(subObjectLock), params: objectLockOnlyParams, action: "s3:GetBucketObjectLockConfiguration", handle: (*Gateway).getObjectLockConfiguration},
-		{match: has(subVersioning), params: versioningOnlyParams, action: "s3:GetBucketVersioning", handle: (*Gateway).getBucketVersioning},
-		{match: has(subVersions), params: listObjectVersionsParams, action: "s3:ListBucket", handle: (*Gateway).listObjectVersions},
-		{match: hasListTypeV2, params: listObjectsV2Params, action: "s3:ListBucket", handle: (*Gateway).listObjectsV2},
-		{params: listObjectsV1Params, action: "s3:ListBucket", handle: (*Gateway).listObjectsV1},
+		{match: has(subUploads), params: listMultipartUploadsParams, action: "s3:ListBucketMultipartUploads", name: "ListMultipartUploads", handle: (*Gateway).listMultipartUploads},
+		{match: has(subLocation), params: locationOnlyParams, action: "s3:GetBucketLocation", name: "GetBucketLocation", handle: (*Gateway).getBucketLocation},
+		{match: has(subACL), params: aclOnlyParams, action: "s3:GetBucketAcl", name: "GetBucketAcl", handle: (*Gateway).getBucketACL},
+		{match: has(subPolicy), params: policyOnlyParams, action: "s3:GetBucketPolicy", name: "GetBucketPolicy", handle: (*Gateway).getBucketPolicy},
+		{match: has(subCORS), params: corsOnlyParams, action: "s3:GetBucketCORS", name: "GetBucketCors", handle: (*Gateway).getBucketCors},
+		{match: has(subObjectLock), params: objectLockOnlyParams, action: "s3:GetBucketObjectLockConfiguration", name: "GetObjectLockConfiguration", handle: (*Gateway).getObjectLockConfiguration},
+		{match: has(subVersioning), params: versioningOnlyParams, action: "s3:GetBucketVersioning", name: "GetBucketVersioning", handle: (*Gateway).getBucketVersioning},
+		{match: has(subVersions), params: listObjectVersionsParams, action: "s3:ListBucket", name: "ListObjectVersions", handle: (*Gateway).listObjectVersions},
+		{match: hasListTypeV2, params: listObjectsV2Params, action: "s3:ListBucket", name: "ListObjectsV2", handle: (*Gateway).listObjectsV2},
+		{params: listObjectsV1Params, action: "s3:ListBucket", name: "ListObjects", handle: (*Gateway).listObjectsV1},
 	},
 	http.MethodHead: {
-		{action: "s3:ListBucket", handle: (*Gateway).headBucket},
+		{action: "s3:ListBucket", name: "HeadBucket", handle: (*Gateway).headBucket},
 	},
 	http.MethodPut: {
-		{match: has(subACL), handle: rejectACL},
+		{match: has(subACL), name: "PutBucketAcl", handle: rejectACL},
 		// bucket configuration is written where the bucket is created — the
 		// control plane / store — never via the S3 API: policies and CORS
 		// rules live in the store, and versioning / Object Lock defaults
@@ -538,50 +556,53 @@ var bucketRoutes = map[string][]route{
 		notImplemented(has(subObjectLock), "PutObjectLockConfiguration"),
 		notImplemented(has(subPolicy), "PutBucketPolicy"),
 		notImplemented(has(subCORS), "PutBucketCors"),
-		notImplemented(nil, "this bucket operation"),
+		// buckets are created and deleted by the control plane
+		notImplemented(noQuery, "CreateBucket"),
+		unknownOperation("this bucket operation"),
 	},
 	http.MethodDelete: {
 		notImplemented(has(subPolicy), "DeleteBucketPolicy"),
 		notImplemented(has(subCORS), "DeleteBucketCors"),
-		notImplemented(nil, "this bucket operation"),
+		notImplemented(noQuery, "DeleteBucket"),
+		unknownOperation("this bucket operation"),
 	},
 	http.MethodPost: {
 		// s3:DeleteObject is evaluated per object inside deleteObjects
-		{match: has(subDelete), params: deleteOnlyParams, handle: (*Gateway).deleteObjects},
-		notImplemented(nil, "this bucket operation"),
+		{match: has(subDelete), params: deleteOnlyParams, name: "DeleteObjects", handle: (*Gateway).deleteObjects},
+		unknownOperation("this bucket operation"),
 	},
 }
 
 var objectRoutes = map[string][]route{
 	http.MethodGet: {
-		{match: has(qpUploadID), params: listPartsParams, action: "s3:ListMultipartUploadParts", handle: (*Gateway).listParts},
-		{match: has(subTagging), params: taggingParams, action: "s3:GetObjectTagging", handle: (*Gateway).getObjectTagging},
-		{match: has(subACL), params: aclParams, action: "s3:GetObjectAcl", handle: (*Gateway).getObjectACL},
-		{match: has(subRetention), params: retentionParams, action: "s3:GetObjectRetention", handle: (*Gateway).getObjectRetention},
-		{match: has(subLegalHold), params: legalHoldParams, action: "s3:GetObjectLegalHold", handle: (*Gateway).getObjectLegalHold},
-		{match: has(subAttributes), params: attributesParams, action: "s3:GetObject", handle: (*Gateway).getObjectAttributes},
-		{params: getObjectParams, action: "s3:GetObject", handle: (*Gateway).getObject},
+		{match: has(qpUploadID), params: listPartsParams, action: "s3:ListMultipartUploadParts", name: "ListParts", handle: (*Gateway).listParts},
+		{match: has(subTagging), params: taggingParams, action: "s3:GetObjectTagging", name: "GetObjectTagging", handle: (*Gateway).getObjectTagging},
+		{match: has(subACL), params: aclParams, action: "s3:GetObjectAcl", name: "GetObjectAcl", handle: (*Gateway).getObjectACL},
+		{match: has(subRetention), params: retentionParams, action: "s3:GetObjectRetention", name: "GetObjectRetention", handle: (*Gateway).getObjectRetention},
+		{match: has(subLegalHold), params: legalHoldParams, action: "s3:GetObjectLegalHold", name: "GetObjectLegalHold", handle: (*Gateway).getObjectLegalHold},
+		{match: has(subAttributes), params: attributesParams, action: "s3:GetObject", name: "GetObjectAttributes", handle: (*Gateway).getObjectAttributes},
+		{params: getObjectParams, action: "s3:GetObject", name: "GetObject", handle: (*Gateway).getObject},
 	},
 	http.MethodHead: {
-		{params: headObjectParams, action: "s3:GetObject", handle: (*Gateway).headObject},
+		{params: headObjectParams, action: "s3:GetObject", name: "HeadObject", handle: (*Gateway).headObject},
 	},
 	http.MethodPut: {
-		{match: has(subTagging), params: taggingParams, action: "s3:PutObjectTagging", handle: (*Gateway).putObjectTagging},
-		{match: has(subACL), handle: rejectACL},
-		{match: has(subRetention), params: retentionParams, bypass: true, action: "s3:PutObjectRetention", handle: (*Gateway).putObjectRetention},
-		{match: has(subLegalHold), params: legalHoldParams, action: "s3:PutObjectLegalHold", handle: (*Gateway).putObjectLegalHold},
-		{match: hasUploadPart, params: uploadPartParams, action: "s3:PutObject", handle: (*Gateway).uploadPartOrCopy},
-		{params: noParams, aclHdr: true, attrs: true, action: "s3:PutObject", handle: (*Gateway).putObjectOrCopy},
+		{match: has(subTagging), params: taggingParams, action: "s3:PutObjectTagging", name: "PutObjectTagging", handle: (*Gateway).putObjectTagging},
+		{match: has(subACL), name: "PutObjectAcl", handle: rejectACL},
+		{match: has(subRetention), params: retentionParams, bypass: true, action: "s3:PutObjectRetention", name: "PutObjectRetention", handle: (*Gateway).putObjectRetention},
+		{match: has(subLegalHold), params: legalHoldParams, action: "s3:PutObjectLegalHold", name: "PutObjectLegalHold", handle: (*Gateway).putObjectLegalHold},
+		{match: hasUploadPart, params: uploadPartParams, name: "UploadPart", copy: "UploadPartCopy", action: "s3:PutObject", handle: (*Gateway).uploadPartOrCopy},
+		{params: noParams, aclHdr: true, attrs: true, name: "PutObject", copy: "CopyObject", action: "s3:PutObject", handle: (*Gateway).putObjectOrCopy},
 	},
 	http.MethodDelete: {
-		{match: has(qpUploadID), params: uploadIDOnlyParams, action: "s3:AbortMultipartUpload", handle: (*Gateway).abortMultipartUpload},
-		{match: has(subTagging), params: taggingParams, action: "s3:DeleteObjectTagging", handle: (*Gateway).deleteObjectTagging},
-		{params: versionIDOnlyParams, bypass: true, action: "s3:DeleteObject", handle: (*Gateway).deleteObject},
+		{match: has(qpUploadID), params: uploadIDOnlyParams, action: "s3:AbortMultipartUpload", name: "AbortMultipartUpload", handle: (*Gateway).abortMultipartUpload},
+		{match: has(subTagging), params: taggingParams, action: "s3:DeleteObjectTagging", name: "DeleteObjectTagging", handle: (*Gateway).deleteObjectTagging},
+		{params: versionIDOnlyParams, bypass: true, action: "s3:DeleteObject", name: "DeleteObject", handle: (*Gateway).deleteObject},
 	},
 	http.MethodPost: {
-		{match: has(subUploads), params: uploadsOnlyParams, aclHdr: true, attrs: true, action: "s3:PutObject", handle: (*Gateway).createMultipartUpload},
-		{match: has(qpUploadID), params: uploadIDOnlyParams, action: "s3:PutObject", handle: (*Gateway).completeMultipartUpload},
-		notImplemented(nil, "this operation"),
+		{match: has(subUploads), params: uploadsOnlyParams, aclHdr: true, attrs: true, action: "s3:PutObject", name: "CreateMultipartUpload", handle: (*Gateway).createMultipartUpload},
+		{match: has(qpUploadID), params: uploadIDOnlyParams, action: "s3:PutObject", name: "CompleteMultipartUpload", handle: (*Gateway).completeMultipartUpload},
+		unknownOperation("this operation"),
 	},
 }
 
