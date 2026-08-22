@@ -22,7 +22,6 @@ import (
 	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/s3xml"
 	"github.com/fujiwara/s3rp/sigv4"
-	"github.com/fujiwara/s3rp/store"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
@@ -774,20 +773,10 @@ func requestBody(c *opCtx) (io.Reader, int64, *s3err.Error) {
 // store a checksum.
 func trailerChecksumAlgorithm(rt *bucketRT, h http.Header) types.ChecksumAlgorithm {
 	alg := checksum.TrailerAlgorithm(h)
-	if alg == "" || !backendIsHTTPS(rt.cfg.Backend) {
+	if alg == "" || !rt.cfg.Backend.IsHTTPS() {
 		return ""
 	}
 	return types.ChecksumAlgorithm(strings.ToUpper(alg))
-}
-
-// backendIsHTTPS reports whether the backend is reached over TLS. An empty
-// endpoint means the SDK's own resolution of the AWS S3 endpoint, which is
-// https.
-func backendIsHTTPS(b *store.Backend) bool {
-	if b == nil || b.Endpoint == "" {
-		return true
-	}
-	return strings.HasPrefix(strings.ToLower(b.Endpoint), "https://")
 }
 
 // readXMLBody decodes an XML request body (aws-chunked aware) into v.

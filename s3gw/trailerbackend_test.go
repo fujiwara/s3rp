@@ -167,21 +167,3 @@ func TestTrailerChecksumHTTPSBackend(t *testing.T) {
 		t.Errorf("backend body is not an aws-chunked payload with a checksum trailer (%d bytes)", len(got.body))
 	}
 }
-
-func TestBackendIsHTTPS(t *testing.T) {
-	for endpoint, want := range map[string]bool{
-		"":                          true, // SDK-resolved AWS endpoint
-		"https://s3.example":        true,
-		"HTTPS://s3.example:443":    true,
-		"http://127.0.0.1:7480":     false,
-		"http://backend.invalid":    false,
-		"https://rgw.internal:7443": true,
-	} {
-		if got := s3gw.BackendIsHTTPS(&store.Backend{Endpoint: endpoint}); got != want {
-			t.Errorf("%q: got %v, want %v", endpoint, got, want)
-		}
-	}
-	if !s3gw.BackendIsHTTPS(nil) {
-		t.Error("nil backend should count as https (SDK default)")
-	}
-}

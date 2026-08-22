@@ -45,5 +45,3 @@ func (g *Gateway) BackendClientFor(ctx context.Context, b *store.Backend) (Backe
 }
 
 func (g *Gateway) ClientCacheLen() int { return g.clients.Len() }
-
-var BackendIsHTTPS = backendIsHTTPS
