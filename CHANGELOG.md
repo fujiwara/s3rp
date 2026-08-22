@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.0.8](https://github.com/fujiwara/s3rp/compare/v0.0.7...v0.0.8) - 2026-08-22
+
+- Reduce docs/s3-tests.md to the ongoing operation of the suite by @fujiwara in https://github.com/fujiwara/s3rp/pull/105
+- Add curl and aws4 signers to the SigV4 cross-check by @fujiwara in https://github.com/fujiwara/s3rp/pull/107
+- Reject requests carrying unsigned x-amz-* headers by @fujiwara in https://github.com/fujiwara/s3rp/pull/108
+- Read request headers through a signature-aware accessor by @fujiwara in https://github.com/fujiwara/s3rp/pull/109
+- Split Op's object attributes into Request and Response by @fujiwara in https://github.com/fujiwara/s3rp/pull/110
+- Recover a panicking request at the boundary by @fujiwara in https://github.com/fujiwara/s3rp/pull/111
+- Drop Go 1.25, build and test on 1.26 and 1.27 by @fujiwara in https://github.com/fujiwara/s3rp/pull/112
+- Name the header literals whose two ends must agree by @fujiwara in https://github.com/fujiwara/s3rp/pull/113
+- Forward trailer checksum algorithms to https backends only by @fujiwara in https://github.com/fujiwara/s3rp/pull/114
+
 ## [v0.0.7](https://github.com/fujiwara/s3rp/compare/v0.0.6...v0.0.7) - 2026-08-14
 
 - Trim comments that restate the code by @fujiwara in https://github.com/fujiwara/s3rp/pull/96
