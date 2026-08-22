@@ -29,6 +29,12 @@ type Op struct {
 	// Method distinguishes operations that share an action, notably
 	// HeadObject from GetObject.
 	Method string `json:"method"`
+	// Operation is the S3 API operation name (PutObject, DeleteObjects,
+	// DeleteBucket, ...). Unlike Action it is set for operations the
+	// gateway refuses outright, so a service can count which unsupported
+	// operations its users attempt. Empty only when the request matched no
+	// known operation.
+	Operation string `json:"operation,omitempty"`
 	// Action is the s3:* action authorized for this operation. It is empty
 	// for the few operations that authorize themselves per object, such as
 	// DeleteObjects.
