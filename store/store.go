@@ -7,6 +7,7 @@ package store
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/fujiwara/s3rp/cors"
@@ -160,6 +161,15 @@ func (b *Backend) SetDefaults(bucketName string) {
 		usePathStyle := b.Endpoint != ""
 		b.UsePathStyle = &usePathStyle
 	}
+}
+
+// IsHTTPS reports whether the backend is reached over TLS. Without an
+// endpoint the SDK resolves the Amazon S3 endpoint, which is https.
+func (b *Backend) IsHTTPS() bool {
+	if b.Endpoint == "" {
+		return true
+	}
+	return strings.HasPrefix(strings.ToLower(b.Endpoint), "https://")
 }
 
 // Password is a string that is masked when marshaled to JSON or YAML.

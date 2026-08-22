@@ -123,8 +123,8 @@ func (g *Gateway) uploadPart(c *opCtx) error {
 		// algorithm is named alongside it
 		in.ChecksumAlgorithm = types.ChecksumAlgorithm(alg)
 	}
-	if alg := checksum.TrailerAlgorithm(r.Header); alg != "" {
-		in.ChecksumAlgorithm = types.ChecksumAlgorithm(strings.ToUpper(alg))
+	if alg := trailerChecksumAlgorithm(rt, r.Header); alg != "" {
+		in.ChecksumAlgorithm = alg
 	}
 	out, err := rt.client.UploadPart(r.Context(), in)
 	if err != nil {

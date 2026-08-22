@@ -16,8 +16,9 @@ import (
 
 // Checksums flow end-to-end: x-amz-checksum-* request headers pass through
 // to the backend, aws-chunked trailer Values are verified by the proxy
-// (chunked.go) and recomputed toward the backend via ChecksumAlgorithm,
-// and response Values pass back to the client.
+// (chunked.go) and recomputed toward an https backend via ChecksumAlgorithm
+// (s3gw trailerChecksumAlgorithm), and response Values pass back to the
+// client.
 
 // HeaderPrefix is the prefix an algorithm's checksum header carries
 // ("x-amz-checksum-" + the lower-case algorithm name). It is exported because

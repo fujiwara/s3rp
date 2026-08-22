@@ -268,12 +268,8 @@ func (g *Gateway) putObject(c *opCtx) error {
 		// not store the checksum it was given
 		in.ChecksumAlgorithm = types.ChecksumAlgorithm(alg)
 	}
-	if alg := checksum.TrailerAlgorithm(r.Header); alg != "" {
-		// the client sends the checksum as an aws-chunked trailer, which
-		// is verified by the chunked reader; the backend SDK recomputes
-		// and stores it (an explicit ChecksumAlgorithm forces calculation
-		// even with RequestChecksumCalculationWhenRequired)
-		in.ChecksumAlgorithm = types.ChecksumAlgorithm(strings.ToUpper(alg))
+	if alg := trailerChecksumAlgorithm(rt, r.Header); alg != "" {
+		in.ChecksumAlgorithm = alg
 	}
 
 	out, err := rt.client.PutObject(r.Context(), in)
@@ -760,6 +756,27 @@ func requestBody(c *opCtx) (io.Reader, int64, *s3err.Error) {
 		}
 		return r.Body, r.ContentLength, nil
 	}
+}
+
+// trailerChecksumAlgorithm returns the ChecksumAlgorithm to hand the backend
+// SDK when the client sent its checksum as an aws-chunked trailer. The
+// trailer itself is verified by the chunked reader; naming the algorithm
+// makes the SDK recompute the checksum toward the backend so it is stored
+// (an explicit ChecksumAlgorithm forces calculation even with
+// RequestChecksumCalculationWhenRequired).
+//
+// The SDK can only do that as a trailer of its own, which it sends over
+// https exclusively: over plain http it would have to buffer the whole
+// (unseekable) body to put the checksum in a header and fails the request
+// instead. So over an http backend the algorithm is not forwarded — the
+// upload is still integrity-checked by the proxy, the backend just does not
+// store a checksum.
+func trailerChecksumAlgorithm(rt *bucketRT, h http.Header) types.ChecksumAlgorithm {
+	alg := checksum.TrailerAlgorithm(h)
+	if alg == "" || !rt.cfg.Backend.IsHTTPS() {
+		return ""
+	}
+	return types.ChecksumAlgorithm(strings.ToUpper(alg))
 }
 
 // readXMLBody decodes an XML request body (aws-chunked aware) into v.
