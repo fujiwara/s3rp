@@ -59,6 +59,10 @@ func TestOpOperationName(t *testing.T) {
 			_, err := client.PutBucketAcl(ctx, &s3.PutBucketAclInput{Bucket: bucket, ACL: types.BucketCannedACLPrivate})
 			return err
 		}},
+		{s3gw.OpUnknown, func() error {
+			_, err := client.PutBucketWebsite(ctx, &s3.PutBucketWebsiteInput{Bucket: bucket, WebsiteConfiguration: &types.WebsiteConfiguration{}})
+			return err
+		}},
 	}
 	for _, c := range calls {
 		ops = nil

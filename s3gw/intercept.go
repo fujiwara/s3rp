@@ -25,6 +25,10 @@ import (
 // exist until the operation has run. Request and Response are pointers so
 // that "not asked for" and "asked for nothing" are the same nil, and so an
 // Authorizer cannot mistake an unfilled Response for an empty one.
+// OpUnknown is the Op.Operation of a request that matched no known S3
+// operation.
+const OpUnknown = "Unknown"
+
 type Op struct {
 	// Method distinguishes operations that share an action, notably
 	// HeadObject from GetObject.
@@ -32,9 +36,9 @@ type Op struct {
 	// Operation is the S3 API operation name (PutObject, DeleteObjects,
 	// DeleteBucket, ...). Unlike Action it is set for operations the
 	// gateway refuses outright, so a service can count which unsupported
-	// operations its users attempt. Empty only when the request matched no
-	// known operation.
-	Operation string `json:"operation,omitempty"`
+	// operations its users attempt; a request matching no known operation
+	// is OpUnknown.
+	Operation string `json:"operation"`
 	// Action is the s3:* action authorized for this operation. It is empty
 	// for the few operations that authorize themselves per object, such as
 	// DeleteObjects.

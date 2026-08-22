@@ -398,7 +398,7 @@ type route struct {
 	aclHdr bool                  // reject unsupported canned ACL headers first
 	bypass bool                  // also require s3:BypassGovernanceRetention when the bypass header is set
 	attrs  bool                  // the operation carries the object's own attributes (SSE, storage class, user metadata)
-	name   string                // S3 operation name recorded on Op ("" = no known operation)
+	name   string                // S3 operation name recorded on Op
 	copy   string                // operation name when x-amz-copy-source is present (PutObject → CopyObject)
 	action string                // s3:* action to authorize ("" = handler authorizes itself)
 	handle func(*Gateway, *opCtx) error
@@ -503,9 +503,9 @@ func notImplemented(match func(url.Values) bool, name string) route {
 }
 
 // unknownOperation is the fallback route for a request matching no known
-// operation; it records no operation name.
+// operation, recorded as OpUnknown.
 func unknownOperation(what string) route {
-	return route{handle: func(*Gateway, *opCtx) error { return s3err.NotImplemented(what) }}
+	return route{name: OpUnknown, handle: func(*Gateway, *opCtx) error { return s3err.NotImplemented(what) }}
 }
 
 // noQuery matches a request with no query parameters at all.
