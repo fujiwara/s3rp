@@ -93,9 +93,10 @@ var (
 // wellKnownErrorStatus maps S3 error codes to HTTP statuses, for errors
 // that do not carry an HTTP response (e.g. stubbed clients).
 var wellKnownErrorStatus = map[string]int{
-	"NoSuchKey":          http.StatusNotFound,
-	"NoSuchBucket":       http.StatusNotFound,
-	"NotFound":           http.StatusNotFound,
+	"NoSuchKey":    http.StatusNotFound,
+	"NoSuchBucket": http.StatusNotFound,
+	"NotFound":     http.StatusNotFound,
+	"ServerSideEncryptionConfigurationNotFoundError": http.StatusNotFound,
 	"AccessDenied":       http.StatusForbidden,
 	"PreconditionFailed": http.StatusPreconditionFailed,
 	"NotModified":        http.StatusNotModified,
@@ -143,11 +144,12 @@ var canonicalMessage = map[string]string{
 	"NotFound":                        "Not Found",
 	"NotImplemented":                  "A header that you provided implies functionality that is not implemented.",
 	"ObjectLockConfigurationNotFound": "Object Lock configuration does not exist for this bucket.",
-	"PreconditionFailed":              "At least one of the preconditions that you specified did not hold.",
-	"RequestTimeout":                  "Your socket connection to the server was not read from or written to within the timeout period.",
-	"ServiceUnavailable":              "Service is unable to handle request.",
-	"SlowDown":                        "Please reduce your request rate.",
-	"TooManyBuckets":                  "You have attempted to create more buckets than allowed.",
+	"ServerSideEncryptionConfigurationNotFoundError": "The server side encryption configuration was not found",
+	"PreconditionFailed":                             "At least one of the preconditions that you specified did not hold.",
+	"RequestTimeout":                                 "Your socket connection to the server was not read from or written to within the timeout period.",
+	"ServiceUnavailable":                             "Service is unable to handle request.",
+	"SlowDown":                                       "Please reduce your request rate.",
+	"TooManyBuckets":                                 "You have attempted to create more buckets than allowed.",
 }
 
 // messageFor returns what the client is told for an error code. An

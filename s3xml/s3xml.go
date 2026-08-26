@@ -233,6 +233,54 @@ type VersioningConfiguration struct {
 	Status  string   `xml:"Status,omitempty"`
 }
 
+// PolicyStatus is the response of GetBucketPolicyStatus.
+type PolicyStatus struct {
+	XMLName  xml.Name `xml:"PolicyStatus"`
+	XMLNS    string   `xml:"xmlns,attr,omitempty"`
+	IsPublic bool     `xml:"IsPublic"`
+}
+
+// OwnershipControls is the request/response body of
+// Put/GetBucketOwnershipControls.
+type OwnershipControls struct {
+	XMLName xml.Name                `xml:"OwnershipControls"`
+	XMLNS   string                  `xml:"xmlns,attr,omitempty"`
+	Rules   []OwnershipControlsRule `xml:"Rule"`
+}
+
+type OwnershipControlsRule struct {
+	ObjectOwnership string `xml:"ObjectOwnership"`
+}
+
+// PublicAccessBlockConfiguration is the request/response body of
+// Put/GetPublicAccessBlock.
+type PublicAccessBlockConfiguration struct {
+	XMLName               xml.Name `xml:"PublicAccessBlockConfiguration"`
+	XMLNS                 string   `xml:"xmlns,attr,omitempty"`
+	BlockPublicAcls       bool     `xml:"BlockPublicAcls"`
+	IgnorePublicAcls      bool     `xml:"IgnorePublicAcls"`
+	BlockPublicPolicy     bool     `xml:"BlockPublicPolicy"`
+	RestrictPublicBuckets bool     `xml:"RestrictPublicBuckets"`
+}
+
+// ServerSideEncryptionConfiguration is the request/response body of
+// Put/GetBucketEncryption.
+type ServerSideEncryptionConfiguration struct {
+	XMLName xml.Name                   `xml:"ServerSideEncryptionConfiguration"`
+	XMLNS   string                     `xml:"xmlns,attr,omitempty"`
+	Rules   []ServerSideEncryptionRule `xml:"Rule"`
+}
+
+type ServerSideEncryptionRule struct {
+	ApplyServerSideEncryptionByDefault *ServerSideEncryptionByDefault `xml:"ApplyServerSideEncryptionByDefault,omitempty"`
+	BucketKeyEnabled                   *bool                          `xml:"BucketKeyEnabled,omitempty"`
+}
+
+type ServerSideEncryptionByDefault struct {
+	SSEAlgorithm   string `xml:"SSEAlgorithm"`
+	KMSMasterKeyID string `xml:"KMSMasterKeyID,omitempty"`
+}
+
 // ListVersionsResult is the response of ListObjectVersions.
 type ListVersionsResult struct {
 	XMLName             xml.Name            `xml:"ListVersionsResult"`

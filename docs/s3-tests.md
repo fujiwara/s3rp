@@ -47,7 +47,10 @@ The expected-failure categories, and why each failure is expected:
 - **Deliberate design surface** — the bulk of the failures.
   Unimplemented bucket-configuration writes (501, including tests that
   probe invalid inputs of those operations and expect 400/404/409 — the
-  refusal comes before input validation), the ACL stub, SSE-C refusal,
+  refusal comes before input validation), the ACL-disabled model's
+  fixed answers (the FULL_CONTROL ACL stub, and GetBucketOwnershipControls
+  answering `BucketOwnerEnforced` whatever `ObjectOwnership` the test
+  asked CreateBucket for), SSE-C refusal,
   SigV4-only (no anonymous access, no SigV2 — the suite's
   `test_post_object_*` tests sign with SigV2), the anti-probing 403 on
   nonexistent buckets, the stricter bucket-name charset. Rationale in

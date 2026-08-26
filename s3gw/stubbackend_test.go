@@ -52,6 +52,9 @@ type stubBackend struct {
 	delTagIn   *s3.DeleteObjectTaggingInput
 	getVerIn   *s3.GetBucketVersioningInput
 	getVerOut  *s3.GetBucketVersioningOutput
+	getEncIn   *s3.GetBucketEncryptionInput
+	getEncOut  *s3.GetBucketEncryptionOutput
+	getEncErr  error
 	listVerIn  *s3.ListObjectVersionsInput
 	listVerOut *s3.ListObjectVersionsOutput
 
@@ -178,6 +181,11 @@ func (b *stubBackend) UploadPartCopy(ctx context.Context, in *s3.UploadPartCopyI
 func (b *stubBackend) GetBucketVersioning(ctx context.Context, in *s3.GetBucketVersioningInput, _ ...func(*s3.Options)) (*s3.GetBucketVersioningOutput, error) {
 	b.getVerIn = in
 	return b.getVerOut, nil
+}
+
+func (b *stubBackend) GetBucketEncryption(ctx context.Context, in *s3.GetBucketEncryptionInput, _ ...func(*s3.Options)) (*s3.GetBucketEncryptionOutput, error) {
+	b.getEncIn = in
+	return b.getEncOut, b.getEncErr
 }
 
 func (b *stubBackend) ListObjectVersions(ctx context.Context, in *s3.ListObjectVersionsInput, _ ...func(*s3.Options)) (*s3.ListObjectVersionsOutput, error) {
