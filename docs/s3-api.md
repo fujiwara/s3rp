@@ -24,6 +24,10 @@ Because operations are reconstructed rather than forwarded, each one is implemen
 - PutObjectTagging
 - DeleteObjectTagging
 - GetBucketVersioning
+- GetBucketEncryption
+- GetBucketPolicyStatus
+- GetBucketOwnershipControls
+- GetPublicAccessBlock
 - ListObjectVersions
 - GetBucketAcl
 - GetObjectAcl
@@ -46,6 +50,8 @@ Because operations are reconstructed rather than forwarded, each one is implemen
 Other operations return a `NotImplemented` error.
 
 CopyObject and UploadPartCopy work between buckets served by the same backend (same endpoint, region and credentials); copying across different backends returns `NotImplemented`. The copy source bucket must belong to the requester's tenant; the destination may be another tenant's bucket when its policy grants `s3:PutObject` ([cross-tenant access](#cross-tenant-access)).
+
+GetBucketPolicyStatus, GetBucketOwnershipControls and GetPublicAccessBlock answer from the gateway's own model without consulting the backend: anonymous access does not exist, so `IsPublic` is always `false`; ACLs are disabled (see [ACLs](#acls)), so ownership is `BucketOwnerEnforced` and every public-access block is `true`. Tools that inspect a bucket (consoles, Terraform, audit scanners) read these alongside the ACL and treat a `NotImplemented` as a broken bucket. GetBucketEncryption is proxied like GetBucketVersioning — the default encryption is backend bucket configuration, and the key id it reports is the same opaque name SSE-KMS requests carry. Their `Put`/`Delete` counterparts are `NotImplemented` like every bucket-configuration write (see [Limitations](#limitations)).
 
 GetBucketLocation and HeadBucket (the `x-amz-bucket-region` header) report the gateway's own region — the value pinned with `SetRegion`, `us-east-1` when unset — never the backend's region, which stays hidden like the backend bucket name and endpoint.
 
@@ -245,4 +251,4 @@ http://localhost:8080/photos/foo.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&...
 - Requests that sign the `user-agent` or other headers the AWS SDK signer ignores will fail verification. Real AWS SDK/CLI clients do not do this.
 - Requests whose query string is not canonically percent-encoded (raw reserved characters in values, signed as sent) fail verification — as they do against AWS itself and every implementation measured; duplicate query keys are accepted in exactly one value ordering. Reachable only from hand-rolled SigV4 clients; see [SigV4 query canonicalization](sigv4-canonicalization.md).
 - Bucket lifecycle configuration (expiration, transitions) is deliberately **not** exposed via the S3 API — `?lifecycle` gets the same loud `NotImplemented` as every unsupported subresource. Enforcement is the backend's job, so rules must live on the backend bucket, and they are written there by the control plane with backend credentials — the same split as bucket policies and CORS, whose `Put*` are also not proxied. This is a deliberate choice beyond consistency: a bucket holds exactly **one** lifecycle configuration, so letting tenants `PutBucketLifecycleConfiguration` would let one request replace the operator's baseline rules (such as aborting stale multipart uploads); exposing it would require a merge layer, not a pass-through. For experiments, Ceph RGW's `rgw_lc_debug_interval` shortens expiry to seconds.
-- The same rule covers every bucket-configuration write: PutBucketVersioning and PutObjectLockConfiguration are also `NotImplemented`. Bucket configuration is written where the bucket is created — the control plane — and a data-plane access key must not be able to overwrite it: suspending versioning changes what the bucket retains from then on, and rewriting the Object Lock default retention would let any key of the tenant undo what the bucket was provisioned with. The reads (GetBucketVersioning, GetObjectLockConfiguration) stay proxied.
+- The same rule covers every bucket-configuration write: PutBucketVersioning, PutObjectLockConfiguration, PutBucketEncryption, PutBucketOwnershipControls and PutPublicAccessBlock (and their `Delete`s) are also `NotImplemented`. Bucket configuration is written where the bucket is created — the control plane — and a data-plane access key must not be able to overwrite it: suspending versioning changes what the bucket retains from then on, and rewriting the Object Lock default retention would let any key of the tenant undo what the bucket was provisioned with. The reads (GetBucketVersioning, GetObjectLockConfiguration, GetBucketEncryption) stay proxied.

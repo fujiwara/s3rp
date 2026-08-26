@@ -28,7 +28,7 @@ CATEGORIES = [
     ("input_probe_501", "Deliberate: 501 before input validation of an unimplemented operation"),
     ("sigv4_only", "Deliberate: SigV4-only / no anonymous access"),
     ("acl_write", "Deliberate: ACL writes refused (ACL-disabled bucket model)"),
-    ("acl_read", "Deliberate: ACL read stub (fixed FULL_CONTROL; name-heuristic)"),
+    ("acl_read", "Deliberate: ACL-disabled model stubs (fixed FULL_CONTROL ACL, BucketOwnerEnforced ownership; name-heuristic)"),
     ("anti_probing", "Deliberate: 403 AccessDenied instead of 404 (anti-probing)"),
     ("access_denied", "AccessDenied — cross-tenant/policy semantics (name-heuristic)"),
     ("naming", "Deliberate: stricter bucket-name charset"),
@@ -92,7 +92,9 @@ def classify(name, text):
         if ACLISH.search(name):
             return "acl_read", op
         return "access_denied", op
-    if code is None and ACLISH.search(name):
+    # the fixed ownership stub answers BucketOwnerEnforced whatever
+    # ObjectOwnership the test asked CreateBucket for
+    if code is None and (ACLISH.search(name) or "BucketOwnerEnforced" in text):
         return "acl_read", op
     if HEADER_EDGE.search(name):
         return "header_edge", op

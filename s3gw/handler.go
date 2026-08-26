@@ -538,6 +538,10 @@ var bucketRoutes = map[string][]route{
 		{match: has(subCORS), params: corsOnlyParams, action: "s3:GetBucketCORS", name: "GetBucketCors", handle: (*Gateway).getBucketCors},
 		{match: has(subObjectLock), params: objectLockOnlyParams, action: "s3:GetBucketObjectLockConfiguration", name: "GetObjectLockConfiguration", handle: (*Gateway).getObjectLockConfiguration},
 		{match: has(subVersioning), params: versioningOnlyParams, action: "s3:GetBucketVersioning", name: "GetBucketVersioning", handle: (*Gateway).getBucketVersioning},
+		{match: has(subEncryption), params: encryptionOnlyParams, action: "s3:GetEncryptionConfiguration", name: "GetBucketEncryption", handle: (*Gateway).getBucketEncryption},
+		{match: has(subPolicyStatus), params: policyStatusOnlyParams, action: "s3:GetBucketPolicyStatus", name: "GetBucketPolicyStatus", handle: (*Gateway).getBucketPolicyStatus},
+		{match: has(subOwnership), params: ownershipOnlyParams, action: "s3:GetBucketOwnershipControls", name: "GetBucketOwnershipControls", handle: (*Gateway).getBucketOwnershipControls},
+		{match: has(subPublicAccess), params: publicAccessOnlyParams, action: "s3:GetBucketPublicAccessBlock", name: "GetPublicAccessBlock", handle: (*Gateway).getPublicAccessBlock},
 		{match: has(subVersions), params: listObjectVersionsParams, action: "s3:ListBucket", name: "ListObjectVersions", handle: (*Gateway).listObjectVersions},
 		{match: hasListTypeV2, params: listObjectsV2Params, action: "s3:ListBucket", name: "ListObjectsV2", handle: (*Gateway).listObjectsV2},
 		{params: listObjectsV1Params, action: "s3:ListBucket", name: "ListObjects", handle: (*Gateway).listObjectsV1},
@@ -556,6 +560,9 @@ var bucketRoutes = map[string][]route{
 		notImplemented(has(subObjectLock), "PutObjectLockConfiguration"),
 		notImplemented(has(subPolicy), "PutBucketPolicy"),
 		notImplemented(has(subCORS), "PutBucketCors"),
+		notImplemented(has(subEncryption), "PutBucketEncryption"),
+		notImplemented(has(subOwnership), "PutBucketOwnershipControls"),
+		notImplemented(has(subPublicAccess), "PutPublicAccessBlock"),
 		// buckets are created and deleted by the control plane
 		notImplemented(noQuery, "CreateBucket"),
 		unknownOperation("this bucket operation"),
@@ -563,6 +570,9 @@ var bucketRoutes = map[string][]route{
 	http.MethodDelete: {
 		notImplemented(has(subPolicy), "DeleteBucketPolicy"),
 		notImplemented(has(subCORS), "DeleteBucketCors"),
+		notImplemented(has(subEncryption), "DeleteBucketEncryption"),
+		notImplemented(has(subOwnership), "DeleteBucketOwnershipControls"),
+		notImplemented(has(subPublicAccess), "DeletePublicAccessBlock"),
 		notImplemented(noQuery, "DeleteBucket"),
 		unknownOperation("this bucket operation"),
 	},
@@ -644,19 +654,23 @@ func (p paramSet) check(query url.Values) *s3err.Error {
 // defined in one place.
 const (
 	// subresource discriminators
-	subACL        = "acl"
-	subCORS       = "cors"
-	subDelete     = "delete"
-	subLegalHold  = "legal-hold"
-	subLocation   = "location"
-	subObjectLock = "object-lock"
-	subPolicy     = "policy"
-	subAttributes = "attributes"
-	subRetention  = "retention"
-	subTagging    = "tagging"
-	subUploads    = "uploads"
-	subVersioning = "versioning"
-	subVersions   = "versions"
+	subACL          = "acl"
+	subCORS         = "cors"
+	subDelete       = "delete"
+	subEncryption   = "encryption"
+	subLegalHold    = "legal-hold"
+	subLocation     = "location"
+	subObjectLock   = "object-lock"
+	subOwnership    = "ownershipControls"
+	subPolicy       = "policy"
+	subPolicyStatus = "policyStatus"
+	subPublicAccess = "publicAccessBlock"
+	subAttributes   = "attributes"
+	subRetention    = "retention"
+	subTagging      = "tagging"
+	subUploads      = "uploads"
+	subVersioning   = "versioning"
+	subVersions     = "versions"
 	// other operation-selecting parameters
 	qpUploadID   = "uploadId"
 	qpPartNumber = "partNumber"
@@ -665,24 +679,28 @@ const (
 )
 
 var (
-	noParams             = newParamSet()
-	aclOnlyParams        = newParamSet(subACL)
-	policyOnlyParams     = newParamSet(subPolicy)
-	corsOnlyParams       = newParamSet(subCORS)
-	objectLockOnlyParams = newParamSet(subObjectLock)
-	retentionParams      = newParamSet(subRetention, qpVersionID)
-	legalHoldParams      = newParamSet(subLegalHold, qpVersionID)
-	aclParams            = newParamSet(subACL, qpVersionID)
-	locationOnlyParams   = newParamSet(subLocation)
-	deleteOnlyParams     = newParamSet(subDelete)
-	uploadsOnlyParams    = newParamSet(subUploads)
-	uploadIDOnlyParams   = newParamSet(qpUploadID)
-	versionIDOnlyParams  = newParamSet(qpVersionID)
-	versioningOnlyParams = newParamSet(subVersioning)
-	taggingParams        = newParamSet(subTagging, qpVersionID)
-	uploadPartParams     = newParamSet(qpUploadID, qpPartNumber)
-	listPartsParams      = newParamSet(qpUploadID, "max-parts", "part-number-marker")
-	listObjectsV1Params  = newParamSet(
+	noParams               = newParamSet()
+	aclOnlyParams          = newParamSet(subACL)
+	policyOnlyParams       = newParamSet(subPolicy)
+	corsOnlyParams         = newParamSet(subCORS)
+	objectLockOnlyParams   = newParamSet(subObjectLock)
+	retentionParams        = newParamSet(subRetention, qpVersionID)
+	legalHoldParams        = newParamSet(subLegalHold, qpVersionID)
+	aclParams              = newParamSet(subACL, qpVersionID)
+	locationOnlyParams     = newParamSet(subLocation)
+	deleteOnlyParams       = newParamSet(subDelete)
+	uploadsOnlyParams      = newParamSet(subUploads)
+	uploadIDOnlyParams     = newParamSet(qpUploadID)
+	versionIDOnlyParams    = newParamSet(qpVersionID)
+	versioningOnlyParams   = newParamSet(subVersioning)
+	encryptionOnlyParams   = newParamSet(subEncryption)
+	policyStatusOnlyParams = newParamSet(subPolicyStatus)
+	ownershipOnlyParams    = newParamSet(subOwnership)
+	publicAccessOnlyParams = newParamSet(subPublicAccess)
+	taggingParams          = newParamSet(subTagging, qpVersionID)
+	uploadPartParams       = newParamSet(qpUploadID, qpPartNumber)
+	listPartsParams        = newParamSet(qpUploadID, "max-parts", "part-number-marker")
+	listObjectsV1Params    = newParamSet(
 		"prefix", "delimiter", "marker", "max-keys", "encoding-type")
 	listObjectsV2Params = newParamSet(
 		qpListType, "prefix", "delimiter", "max-keys", "continuation-token",
