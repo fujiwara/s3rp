@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Sets up a MicroCeph cluster with an RGW endpoint for the s3-tests suite.
 #
-# The compose.yml ceph service (quay.io/ceph/demo) is frozen at Ceph 19.2.0
-# — that image is no longer built — so this is the way to test against a
-# current Ceph: MicroCeph tracks upstream point releases per channel.
+# Unlike the compose.yml ceph service (a single container bootstrapped by
+# docker/ceph-demo.sh), this is a persistent host-level cluster with loop
+# OSDs: the fixed local environment the bench numbers are taken against,
+# so results stay comparable across runs. MicroCeph tracks upstream point
+# releases per channel.
 #
 # Needs root:  sudo ./s3tests/setup-microceph.sh
 #
