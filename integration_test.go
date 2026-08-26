@@ -588,7 +588,7 @@ func TestIntegration(t *testing.T) {
 			return s.String()
 		}
 		if checksumOf(put.ChecksumCRC32, put.ChecksumCRC32C, put.ChecksumCRC64NVME, put.ChecksumSHA1, put.ChecksumSHA256) == "" {
-			// e.g. the ceph/demo RGW build does not store checksums
+			// e.g. Ceph RGW before tentacle does not store checksums
 			t.Skip("backend does not support checksums")
 		}
 		if checksumOf(out.ChecksumCRC32, out.ChecksumCRC32C, out.ChecksumCRC64NVME, out.ChecksumSHA1, out.ChecksumSHA256) == "" {

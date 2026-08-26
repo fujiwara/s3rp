@@ -12,10 +12,16 @@ services:
   # start explicitly: docker compose up -d --wait ceph
   # NOTE: access RGW via http://127.0.0.1:7480 (not localhost) — RGW
   # resolves non-matching Host names as virtual-hosted bucket names.
+  # quay.io/ceph/demo stopped being published after squid, so the release
+  # image is bootstrapped by docker/ceph-demo.sh (a trimmed port of the
+  # demo entrypoint: mon + mgr + one OSD + RGW + admin user).
   ceph:
-    image: quay.io/ceph/demo:latest-squid
+    image: quay.io/ceph/ceph:v20
     profiles: [ceph]
     network_mode: host
+    entrypoint: ["/ceph-demo.sh"]
+    volumes:
+      - ./docker/ceph-demo.sh:/ceph-demo.sh:ro
     environment:
       MON_IP: 127.0.0.1
       CEPH_PUBLIC_NETWORK: 127.0.0.1/32

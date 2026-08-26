@@ -1,6 +1,6 @@
 # Runs the ceph/s3-tests compatibility suite (s3tests/run.sh) against a
-# MicroCeph RGW, so the backend is a current Ceph rather than the frozen
-# quay.io/ceph/demo image. Manually triggered: the run takes tens of
+# MicroCeph RGW, a multi-daemon cluster closer to a real deployment than
+# the compose single-container one. Manually triggered: the run takes tens of
 # minutes and its outcome is a classified report, not a pass/fail — the
 # job succeeds when the suite ran, and the triage report lands in the job
 # summary (full results as artifacts).
