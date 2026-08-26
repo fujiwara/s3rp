@@ -72,12 +72,22 @@ single test while triaging:
 PYTEST_ARGS='-k test_bucket_list_empty' ./s3tests/run.sh
 ```
 
-## Testing against a current Ceph (MicroCeph)
+## Choosing the Ceph release
 
-The compose `ceph` service (quay.io/ceph/demo) is frozen at Ceph 19.2.0 —
-that image is no longer built. To verify against a current Ceph, set up a
+The compose `ceph` service runs `quay.io/ceph/ceph:v20` (tentacle) by
+default; `CEPH_IMAGE` selects another release image, which is also the
+s3-tests workflow's input:
+
+```sh
+CEPH_IMAGE=quay.io/ceph/ceph:v19 ./s3tests/run.sh
+```
+
+## Testing against the bench MicroCeph
+
+The local bench environment is a persistent
 [MicroCeph](https://canonical-microceph.readthedocs-hosted.com/) cluster
-(snap; tracks upstream point releases) and point the runner at it:
+(`setup-microceph.sh`, snap; tracks upstream point releases). The suite
+can be pointed at it too:
 
 ```sh
 sudo ./s3tests/setup-microceph.sh    # MICROCEPH_CHANNEL=squid/stable for 19.x
