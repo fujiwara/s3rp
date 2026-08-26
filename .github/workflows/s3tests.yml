@@ -1,6 +1,6 @@
-# Runs the ceph/s3-tests compatibility suite (s3tests/run.sh) against a
-# MicroCeph RGW, a multi-daemon cluster closer to a real deployment than
-# the compose single-container one. Manually triggered: the run takes tens of
+# Runs the ceph/s3-tests compatibility suite (s3tests/run.sh) against the
+# compose ceph service, the same backend as a local run. Manually
+# triggered: the run takes tens of
 # minutes and its outcome is a classified report, not a pass/fail — the
 # job succeeds when the suite ran, and the triage report lands in the job
 # summary (full results as artifacts).
@@ -8,17 +8,17 @@ name: s3-tests
 on:
   workflow_dispatch:
     inputs:
-      channel:
-        description: MicroCeph snap channel (Ceph release)
+      image:
+        description: Ceph release image for the compose ceph service
         type: choice
-        default: tentacle/stable
+        default: quay.io/ceph/ceph:v20
         options:
-          - tentacle/stable
-          - squid/stable
+          - quay.io/ceph/ceph:v20
+          - quay.io/ceph/ceph:v19
 
 jobs:
   s3tests:
-    name: s3-tests (microceph)
+    name: s3-tests (ceph)
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -35,17 +35,17 @@ jobs:
         with:
           install: false # run.sh installs the tools pinned in s3tests/mise.toml
 
-      - name: Set up MicroCeph
+      - name: Start the ceph backend
         run: |
-          sudo MICROCEPH_CHANNEL="$MICROCEPH_CHANNEL" ./s3tests/setup-microceph.sh
-          echo "backend: $(sudo microceph.ceph version)" >> "$GITHUB_STEP_SUMMARY"
+          docker compose up -d --wait ceph
+          echo "backend: $(docker compose exec ceph ceph version)" >> "$GITHUB_STEP_SUMMARY"
         env:
-          MICROCEPH_CHANNEL: ${{ inputs.channel }}
+          CEPH_IMAGE: ${{ inputs.image }}
 
       - name: Run the suite
         run: ./s3tests/run.sh
         env:
-          S3RP_TEST_BACKEND_ENDPOINT: http://127.0.0.1:7490
+          CEPH_IMAGE: ${{ inputs.image }}
 
       - name: Put the triage report in the job summary
         if: always()

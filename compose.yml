@@ -16,7 +16,7 @@ services:
   # image is bootstrapped by docker/ceph-demo.sh (a trimmed port of the
   # demo entrypoint: mon + mgr + one OSD + RGW + admin user).
   ceph:
-    image: quay.io/ceph/ceph:v20
+    image: ${CEPH_IMAGE:-quay.io/ceph/ceph:v20}
     profiles: [ceph]
     network_mode: host
     entrypoint: ["/ceph-demo.sh"]

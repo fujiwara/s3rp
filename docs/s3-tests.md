@@ -18,14 +18,15 @@ script via the manually-triggered
 - Marker filter (rationale per marker in `run.sh`):
   `not lifecycle_expiration/transition, cloud_*, s3website, sns,
   storage_class, fails_on_rgw, auth_aws2`.
-- Backends: locally the compose `ceph` service (`quay.io/ceph/ceph:v20`, tentacle);
-  in CI a MicroCeph RGW (`s3tests/setup-microceph.sh`; the snap channel
-  is a workflow input, default `tentacle/stable`, which tracks point
-  releases — the job summary states the exact Ceph version). On the
-  compose backend `run.sh` deselects
-  `test_upload_part_copy_percent_encoded_key`: it crashes that RGW
-  itself (abort in `RGWObjectCtx::set_atomic`; fixed in later Ceph),
-  killing the daemon for the rest of the run.
+- Backend: the compose `ceph` service, locally and in CI
+  (`quay.io/ceph/ceph:v20`, tentacle, by default; `CEPH_IMAGE` — the
+  workflow's input — selects another release image, and the job summary
+  states the exact Ceph version). On a squid (`v19`) image `run.sh`
+  deselects `test_upload_part_copy_percent_encoded_key`: it crashes that
+  RGW itself (abort in `RGWObjectCtx::set_atomic`; fixed in 20.x),
+  killing the daemon for the rest of the run. The bench MicroCeph
+  (`s3tests/setup-microceph.sh`) can be targeted via
+  `S3RP_TEST_BACKEND_ENDPOINT` instead.
 
 ## Reading a run
 

@@ -19,15 +19,14 @@ BACKEND_ENDPOINT=${S3RP_TEST_BACKEND_ENDPOINT:-http://127.0.0.1:7480}
 MARKERS=${MARKERS:-"not lifecycle_expiration and not lifecycle_transition \
 and not cloud_transition and not cloud_restore and not s3website and not sns \
 and not storage_class and not fails_on_rgw and not auth_aws2"}
-# Ceph 19.2.0 aborts in RGWObjectCtx::set_atomic on UploadPartCopy with a
+# Ceph 19.2.x aborts in RGWObjectCtx::set_atomic on UploadPartCopy with a
 # percent-encoded copy-source key, killing the RGW daemon for the rest of
-# the run. The compose image is frozen on that release, so the test is
-# deselected there; fixed upstream (verified on 20.2.1 via MicroCeph).
-if [ "$BACKEND_ENDPOINT" = "http://127.0.0.1:7480" ]; then
-    DESELECT=${DESELECT:-"--deselect s3tests/functional/test_s3.py::test_upload_part_copy_percent_encoded_key"}
-else
-    DESELECT=${DESELECT:-}
-fi
+# the run (fixed in 20.x), so the test is deselected when the compose
+# backend runs a squid image.
+case "${CEPH_IMAGE:-}" in
+*:v19*) DESELECT=${DESELECT:-"--deselect s3tests/functional/test_s3.py::test_upload_part_copy_percent_encoded_key"} ;;
+*) DESELECT=${DESELECT:-} ;;
+esac
 PYTEST_ARGS=${PYTEST_ARGS:-}
 
 cd "$(dirname "$0")/.."   # repo root
@@ -37,7 +36,7 @@ RESULTS=$WORK/results
 mkdir -p "$RESULTS"
 
 # the compose ceph is only started when it is the backend being tested;
-# another endpoint (e.g. microceph via setup-microceph.sh) is used as-is
+# another endpoint (e.g. the bench MicroCeph via setup-microceph.sh) is used as-is
 if [ "$BACKEND_ENDPOINT" = "http://127.0.0.1:7480" ]; then
     echo "==> starting ceph backend"
     docker compose up -d --wait ceph
