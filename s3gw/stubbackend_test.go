@@ -185,7 +185,10 @@ func (b *stubBackend) GetBucketVersioning(ctx context.Context, in *s3.GetBucketV
 
 func (b *stubBackend) GetBucketEncryption(ctx context.Context, in *s3.GetBucketEncryptionInput, _ ...func(*s3.Options)) (*s3.GetBucketEncryptionOutput, error) {
 	b.getEncIn = in
-	return b.getEncOut, b.getEncErr
+	if b.getEncErr != nil {
+		return nil, b.getEncErr
+	}
+	return b.getEncOut, nil
 }
 
 func (b *stubBackend) ListObjectVersions(ctx context.Context, in *s3.ListObjectVersionsInput, _ ...func(*s3.Options)) (*s3.ListObjectVersionsOutput, error) {
