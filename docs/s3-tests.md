@@ -18,7 +18,7 @@ script via the manually-triggered
 - Marker filter (rationale per marker in `run.sh`):
   `not lifecycle_expiration/transition, cloud_*, s3website, sns,
   storage_class, fails_on_rgw, auth_aws2`.
-- Backends: locally the compose `ceph` service (frozen at Ceph 19.2.0);
+- Backends: locally the compose `ceph` service (`quay.io/ceph/ceph:v20`, tentacle);
   in CI a MicroCeph RGW (`s3tests/setup-microceph.sh`; the snap channel
   is a workflow input, default `tentacle/stable`, which tracks point
   releases — the job summary states the exact Ceph version). On the
