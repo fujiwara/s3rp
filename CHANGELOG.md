@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.0.10](https://github.com/fujiwara/s3rp/compare/v0.0.9...v0.0.10) - 2026-08-26
+
+- Run the compose ceph backend on the tentacle release image by @fujiwara in https://github.com/fujiwara/s3rp/pull/117
+- Run the s3-tests workflow against the compose ceph service by @fujiwara in https://github.com/fujiwara/s3rp/pull/119
+- Add the bucket-inspection reads by @fujiwara in https://github.com/fujiwara/s3rp/pull/120
+
 ## [v0.0.9](https://github.com/fujiwara/s3rp/compare/v0.0.8...v0.0.9) - 2026-08-22
 
 - Record the S3 operation name on Op by @fujiwara in https://github.com/fujiwara/s3rp/pull/115
