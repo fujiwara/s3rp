@@ -2,6 +2,8 @@ package harness
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -48,7 +50,7 @@ func (i *bucketInterceptor) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	requestID := s3err.NewRequestID()
+	requestID := newRequestID()
 	w.Header().Set("x-amz-request-id", requestID)
 
 	// Verify the signature and learn the key behind it. Verify reads only
@@ -173,6 +175,14 @@ func (i *bucketInterceptor) deleteBucket(w http.ResponseWriter, r *http.Request,
 
 // finish writes the error response (if any) and logs the operation in the
 // same JSON-lines stream the gateway observer writes to.
+// newRequestID mints an x-amz-request-id in the gateway's shape for the
+// requests the harness answers itself.
+func newRequestID() string {
+	b := make([]byte, 8)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
 func (i *bucketInterceptor) finish(w http.ResponseWriter, r *http.Request, bucket, tenant, requestID string, s3e *s3err.Error) {
 	status := http.StatusOK
 	code := ""

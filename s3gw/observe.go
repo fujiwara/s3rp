@@ -2,11 +2,11 @@ package s3gw
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"time"
-
-	"github.com/fujiwara/s3rp/s3err"
 )
 
 // RequestInfo describes a finished request. The gateway does not log: it
@@ -122,5 +122,12 @@ func (g *Gateway) newRequestID(r *http.Request) string {
 			return id
 		}
 	}
-	return s3err.NewRequestID()
+	return randomRequestID()
+}
+
+// randomRequestID is the gateway's own id: 8 random bytes as hex.
+func randomRequestID() string {
+	b := make([]byte, 8)
+	rand.Read(b)
+	return hex.EncodeToString(b)
 }
