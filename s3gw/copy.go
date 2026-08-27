@@ -44,7 +44,7 @@ func (g *Gateway) resolveCopySource(c *opCtx) (string, *s3err.Error) {
 		if errors.Is(err, store.ErrNotFound) {
 			// the cause tells the observer this denial is an unresolved
 			// source bucket, not a policy decision; the client sees neither
-			return "", s3err.AccessDenied().WithCause(err)
+			return "", s3err.AccessDenied().WithCause(copySourceReason(c.vr.principal(), srcBucket+"/"+srcKey, err))
 		}
 		return "", s3err.Internal(err, "bucket lookup failed")
 	}
