@@ -623,6 +623,32 @@ The gateway's outbound side: `SetClientOptions` for tuning the clients it builds
   // served on the metrics listener, not under the S3 handler
   ```
 
+  With OpenTelemetry metrics the same shape is one callback observing both caches — an observable counter for the monotonic fields, an observable gauge for the fill:
+
+  ```go
+  func cacheMetrics(meter metric.Meter, gw *s3gw.Gateway) error {
+  	hits, _ := meter.Int64ObservableCounter("s3gw.cache.hits")
+  	misses, _ := meter.Int64ObservableCounter("s3gw.cache.misses")
+  	evictions, _ := meter.Int64ObservableCounter("s3gw.cache.evictions")
+  	length, _ := meter.Int64ObservableGauge("s3gw.cache.len")
+  	capacity, _ := meter.Int64ObservableGauge("s3gw.cache.capacity")
+  	caches := map[string]func() s3gw.CacheStats{"client": gw.ClientCacheStats, "signer": gw.SignerCacheStats}
+  	_, err := meter.RegisterCallback(func(_ context.Context, o metric.Observer) error {
+  		for name, stats := range caches {
+  			s := stats()
+  			attrs := metric.WithAttributes(attribute.String("cache", name))
+  			o.ObserveInt64(hits, int64(s.Hits), attrs)
+  			o.ObserveInt64(misses, int64(s.Misses), attrs)
+  			o.ObserveInt64(evictions, int64(s.Evictions), attrs)
+  			o.ObserveInt64(length, int64(s.Len), attrs)
+  			o.ObserveInt64(capacity, int64(s.Capacity), attrs)
+  		}
+  		return nil
+  	}, hits, misses, evictions, length, capacity)
+  	return err
+  }
+  ```
+
   Each `stats()` call takes its own snapshot, so a scrape reads the fields moments apart — fine for monitoring, which is what they are for. `SetSignerCacheSize` rebuilds the signer cache and resets its counters; a Prometheus counter handles that as an ordinary counter reset. What to look at, per cache:
 
   | signal | reads as | do |
