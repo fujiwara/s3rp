@@ -14,11 +14,15 @@ import (
 // as Amazon S3 does; unset (the default), only the path style exists.
 //
 // The suffix is the endpoint's own host name with a leading dot ("." is
-// added when missing), so the bare endpoint stays path-style and only a
-// proper subdomain names a bucket. Bucket names contain no dot, so the
+// added when missing, a port is dropped since the Host is matched without
+// its port), so the bare endpoint stays path-style and only a proper
+// subdomain names a bucket. Bucket names contain no dot, so the
 // label is a single one; a dotted label names no bucket. Signature
 // verification is unaffected: the signed Host is whatever the client sent.
 func (g *Gateway) SetVirtualHostSuffix(suffix string) {
+	if h, _, err := net.SplitHostPort(suffix); err == nil {
+		suffix = h
+	}
 	suffix = strings.ToLower(strings.TrimSuffix(suffix, "."))
 	if suffix != "" && !strings.HasPrefix(suffix, ".") {
 		suffix = "." + suffix

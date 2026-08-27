@@ -209,6 +209,32 @@ func TestVirtualHostResolution(t *testing.T) {
 	}
 }
 
+// TestVirtualHostSuffixSpellings checks that the suffix is accepted however
+// an operator is likely to write the endpoint's host name.
+func TestVirtualHostSuffixSpellings(t *testing.T) {
+	for _, suffix := range []string{"s3.example.com", ".s3.example.com", "S3.Example.COM.", "s3.example.com:8080"} {
+		t.Run(suffix, func(t *testing.T) {
+			ts, gw := newCORSTestProxy(t)
+			gw.SetVirtualHostSuffix(suffix)
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodOptions, ts+"/key.txt", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Host = "webbucket.s3.example.com"
+			req.Header.Set("Origin", "https://app.example.com")
+			req.Header.Set("Access-Control-Request-Method", "GET")
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				t.Errorf("expect 200, got %d", resp.StatusCode)
+			}
+		})
+	}
+}
+
 func TestVirtualHostDisabledByDefault(t *testing.T) {
 	ts, _ := newCORSTestProxy(t)
 	req, err := http.NewRequestWithContext(t.Context(), http.MethodOptions, ts+"/key.txt", nil)
