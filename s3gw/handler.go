@@ -88,7 +88,7 @@ func (w *statusWriter) Write(p []byte) (int, error) {
 func (g *Gateway) wrapHandler(h handlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		requestID := s3err.NewRequestID()
+		requestID := g.newRequestID(r)
 		w.Header().Set("x-amz-request-id", requestID)
 		// The record is assembled as the request goes: the identity is known
 		// once the signature verifies, the operation only after routing and

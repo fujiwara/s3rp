@@ -247,10 +247,55 @@ Your `store.Store` implementation — and the control plane's write path that fe
 - `RequestInfo` keeps the identity apart from the operation: `Tenant`, `User` and `AccessKeyID` are set as soon as the signature verifies, `Op` only once routing and the policies pass. So a request refused for an unknown bucket or a denied action still records **who** asked, which is usually the point of looking. `AccessKeyID` is there for key-level accounting — a user holds several keys during rotation, so a last-used timestamp that answers "is the old key still in use?" must be kept per key, and the observer is the one place that sees every request the key actually signed (the store's `GetKey` runs *before* verification, so it would record presentation, not use — and a store cache skips it entirely). Aggregate in memory and flush coarsely; do not write per request.
 - `RequestInfo` stands on its own, `Start` included, so it can be handed to a metering queue or a batch and still say when it happened — an observer that defers the work must not have to stamp the time itself. It carries snake_case JSON tags and can be emitted as it stands; the failure reason is rendered as its message, since an `error` marshals to an empty object on its own. `Op` is tagged the same way.
 - Log `RequestInfo.RawQuery`, not the request's own query string: the gateway masks the presigned authentication parameters, and a presigned URL's signature is a bearer credential until it expires.
+- **The request id is yours to choose.** By default the gateway mints a random `x-amz-request-id`; `SetRequestID` replaces that with a function called once per request, before anything else, with the request as your wrapping handler passed it. Return the trace id your handler put in the context and the id the client is told, the log line and the trace are one and the same — no lookup between a user's report and the trace it belongs to. An empty result falls back to the random id. When the hop in front starts the trace (nginx's otel module, HAProxy), its `traceparent` arrives as a request header and the propagator in your otelhttp handler puts it in the context, so the same function picks it up — but treat that header like `X-Real-IP`: the hop in front must set or overwrite it on every request, because a client can send one too, and a request id an attacker chose is a log you cannot trust.
+
+  ```go
+  gw.SetRequestID(func(r *http.Request) string {
+  	if sc := trace.SpanContextFromContext(r.Context()); sc.HasTraceID() {
+  		return sc.TraceID().String()
+  	}
+  	return "" // the gateway's own id
+  })
+  h := otelhttp.NewHandler(gw.Handler(), "s3") // the span exists before SetRequestID runs
+  ```
+- **What the backend answered travels in the context, not in `RequestInfo`.** The gateway passes the inbound request's context to every backend call, every hook and the observer, so a record your wrapping handler puts in the context can be filled by a middleware on the backend client (`SetClientOptions` → `APIOptions`, a `Deserialize` step reading the raw response) and read back in the observer — the backend's `x-amz-request-id` and `x-amz-id-2`, its response headers, one entry per attempt including the retries the SDK makes inside a single inbound request, which the hooks never see. `RequestInfo` and `Op` deliberately carry nothing of this: which backend facts matter is your call and changes with the backend, and the context is already the carrier. `s3gw/requestid_test.go` (`TestBackendResponseFactsThroughContext`) runs this pattern against the real SDK client.
+
+  ```go
+  type backendFacts struct{ requestIDs []string } // guard with a mutex if you read concurrently
+  type factsKey struct{}
+
+  gw.SetClientOptions(func(*store.Backend) []func(*s3.Options) {
+  	return []func(*s3.Options){func(o *s3.Options) {
+  		o.APIOptions = append(o.APIOptions, func(stack *middleware.Stack) error {
+  			return stack.Deserialize.Add(middleware.DeserializeMiddlewareFunc("RecordBackendResponse",
+  				func(ctx context.Context, in middleware.DeserializeInput, next middleware.DeserializeHandler) (
+  					middleware.DeserializeOutput, middleware.Metadata, error,
+  				) {
+  					out, md, err := next.HandleDeserialize(ctx, in)
+  					if resp, ok := out.RawResponse.(*smithyhttp.Response); ok {
+  						if f, ok := ctx.Value(factsKey{}).(*backendFacts); ok {
+  							f.requestIDs = append(f.requestIDs, resp.Header.Get("x-amz-request-id"))
+  						}
+  					}
+  					return out, md, err
+  				}), middleware.After)
+  		})
+  	}}
+  })
+  gw.SetObserver(func(ctx context.Context, info *s3gw.RequestInfo) {
+  	f, _ := ctx.Value(factsKey{}).(*backendFacts)
+  	slog.Info("request", "request_id", info.RequestID, "backend_request_ids", f.requestIDs)
+  })
+  h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+  	gw.Handler().ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), factsKey{}, &backendFacts{})))
+  })
+  ```
 
 **Do**
 
 - Install an observer — it is the only place a failure's cause exists at all.
+- Derive the request id from your trace (`SetRequestID`) so a reported `x-amz-request-id` opens the trace directly; take it from the hop in front only if that hop overwrites the header on every request.
+- Carry what you want to know about the backend exchange in the request context and fill it from a backend-client middleware; read it in the observer.
 - Keep it fast (it runs on the request path, after the response): buffer or sample at real request rates, or hand `RequestInfo` to a queue — it is self-contained, `Start` included.
 
 **Don't**
@@ -465,7 +510,7 @@ The gateway serves plain HTTP, so a real deployment puts a reverse proxy in fron
 - **Next, a real-client-IP header your proxy overwrites** (nginx's `X-Real-IP` via `proxy_set_header X-Real-IP $remote_addr;`, Cloudflare's `CF-Connecting-IP`, CloudFront's `CloudFront-Viewer-Address`): single-valued and set by the trusted hop itself, so there is no list to reason about — read it in a handler wrapped around `gw.Handler()` and rewrite `RemoteAddr`. Two conditions make it trustworthy: the hop must **overwrite** the header unconditionally (a proxy that passes a client-supplied value through leaves it spoofable), and the handler must trust it only on requests that actually came from your proxy — it is still an HTTP header on a port anyone might reach directly.
 - **`X-Forwarded-For` is the last resort**, for chains where only the appended list survives to the gateway: rewrite `RemoteAddr` from the entry appended by **your own** trusted hop — count from the right, and never trust what arrived from the client side, since any client can write this header too. That trust arithmetic is the bug class the two options above avoid.
 
-Left unrecovered, conditions see the proxy's address and fail closed: IP-gated `Allow`s grant nothing and `NotIpAddress` `Deny`s fire for everyone — wrong, but never silently open. Also leave the `x-amz-request-id` response header alone: it is what ties a user's report to the log line explaining it.
+Left unrecovered, conditions see the proxy's address and fail closed: IP-gated `Allow`s grant nothing and `NotIpAddress` `Deny`s fire for everyone — wrong, but never silently open. Also leave the `x-amz-request-id` response header alone: it is what ties a user's report to the log line explaining it (a proxy that starts the trace can instead hand its trace id in via `traceparent`, which `SetRequestID` turns into the request id — see [Observation](#observation)).
 
 **The hop itself.** The scheme is not part of a SigV4 signature, so terminating TLS and forwarding over plain HTTP verifies correctly — but that hop carries object payloads and the requests authenticating them, so it belongs on a trusted network or under mTLS.
 

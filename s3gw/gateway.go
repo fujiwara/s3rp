@@ -12,6 +12,7 @@ package s3gw
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync/atomic"
 
 	"github.com/fujiwara/s3rp/sigv4"
@@ -51,6 +52,7 @@ type Gateway struct {
 	authorizer     Authorizer
 	interceptors   []Interceptor
 	observer       Observer
+	requestID      func(r *http.Request) string
 	bandwidthLimit func(op *Op) (in, out BandwidthLimiter)
 
 	newClient     func(ctx context.Context, b *store.Backend) (BackendClient, error)

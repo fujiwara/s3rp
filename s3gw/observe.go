@@ -3,7 +3,10 @@ package s3gw
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"time"
+
+	"github.com/fujiwara/s3rp/s3err"
 )
 
 // RequestInfo describes a finished request. The gateway does not log: it
@@ -98,3 +101,26 @@ type Observer func(ctx context.Context, info *RequestInfo)
 // no log at all — including for failures, whose cause is not recoverable
 // anywhere else.
 func (g *Gateway) SetObserver(o Observer) { g.observer = o }
+
+// SetRequestID replaces how the x-amz-request-id of each request is chosen.
+// The function is called once per request, before anything else happens,
+// with the request as the wrapping handler passed it — so an id derived from
+// what that handler put in the context (a trace id, an id from the hop in
+// front) ties the id the client is told, the log line and the trace
+// together. An empty result falls back to the gateway's own random id.
+//
+// The gateway does not trust any header for this: a value taken from one
+// (a traceparent, an X-Request-Id) is the caller's decision, and must come
+// from the hop in front, never from the client — the same rule as the
+// client address.
+func (g *Gateway) SetRequestID(f func(r *http.Request) string) { g.requestID = f }
+
+// newRequestID is the id a request is told and logged under.
+func (g *Gateway) newRequestID(r *http.Request) string {
+	if g.requestID != nil {
+		if id := g.requestID(r); id != "" {
+			return id
+		}
+	}
+	return s3err.NewRequestID()
+}
