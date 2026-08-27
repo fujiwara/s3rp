@@ -227,6 +227,10 @@ GetBucketCors returns the configuration (`NoSuchCORSConfiguration` when absent);
 
 The gateway behaves like a bucket with ACLs disabled (Object Ownership = bucket owner enforced, the AWS default since 2023). GetBucketAcl / GetObjectAcl return a fixed policy granting FULL_CONTROL to the tenant; PutBucketAcl / PutObjectAcl return `AccessControlListNotSupported`, and canned ACLs other than `private` / `bucket-owner-full-control` are rejected on uploads. Use bucket policies for access control instead.
 
+## Addressing
+
+Buckets are addressed path-style (`/bucket/key`) and, when the gateway is given its host name (`virtual_host_suffix` in the bundled config, `SetVirtualHostSuffix` when embedding), virtual-hosted-style as well: a request whose `Host` is `bucket.s3.example.com` targets that bucket and its whole path is the key. Both forms are served at once, as on Amazon S3; a `Host` that is not a direct subdomain of the suffix (the bare endpoint, another name, a dotted label) is path-style. Bucket names contain no dot, so a bucket is always exactly one DNS label — that is why the name charset excludes it. The `Location` a multipart completion or a POST upload returns mirrors the form the client used. Signature verification is unaffected either way: the signed `Host` is whatever the client sent.
+
 ## Presigned URLs
 
 Presigned URLs (SigV4 query string authentication) generated with front-side keys against the gateway's endpoint are supported for the operations above. Expiry (`X-Amz-Expires`, up to 7 days) is enforced.

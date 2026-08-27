@@ -19,6 +19,9 @@ func TestLoadConfig(t *testing.T) {
 	if cfg.Listen != ":8080" {
 		t.Errorf("expect :8080, got %s", cfg.Listen)
 	}
+	if cfg.VirtualHostSuffix != "s3.example.com" {
+		t.Errorf("expect s3.example.com, got %s", cfg.VirtualHostSuffix)
+	}
 	if len(cfg.Tenants) != 2 {
 		t.Fatalf("expect 2 tenants, got %d", len(cfg.Tenants))
 	}

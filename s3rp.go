@@ -31,6 +31,9 @@ func New(ctx context.Context, cfg *Config) (*S3RP, error) {
 func NewWithStore(_ context.Context, cfg *Config, st store.Store) (*S3RP, error) {
 	gw := s3gw.New(st)
 	gw.SetObserver(logRequest)
+	if cfg.VirtualHostSuffix != "" {
+		gw.SetVirtualHostSuffix(cfg.VirtualHostSuffix)
+	}
 	return &S3RP{Gateway: gw, cfg: cfg, store: st}, nil
 }
 

@@ -227,12 +227,12 @@ func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	// browser-based POST uploads carry their authentication in the form
 	// fields, not in a header or the query
 	if r.Method == http.MethodPost && isMultipartForm(r) {
-		bucket, key, err := splitPath(r.URL.EscapedPath())
+		t, err := g.requestTarget(r)
 		if err != nil {
 			return s3err.New(http.StatusBadRequest, "InvalidURI", "Couldn't parse the specified URI.").WithCause(err)
 		}
-		if bucket != "" && key == "" {
-			return g.handlePostObject(w, r, bucket)
+		if t.bucket != "" && t.key == "" {
+			return g.handlePostObject(w, r, t)
 		}
 		// a multipart POST to any other path is not a browser upload; let
 		// the normal flow reject it
@@ -245,10 +245,11 @@ func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) error {
 		info.Tenant, info.User = vr.Tenant, vr.User
 		info.AccessKeyID = vr.AccessKeyID
 	}
-	bucket, key, err := splitPath(r.URL.EscapedPath())
+	t, err := g.requestTarget(r)
 	if err != nil {
 		return s3err.New(http.StatusBadRequest, "InvalidURI", "Couldn't parse the specified URI.").WithCause(err)
 	}
+	bucket, key := t.bucket, t.key
 
 	if bucket == "" {
 		if r.Method != http.MethodGet {
@@ -271,7 +272,7 @@ func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return s3err.Internal(err, "backend client failed")
 	}
-	rt := &bucketRT{cfg: b, client: client}
+	rt := &bucketRT{cfg: b, client: client, target: t}
 	cors.SetHeaders(w, r, b.CORS)
 
 	query := r.URL.Query()
