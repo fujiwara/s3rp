@@ -5,8 +5,6 @@ package s3err
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -234,10 +232,4 @@ func Write(w http.ResponseWriter, r *http.Request, e *Error, requestID string) {
 	}
 	w.Write([]byte(xml.Header))
 	w.Write(b)
-}
-
-func NewRequestID() string {
-	b := make([]byte, 8)
-	rand.Read(b)
-	return hex.EncodeToString(b)
 }
