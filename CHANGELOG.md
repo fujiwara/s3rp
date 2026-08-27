@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.0.11](https://github.com/fujiwara/s3rp/compare/v0.0.10...v0.0.11) - 2026-08-27
+
+- Add virtual-hosted-style addressing alongside path style by @fujiwara in https://github.com/fujiwara/s3rp/pull/121
+
 ## [v0.0.10](https://github.com/fujiwara/s3rp/compare/v0.0.9...v0.0.10) - 2026-08-26
 
 - Run the compose ceph backend on the tentacle release image by @fujiwara in https://github.com/fujiwara/s3rp/pull/117
