@@ -1,4 +1,5 @@
 listen: ":8080"
+virtual_host_suffix: s3.example.com
 tenants:
   - name: acme
     users:

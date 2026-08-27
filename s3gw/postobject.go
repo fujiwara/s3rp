@@ -107,7 +107,8 @@ func checkPostFields(fields map[string]string) *s3err.Error {
 	return nil
 }
 
-func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, bucket string) error {
+func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, t target) error {
+	bucket := t.bucket
 	if err := (paramSet{}).check(r.URL.Query()); err != nil {
 		return err
 	}
@@ -159,7 +160,7 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, bucke
 	if err != nil {
 		return s3err.Internal(err, "backend client failed")
 	}
-	rt := &bucketRT{cfg: b, client: client}
+	rt := &bucketRT{cfg: b, client: client, target: t}
 	cors.SetHeaders(w, r, b.CORS)
 
 	// the acl form field follows the same rule as the x-amz-acl header on
@@ -329,11 +330,7 @@ func (g *Gateway) postPutObject(c *opCtx, fields map[string]string, file *multip
 	}
 	setSSEHeaders(w.Header(), out.ServerSideEncryption, out.SSEKMSKeyId)
 	// the front URL of the object, never the backend's
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	location := scheme + "://" + r.Host + (&url.URL{Path: "/" + rt.cfg.Name + "/" + key}).EscapedPath()
+	location := objectURL(r, rt.target, key)
 
 	if redirect := fields["success_action_redirect"]; redirect != "" {
 		if u, err := url.Parse(redirect); err == nil && u.IsAbs() {

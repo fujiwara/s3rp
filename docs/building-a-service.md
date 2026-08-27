@@ -438,6 +438,7 @@ The handler and listener wrapping `Handler()`: everything that must run before s
   log.Fatal(http.ListenAndServe(":8080", h))
   ```
 - The signing region of a request is taken from its credential scope, so by default **any region verifies** — the signature commits to the region either way, and a front endpoint has no inherent region. A multi-region deployment should pin each endpoint with `SetRegion`: not for signature integrity, but so a client pointed at the wrong regional endpoint fails fast with AWS's own error (`AuthorizationHeaderMalformed`, naming the expected region) instead of silently being served cross-region, and so a leaked derived signing key stays scoped to its region as SigV4 intends. The pinned region is also what GetBucketLocation and HeadBucket report, keeping region discovery consistent with what the verifier accepts.
+- **Virtual-hosted-style addressing** is opt-in: `SetVirtualHostSuffix("s3.example.com")` makes `bucket.s3.example.com` address the bucket while the path style keeps working on every other `Host` (see [Addressing](s3-api.md#addressing)). It needs a wildcard DNS record and a wildcard certificate at the TLS terminator; the terminator must pass `Host` through unchanged (the nginx and HAProxy examples below do), since it is both the bucket selector and part of what the client signed.
 
 ### Behind a TLS terminator
 

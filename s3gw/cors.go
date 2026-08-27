@@ -26,11 +26,11 @@ func (g *Gateway) handlePreflight(w http.ResponseWriter, r *http.Request) error 
 		return s3err.New(http.StatusBadRequest, "BadRequest",
 			"Insufficient information. Origin request header needed.")
 	}
-	bucket, _, err := splitPath(r.URL.EscapedPath())
-	if err != nil || bucket == "" {
+	t, err := g.requestTarget(r)
+	if err != nil || t.bucket == "" {
 		return corsNotAllowed()
 	}
-	b, err := g.store.GetBucketByName(r.Context(), bucket)
+	b, err := g.store.GetBucketByName(r.Context(), t.bucket)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return corsNotAllowed()

@@ -27,8 +27,12 @@ type (
 )
 
 type Config struct {
-	Listen  string          `yaml:"listen" json:"listen"`
-	Tenants []*TenantConfig `yaml:"tenants,omitempty" json:"tenants,omitempty"`
+	Listen string `yaml:"listen" json:"listen"`
+	// VirtualHostSuffix enables virtual-hosted-style addressing under this
+	// host name ("s3.example.com": bucket "photos" is photos.s3.example.com)
+	// alongside the path style; empty = path style only.
+	VirtualHostSuffix string          `yaml:"virtual_host_suffix,omitempty" json:"virtual_host_suffix,omitempty"`
+	Tenants           []*TenantConfig `yaml:"tenants,omitempty" json:"tenants,omitempty"`
 }
 
 // TenantConfig defines a tenant: its users and the buckets it owns.

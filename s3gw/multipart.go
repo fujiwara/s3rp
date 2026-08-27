@@ -2,7 +2,6 @@ package s3gw
 
 import (
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 
@@ -205,15 +204,7 @@ func (g *Gateway) completeMultipartUpload(c *opCtx) error {
 	if err != nil {
 		return s3err.FromSDKError(err, r.URL.Path)
 	}
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	location := (&url.URL{
-		Scheme: scheme,
-		Host:   r.Host,
-		Path:   "/" + rt.cfg.Name + "/" + key,
-	}).String()
+	location := objectURL(r, rt.target, key)
 	c.setResponse(OpResponse{
 		SSE:         string(out.ServerSideEncryption),
 		SSEKMSKeyID: aws.ToString(out.SSEKMSKeyId),

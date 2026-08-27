@@ -64,6 +64,7 @@ A tenant owns one or more buckets and users. Bucket names (`[a-z0-9-]`, 3–63 c
 
 ```yaml
 listen: ":8080"
+virtual_host_suffix: s3.example.com  # optional: also serve photos.s3.example.com (see Client usage)
 tenants:
   - name: acme                       # tenant identifier
     users:
@@ -109,7 +110,7 @@ The `s3rp` binary reads its definitions from the YAML config as above. Any other
 
 ## Client usage
 
-Point any S3 client at s3rp with path-style addressing and a front-side key.
+Point any S3 client at s3rp with path-style addressing and a front-side key. With `virtual_host_suffix` set, virtual-hosted-style addressing (`https://photos.s3.example.com/foo.jpg`) is served as well — both forms at once, as on Amazon S3 — given a wildcard DNS record and, under TLS, a wildcard certificate for `*.s3.example.com`; the bare endpoint stays path-style, and the URLs in responses (multipart and POST `Location`) mirror whichever form the client used.
 
 ```console
 $ export AWS_ACCESS_KEY_ID=S3RPKEY001

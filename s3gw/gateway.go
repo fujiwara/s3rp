@@ -44,6 +44,10 @@ type Gateway struct {
 	// backend identity and is never exposed.
 	region string
 
+	// vhostSuffix is the SetVirtualHostSuffix value, normalized to a leading
+	// dot; empty means path-style addressing only.
+	vhostSuffix string
+
 	authorizer     Authorizer
 	interceptors   []Interceptor
 	observer       Observer
@@ -70,6 +74,9 @@ const defaultClientCacheSize = 128
 type bucketRT struct {
 	cfg    *store.Bucket
 	client BackendClient
+	// target is how the request addressed the bucket, for the URLs handed
+	// back to the client
+	target target
 }
 
 // clientCacheKey identifies a backend client. Clients are bucket-agnostic:
