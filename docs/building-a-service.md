@@ -593,7 +593,46 @@ The gateway's outbound side: `SetClientOptions` for tuning the clients it builds
   ```
 - One backend requirement that is not a client option: **disable Nagle on the backend's frontend** — for Ceph RGW, `tcp_nodelay=1` in `rgw_frontends` (`rgw_frontend_extra_args` under cephadm). RGW's beast frontend leaves Nagle on by default and writes response headers and body separately, so any response body smaller than one MSS stalls ~40ms against the gateway's delayed ACK before its first byte is sent. The reach depends on the MSS: ~1.4KB bodies on a standard 1500 MTU, but **~9KB with jumbo frames** — on a datacenter network that is every small-object GET, at +40ms each (measured: 16KiB GET 43ms → 1.1ms once set). Go-based backends (versitygw) and AWS S3 are unaffected, as is the gateway's own front side — Go's HTTP server sets TCP_NODELAY on accepted connections.
 - What the gateway does cache is derived from definitions, never a definition itself, and is bounded: backend **clients** (one per distinct endpoint/credentials, LRU, default 128 — `SetClientCacheSize`) and one SigV4 **signer** per access key (default 512 slots — `SetSignerCacheSize`). Size them to the number of distinct backends and of access keys active at once; an evicted entry is rebuilt on its next request, so undersizing costs latency, not correctness.
-- Whether they *are* sized right is answerable: `ClientCacheStats` / `SignerCacheStats` return snapshots (hits, misses, evictions, len, capacity — monotonic counters, poll them from your metrics collector). A rising eviction rate with `Len` near `Capacity` means the cache is too small. The signer cache's evictions are collision displacements: a high rate with `Len` well **under** `Capacity` means hot keys sharing a slot by hash luck, which more slots make improbable.
+- Whether they *are* sized right is answerable: `ClientCacheStats` / `SignerCacheStats` return a `CacheStats` snapshot — `Hits`, `Misses`, `Evictions` are monotonic counters, `Len` and `Capacity` the current fill and bound. The gateway keeps no history and never logs them; expose them from your metrics endpoint and let the collector derive rates. The natural shape is a set of `*Func` collectors read at scrape time — no goroutine, no sampling interval of your own, and the counters are atomics so reading them costs nothing on the request path:
+
+  ```go
+  // one collector per cache; the name is the label
+  func cacheMetrics(reg prometheus.Registerer, name string, stats func() s3gw.CacheStats) {
+  	labels := prometheus.Labels{"cache": name}
+  	counter := func(field string, get func(s3gw.CacheStats) uint64) prometheus.Collector {
+  		return prometheus.NewCounterFunc(prometheus.CounterOpts{
+  			Name: "s3gw_cache_" + field + "_total", ConstLabels: labels,
+  		}, func() float64 { return float64(get(stats())) })
+  	}
+  	gauge := func(field string, get func(s3gw.CacheStats) int) prometheus.Collector {
+  		return prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+  			Name: "s3gw_cache_" + field, ConstLabels: labels,
+  		}, func() float64 { return float64(get(stats())) })
+  	}
+  	reg.MustRegister(
+  		counter("hits", func(s s3gw.CacheStats) uint64 { return s.Hits }),
+  		counter("misses", func(s s3gw.CacheStats) uint64 { return s.Misses }),
+  		counter("evictions", func(s s3gw.CacheStats) uint64 { return s.Evictions }),
+  		gauge("len", func(s s3gw.CacheStats) int { return s.Len }),
+  		gauge("capacity", func(s s3gw.CacheStats) int { return s.Capacity }),
+  	)
+  }
+
+  cacheMetrics(prometheus.DefaultRegisterer, "client", gw.ClientCacheStats)
+  cacheMetrics(prometheus.DefaultRegisterer, "signer", gw.SignerCacheStats)
+  // served on the metrics listener, not under the S3 handler
+  ```
+
+  Each `stats()` call takes its own snapshot, so a scrape reads the fields moments apart — fine for monitoring, which is what they are for. `SetSignerCacheSize` rebuilds the signer cache and resets its counters; a Prometheus counter handles that as an ordinary counter reset. What to look at, per cache:
+
+  | signal | reads as | do |
+  |---|---|---|
+  | `rate(evictions)` rising, `len` ≈ `capacity` | more distinct backends / active keys than slots; every eviction is a client (connection pool) or signer rebuilt on the next request | raise `SetClientCacheSize` / `SetSignerCacheSize` |
+  | signer: `rate(evictions)` > 0, `len` ≪ `capacity` | hot keys colliding in the direct-mapped table (they displace each other on every alternation) | more slots lower the odds; it costs only memory |
+  | `misses` growing with `evictions` ≈ 0 | cold fills — new tenants, a restart | nothing; a miss is one build |
+  | client: `misses` keep growing, `len` small, `evictions` ≈ 0 | the same few backends miss again and again — a backend definition is varying between requests (credentials, endpoint spelling, `SetDefaults` not applied), so each variant is a new client | fix the store: a client is keyed by endpoint, region, credentials and path style, and `Backend.SetDefaults` must run before the definition is returned |
+
+  A one-shot check without a metrics stack is the same two calls: log `gw.ClientCacheStats()` and `gw.SignerCacheStats()` from a debug endpoint or on shutdown and compare `Evictions` with `Len`/`Capacity` as above.
 
 **Do**
 
