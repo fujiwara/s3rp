@@ -239,6 +239,7 @@ func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	}
 	vr, s3e := g.verifyRequest(r)
 	if s3e != nil {
+		recordPresentedKey(r.Context(), s3e)
 		return s3e
 	}
 	if info := recordOf(r.Context()); info != nil {

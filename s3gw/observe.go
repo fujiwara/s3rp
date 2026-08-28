@@ -5,8 +5,12 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
+
+	"github.com/fujiwara/s3rp/s3err"
+	"github.com/fujiwara/s3rp/sigv4"
 )
 
 // RequestInfo describes a finished request. The gateway does not log: it
@@ -91,6 +95,20 @@ type infoKey struct{}
 func recordOf(ctx context.Context) *RequestInfo {
 	info, _ := ctx.Value(infoKey{}).(*RequestInfo)
 	return info
+}
+
+// recordPresentedKey records, for a request whose authentication failed,
+// the access key id it claimed — unverified, which is why Tenant and User
+// stay empty: the key proves nothing, but which key was tried is what a
+// leaked-key hunt or a rotation left-behind needs.
+func recordPresentedKey(ctx context.Context, s3e *s3err.Error) {
+	info := recordOf(ctx)
+	if info == nil {
+		return
+	}
+	if f, ok := errors.AsType[*sigv4.AuthFailure](s3e); ok {
+		info.AccessKeyID = f.AccessKeyID
+	}
 }
 
 // Observer is called once per request, after the response has been written.

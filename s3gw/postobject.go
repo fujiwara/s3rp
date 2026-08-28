@@ -145,6 +145,7 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, t tar
 
 	vr, pp, s3e := g.verifyPostRequest(r, fields)
 	if s3e != nil {
+		recordPresentedKey(r.Context(), s3e)
 		return s3e
 	}
 	if info := recordOf(r.Context()); info != nil {

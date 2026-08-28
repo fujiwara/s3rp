@@ -227,8 +227,13 @@ func TestObserverIdentityAndOp(t *testing.T) {
 		w := httptest.NewRecorder()
 		gw.Handler().ServeHTTP(w, req)
 
-		if got.Tenant != "" || got.User != "" || got.AccessKeyID != "" || got.Op != nil {
+		if got.Tenant != "" || got.User != "" || got.Op != nil {
 			t.Errorf("nothing is proven by a bad signature, got %+v", got)
+		}
+		// the key the request claimed is recorded unverified, so a
+		// leaked-key hunt can see which key was tried
+		if got.AccessKeyID != testAccessKeyID {
+			t.Errorf("expect the presented key id, got %q", got.AccessKeyID)
 		}
 		if got.Code != "SignatureDoesNotMatch" {
 			t.Errorf("unexpected code %q", got.Code)
