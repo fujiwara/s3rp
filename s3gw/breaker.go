@@ -91,7 +91,9 @@ func classifyAttempt(raw any, err error) (ok, report bool) {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return false, true
 	}
-	if resp, isHTTP := raw.(*smithyhttp.Response); isHTTP && resp != nil && resp.Response != nil {
+	// a transport failure still comes with a raw response, an empty one
+	// with status 0, so only a real status says the backend answered
+	if resp, isHTTP := raw.(*smithyhttp.Response); isHTTP && resp != nil && resp.Response != nil && resp.StatusCode >= 100 {
 		return resp.StatusCode < http.StatusInternalServerError, true
 	}
 	if err == nil {

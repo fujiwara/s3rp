@@ -73,6 +73,8 @@ func TestClassifyAttempt(t *testing.T) {
 		{"404 proves the backend is up", resp(404), errors.New("NoSuchKey"), true, true},
 		{"503", resp(503), errors.New("SlowDown"), false, true},
 		{"transport failure", nil, errors.New("dial tcp: connection refused"), false, true},
+		// the SDK hands a transport failure over with an empty response
+		{"transport failure with the SDK's empty response", resp(0), errors.New("dial tcp: connection refused"), false, true},
 		{"timeout", nil, context.DeadlineExceeded, false, true},
 		{"client canceled", nil, context.Canceled, false, false},
 	}
@@ -205,6 +207,31 @@ func TestBreakerFailsFast(t *testing.T) {
 	}
 	if br.State() != "closed" {
 		t.Errorf("expect closed after a successful probe, got %s", br.State())
+	}
+}
+
+// A backend nobody listens on: the real transport failure, with the SDK's
+// default retries, must open the breaker.
+func TestBreakerOpensOnConnectionRefused(t *testing.T) {
+	m := buildStore(t, "cbtenant",
+		[]userSpec{{name: "u", keyID: testAccessKeyID, secret: testSecretAccessKey}},
+		[]bucketSpec{{name: "cbbucket", endpoint: "http://127.0.0.1:1"}})
+	gw := s3gw.New(m)
+	br := s3gw.NewConsecutiveFailures(2, time.Minute)
+	gw.SetBreaker(func(*store.Backend) s3gw.Breaker { return br })
+	var last atomic.Pointer[s3gw.RequestInfo]
+	gw.SetObserver(func(_ context.Context, info *s3gw.RequestInfo) { last.Store(info) })
+	client := newS3Client(t, newTestServer(t, gw), testAccessKeyID, testSecretAccessKey)
+	_, err := client.HeadBucket(t.Context(), &s3.HeadBucketInput{Bucket: aws.String("cbbucket")})
+	// attempts 1 and 2 are refused connections, attempt 3 is refused by
+	// the breaker — and that is the error the request ends with
+	expectCode(t, err, "ServiceUnavailable")
+	if br.State() != "open" {
+		t.Errorf("expect open after two refused connections, got %s", br.State())
+	}
+	var open *s3gw.BreakerOpen
+	if info := last.Load(); info == nil || !errors.As(info.Err, &open) {
+		t.Errorf("expect the observer to see the open breaker, got %+v", info)
 	}
 }
 
