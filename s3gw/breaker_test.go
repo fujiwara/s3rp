@@ -59,6 +59,19 @@ func TestConsecutiveFailures(t *testing.T) {
 	expect(t, true, "closed")
 }
 
+func TestBackendName(t *testing.T) {
+	for _, tc := range []struct{ endpoint, region, want string }{
+		{"http://rgw:7480", "us-east-1", "http://rgw:7480"},
+		{"https://user:secret@rgw.example.com/prefix?x=1", "us-east-1", "https://rgw.example.com"},
+		{"", "ap-northeast-1", "aws:ap-northeast-1"},
+	} {
+		b := &store.Backend{Endpoint: tc.endpoint, Region: tc.region}
+		if got := s3gw.BackendName(b); got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.endpoint, got, tc.want)
+		}
+	}
+}
+
 func TestClassifyAttempt(t *testing.T) {
 	resp := func(status int) *smithyhttpResponse {
 		return &smithyhttpResponse{Response: &http.Response{StatusCode: status}}
@@ -195,8 +208,8 @@ func TestBreakerFailsFast(t *testing.T) {
 	if info == nil || info.Code != "ServiceUnavailable" || !errors.As(info.Err, &open) {
 		t.Fatalf("expect the observer to see the open breaker, got %+v", info)
 	}
-	if open.Endpoint == "" {
-		t.Error("expect the endpoint in the cause")
+	if open.Backend == "" {
+		t.Error("expect the backend named in the cause")
 	}
 
 	// after the cooldown a probe goes through; the backend has recovered

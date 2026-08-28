@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -44,12 +45,28 @@ func (g *Gateway) SetBreaker(f func(b *store.Backend) Breaker) { g.breaker = f }
 
 // BreakerOpen is the cause behind a ServiceUnavailable the gateway answered
 // without calling the backend: its breaker was open. Observer-only; the
-// endpoint never reaches the client.
+// backend never reaches the client.
 type BreakerOpen struct {
-	Endpoint string `json:"endpoint"`
+	// Backend names the backend as backendName does: scheme and host of
+	// its endpoint, or "aws:<region>" for Amazon S3 — never a path, query
+	// or userinfo an endpoint URL might carry.
+	Backend string `json:"backend"`
 }
 
-func (e *BreakerOpen) Error() string { return "backend circuit open: " + e.Endpoint }
+// backendName is how a backend is named in an observer cause: enough to
+// tell backends apart, nothing an endpoint URL could smuggle into a log.
+func backendName(b *store.Backend) string {
+	if b.Endpoint == "" {
+		return "aws:" + b.Region
+	}
+	u, err := url.Parse(b.Endpoint)
+	if err != nil || u.Host == "" {
+		return "backend:" + b.Region
+	}
+	return u.Scheme + "://" + u.Host
+}
+
+func (e *BreakerOpen) Error() string { return "backend circuit open: " + e.Backend }
 
 // RetryableError tells the SDK's retryer not to retry a refused attempt:
 // retrying would only ask the same open breaker again.
@@ -69,7 +86,7 @@ func breakerMiddleware(b *store.Backend, br Breaker) func(*middleware.Stack) err
 				if !br.Allow() {
 					return middleware.DeserializeOutput{}, middleware.Metadata{},
 						s3err.New(http.StatusServiceUnavailable, "ServiceUnavailable", "Service is unable to handle request.").
-							WithCause(&BreakerOpen{Endpoint: b.Endpoint})
+							WithCause(&BreakerOpen{Backend: backendName(b)})
 				}
 				out, md, err := next.HandleDeserialize(ctx, in)
 				if ok, report := classifyAttempt(out.RawResponse, err); report {

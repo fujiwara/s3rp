@@ -52,3 +52,5 @@ func SetBreakerClock(b *ConsecutiveFailures, now func() time.Time) { b.now = now
 
 // ClassifyAttempt exposes the breaker's outcome classification.
 var ClassifyAttempt = classifyAttempt
+
+var BackendName = backendName
