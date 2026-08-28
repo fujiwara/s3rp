@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/fujiwara/s3rp"
 	"github.com/google/go-cmp/cmp"
@@ -21,6 +22,9 @@ func TestLoadConfig(t *testing.T) {
 	}
 	if cfg.VirtualHostSuffix != "s3.example.com" {
 		t.Errorf("expect s3.example.com, got %s", cfg.VirtualHostSuffix)
+	}
+	if cb := cfg.CircuitBreaker; cb == nil || cb.Failures != 5 || cb.Cooldown != 30*time.Second {
+		t.Errorf("unexpected circuit breaker %+v", cb)
 	}
 	if len(cfg.Tenants) != 2 {
 		t.Fatalf("expect 2 tenants, got %d", len(cfg.Tenants))
@@ -66,6 +70,18 @@ var validateTestCases = []struct {
 		name:   "no tenants",
 		yaml:   `listen: ":8080"`,
 		errStr: "no tenants",
+	},
+	{
+		name: "circuit breaker without failures",
+		yaml: `
+circuit_breaker: {cooldown: 10s}
+tenants:
+  - name: foo
+    users: [{name: user1, keys: [{access_key_id: k1, secret_access_key: s}]}]
+    buckets:
+      - name: bucket1
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}`,
+		errStr: "circuit_breaker.failures",
 	},
 	{
 		name: "duplicate tenant",

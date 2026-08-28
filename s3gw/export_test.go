@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/sigv4"
@@ -45,3 +46,11 @@ func (g *Gateway) BackendClientFor(ctx context.Context, b *store.Backend) (Backe
 }
 
 func (g *Gateway) ClientCacheLen() int { return g.clients.Len() }
+
+// SetBreakerClock replaces the bundled breaker's clock.
+func SetBreakerClock(b *ConsecutiveFailures, now func() time.Time) { b.now = now }
+
+// ClassifyAttempt exposes the breaker's outcome classification.
+var ClassifyAttempt = classifyAttempt
+
+var BackendName = backendName

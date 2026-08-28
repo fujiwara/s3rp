@@ -65,6 +65,9 @@ A tenant owns one or more buckets and users. Bucket names (`[a-z0-9-]`, 3–63 c
 ```yaml
 listen: ":8080"
 virtual_host_suffix: s3.example.com  # optional: also serve photos.s3.example.com (see Client usage)
+circuit_breaker:                     # optional: fail fast toward a backend that keeps failing
+  failures: 5                        #   consecutive failed attempts that open it (size above the SDK's 3 retries)
+  cooldown: 30s                      #   then one probe per cooldown until one succeeds
 tenants:
   - name: acme                       # tenant identifier
     users:
