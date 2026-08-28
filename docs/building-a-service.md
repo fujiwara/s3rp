@@ -595,6 +595,23 @@ The gateway's outbound side: `SetClientOptions` for tuning the clients it builds
   })
   ```
 - One backend requirement that is not a client option: **disable Nagle on the backend's frontend** — for Ceph RGW, `tcp_nodelay=1` in `rgw_frontends` (`rgw_frontend_extra_args` under cephadm). RGW's beast frontend leaves Nagle on by default and writes response headers and body separately, so any response body smaller than one MSS stalls ~40ms against the gateway's delayed ACK before its first byte is sent. The reach depends on the MSS: ~1.4KB bodies on a standard 1500 MTU, but **~9KB with jumbo frames** — on a datacenter network that is every small-object GET, at +40ms each (measured: 16KiB GET 43ms → 1.1ms once set). Go-based backends (versitygw) and AWS S3 are unaffected, as is the gateway's own front side — Go's HTTP server sets TCP_NODELAY on accepted connections.
+- **Fault isolation is a circuit breaker per backend client, `SetBreaker`.** When a backend is down, every request for every bucket on it otherwise pays the dial or read timeout before failing, and the SDK's retries after it (bounded by its retry token bucket, but the *first* attempt is not) — enough parked handlers and the process is as down as the backend. The hook picks a `Breaker` (`Allow() bool`, `Report(ok bool)`) per client the gateway builds — once per backend identity, the client-cache key — and the gateway wraps every attempt the SDK makes, retries included: `Allow` before the network, `Report` after, with `ok` = the backend answered anything below 500. A 404 or 403 proves the backend is up; a 5xx, a transport failure or a timeout does not; a request the client abandoned (`context.Canceled`) is not reported at all, since it says nothing about the backend. A refused attempt costs serialization and signing (microseconds) and returns `503 ServiceUnavailable` to the client with a `*s3gw.BreakerOpen` cause for the observer (`errors.As(info.Err, &open)`; the endpoint is in the cause, never in the response). The SDK does not retry a refusal. Nothing is added to `Op`: which backend a bucket is on is your store's knowledge, and an Interceptor that needs to know can `errors.As` the error `next()` returns.
+
+  `NewConsecutiveFailures(n, cooldown)` is the bundled breaker: open after `n` consecutive failures, then one probe per `cooldown` — a successful probe closes it, a failed one re-opens it, and an unreported probe (the client gave up) is simply followed by the next one a cooldown later, so it cannot wedge. `State()` is the metric to export. Size `n` above the SDK's retry attempts (3 by default) or a single request's retries open it. A rebuilt client (cache eviction) asks the hook again, so returning a fresh breaker means per-client state; return a shared one to aggregate — per endpoint across credentials, say, when several tenants' backend users share one RGW:
+
+  ```go
+  // per client: each backend identity trips on its own
+  gw.SetBreaker(func(*store.Backend) s3gw.Breaker {
+  	return s3gw.NewConsecutiveFailures(5, 30*time.Second)
+  })
+
+  // per endpoint: every credential set on the same RGW shares one breaker
+  var byEndpoint sync.Map
+  gw.SetBreaker(func(b *store.Backend) s3gw.Breaker {
+  	br, _ := byEndpoint.LoadOrStore(b.Endpoint, s3gw.NewConsecutiveFailures(5, 30*time.Second))
+  	return br.(s3gw.Breaker)
+  })
+  ```
 - What the gateway does cache is derived from definitions, never a definition itself, and is bounded: backend **clients** (one per distinct endpoint/credentials, LRU, default 128 — `SetClientCacheSize`) and one SigV4 **signer** per access key (default 512 slots — `SetSignerCacheSize`). Size them to the number of distinct backends and of access keys active at once; an evicted entry is rebuilt on its next request, so undersizing costs latency, not correctness.
 - Whether they *are* sized right is answerable: `ClientCacheStats` / `SignerCacheStats` return a `CacheStats` snapshot — `Hits`, `Misses`, `Evictions` are monotonic counters, `Len` and `Capacity` the current fill and bound. The gateway keeps no history and never logs them; expose them from your metrics endpoint and let the collector derive rates. The natural shape is a set of `*Func` collectors read at scrape time — no goroutine, no sampling interval of your own, and the counters are atomics so reading them costs nothing on the request path:
 
@@ -669,11 +686,13 @@ The gateway's outbound side: `SetClientOptions` for tuning the clients it builds
 - Instrument the backend `HTTPClient` (e.g. an otelhttp transport) for per-backend latency and retry metrics; the hooks cannot see them.
 - Set `tcp_nodelay=1` on a Ceph RGW backend's frontend; without it small-object GETs stall ~40ms per request.
 - Size the caches to what is active at once and poll the stats to verify.
+- Guard backends with `SetBreaker` and size `failures` above the SDK's retry attempts; export the bundled breaker's `State()`.
 
 **Don't**
 
 - Don't override the gateway's own client settings casually — the unsigned-payload and checksum settings are load-bearing for non-AWS backends.
 - Don't change client options at runtime and expect existing clients to pick them up; they keep what they were built with.
+- Don't build a breaker in an Interceptor: it sees one error per request, not per attempt, and does not know the backend.
 
 ## The other packages
 

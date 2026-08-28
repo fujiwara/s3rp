@@ -34,6 +34,11 @@ func NewWithStore(_ context.Context, cfg *Config, st store.Store) (*S3RP, error)
 	if cfg.VirtualHostSuffix != "" {
 		gw.SetVirtualHostSuffix(cfg.VirtualHostSuffix)
 	}
+	if cb := cfg.CircuitBreaker; cb != nil {
+		gw.SetBreaker(func(*store.Backend) s3gw.Breaker {
+			return s3gw.NewConsecutiveFailures(cb.Failures, cb.Cooldown)
+		})
+	}
 	return &S3RP{Gateway: gw, cfg: cfg, store: st}, nil
 }
 

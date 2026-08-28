@@ -57,6 +57,8 @@ GetBucketLocation and HeadBucket (the `x-amz-bucket-region` header) report the g
 
 Wherever a response exposes an `Owner` or `Initiator` — object and version listings, multipart listings, ACLs, ListBuckets — it is the bucket-owning tenant (which differs from the requester's on a [cross-tenant request](#cross-tenant-access)), never the backend account the proxy uses.
 
+A backend the gateway has stopped calling — its circuit breaker is open after repeated failures, when the service enables one (`circuit_breaker` in the bundled config, `SetBreaker` when embedding) — answers `503 ServiceUnavailable` immediately instead of waiting on the backend; clients treat it like any throttling response and retry later.
+
 ListBuckets answers from the store without calling any backend: the bucket names are the front names, and each `CreationDate` is the store's `created_at` for the bucket (the Unix epoch when the store does not track one).
 
 The `versionId` query parameter is passed through on GetObject, HeadObject, DeleteObject, GetObjectAcl and the object tagging operations. GetObject and HeadObject also accept `partNumber` to read a single part of a multipart object, returning `x-amz-mp-parts-count`. Versioning requires a backend that supports it. The versioning **state** is bucket configuration: PutBucketVersioning is not proxied (see [Limitations](#limitations)), so it is set on the backend bucket by whoever created it; GetBucketVersioning reports it.

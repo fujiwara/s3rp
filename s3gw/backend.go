@@ -69,7 +69,7 @@ type BackendClient interface {
 	PutObjectLegalHold(ctx context.Context, in *s3.PutObjectLegalHoldInput, optFns ...func(*s3.Options)) (*s3.PutObjectLegalHoldOutput, error)
 }
 
-func newBackendClient(ctx context.Context, b *store.Backend, clientOptions func(*store.Backend) []func(*s3.Options)) (BackendClient, error) {
+func newBackendClient(ctx context.Context, b *store.Backend, clientOptions func(*store.Backend) []func(*s3.Options), breaker func(*store.Backend) Breaker) (BackendClient, error) {
 	optFns := []func(*awsconfig.LoadOptions) error{
 		awsconfig.WithRegion(b.Region),
 	}
@@ -85,6 +85,10 @@ func newBackendClient(ctx context.Context, b *store.Backend, clientOptions func(
 	var extra []func(*s3.Options)
 	if clientOptions != nil {
 		extra = clientOptions(b)
+	}
+	var br Breaker
+	if breaker != nil {
+		br = breaker(b)
 	}
 	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
 		if b.Endpoint != "" {
@@ -102,6 +106,10 @@ func newBackendClient(ctx context.Context, b *store.Backend, clientOptions func(
 		// equivalent single comma-joined header (the same canonical form)
 		// keeps both RGW and AWS verifying.
 		o.APIOptions = append(o.APIOptions, mergeRepeatedHeadersMiddleware)
+		// fail fast toward a backend its breaker has opened; see SetBreaker
+		if br != nil {
+			o.APIOptions = append(o.APIOptions, breakerMiddleware(b, br))
+		}
 		// default CRC32 trailer checksums re-introduce aws-chunked
 		// encoding, which some S3-compatible backends reject
 		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired

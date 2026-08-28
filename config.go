@@ -31,8 +31,29 @@ type Config struct {
 	// VirtualHostSuffix enables virtual-hosted-style addressing under this
 	// host name ("s3.example.com": bucket "photos" is photos.s3.example.com)
 	// alongside the path style; empty = path style only.
-	VirtualHostSuffix string          `yaml:"virtual_host_suffix,omitempty" json:"virtual_host_suffix,omitempty"`
-	Tenants           []*TenantConfig `yaml:"tenants,omitempty" json:"tenants,omitempty"`
+	VirtualHostSuffix string `yaml:"virtual_host_suffix,omitempty" json:"virtual_host_suffix,omitempty"`
+	// CircuitBreaker, when set, guards every backend with a breaker that
+	// opens after Failures consecutive failed attempts and probes once per
+	// Cooldown after that; requests to an open backend are refused with
+	// ServiceUnavailable instead of waiting on it.
+	CircuitBreaker *CircuitBreakerConfig `yaml:"circuit_breaker,omitempty" json:"circuit_breaker,omitempty"`
+	Tenants        []*TenantConfig       `yaml:"tenants,omitempty" json:"tenants,omitempty"`
+}
+
+// CircuitBreakerConfig sizes the per-backend breaker (see s3gw.NewConsecutiveFailures).
+type CircuitBreakerConfig struct {
+	Failures int           `yaml:"failures" json:"failures"`
+	Cooldown time.Duration `yaml:"cooldown" json:"cooldown"`
+}
+
+func (c *CircuitBreakerConfig) validate() error {
+	if c.Failures < 1 {
+		return fmt.Errorf("circuit_breaker.failures must be at least 1")
+	}
+	if c.Cooldown <= 0 {
+		return fmt.Errorf("circuit_breaker.cooldown must be positive")
+	}
+	return nil
 }
 
 // TenantConfig defines a tenant: its users and the buckets it owns.
@@ -98,6 +119,11 @@ func (c *Config) SetDefaults() {
 func (c *Config) Validate() error {
 	if len(c.Tenants) == 0 {
 		return fmt.Errorf("no tenants defined")
+	}
+	if c.CircuitBreaker != nil {
+		if err := c.CircuitBreaker.validate(); err != nil {
+			return err
+		}
 	}
 	tenantNames := make(map[string]bool, len(c.Tenants))
 	// bucket names and access key ids must be unique across all tenants:

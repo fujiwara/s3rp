@@ -57,6 +57,7 @@ type Gateway struct {
 
 	newClient     func(ctx context.Context, b *store.Backend) (BackendClient, error)
 	clientOptions func(b *store.Backend) []func(*s3.Options)
+	breaker       func(b *store.Backend) Breaker
 	clients       *lru.Cache[clientCacheKey, BackendClient]
 
 	// client cache counters; the capacity is stored here because the LRU
@@ -111,7 +112,7 @@ func New(st store.Store) *Gateway {
 		func(clientCacheKey, BackendClient) { g.clientEvictions.Add(1) })
 	g.clientCacheCap.Store(defaultClientCacheSize)
 	g.newClient = func(ctx context.Context, b *store.Backend) (BackendClient, error) {
-		return newBackendClient(ctx, b, g.clientOptions)
+		return newBackendClient(ctx, b, g.clientOptions, g.breaker)
 	}
 	return g
 }
