@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.0.12](https://github.com/fujiwara/s3rp/compare/v0.0.11...v0.0.12) - 2026-08-28
+
+- Let a service choose the request id by @fujiwara in https://github.com/fujiwara/s3rp/pull/123
+- Explain every AccessDenied to the observer by @fujiwara in https://github.com/fujiwara/s3rp/pull/126
+- Document how to expose and read the cache stats by @fujiwara in https://github.com/fujiwara/s3rp/pull/125
+
 ## [v0.0.11](https://github.com/fujiwara/s3rp/compare/v0.0.10...v0.0.11) - 2026-08-27
 
 - Add virtual-hosted-style addressing alongside path style by @fujiwara in https://github.com/fujiwara/s3rp/pull/121
