@@ -580,11 +580,18 @@ func (g *Gateway) deleteObjects(c *opCtx) error {
 	for _, o := range req.Objects {
 		if checkPerObject {
 			resource := rt.cfg.Name + "/" + o.Key
-			if delAuth.denies(resource) || (bypass && bypassAuth.denies(resource)) {
+			auth, denied := delAuth, delAuth.denies(resource)
+			if !denied && bypass && bypassAuth.denies(resource) {
+				auth, denied = bypassAuth, true
+			}
+			if denied {
 				s3e := s3err.AccessDenied()
 				result.Errors = append(result.Errors, s3xml.DeleteError{
 					Key: o.Key, VersionID: o.VersionID, Code: s3e.Code, Message: s3e.Message,
 				})
+				// the request itself succeeds, so the observer learns of
+				// the refusals through the op, one entry per statement
+				c.op.addDenial(auth.denyReason(resource))
 				continue
 			}
 		}

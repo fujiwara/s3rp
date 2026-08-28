@@ -69,6 +69,14 @@ type Op struct {
 	BytesIn  int64 `json:"bytes_in"`
 	BytesOut int64 `json:"bytes_out"`
 
+	// Denials summarizes the per-key refusals of an operation that
+	// authorizes per object (DeleteObjects) and therefore succeeds as a
+	// whole: one entry per deciding statement with the number of keys it
+	// refused. Nil when every key went through. Set by the time next
+	// returns, like Response. A refusal of the whole request is not here —
+	// it is the *DenyReason cause of the AccessDenied the observer gets.
+	Denials []Denial `json:"denials,omitempty"`
+
 	// BucketMetadata and KeyMetadata carry the store.Bucket.Metadata and
 	// store.Key.Metadata the Store attached to the definitions this request
 	// resolved, so hooks get the data the store already loaded — a quota, a

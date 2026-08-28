@@ -239,6 +239,7 @@ func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	}
 	vr, s3e := g.verifyRequest(r)
 	if s3e != nil {
+		recordPresentedKey(r.Context(), s3e)
 		return s3e
 	}
 	if info := recordOf(r.Context()); info != nil {
@@ -310,7 +311,7 @@ func (g *Gateway) resolveBucket(ctx context.Context, vr *verifiedRequest, bucket
 		return nil, s3err.Internal(err, "bucket lookup failed")
 	}
 	if b.Policy == nil || !b.Policy.MentionsPrincipal(vr.principal()) {
-		return nil, s3err.AccessDenied()
+		return nil, s3err.AccessDenied().WithCause(visibilityReason(vr.principal(), bucket))
 	}
 	return b, nil
 }

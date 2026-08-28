@@ -184,9 +184,9 @@ func lookupSecret(r *http.Request, lookup SecretLookup, accessKeyID, sessionToke
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrUnknownKey):
-			return Credential{}, s3err.InvalidAccessKeyID().WithCause(err)
+			return Credential{}, s3err.InvalidAccessKeyID().WithCause(&AuthFailure{Reason: ReasonUnknownKey, AccessKeyID: accessKeyID, err: err})
 		case errors.Is(err, ErrInvalidToken):
-			return Credential{}, invalidTokenError().WithCause(err)
+			return Credential{}, invalidTokenError().WithCause(&AuthFailure{Reason: ReasonInvalidToken, AccessKeyID: accessKeyID, err: err})
 		}
 		return Credential{}, s3err.Internal(err, "key lookup failed")
 	}
@@ -201,7 +201,7 @@ func invalidTokenError() *s3err.Error {
 // validateSessionToken enforces the token rules symmetrically: a temporary
 // credential must present exactly its token, a long-lived one must present
 // none.
-func validateSessionToken(expected, presented string) *s3err.Error {
+func validateSessionToken(akid, expected, presented string) *s3err.Error {
 	if expected == "" && presented == "" {
 		return nil
 	}
@@ -215,7 +215,13 @@ func validateSessionToken(expected, presented string) *s3err.Error {
 	if subtle.ConstantTimeCompare(e[:], p[:]) == 1 {
 		return nil
 	}
-	return invalidTokenError()
+	detail := "presented token does not match the key's"
+	if expected == "" {
+		detail = "token presented for a long-lived key"
+	} else if presented == "" {
+		detail = "temporary credential used without its token"
+	}
+	return invalidTokenError().WithCause(authFailure(ReasonInvalidToken, akid, detail))
 }
 
 // IsStreaming reports whether a payload hash denotes an aws-chunked body,
@@ -276,7 +282,7 @@ func (v *Verifier) Verify(r *http.Request, lookup SecretLookup) (*Verified, *s3e
 	case hasHeaderAuth:
 		return v.verifyHeaderRequest(r, lookup)
 	default:
-		return nil, s3err.AccessDenied()
+		return nil, s3err.AccessDenied().WithCause(authFailure(ReasonNoAuth, "", "no Authorization header and no presigned query"))
 	}
 }
 
@@ -300,7 +306,7 @@ func (v *Verifier) verifyHeaderRequest(r *http.Request, lookup SecretLookup) (*V
 		return nil, s3err.New(http.StatusBadRequest, "AuthorizationHeaderMalformed",
 			fmt.Sprintf("The authorization header is malformed; the region '%s' is wrong; expecting '%s'", auth.Region, v.region))
 	}
-	if s3e := requireSignedAmzHeaders(r.Header, auth.SignedHeaders); s3e != nil {
+	if s3e := requireSignedAmzHeaders(auth.AccessKeyID, r.Header, auth.SignedHeaders); s3e != nil {
 		return nil, s3e
 	}
 	presentedToken := r.Header.Get("X-Amz-Security-Token")
@@ -308,7 +314,7 @@ func (v *Verifier) verifyHeaderRequest(r *http.Request, lookup SecretLookup) (*V
 	if s3e != nil {
 		return nil, s3e
 	}
-	if s3e := validateSessionToken(cred.SessionToken, presentedToken); s3e != nil {
+	if s3e := validateSessionToken(auth.AccessKeyID, cred.SessionToken, presentedToken); s3e != nil {
 		return nil, s3e
 	}
 
@@ -329,7 +335,8 @@ func (v *Verifier) verifyHeaderRequest(r *http.Request, lookup SecretLookup) (*V
 	now := v.now()
 	if d := now.Sub(t); d > maxClockSkew || d < -maxClockSkew {
 		return nil, s3err.New(http.StatusForbidden, "RequestTimeTooSkewed",
-			"The difference between the request time and the current time is too large.")
+			"The difference between the request time and the current time is too large.").
+			WithCause(authFailure(ReasonTimeSkewed, auth.AccessKeyID, fmt.Sprintf("signed at %s, now %s", t.Format(time.RFC3339), now.Format(time.RFC3339))))
 	}
 
 	payloadHash := r.Header.Get(amzContentSha256)
@@ -360,9 +367,9 @@ func (v *Verifier) verifyHeaderRequest(r *http.Request, lookup SecretLookup) (*V
 	if !sigOK || !headersOK {
 		// which side differs is the first thing anyone debugging a mismatch
 		// wants, and it is safe to record: no secret is involved
-		return nil, s3err.SignatureDoesNotMatch().WithCause(fmt.Errorf(
-			"signature mismatch: client signed headers %q, re-signed %q",
-			strings.Join(auth.SignedHeaders, ";"), strings.Join(signed.SignedHeaders, ";")))
+		return nil, s3err.SignatureDoesNotMatch().WithCause(authFailure(ReasonSignatureMismatch, auth.AccessKeyID, fmt.Sprintf(
+			"client signed headers %q, re-signed %q",
+			strings.Join(auth.SignedHeaders, ";"), strings.Join(signed.SignedHeaders, ";"))))
 	}
 	return &Verified{
 		AccessKeyID:     auth.AccessKeyID,
@@ -418,7 +425,7 @@ func (v *Verifier) verifyPresignedRequest(r *http.Request, lookup SecretLookup) 
 	if len(signedHeaders) == 0 || signedHeaders[0] == "" {
 		return nil, queryParamsError("X-Amz-SignedHeaders is required")
 	}
-	if s3e := requireSignedAmzHeaders(r.Header, signedHeaders); s3e != nil {
+	if s3e := requireSignedAmzHeaders(akid, r.Header, signedHeaders); s3e != nil {
 		return nil, s3e
 	}
 	t, err := time.Parse(amzDateFormat, query.Get("X-Amz-Date"))
@@ -437,17 +444,19 @@ func (v *Verifier) verifyPresignedRequest(r *http.Request, lookup SecretLookup) 
 	}
 	now := v.now()
 	if now.After(t.Add(time.Duration(expires) * time.Second)) {
-		return nil, s3err.New(http.StatusForbidden, "AccessDenied", "Request has expired")
+		return nil, s3err.New(http.StatusForbidden, "AccessDenied", "Request has expired").
+			WithCause(authFailure(ReasonExpired, akid, fmt.Sprintf("signed at %s for %ds", t.Format(time.RFC3339), expires)))
 	}
 	if t.After(now.Add(maxClockSkew)) {
-		return nil, s3err.New(http.StatusForbidden, "AccessDenied", "Request is not valid yet")
+		return nil, s3err.New(http.StatusForbidden, "AccessDenied", "Request is not valid yet").
+			WithCause(authFailure(ReasonNotYetValid, akid, fmt.Sprintf("signed at %s, now %s", t.Format(time.RFC3339), now.Format(time.RFC3339))))
 	}
 	presentedToken := query.Get("X-Amz-Security-Token")
 	cred, s3e := lookupSecret(r, lookup, akid, presentedToken)
 	if s3e != nil {
 		return nil, s3e
 	}
-	if s3e := validateSessionToken(cred.SessionToken, presentedToken); s3e != nil {
+	if s3e := validateSessionToken(akid, cred.SessionToken, presentedToken); s3e != nil {
 		return nil, s3e
 	}
 
@@ -486,9 +495,9 @@ func (v *Verifier) verifyPresignedRequest(r *http.Request, lookup SecretLookup) 
 		[]byte(signedQuery.Get("X-Amz-Signature")), []byte(query.Get("X-Amz-Signature"))) == 1
 	headersOK := signedQuery.Get("X-Amz-SignedHeaders") == query.Get("X-Amz-SignedHeaders")
 	if !sigOK || !headersOK {
-		return nil, s3err.SignatureDoesNotMatch().WithCause(fmt.Errorf(
-			"presigned signature mismatch: client signed headers %q, re-signed %q",
-			query.Get("X-Amz-SignedHeaders"), signedQuery.Get("X-Amz-SignedHeaders")))
+		return nil, s3err.SignatureDoesNotMatch().WithCause(authFailure(ReasonSignatureMismatch, akid, fmt.Sprintf(
+			"presigned: client signed headers %q, re-signed %q",
+			query.Get("X-Amz-SignedHeaders"), signedQuery.Get("X-Amz-SignedHeaders"))))
 	}
 	promoted := promoteHoistedQueryParams(r)
 	return &Verified{
@@ -551,7 +560,7 @@ func promoteHoistedQueryParams(r *http.Request) []string {
 // listed sorted so the message is deterministic. Called once per request,
 // before the signature is compared, so an unsigned x-amz-* header never
 // reaches an operation handler.
-func requireSignedAmzHeaders(h http.Header, signedHeaders []string) *s3err.Error {
+func requireSignedAmzHeaders(akid string, h http.Header, signedHeaders []string) *s3err.Error {
 	signed := make(map[string]bool, len(signedHeaders))
 	for _, s := range signedHeaders {
 		signed[strings.ToLower(s)] = true
@@ -568,7 +577,8 @@ func requireSignedAmzHeaders(h http.Header, signedHeaders []string) *s3err.Error
 	}
 	sort.Strings(unsigned)
 	return s3err.New(http.StatusForbidden, "AccessDenied",
-		"There were headers present in the request which were not signed: "+strings.Join(unsigned, ", "))
+		"There were headers present in the request which were not signed: "+strings.Join(unsigned, ", ")).
+		WithCause(authFailure(ReasonUnsignedHeaders, akid, strings.Join(unsigned, ", ")))
 }
 
 // cloneForSigning builds a request containing only the headers the client

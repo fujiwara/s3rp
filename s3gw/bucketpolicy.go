@@ -18,20 +18,28 @@ import (
 // user of another tenant has no access, and only a matching Allow grants
 // it — Deny still wins over Allow, so a matching Deny cuts a cross-tenant
 // grant too.
+//
+// Every refusal carries a *DenyReason as its cause, for the observer only;
+// the allow path builds nothing.
 func (g *Gateway) authorize(vr *verifiedRequest, b *store.Bucket, action, resource string) *s3err.Error {
 	// the user's identity policy gates the action first (default allow all);
 	// then the bucket policy decides by tenant.
-	if !vr.UserPolicy.Allows(action) {
-		return s3err.AccessDenied()
+	if d := vr.UserPolicy.Decide(action); d.Effect != policy.Allow {
+		return s3err.AccessDenied().WithCause(userPolicyReason(vr.principal(), action, d))
 	}
 	if b.Tenant != vr.Tenant {
-		if b.Policy == nil || b.Policy.Evaluate(vr.principal(), action, resource, vr.requestContext()) != policy.Allow {
-			return s3err.AccessDenied()
+		if b.Policy == nil {
+			return s3err.AccessDenied().WithCause(bucketPolicyReason(nil, vr.principal(), action, resource, policy.Decision{Statement: -1}))
+		}
+		if d := b.Policy.Decide(vr.principal(), action, resource, vr.requestContext()); d.Effect != policy.Allow {
+			return s3err.AccessDenied().WithCause(bucketPolicyReason(b.Policy, vr.principal(), action, resource, d))
 		}
 		return nil
 	}
-	if b.Policy != nil && b.Policy.Evaluate(vr.principal(), action, resource, vr.requestContext()) == policy.Deny {
-		return s3err.AccessDenied()
+	if b.Policy != nil {
+		if d := b.Policy.Decide(vr.principal(), action, resource, vr.requestContext()); d.Effect == policy.Deny {
+			return s3err.AccessDenied().WithCause(bucketPolicyReason(b.Policy, vr.principal(), action, resource, d))
+		}
 	}
 	return nil
 }
@@ -48,25 +56,34 @@ type perObjectAuthorizer struct {
 	// resource must additionally match an Allow statement.
 	requireAllow bool
 	allow        policy.AllowEvaluator
+
+	// for explaining a denial (denyReason), never consulted by denies
+	principal, action string
+	policy            *policy.Policy
+	userDecision      policy.Decision // the user policy's verdict on the action
 }
 
 // perObjectAuthorizer builds the authorizer for one action, running the
 // resource-independent checks a single time.
 func (g *Gateway) perObjectAuthorizer(vr *verifiedRequest, b *store.Bucket, action string) perObjectAuthorizer {
-	if !vr.UserPolicy.Allows(action) {
-		return perObjectAuthorizer{denyAll: true}
+	a := perObjectAuthorizer{principal: vr.principal(), action: action, policy: b.Policy}
+	a.userDecision = vr.UserPolicy.Decide(action)
+	if a.userDecision.Effect != policy.Allow {
+		a.denyAll = true
+		return a
 	}
-	a := perObjectAuthorizer{}
 	rc := vr.requestContext()
 	if b.Tenant != vr.Tenant {
+		a.requireAllow = true
 		if b.Policy == nil {
-			return perObjectAuthorizer{denyAll: true}
+			a.denyAll = true
+			return a
 		}
 		a.allow = b.Policy.AllowEvaluatorFor(vr.principal(), action, rc)
 		if a.allow.AlwaysDenies() {
-			return perObjectAuthorizer{denyAll: true}
+			a.denyAll = true
+			return a
 		}
-		a.requireAllow = true
 		a.eval = b.Policy.DenyEvaluatorFor(vr.principal(), action, rc)
 		return a
 	}
@@ -86,6 +103,20 @@ func (a perObjectAuthorizer) denies(resource string) bool {
 	// testing both the Allow and the Deny side: convert the resource once
 	r := []rune(resource)
 	return !a.allow.AllowsRunes(r) || a.eval.DeniesRunes(r)
+}
+
+// denyReason explains why denies(resource) was true. It is a second scan of
+// the Deny patterns, paid only for a denied key, so the per-object path
+// stays a single scan for keys that go through.
+func (a perObjectAuthorizer) denyReason(resource string) *DenyReason {
+	if a.userDecision.Effect != policy.Allow {
+		return userPolicyReason(a.principal, a.action, a.userDecision)
+	}
+	if i := a.eval.DenyingStatement([]rune(resource)); i >= 0 {
+		return denyStatementReason(a.policy, a.principal, a.action, resource, i)
+	}
+	// nothing denied it explicitly, so a cross-tenant baseline did
+	return &DenyReason{Layer: LayerCrossTenant, Statement: -1, Principal: a.principal, Action: a.action, Resource: resource}
 }
 
 // allowsEverything reports that no resource can be denied for this action, so

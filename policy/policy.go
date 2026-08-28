@@ -216,8 +216,17 @@ func (p *Policy) validate() error {
 	if len(p.Statement) > MaxStatements {
 		return fmt.Errorf("policy has %d statements, at most %d are allowed", len(p.Statement), MaxStatements)
 	}
+	sids := make(map[string]int, len(p.Statement))
 	for i, st := range p.Statement {
 		name := statementName(st.Sid, i)
+		// a Sid names a statement in the operator's log; two statements
+		// sharing one could not be told apart there (IAM requires the same)
+		if st.Sid != "" {
+			if j, dup := sids[st.Sid]; dup {
+				return fmt.Errorf("duplicate Sid %q (statement[%d] and statement[%d])", st.Sid, j, i)
+			}
+			sids[st.Sid] = i
+		}
 		if st.Effect != "Allow" && st.Effect != "Deny" {
 			return fmt.Errorf("%s: effect must be Allow or Deny", name)
 		}
@@ -324,13 +333,21 @@ type ActionStatement struct {
 // (Deny takes precedence, unmatched actions are implicitly denied), as in
 // an AWS identity policy.
 func (up *UserPolicy) Allows(action string) bool {
+	return up.Decide(action).Effect == Allow
+}
+
+// Decide is Allows keeping the deciding statement: the Deny that matched,
+// the first Allow that did, or -1 — with the effect Allow for an empty
+// policy (everything allowed) and Deny for an action no statement matched
+// (the implicit deny).
+func (up *UserPolicy) Decide(action string) Decision {
 	if up == nil || len(up.Statements) == 0 {
-		return true
+		return Decision{Effect: Allow, Statement: -1}
 	}
 	up.compileOnce.Do(up.compile)
 	// Convert the action to runes once; every pattern is matched against it.
 	actionRunes := []rune(strings.ToLower(action))
-	allowed := false
+	result := Decision{Effect: Deny, Statement: -1}
 	for i := range up.Statements {
 		st := &up.Statements[i]
 		if !matchAnyRunes(st.actionRunes, actionRunes) {
@@ -340,12 +357,14 @@ func (up *UserPolicy) Allows(action string) bool {
 		// ignored so a malformed effect cannot silently grant access.
 		switch st.Effect {
 		case "Deny":
-			return false
+			return Decision{Effect: Deny, Statement: i}
 		case "Allow":
-			allowed = true
+			if result.Effect != Allow {
+				result = Decision{Effect: Allow, Statement: i}
+			}
 		}
 	}
-	return allowed
+	return result
 }
 
 // compile precomputes the rune form of every action pattern so Allows does
@@ -406,6 +425,37 @@ func MarshalUserPolicy(up *UserPolicy) (string, error) {
 // closed). Deny takes precedence over Allow; None means no statement
 // matched.
 func (p *Policy) Evaluate(principal, action, resource string, rc RequestContext) Effect {
+	return p.Decide(principal, action, resource, rc).Effect
+}
+
+// Decision is the outcome of an evaluation together with the statement
+// that decided it, so a refusal can be explained to an operator.
+type Decision struct {
+	Effect Effect
+	// Statement is the index of the deciding statement — the Deny that
+	// matched, or the first matching Allow — and -1 when none matched
+	// (None, or an implicit deny under a user policy).
+	Statement int
+}
+
+// StatementName names the deciding statement as the log should: by index,
+// with the Sid appended when the policy gives it one (statement[2]
+// "NoDeleteLogs"). The index is always there so a policy from before Sid
+// uniqueness was enforced still names one statement. Empty when no
+// statement decided.
+func (d Decision) StatementName(p *Policy) string {
+	if d.Statement < 0 || p == nil || d.Statement >= len(p.Statement) {
+		return ""
+	}
+	name := fmt.Sprintf("statement[%d]", d.Statement)
+	if sid := p.Statement[d.Statement].Sid; sid != "" {
+		name += fmt.Sprintf(" %q", sid)
+	}
+	return name
+}
+
+// Decide is Evaluate keeping the deciding statement.
+func (p *Policy) Decide(principal, action, resource string, rc RequestContext) Decision {
 	// AWS treats the Action element as case-insensitive; comparing it
 	// case-sensitively would let a mis-cased Deny silently fail open. The
 	// Resource is an object key and stays case-sensitive.
@@ -418,7 +468,7 @@ func (p *Policy) Evaluate(principal, action, resource string, rc RequestContext)
 	// and pattern, this is the dominant cost for a large policy or a long key.
 	actionRunes := []rune(strings.ToLower(action))
 	resourceRunes := []rune(resource)
-	result := None
+	result := Decision{Effect: None, Statement: -1}
 	for i := range p.Statement {
 		st := &p.Statement[i]
 		if !st.matchPrincipal(principal) {
@@ -434,9 +484,11 @@ func (p *Policy) Evaluate(principal, action, resource string, rc RequestContext)
 			continue
 		}
 		if st.Effect == "Deny" {
-			return Deny
+			return Decision{Effect: Deny, Statement: i}
 		}
-		result = Allow
+		if result.Effect == None {
+			result = Decision{Effect: Allow, Statement: i}
+		}
 	}
 	return result
 }
@@ -450,6 +502,9 @@ type DenyEvaluator struct {
 	// resource patterns of every Deny statement whose principal and action
 	// matched; a resource is denied iff it matches any of them.
 	denyResources [][]rune
+	// denyStatements[i] is the index of the statement denyResources[i]
+	// came from, for attributing a denial.
+	denyStatements []int
 }
 
 // DenyEvaluatorFor pre-matches principal and action and returns an evaluator
@@ -467,21 +522,33 @@ func (p *Policy) DenyEvaluatorFor(principal, action string, rc RequestContext) D
 	rc.SourceIP = rc.SourceIP.Unmap()
 	actionRunes := []rune(strings.ToLower(action))
 	var e DenyEvaluator
+	// matched is scanned twice: once to size the slices exactly (the
+	// evaluator is built per request, so its allocations count), once to
+	// fill them
+	var n int
+	matched := func(st *Statement) bool {
+		return st.Effect == "Deny" && st.matchPrincipal(principal) && st.matchCondition(rc) &&
+			matchAnyRunes(st.actionRunes, actionRunes)
+	}
+	for i := range p.Statement {
+		if matched(&p.Statement[i]) {
+			n += len(p.Statement[i].resourceRunes)
+		}
+	}
+	if n == 0 {
+		return e
+	}
+	e.denyResources = make([][]rune, 0, n)
+	e.denyStatements = make([]int, 0, n)
 	for i := range p.Statement {
 		st := &p.Statement[i]
-		if st.Effect != "Deny" {
-			continue
-		}
-		if !st.matchPrincipal(principal) {
-			continue
-		}
-		if !st.matchCondition(rc) {
-			continue
-		}
-		if !matchAnyRunes(st.actionRunes, actionRunes) {
+		if !matched(st) {
 			continue
 		}
 		e.denyResources = append(e.denyResources, st.resourceRunes...)
+		for range st.resourceRunes {
+			e.denyStatements = append(e.denyStatements, i)
+		}
 	}
 	return e
 }
@@ -588,6 +655,17 @@ func (e DenyEvaluator) DeniesRunes(resource []rune) bool {
 	return matchAnyRunes(e.denyResources, resource)
 }
 
+// DenyingStatement is the index of the Deny statement whose resource
+// pattern matches, -1 when none does. It is the explanation for a resource
+// DeniesRunes reported denied, resolved separately so the per-object loop
+// pays for it only on a denial.
+func (e DenyEvaluator) DenyingStatement(resource []rune) int {
+	if i := matchIndexRunes(e.denyResources, resource); i >= 0 {
+		return e.denyStatements[i]
+	}
+	return -1
+}
+
 // compile precomputes the rune form of every action and resource pattern so
 // Evaluate does not reconvert them on each request. Action patterns are
 // lower-cased for AWS-style case-insensitive matching.
@@ -648,12 +726,18 @@ func matchAnyPrincipal(entries []string, principal string) bool {
 }
 
 func matchAnyRunes(patterns [][]rune, value []rune) bool {
-	for _, p := range patterns {
+	return matchIndexRunes(patterns, value) >= 0
+}
+
+// matchIndexRunes returns the index of the first pattern matching value,
+// -1 when none does.
+func matchIndexRunes(patterns [][]rune, value []rune) int {
+	for i, p := range patterns {
 		if matchRunes(p, value) {
-			return true
+			return i
 		}
 	}
-	return false
+	return -1
 }
 
 func patternRunes(patterns []string) [][]rune {
