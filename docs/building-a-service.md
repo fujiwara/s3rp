@@ -29,6 +29,7 @@ package main
 
 import (
 	"context"
+	"slices"
 	"log"
 	"log/slog"
 	"net/http"
@@ -84,7 +85,7 @@ type quota struct{}
 
 func (quota) Authorize(ctx context.Context, op *s3gw.Op) error {
 	plan, _ := op.BucketMetadata.(*tenantPlan) // attached by GetBucket above
-	if op.Action == "s3:PutObject" && plan != nil && usedBytes(op.Tenant) > plan.quotaBytes {
+	if slices.Contains(op.Actions, "s3:PutObject") && plan != nil && usedBytes(op.Tenant) > plan.quotaBytes {
 		// any error refuses the request; an *s3err.Error chooses what the
 		// client is told, and the backend is never reached
 		return s3err.New(http.StatusForbidden, "QuotaExceeded", "Quota exceeded")
@@ -358,8 +359,8 @@ Your `store.Store` implementation — and the control plane's write path that fe
   })
   ```
 - A client that retries sends a **new request**, which is verified, authorized and metered on its own. Whether that should count toward a quota or an invoice is the application's decision — and on a write it may have left something behind: [Retries and write side effects](#retries-and-write-side-effects).
-- `Op.Operation` is the S3 API operation name (`PutObject`, `CopyObject`, `DeleteObjects`, ...) and is the field to aggregate on: `Op.Action` is the `s3:*` action that was *authorized*, which several operations share (`GetObject` and `HeadObject`, every multipart write) and which is empty where authorization happens per object (`DeleteObjects`). `Operation` is also set for the operations the gateway refuses outright — `DeleteBucket`, `PutBucketPolicy`, `PutBucketAcl` and the other `NotImplemented` / `AccessControlListNotSupported` responses — so a service can count which unsupported operations its users attempt. A request matching no known operation at all is recorded as `s3gw.OpUnknown` (`"Unknown"`).
-- `Op.Actions` lists every action the request was authorized for before the hooks ran, `Action` first. A header can add one, as on Amazon S3: `x-amz-tagging` on an upload needs `s3:PutObjectTagging`, the `x-amz-object-lock-*` headers `s3:PutObjectRetention` / `s3:PutObjectLegalHold`, `x-amz-bypass-governance-retention` `s3:BypassGovernanceRetention`, and a copy reads its source under `s3:GetObject`. This is the seam for refusing what a header does — tags, a retention period — without reading headers: what S3 models as a permission stays a permission, so it is either a policy `Deny` on the action or an `Authorizer` matching it here, and the values never appear on `Op.Request` (which is why `Request` does not grow a field per header). Empty where `Action` is.
+- `Op.Operation` is the S3 API operation name (`PutObject`, `CopyObject`, `DeleteObjects`, ...) and is the field to aggregate on: the `s3:*` actions in `Op.Actions` are what was *authorized*, which several operations share (`GetObject` and `HeadObject`, every multipart write) and which is empty where authorization happens per object (`DeleteObjects`). `Operation` is also set for the operations the gateway refuses outright — `DeleteBucket`, `PutBucketPolicy`, `PutBucketAcl` and the other `NotImplemented` / `AccessControlListNotSupported` responses — so a service can count which unsupported operations its users attempt. A request matching no known operation at all is recorded as `s3gw.OpUnknown` (`"Unknown"`).
+- `Op.Actions` lists every action the request was authorized for before the hooks ran, the operation's own first. A header can add one, as on Amazon S3: `x-amz-tagging` on an upload needs `s3:PutObjectTagging`, the `x-amz-object-lock-*` headers `s3:PutObjectRetention` / `s3:PutObjectLegalHold`, `x-amz-bypass-governance-retention` `s3:BypassGovernanceRetention`, and a copy reads its source under `s3:GetObject`. This is the seam for refusing what a header does — tags, a retention period — without reading headers: what S3 models as a permission stays a permission, so it is either a policy `Deny` on the action or an `Authorizer` matching it here, and the values never appear on `Op.Request` (which is why `Request` does not grow a field per header). Match with `slices.Contains`, never by position beyond the first.
 
   ```go
   func (p plan) Authorize(_ context.Context, op *s3gw.Op) error {

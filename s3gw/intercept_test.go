@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -53,7 +54,7 @@ func TestAuthorizerCanRefuse(t *testing.T) {
 		t.Fatalf("expect one authorization, got %d", len(block.seen))
 	}
 	op := block.seen[0]
-	if op.Action != "s3:GetObject" || op.Bucket != "testbucket" || op.Key != "a.txt" {
+	if !slices.Equal(op.Actions, []string{"s3:GetObject"}) || op.Bucket != "testbucket" || op.Key != "a.txt" {
 		t.Errorf("unexpected op %+v", op)
 	}
 	if op.Tenant == "" || op.User == "" {
@@ -100,13 +101,13 @@ func TestInterceptorMeters(t *testing.T) {
 		t.Fatalf("expect two operations recorded, got %d", len(recorded))
 	}
 	get, put := recorded[0], recorded[1]
-	if get.Method != "GET" || get.Action != "s3:GetObject" {
+	if get.Method != "GET" || !slices.Equal(get.Actions, []string{"s3:GetObject"}) {
 		t.Errorf("unexpected get op %+v", get)
 	}
 	if get.BytesOut != int64(len(body)) {
 		t.Errorf("expect %d bytes served, got %d", len(body), get.BytesOut)
 	}
-	if put.Action != "s3:PutObject" || put.BytesIn == 0 {
+	if !slices.Equal(put.Actions, []string{"s3:PutObject"}) || put.BytesIn == 0 {
 		t.Errorf("expect the uploaded bytes to be counted, got %+v", put)
 	}
 }

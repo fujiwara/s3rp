@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -190,7 +191,7 @@ func TestObserverIdentityAndOp(t *testing.T) {
 		if got.Op == nil {
 			t.Fatal("expect the operation")
 		}
-		if got.Op.Action != "s3:GetObject" || got.Op.Bucket != "testbucket" || got.Op.Key != "a.txt" {
+		if !slices.Equal(got.Op.Actions, []string{"s3:GetObject"}) || got.Op.Bucket != "testbucket" || got.Op.Key != "a.txt" {
 			t.Errorf("unexpected operation %+v", got.Op)
 		}
 	})

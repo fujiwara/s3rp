@@ -39,20 +39,17 @@ type Op struct {
 	// operations its users attempt; a request matching no known operation
 	// is OpUnknown.
 	Operation string `json:"operation"`
-	// Action is the s3:* action authorized for this operation. It is empty
-	// for the few operations that authorize themselves per object, such as
-	// DeleteObjects.
-	Action string `json:"action,omitempty"`
-	// Actions lists every action the request was authorized for before the
-	// hooks ran, Action first. A header adds one, as on Amazon S3:
-	// x-amz-tagging on an upload needs s3:PutObjectTagging, the
+	// Actions lists the s3:* actions the request was authorized for before
+	// the hooks ran, the operation's own first. A header adds one, as on
+	// Amazon S3: x-amz-tagging on an upload needs s3:PutObjectTagging, the
 	// x-amz-object-lock-* headers s3:PutObjectRetention /
 	// s3:PutObjectLegalHold, x-amz-bypass-governance-retention
 	// s3:BypassGovernanceRetention; a copy reads its source under
 	// s3:GetObject. This is how a service refuses tags or a lock on an
 	// upload — a policy Deny on the action, or an Authorizer matching it
 	// here — without the values being reported on Request: what S3 models
-	// as a permission stays a permission. Empty where Action is.
+	// as a permission stays a permission. Empty for the few operations that
+	// authorize themselves per object, such as DeleteObjects.
 	Actions []string `json:"actions,omitempty"`
 	Tenant  string   `json:"tenant"`
 	User    string   `json:"user"`

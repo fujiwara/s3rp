@@ -249,7 +249,7 @@ func TestOpActions(t *testing.T) {
 			want: []string{"s3:DeleteObject", "s3:BypassGovernanceRetention"},
 		},
 		{
-			// authorized per object, so nothing is listed — like Action
+			// authorized per object, so nothing is listed
 			name: "delete objects",
 			call: func() error {
 				_, err := client.DeleteObjects(ctx, &s3.DeleteObjectsInput{Bucket: bucket, Delete: &types.Delete{Objects: []types.ObjectIdentifier{{Key: key}}}})
@@ -270,9 +270,6 @@ func TestOpActions(t *testing.T) {
 			op := rec.ops[0]
 			if diff := cmp.Diff(tt.want, op.Actions); diff != "" {
 				t.Errorf("Actions mismatch (-want +got):\n%s", diff)
-			}
-			if len(op.Actions) > 0 && op.Actions[0] != op.Action {
-				t.Errorf("expect Action %q first in Actions %v", op.Action, op.Actions)
 			}
 		})
 	}

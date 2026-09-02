@@ -497,7 +497,6 @@ func (c *opCtx) dispatch(routes []route) error {
 		op := &Op{
 			Method:         c.r.Method,
 			Operation:      name,
-			Action:         rt.action,
 			Actions:        actions,
 			Tenant:         c.vr.Tenant,
 			User:           c.vr.User,

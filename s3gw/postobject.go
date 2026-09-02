@@ -196,7 +196,6 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, t tar
 	op := &Op{
 		Method:         r.Method,
 		Operation:      "PostObject",
-		Action:         "s3:PutObject",
 		Actions:        actions,
 		Tenant:         vr.Tenant,
 		User:           vr.User,
