@@ -71,7 +71,7 @@ Conditional requests are forwarded to the backend: `If-Match` / `If-None-Match` 
 
 ### Object Lock
 
-Object Lock (WORM) is passed through to the backend, which enforces the retention. The per-object retention and legal hold operations are proxied, and the `x-amz-object-lock-*` headers on uploads and `x-amz-bypass-governance-retention` on deletes are forwarded. Bucket policies gain the corresponding actions (`s3:GetObjectRetention`, `s3:PutObjectRetention`, `s3:GetObjectLegalHold`, `s3:PutObjectLegalHold`, `s3:BypassGovernanceRetention`, `s3:GetBucketObjectLockConfiguration`). The bucket-level configuration is readable (GetObjectLockConfiguration) but not writable through the gateway: the default retention is bucket configuration, written where the bucket is created (see [Limitations](#limitations)).
+Object Lock (WORM) is passed through to the backend, which enforces the retention. The per-object retention and legal hold operations are proxied, and the `x-amz-object-lock-*` headers on uploads (PutObject, CopyObject, CreateMultipartUpload) and `x-amz-bypass-governance-retention` on deletes are forwarded — each requiring the corresponding action in addition to the operation's own, as on AWS (see [Actions a header adds](#actions-a-header-adds)). Bucket policies gain the corresponding actions (`s3:GetObjectRetention`, `s3:PutObjectRetention`, `s3:GetObjectLegalHold`, `s3:PutObjectLegalHold`, `s3:BypassGovernanceRetention`, `s3:GetBucketObjectLockConfiguration`). The bucket-level configuration is readable (GetObjectLockConfiguration) but not writable through the gateway: the default retention is bucket configuration, written where the bucket is created (see [Limitations](#limitations)).
 
 Object Lock must be enabled when a bucket is created, and the gateway does not proxy CreateBucket, so the backend bucket must have been created with Object Lock enabled. The exact behavior depends on the backend: Ceph RGW and Amazon S3 support it fully, while versitygw enforces retention but does not honor governance-mode bypass.
 
@@ -202,6 +202,19 @@ Evaluation is IAM-style and independent of the bucket policy's baseline-allow mo
 - **With a policy**, only actions matching an `Allow` are permitted; anything unmatched is an implicit deny. A matching `Deny` takes precedence over any `Allow`. So `Allow [s3:Get*, s3:List*]` limits the user to reads.
 
 A request must pass **both** layers: the user policy must allow the action **and** the bucket policy must not `Deny` it. Either denial returns `403 AccessDenied`. The check sits at the same single authorization chokepoint as bucket policies, so it covers every operation uniformly (including per-object DeleteObjects entries and the source/destination actions of a copy).
+
+#### Actions a header adds
+
+Some request headers require an action beyond the operation's own, exactly as on Amazon S3, so a policy can refuse what the header does without the gateway inspecting values:
+
+| header | on | additional action |
+|---|---|---|
+| `x-amz-tagging` | PutObject, CopyObject, CreateMultipartUpload, POST upload | `s3:PutObjectTagging` |
+| `x-amz-object-lock-mode`, `x-amz-object-lock-retain-until-date` | PutObject, CopyObject, CreateMultipartUpload | `s3:PutObjectRetention` |
+| `x-amz-object-lock-legal-hold` | PutObject, CopyObject, CreateMultipartUpload | `s3:PutObjectLegalHold` |
+| `x-amz-bypass-governance-retention: true` | DeleteObject, DeleteObjects, PutObjectRetention | `s3:BypassGovernanceRetention` |
+
+A user policy of `Allow [s3:*]` + `Deny [s3:PutObjectTagging]` therefore refuses tags everywhere they can be written — the dedicated PutObjectTagging operation and an upload carrying `x-amz-tagging` alike — and a bucket policy `Deny` on `s3:PutObjectRetention` keeps a tenant from locking objects on upload. A copy also needs `s3:GetObject` on its source.
 
 Both bucket and user policies are bounded in size: at most 20 KB per document, 20 statements per policy, 30 actions and 10 resources per statement, 128 bytes per action/resource pattern, 100 principal users per statement, and 50 condition values per operator. Oversized policies are rejected when loaded.
 

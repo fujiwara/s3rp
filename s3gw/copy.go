@@ -65,14 +65,10 @@ func (g *Gateway) resolveCopySource(c *opCtx) (string, *s3err.Error) {
 
 func (g *Gateway) copyObject(c *opCtx) error {
 	w, r, rt, key := c.w, c.r, c.rt, c.key
-	copySource, s3e := g.resolveCopySource(c)
-	if s3e != nil {
-		return s3e
-	}
 	in := &s3.CopyObjectInput{
 		Bucket:     aws.String(rt.cfg.Backend.Bucket),
 		Key:        aws.String(key),
-		CopySource: aws.String(copySource),
+		CopySource: aws.String(c.copySource),
 	}
 	if v := c.signed("x-amz-metadata-directive"); v != "" {
 		in.MetadataDirective = types.MetadataDirective(v)
@@ -86,9 +82,10 @@ func (g *Gateway) copyObject(c *opCtx) error {
 	if v := c.signed("x-amz-tagging-directive"); v != "" {
 		in.TaggingDirective = types.TaggingDirective(v)
 	}
-	if v := c.signed("x-amz-tagging"); v != "" {
+	if v := c.signed(hdrTagging); v != "" {
 		in.Tagging = aws.String(v)
 	}
+	applyObjectLockHeaders(c.hdr, &in.ObjectLockMode, &in.ObjectLockRetainUntilDate, &in.ObjectLockLegalHoldStatus)
 	if md := c.hdr.AmzMeta(); len(md) > 0 {
 		in.Metadata = md
 	}
@@ -145,10 +142,6 @@ func (g *Gateway) copyObject(c *opCtx) error {
 
 func (g *Gateway) uploadPartCopy(c *opCtx) error {
 	w, r, rt, key := c.w, c.r, c.rt, c.key
-	copySource, s3e := g.resolveCopySource(c)
-	if s3e != nil {
-		return s3e
-	}
 	query := r.URL.Query()
 	partNumber, err := strconv.ParseInt(query.Get("partNumber"), 10, 32)
 	if err != nil {
@@ -160,7 +153,7 @@ func (g *Gateway) uploadPartCopy(c *opCtx) error {
 		Key:        aws.String(key),
 		UploadId:   aws.String(query.Get("uploadId")),
 		PartNumber: aws.Int32(int32(partNumber)),
-		CopySource: aws.String(copySource),
+		CopySource: aws.String(c.copySource),
 	}
 	if v := c.signed("x-amz-copy-source-range"); v != "" {
 		in.CopySourceRange = aws.String(v)
