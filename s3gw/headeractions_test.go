@@ -60,7 +60,7 @@ func TestHeaderActions(t *testing.T) {
 	c := clientsFor(t, gw, users)
 	ctx := t.Context()
 
-	bucket, key, body := aws.String("data"), aws.String("k"), strings.NewReader("x")
+	bucket, key := aws.String("data"), aws.String("k")
 	lockMode, until := types.ObjectLockModeGovernance, aws.Time(time.Now().Add(time.Hour).UTC().Truncate(time.Second))
 	tests := []struct {
 		name   string
@@ -70,14 +70,14 @@ func TestHeaderActions(t *testing.T) {
 		{
 			name: "put without tags or lock",
 			call: func(c *s3.Client) error {
-				_, err := c.PutObject(ctx, &s3.PutObjectInput{Bucket: bucket, Key: key, Body: body})
+				_, err := c.PutObject(ctx, &s3.PutObjectInput{Bucket: bucket, Key: key, Body: strings.NewReader("x")})
 				return err
 			},
 		},
 		{
 			name: "put with tags",
 			call: func(c *s3.Client) error {
-				_, err := c.PutObject(ctx, &s3.PutObjectInput{Bucket: bucket, Key: key, Body: body, Tagging: aws.String("k=v")})
+				_, err := c.PutObject(ctx, &s3.PutObjectInput{Bucket: bucket, Key: key, Body: strings.NewReader("x"), Tagging: aws.String("k=v")})
 				return err
 			},
 			denied: map[string]string{"notagger": "s3:PutObjectTagging"},
@@ -85,7 +85,7 @@ func TestHeaderActions(t *testing.T) {
 		{
 			name: "put with retention",
 			call: func(c *s3.Client) error {
-				_, err := c.PutObject(ctx, &s3.PutObjectInput{Bucket: bucket, Key: key, Body: body, ObjectLockMode: lockMode, ObjectLockRetainUntilDate: until})
+				_, err := c.PutObject(ctx, &s3.PutObjectInput{Bucket: bucket, Key: key, Body: strings.NewReader("x"), ObjectLockMode: lockMode, ObjectLockRetainUntilDate: until})
 				return err
 			},
 			denied: map[string]string{"nolocker": "s3:PutObjectRetention"},
@@ -93,7 +93,7 @@ func TestHeaderActions(t *testing.T) {
 		{
 			name: "put with legal hold",
 			call: func(c *s3.Client) error {
-				_, err := c.PutObject(ctx, &s3.PutObjectInput{Bucket: bucket, Key: key, Body: body, ObjectLockLegalHoldStatus: types.ObjectLockLegalHoldStatusOn})
+				_, err := c.PutObject(ctx, &s3.PutObjectInput{Bucket: bucket, Key: key, Body: strings.NewReader("x"), ObjectLockLegalHoldStatus: types.ObjectLockLegalHoldStatusOn})
 				return err
 			},
 			denied: map[string]string{"nolocker": "s3:PutObjectLegalHold"},
