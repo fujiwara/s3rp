@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"time"
 
@@ -327,6 +328,9 @@ type opCtx struct {
 	hdr   signedHeader
 	query url.Values
 	key   string
+	// copySource is the backend copy source of a copy variant, resolved and
+	// authorized by dispatch before the hooks run.
+	copySource string
 	// op is the operation the hooks were given, set by dispatch. Handlers
 	// record the backend's answer on it through setResponse.
 	op *Op
@@ -391,24 +395,54 @@ func (c *opCtx) authorize(action string) *s3err.Error {
 	return c.g.authorize(c.vr, c.rt.cfg, action, resource)
 }
 
+// headerAction is an action a request must additionally be authorized for
+// when it carries a header, as on Amazon S3: writing tags with an upload
+// needs s3:PutObjectTagging, locking the object s3:PutObjectRetention /
+// s3:PutObjectLegalHold, bypassing governance mode
+// s3:BypassGovernanceRetention. What S3 models as a permission stays a
+// permission here — authorized at the same chokepoint and listed on
+// Op.Actions, so a policy Deny or an Authorizer refuses it by name — rather
+// than becoming a value on OpRequest, which carries only what S3 has no
+// action for.
+type headerAction struct {
+	present func(signedHeader) bool
+	action  string
+}
+
+func signedPresent(name string) func(signedHeader) bool {
+	return func(h signedHeader) bool { return h.Signed(name) != "" }
+}
+
+var (
+	bypassActions = []headerAction{{bypassGovernanceRetention, "s3:BypassGovernanceRetention"}}
+	// uploadActions apply to the writes that create an object with its
+	// attributes: PutObject, CopyObject, CreateMultipartUpload.
+	uploadActions = []headerAction{
+		{signedPresent(hdrTagging), "s3:PutObjectTagging"},
+		{signedPresent(hdrObjectLockMode), "s3:PutObjectRetention"},
+		{signedPresent(hdrObjectLockRetainUntil), "s3:PutObjectRetention"},
+		{signedPresent(hdrObjectLockLegalHold), "s3:PutObjectLegalHold"},
+	}
+)
+
 // route selects one operation by a query discriminator and describes the
 // checks to run before its handler. handle is a method value of *Gateway, so
 // the route table reads as a plain "discriminator -> handler" mapping.
 type route struct {
-	match  func(url.Values) bool // selects this route (nil = always, the fallback)
-	params paramSet              // allowed query parameters (nil = skip the check)
-	aclHdr bool                  // reject unsupported canned ACL headers first
-	bypass bool                  // also require s3:BypassGovernanceRetention when the bypass header is set
-	attrs  bool                  // the operation carries the object's own attributes (SSE, storage class, user metadata)
-	name   string                // S3 operation name recorded on Op
-	copy   string                // operation name when x-amz-copy-source is present (PutObject → CopyObject)
-	action string                // s3:* action to authorize ("" = handler authorizes itself)
-	handle func(*Gateway, *opCtx) error
+	match      func(url.Values) bool // selects this route (nil = always, the fallback)
+	params     paramSet              // allowed query parameters (nil = skip the check)
+	aclHdr     bool                  // reject unsupported canned ACL headers first
+	hdrActions []headerAction        // actions a header adds to the authorization
+	attrs      bool                  // the operation carries the object's own attributes (SSE, storage class, user metadata)
+	name       string                // S3 operation name recorded on Op
+	copy       string                // operation name when x-amz-copy-source is present (PutObject → CopyObject)
+	action     string                // s3:* action to authorize ("" = handler authorizes itself)
+	handle     func(*Gateway, *opCtx) error
 }
 
 // dispatch runs the first matching route's checks and handler, in the
-// order: parameter check, canned-ACL header, bypass authorization,
-// action authorization, handler.
+// order: parameter check, canned-ACL header, action authorization, header
+// actions, copy source, handler.
 func (c *opCtx) dispatch(routes []route) error {
 	// SSE-C would be silently dropped by every operation, which is a
 	// security expectation violated without a word — refuse it up front.
@@ -434,24 +468,37 @@ func (c *opCtx) dispatch(routes []route) error {
 				return err
 			}
 		}
-		if rt.bypass && bypassGovernanceRetention(c.hdr) {
-			if err := c.authorize("s3:BypassGovernanceRetention"); err != nil {
-				return err
-			}
-		}
+		var actions []string
 		if rt.action != "" {
 			if err := c.authorize(rt.action); err != nil {
 				return err
 			}
+			actions = append(actions, rt.action)
+		}
+		for _, ha := range rt.hdrActions {
+			if !ha.present(c.hdr) || slices.Contains(actions, ha.action) {
+				continue
+			}
+			if err := c.authorize(ha.action); err != nil {
+				return err
+			}
+			actions = append(actions, ha.action)
 		}
 		name := rt.name
 		if rt.copy != "" && c.signed(hdrCopySource) != "" {
 			name = rt.copy
+			src, s3e := c.g.resolveCopySource(c)
+			if s3e != nil {
+				return s3e
+			}
+			c.copySource = src
+			actions = append(actions, "s3:GetObject")
 		}
 		op := &Op{
 			Method:         c.r.Method,
 			Operation:      name,
 			Action:         rt.action,
+			Actions:        actions,
 			Tenant:         c.vr.Tenant,
 			User:           c.vr.User,
 			Bucket:         c.rt.cfg.Name,
@@ -518,14 +565,14 @@ func rejectACL(*Gateway, *opCtx) error { return errACLNotSupported() }
 // putObjectOrCopy and uploadPartOrCopy pick the copy variant when the
 // request carries an x-amz-copy-source header.
 func (g *Gateway) putObjectOrCopy(c *opCtx) error {
-	if c.signed(hdrCopySource) != "" {
+	if c.copySource != "" {
 		return g.copyObject(c)
 	}
 	return g.putObject(c)
 }
 
 func (g *Gateway) uploadPartOrCopy(c *opCtx) error {
-	if c.signed(hdrCopySource) != "" {
+	if c.copySource != "" {
 		return g.uploadPartCopy(c)
 	}
 	return g.uploadPart(c)
@@ -601,18 +648,18 @@ var objectRoutes = map[string][]route{
 	http.MethodPut: {
 		{match: has(subTagging), params: taggingParams, action: "s3:PutObjectTagging", name: "PutObjectTagging", handle: (*Gateway).putObjectTagging},
 		{match: has(subACL), name: "PutObjectAcl", handle: rejectACL},
-		{match: has(subRetention), params: retentionParams, bypass: true, action: "s3:PutObjectRetention", name: "PutObjectRetention", handle: (*Gateway).putObjectRetention},
+		{match: has(subRetention), params: retentionParams, hdrActions: bypassActions, action: "s3:PutObjectRetention", name: "PutObjectRetention", handle: (*Gateway).putObjectRetention},
 		{match: has(subLegalHold), params: legalHoldParams, action: "s3:PutObjectLegalHold", name: "PutObjectLegalHold", handle: (*Gateway).putObjectLegalHold},
 		{match: hasUploadPart, params: uploadPartParams, name: "UploadPart", copy: "UploadPartCopy", action: "s3:PutObject", handle: (*Gateway).uploadPartOrCopy},
-		{params: noParams, aclHdr: true, attrs: true, name: "PutObject", copy: "CopyObject", action: "s3:PutObject", handle: (*Gateway).putObjectOrCopy},
+		{params: noParams, aclHdr: true, hdrActions: uploadActions, attrs: true, name: "PutObject", copy: "CopyObject", action: "s3:PutObject", handle: (*Gateway).putObjectOrCopy},
 	},
 	http.MethodDelete: {
 		{match: has(qpUploadID), params: uploadIDOnlyParams, action: "s3:AbortMultipartUpload", name: "AbortMultipartUpload", handle: (*Gateway).abortMultipartUpload},
 		{match: has(subTagging), params: taggingParams, action: "s3:DeleteObjectTagging", name: "DeleteObjectTagging", handle: (*Gateway).deleteObjectTagging},
-		{params: versionIDOnlyParams, bypass: true, action: "s3:DeleteObject", name: "DeleteObject", handle: (*Gateway).deleteObject},
+		{params: versionIDOnlyParams, hdrActions: bypassActions, action: "s3:DeleteObject", name: "DeleteObject", handle: (*Gateway).deleteObject},
 	},
 	http.MethodPost: {
-		{match: has(subUploads), params: uploadsOnlyParams, aclHdr: true, attrs: true, action: "s3:PutObject", name: "CreateMultipartUpload", handle: (*Gateway).createMultipartUpload},
+		{match: has(subUploads), params: uploadsOnlyParams, aclHdr: true, hdrActions: uploadActions, attrs: true, action: "s3:PutObject", name: "CreateMultipartUpload", handle: (*Gateway).createMultipartUpload},
 		{match: has(qpUploadID), params: uploadIDOnlyParams, action: "s3:PutObject", name: "CompleteMultipartUpload", handle: (*Gateway).completeMultipartUpload},
 		unknownOperation("this operation"),
 	},

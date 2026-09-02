@@ -90,7 +90,7 @@ var postFieldMapped = map[string]bool{
 	"content-type": true, "content-md5": true, "cache-control": true,
 	"content-disposition": true, "content-encoding": true,
 	"content-language": true, "expires": true,
-	hdrStorageClass: true, "x-amz-tagging": true,
+	hdrStorageClass: true, hdrTagging: true,
 	hdrSSE: true, hdrSSEKMSKeyID: true,
 	"x-amz-algorithm": true, "x-amz-credential": true,
 	"x-amz-date": true, "x-amz-signature": true, "policy": true,
@@ -184,10 +184,20 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, t tar
 	if s3e := c.authorize("s3:PutObject"); s3e != nil {
 		return s3e
 	}
+	actions := []string{"s3:PutObject"}
+	// tags on a form upload need s3:PutObjectTagging as well, as on the
+	// header path (handler.go uploadActions)
+	if fields[hdrTagging] != "" {
+		if s3e := c.authorize("s3:PutObjectTagging"); s3e != nil {
+			return s3e
+		}
+		actions = append(actions, "s3:PutObjectTagging")
+	}
 	op := &Op{
 		Method:         r.Method,
 		Operation:      "PostObject",
 		Action:         "s3:PutObject",
+		Actions:        actions,
 		Tenant:         vr.Tenant,
 		User:           vr.User,
 		Bucket:         b.Name,
@@ -289,7 +299,7 @@ func (g *Gateway) postPutObject(c *opCtx, fields map[string]string, file *multip
 	if v := fields[hdrStorageClass]; v != "" {
 		in.StorageClass = types.StorageClass(v)
 	}
-	if v := fields["x-amz-tagging"]; v != "" {
+	if v := fields[hdrTagging]; v != "" {
 		in.Tagging = aws.String(v)
 	}
 	if s3e := applySSE(postFieldHeader(fields), &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {

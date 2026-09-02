@@ -16,6 +16,16 @@ const hdrStorageClass = "x-amz-storage-class"
 // plain upload of an empty body rather than fail.
 const hdrCopySource = "x-amz-copy-source"
 
+// the upload headers that add an action to the authorization (handler.go
+// uploadActions); the values are applied to the backend input by
+// proxy.go / multipart.go / copy.go and objectlock.go
+const (
+	hdrTagging               = "x-amz-tagging"
+	hdrObjectLockMode        = "x-amz-object-lock-mode"
+	hdrObjectLockRetainUntil = "x-amz-object-lock-retain-until-date"
+	hdrObjectLockLegalHold   = "x-amz-object-lock-legal-hold"
+)
+
 // amzMetaPrefix is the user-metadata header prefix, matched rather than
 // compared: a mistyped prefix would not fail a lookup loudly but would
 // silently stop collecting metadata (AmzMeta) or stop covering fields the
