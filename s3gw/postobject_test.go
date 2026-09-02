@@ -11,6 +11,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -185,7 +186,7 @@ func TestPostObject(t *testing.T) {
 		t.Fatalf("expect the hooks to run once, got %d", len(ops))
 	}
 	op := ops[0]
-	if op.Method != "POST" || op.Action != "s3:PutObject" || op.Bucket != "testbucket" || op.Key != "user/hello.txt" {
+	if op.Method != "POST" || !slices.Equal(op.Actions, []string{"s3:PutObject"}) || op.Bucket != "testbucket" || op.Key != "user/hello.txt" {
 		t.Errorf("unexpected op %+v", op)
 	}
 	if op.Tenant != "testtenant" || op.User != "testuser" {

@@ -246,7 +246,7 @@ func (g *Gateway) putObject(c *opCtx) error {
 	if v := c.signed(hdrStorageClass); v != "" {
 		in.StorageClass = types.StorageClass(v)
 	}
-	if v := c.signed("x-amz-tagging"); v != "" {
+	if v := c.signed(hdrTagging); v != "" {
 		in.Tagging = aws.String(v)
 	}
 	if s3e := applySSE(c.hdr, &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {

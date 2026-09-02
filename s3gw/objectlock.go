@@ -154,15 +154,15 @@ func bypassGovernanceRetention(hdr signedHeader) bool {
 // applyObjectLockHeaders copies the object-lock upload headers onto a
 // PutObject/CreateMultipartUpload-style input via the provided setters.
 func applyObjectLockHeaders(hdr signedHeader, mode *types.ObjectLockMode, retainUntil **time.Time, legalHold *types.ObjectLockLegalHoldStatus) {
-	if v := hdr.Signed("x-amz-object-lock-mode"); v != "" {
+	if v := hdr.Signed(hdrObjectLockMode); v != "" {
 		*mode = types.ObjectLockMode(v)
 	}
-	if v := hdr.Signed("x-amz-object-lock-retain-until-date"); v != "" {
+	if v := hdr.Signed(hdrObjectLockRetainUntil); v != "" {
 		if t, err := time.Parse(time.RFC3339, v); err == nil {
 			*retainUntil = aws.Time(t)
 		}
 	}
-	if v := hdr.Signed("x-amz-object-lock-legal-hold"); v != "" {
+	if v := hdr.Signed(hdrObjectLockLegalHold); v != "" {
 		*legalHold = types.ObjectLockLegalHoldStatus(v)
 	}
 }

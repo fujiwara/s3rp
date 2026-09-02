@@ -47,7 +47,7 @@ func (g *Gateway) createMultipartUpload(c *opCtx) error {
 	if v := c.signed(hdrStorageClass); v != "" {
 		in.StorageClass = types.StorageClass(v)
 	}
-	if v := c.signed("x-amz-tagging"); v != "" {
+	if v := c.signed(hdrTagging); v != "" {
 		in.Tagging = aws.String(v)
 	}
 	applyObjectLockHeaders(c.hdr, &in.ObjectLockMode, &in.ObjectLockRetainUntilDate, &in.ObjectLockLegalHoldStatus)

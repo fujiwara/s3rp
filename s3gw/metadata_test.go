@@ -81,7 +81,7 @@ func TestOpCarriesStoreMetadata(t *testing.T) {
 // service's decision, not the gateway's.
 func TestOpMetadataStaysOutOfJSON(t *testing.T) {
 	op := &s3gw.Op{
-		Method: "GET", Action: "s3:GetObject",
+		Method: "GET", Actions: []string{"s3:GetObject"},
 		Tenant: "testtenant", User: "testuser",
 		Bucket: "testbucket", Key: "a.txt",
 		BucketMetadata: &quota{limit: 42},
