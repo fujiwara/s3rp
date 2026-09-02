@@ -1,5 +1,14 @@
 # Changelog
 
+## [v0.0.13](https://github.com/fujiwara/s3rp/compare/v0.0.12...v0.0.13) - 2026-09-02
+
+- Add a per-backend circuit breaker by @fujiwara in https://github.com/fujiwara/s3rp/pull/127
+- Authorize the actions an upload header adds and list them on Op.Actions by @fujiwara in https://github.com/fujiwara/s3rp/pull/134
+- Bump the aws-sdk-go-v2 group with 4 updates by @dependabot[bot] in https://github.com/fujiwara/s3rp/pull/131
+- Bump jdx/mise-action from 4.2.4 to 4.3.0 by @dependabot[bot] in https://github.com/fujiwara/s3rp/pull/130
+- Bump Songmu/tagpr from 1.20.1 to 1.20.2 by @dependabot[bot] in https://github.com/fujiwara/s3rp/pull/129
+- Bump github.com/alecthomas/kong from 1.16.0 to 1.16.1 by @dependabot[bot] in https://github.com/fujiwara/s3rp/pull/132
+
 ## [v0.0.12](https://github.com/fujiwara/s3rp/compare/v0.0.11...v0.0.12) - 2026-08-28
 
 - Let a service choose the request id by @fujiwara in https://github.com/fujiwara/s3rp/pull/123
