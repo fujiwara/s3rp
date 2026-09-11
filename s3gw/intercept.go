@@ -252,9 +252,17 @@ const SizeUnknown int64 = -1
 // vocabulary. The two directions are one interface on purpose: choosing
 // backend classes on writes while reporting them as they are on reads would
 // show clients class names they never asked for and S3 does not define, so
-// a mapper that means to pass one direction through says so explicitly
-// (ToBackend returning op.Request.StorageClass, ToClient returning
-// backendClass). Without a mapper both directions pass through unchanged.
+// a mapper that means to pass one direction through says so explicitly:
+// ToClient returning backendClass, and ToBackend returning the requested
+// class — guarding the pointer, since Op.Request is nil for a write that
+// asked for nothing:
+//
+//	if op.Request == nil {
+//		return ""
+//	}
+//	return op.Request.StorageClass
+//
+// Without a mapper both directions pass through unchanged.
 type StorageClassMapper interface {
 	// ToBackend returns the class every write sends the backend —
 	// PutObject, POST upload, CopyObject and CreateMultipartUpload — in
