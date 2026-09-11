@@ -506,6 +506,7 @@ func (c *opCtx) dispatch(routes []route) error {
 			Tenant:         c.vr.Tenant,
 			User:           c.vr.User,
 			Bucket:         c.rt.cfg.Name,
+			BucketOwner:    c.rt.cfg.Tenant,
 			Key:            c.key,
 			Request:        c.objectRequest(rt.attrs),
 			BucketMetadata: c.rt.cfg.Metadata,

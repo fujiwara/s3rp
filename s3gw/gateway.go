@@ -57,6 +57,9 @@ type Gateway struct {
 	// storageClass maps classes between client and backend (intercept.go);
 	// nil passes both directions through
 	storageClass StorageClassMapper
+	// kmsKey maps SSE-KMS key ids between client and backend (intercept.go);
+	// nil passes both directions through
+	kmsKey KMSKeyMapper
 
 	newClient     func(ctx context.Context, b *store.Backend) (BackendClient, error)
 	clientOptions func(b *store.Backend) []func(*s3.Options)
