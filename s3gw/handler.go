@@ -454,6 +454,10 @@ func (c *opCtx) dispatch(routes []route) error {
 	if err := checkSSE(c.hdr); err != nil {
 		return err
 	}
+	// a header no operation reads is refused, not ignored (headers.go)
+	if err := c.hdr.checkKnownAmzHeaders(); err != nil {
+		return err
+	}
 	for _, rt := range routes {
 		if rt.match != nil && !rt.match(c.query) {
 			continue

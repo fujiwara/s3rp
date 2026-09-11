@@ -2,7 +2,10 @@ package s3gw
 
 import (
 	"net/http"
+	"sort"
 	"strings"
+
+	"github.com/fujiwara/s3rp/s3err"
 )
 
 // hdrStorageClass names the storage class an upload asks for. It is read
@@ -25,6 +28,67 @@ const (
 	hdrObjectLockRetainUntil = "x-amz-object-lock-retain-until-date"
 	hdrObjectLockLegalHold   = "x-amz-object-lock-legal-hold"
 )
+
+// knownAmzHeaders is every x-amz-* request header some operation honors or
+// refuses by name. checkKnownAmzHeaders refuses any other with
+// NotImplemented — the header-path counterpart of the 501 for an unknown
+// query subresource and for an unknown POST form field: a header the
+// gateway would otherwise ignore is a request it cannot honor, and ignoring
+// it is how an encryption context, a redirect location or a grant would be
+// dropped while the client believes it applied. The verifier's
+// unsigned-header gate runs first, so everything checked here is signed.
+//
+// A header handled on one route is known on every route (x-amz-tagging on a
+// GET is ignored, as on Amazon S3); what matters is that no header the
+// gateway never reads gets through. TestKnownAmzHeadersCoverSource keeps
+// the list in step with the headers the operation files read.
+var knownAmzHeaders = map[string]bool{
+	// consumed by the verifier
+	"x-amz-date": true, "x-amz-content-sha256": true, "x-amz-security-token": true,
+	"x-amz-decoded-content-length": true, "x-amz-trailer": true,
+	// sent by the browser SDKs
+	"x-amz-user-agent": true,
+	// checksums (checksum.FromHeaders / TrailerAlgorithm)
+	"x-amz-checksum-algorithm": true, "x-amz-checksum-type": true, "x-amz-checksum-mode": true,
+	"x-amz-checksum-crc32": true, "x-amz-checksum-crc32c": true, "x-amz-checksum-crc64nvme": true,
+	"x-amz-checksum-sha1": true, "x-amz-checksum-sha256": true, "x-amz-sdk-checksum-algorithm": true,
+	// object writes and copies
+	hdrStorageClass: true, hdrTagging: true, "x-amz-tagging-directive": true, "x-amz-metadata-directive": true,
+	hdrCopySource: true, "x-amz-copy-source-if-match": true, "x-amz-copy-source-if-none-match": true,
+	"x-amz-copy-source-if-modified-since": true, "x-amz-copy-source-if-unmodified-since": true,
+	"x-amz-copy-source-range": true, "x-amz-mp-object-size": true,
+	// encryption (sse.go); the SSE-C family is deliberately absent so a
+	// stray customer-key header meets the 501 even without its algorithm
+	hdrSSE: true, hdrSSEKMSKeyID: true,
+	// ACLs, refused by name (acl.go)
+	"x-amz-acl": true, "x-amz-grant-read": true, "x-amz-grant-write": true,
+	"x-amz-grant-read-acp": true, "x-amz-grant-write-acp": true, "x-amz-grant-full-control": true,
+	// Object Lock
+	hdrObjectLockMode: true, hdrObjectLockRetainUntil: true, hdrObjectLockLegalHold: true,
+	"x-amz-bypass-governance-retention": true,
+	// reads and conditional deletes
+	"x-amz-object-attributes": true, "x-amz-max-parts": true, "x-amz-part-number-marker": true,
+	"x-amz-if-match-size": true, "x-amz-if-match-last-modified-time": true,
+}
+
+// checkKnownAmzHeaders refuses a request carrying an x-amz-* header no
+// operation handles (see knownAmzHeaders); x-amz-meta-* is user metadata and
+// always known.
+func (s signedHeader) checkKnownAmzHeaders() *s3err.Error {
+	var unknown []string
+	for name := range s.h {
+		lname := strings.ToLower(name)
+		if !strings.HasPrefix(lname, "x-amz-") || knownAmzHeaders[lname] || strings.HasPrefix(lname, amzMetaPrefix) {
+			continue
+		}
+		unknown = append(unknown, lname)
+	}
+	if len(unknown) == 0 {
+		return nil
+	}
+	sort.Strings(unknown)
+	return s3err.NotImplemented("header " + strings.Join(unknown, ", "))
+}
 
 // amzMetaPrefix is the user-metadata header prefix, matched rather than
 // compared: a mistyped prefix would not fail a lookup loudly but would

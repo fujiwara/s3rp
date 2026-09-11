@@ -54,3 +54,7 @@ func SetBreakerClock(b *ConsecutiveFailures, now func() time.Time) { b.now = now
 var ClassifyAttempt = classifyAttempt
 
 var BackendName = backendName
+
+// KnownAmzHeaders exposes the request-header allowlist to
+// TestKnownAmzHeadersCoverSource.
+var KnownAmzHeaders = knownAmzHeaders
