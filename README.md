@@ -13,6 +13,10 @@ S3 client --(SigV4, tenant keys)--> s3rp --(SigV4, backend keys)--> S3-compatibl
                      store (YAML, or your own), read-only
 ```
 
+## Documentation
+
+This README covers the bundled binary. The rest — the S3 API contract and its request headers, building a service on the gateway, the compatibility suite, the SigV4 measurements — is indexed in **[docs/README.md](docs/README.md)**.
+
 ## What this PoC validates
 
 s3rp is not an object storage implementation — it stores no data itself. It explores the **data plane of a managed, multi-tenant S3 service** that sits in front of existing S3-compatible storage (Ceph RGW, versitygw, Amazon S3, ...). The questions it answers, and the design decisions behind them:
