@@ -73,7 +73,9 @@ var knownAmzHeaders = map[string]bool{
 
 // checkKnownAmzHeaders refuses a request carrying an x-amz-* header no
 // operation handles (see knownAmzHeaders); x-amz-meta-* is user metadata and
-// always known.
+// always known. It runs on every authenticated entry path — handleRequest
+// after the signature verifies, handlePostObject after the policy does —
+// and looks at names only, so the coverage set is irrelevant to it.
 func (s signedHeader) checkKnownAmzHeaders() *s3err.Error {
 	var unknown []string
 	for name := range s.h {

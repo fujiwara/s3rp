@@ -68,6 +68,13 @@ func TestUnknownAmzHeaderRefused(t *testing.T) {
 			wantCode: "AccessControlListNotSupported",
 		},
 		{
+			// presence is what makes it a grant; Header.Get would read an
+			// empty value as absent
+			name: "empty grant on PUT", method: "PUT",
+			headers:  map[string]string{"x-amz-grant-full-control": ""},
+			wantCode: "AccessControlListNotSupported",
+		},
+		{
 			// what the browser SDKs send
 			name: "x-amz-user-agent", method: "GET",
 			headers: map[string]string{"x-amz-user-agent": "aws-sdk-js/3.0.0"},
@@ -116,6 +123,37 @@ func TestUnknownAmzHeaderRefused(t *testing.T) {
 				t.Error("expect the refusal before the backend is called")
 			}
 		})
+	}
+}
+
+// The check runs on every authenticated entry path, not only the
+// dispatched operations: ListBuckets answers before dispatch, and a POST
+// upload never reaches it.
+func TestUnknownAmzHeaderOnListBucketsAndPost(t *testing.T) {
+	gw := newTestGateway(t)
+	if err := gw.SetBackend("testbucket", &stubPost{}); err != nil {
+		t.Fatal(err)
+	}
+
+	req := signedRequest(t, "GET", "http://s3.example.com/", nil, emptyPayloadHash, time.Now(), testCreds(),
+		func(r *http.Request) { r.Header.Set("x-amz-request-payer", "requester") })
+	w := httptest.NewRecorder()
+	gw.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusNotImplemented || !strings.Contains(w.Body.String(), "x-amz-request-payer") {
+		t.Errorf("ListBuckets: expect 501 naming the header, got %d: %s", w.Code, w.Body.String())
+	}
+
+	form := &postForm{
+		conditions: []string{`{"key": "a.txt"}`},
+		fields:     [][2]string{{"key", "a.txt"}},
+		filename:   "a.txt", content: "hello",
+	}
+	preq := form.request(t)
+	preq.Header.Set("x-amz-website-redirect-location", "/elsewhere")
+	w = httptest.NewRecorder()
+	gw.Handler().ServeHTTP(w, preq)
+	if w.Code != http.StatusNotImplemented || !strings.Contains(w.Body.String(), "x-amz-website-redirect-location") {
+		t.Errorf("POST upload: expect 501 naming the header, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
@@ -194,6 +232,16 @@ func TestKnownAmzHeadersCoverSource(t *testing.T) {
 		src, err := os.ReadFile(f)
 		if err != nil {
 			t.Fatal(err)
+		}
+		if f == "headers.go" {
+			// the allowlist's own literals are not reads; scanning them
+			// would make the reverse check below vacuous
+			start := strings.Index(string(src), "var knownAmzHeaders = ")
+			end := strings.Index(string(src[start:]), "\n}\n")
+			if start < 0 || end < 0 {
+				t.Fatal("knownAmzHeaders definition not found in headers.go")
+			}
+			src = append(append([]byte{}, src[:start]...), src[start+end:]...)
 		}
 		for _, m := range literal.FindAllStringSubmatch(string(src), -1) {
 			name := m[1]

@@ -147,6 +147,11 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, t tar
 		recordPresentedKey(r.Context(), s3e)
 		return s3e
 	}
+	// the form fields are bound by the policy; an x-amz-* HTTP header on a
+	// POST upload is read by nothing and is refused like anywhere else
+	if s3e := newSignedHeader(r, nil).checkKnownAmzHeaders(); s3e != nil {
+		return s3e
+	}
 	if info := recordOf(r.Context()); info != nil {
 		info.Tenant, info.User = vr.Tenant, vr.User
 		info.AccessKeyID = vr.AccessKeyID

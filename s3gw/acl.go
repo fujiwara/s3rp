@@ -34,7 +34,9 @@ var aclGrantHeaders = []string{
 // header as absent.
 func checkACLHeader(hdr signedHeader) *s3err.Error {
 	for _, name := range aclGrantHeaders {
-		if hdr.Attribute(name) != "" {
+		// presence, not value: an empty grant header is still a grant
+		// header, and Get would read it as absent
+		if len(hdr.AttributeValues(name)) > 0 {
 			return errACLNotSupported()
 		}
 	}
