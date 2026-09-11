@@ -247,6 +247,11 @@ func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) error {
 		info.Tenant, info.User = vr.Tenant, vr.User
 		info.AccessKeyID = vr.AccessKeyID
 	}
+	// a header no operation reads is refused, not ignored (headers.go);
+	// here, so ListBuckets is covered along with every dispatched operation
+	if s3e := newSignedHeader(r, vr.SignedHeaders).checkKnownAmzHeaders(); s3e != nil {
+		return s3e
+	}
 	t, err := g.requestTarget(r)
 	if err != nil {
 		return s3err.New(http.StatusBadRequest, "InvalidURI", "Couldn't parse the specified URI.").WithCause(err)

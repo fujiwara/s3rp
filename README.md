@@ -13,6 +13,10 @@ S3 client --(SigV4, tenant keys)--> s3rp --(SigV4, backend keys)--> S3-compatibl
                      store (YAML, or your own), read-only
 ```
 
+## Documentation
+
+This README covers the bundled binary. The rest — the S3 API contract and its request headers, building a service on the gateway, the compatibility suite, the SigV4 measurements — is indexed in **[docs/README.md](docs/README.md)**.
+
 ## What this PoC validates
 
 s3rp is not an object storage implementation — it stores no data itself. It explores the **data plane of a managed, multi-tenant S3 service** that sits in front of existing S3-compatible storage (Ceph RGW, versitygw, Amazon S3, ...). The questions it answers, and the design decisions behind them:
@@ -141,7 +145,7 @@ The other packages are usable on their own: `sigv4` (server-side SigV4 verificat
 
 ## Limitations
 
-API-level limitations — headers that break verification, why lifecycle and other bucket-configuration writes are `NotImplemented` — are listed in [docs/s3-api.md](docs/s3-api.md#limitations). What follows is specific to the bundled binary:
+Which request headers are honored, refused by name or not supported is listed in [docs/request-headers.md](docs/request-headers.md). API-level limitations — headers that break verification, why lifecycle and other bucket-configuration writes are `NotImplemented` — are listed in [docs/s3-api.md](docs/s3-api.md#limitations). What follows is specific to the bundled binary:
 
 - Definitions are read from the store on every request and nothing is cached, so the store is on the hot path. Caching belongs to a store implementation, which is the only thing that knows when a key is revoked.
 - Every request is logged synchronously. At any real request rate that write dominates the request path — it roughly doubled the time of a small GET when measured — so a deployment would want the log buffered or sampled.

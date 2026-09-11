@@ -21,10 +21,25 @@ func errACLNotSupported() *s3err.Error {
 		"The bucket does not allow ACLs")
 }
 
+// aclGrantHeaders are the explicit-grant headers, refused like a canned
+// ACL: a grant is an ACL write whatever the syntax.
+var aclGrantHeaders = []string{
+	"x-amz-grant-read", "x-amz-grant-write", "x-amz-grant-read-acp",
+	"x-amz-grant-write-acp", "x-amz-grant-full-control",
+}
+
 // checkACLHeader rejects canned ACLs other than the ones an ACL-disabled
-// bucket accepts. Attribute, decided here and not by the caller: a refusal
-// must see the value signed or not, never treat the header as absent.
+// bucket accepts, and any explicit grant. Attribute, decided here and not by
+// the caller: a refusal must see the value signed or not, never treat the
+// header as absent.
 func checkACLHeader(hdr signedHeader) *s3err.Error {
+	for _, name := range aclGrantHeaders {
+		// presence, not value: an empty grant header is still a grant
+		// header, and Get would read it as absent
+		if len(hdr.AttributeValues(name)) > 0 {
+			return errACLNotSupported()
+		}
+	}
 	switch hdr.Attribute("x-amz-acl") {
 	case "", "private", "bucket-owner-full-control":
 		return nil
