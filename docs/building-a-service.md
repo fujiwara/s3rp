@@ -310,88 +310,59 @@ Your `store.Store` implementation — and the control plane's write path that fe
 
 ## Hooks and metering
 
-`Authorizer`, `Interceptor` and `SetBandwidthLimit`: the seams every operation runs through once the bucket and user policies have allowed it.
+Once the bucket and user policies have allowed an operation, it runs through the seams below. This is where a service refuses what policies cannot express, meters what it served, shapes the streams, and decides the storage class — each in the one place built for it.
 
-- `store.Bucket.Metadata` and `store.Key.Metadata` are opaque to the gateway and come back on `Op` (`BucketMetadata` / `KeyMetadata`), so the hooks get what the store's lookups already loaded — a quota, a suspension flag — without querying it again. They are excluded from `Op`'s JSON on purpose: whether that data belongs in a log is your decision. A store that shares definitions across requests must make the values safe for concurrent reads.
-- Interceptors bracket **one inbound request** and nest like middleware: the first `Use` is the outermost layer, and `next()` runs everything inside it — down to the handler, which both calls the backend and writes the response to the client. With `gw.Use(A); gw.Use(B)`:
+| Seam | Runs | Use it for |
+|---|---|---|
+| `Authorizer` | once per operation, before anything runs | refusing: quota, suspension, a header's action the plan does not include |
+| `Interceptor` (`Use`) | around the operation, nested like middleware | metering after `next()`, per-tenant concurrency caps |
+| `SetBandwidthLimit` | after the `Authorizer`, once per operation | picking the limiters that pace the request and response bodies |
+| `StorageClassMapper` | on every write (backend side) and every read that reports a class (client side) | choosing the backend class per object; hiding the backend's class names |
 
-  ```
-  verification → routing → policies → Authorizer
-    A, before its next()
-      B, before its next()
-        handler: backend call (incl. SDK-internal retries),
-                 response streamed to the client
-        ...op.BytesIn / op.BytesOut are final from here on
-      B, after its next()
-    A, after its next()
-  observer (RequestInfo, exactly once)
-  ```
+All of them get the same `Op`: what is being done, by whom, to what, what the client asked for about the object and what the backend reported, plus `BucketMetadata` / `KeyMetadata` — whatever your store attached to the definitions, so a hook reads the quota or plan the lookup already loaded instead of querying again (excluded from `Op`'s JSON; a store that shares definitions across requests must make them safe for concurrent reads).
 
-  Returning without calling `next` refuses the request — nothing inside runs, the backend is never contacted. An error returned by an inner layer is the outer layer's `next()` result, and whatever the outermost returns decides what the client is told. The byte counts are set at the innermost point, so metering is code placed after `next` in **any** layer and the counts are identical; a *duration* measured in A includes B, though, as in any middleware stack.
-- **Concurrency limiting** — a cap on in-flight operations per tenant — belongs in an interceptor, not the `Authorizer`: counting what is in flight needs a release point, and only an interceptor sees the operation end. `Authorize` is a one-shot admission check with no completion signal, so it could count requests but never un-count them. Acquire before `next`, release after it returns:
+How one request flows through them, with `gw.Use(A); gw.Use(B)`:
 
-  ```go
-  var inflight sync.Map // tenant -> *semaphore.Weighted; sized from your plan data
-  gw.Use(func(ctx context.Context, op *s3gw.Op, next func() error) error {
-  	s, _ := inflight.LoadOrStore(op.Tenant, semaphore.NewWeighted(32))
-  	sem := s.(*semaphore.Weighted)
-  	if !sem.TryAcquire(1) {
-  		// full: refuse rather than queue — a queued request holds a
-  		// connection and its buffers for the whole wait
-  		return s3err.New(http.StatusServiceUnavailable, "SlowDown",
-  			"Please reduce your request rate.")
-  	}
-  	defer sem.Release(1)
-  	return next()
-  })
-  ```
+```
+verification → routing → policies → Authorizer → bandwidth limiters chosen
+  A, before its next()
+    B, before its next()
+      handler: StorageClassMapper.ToBackend on a write,
+               backend call (incl. SDK-internal retries),
+               response streamed to the client (ToClient on a read)
+      ...op.BytesIn / op.BytesOut are final from here on
+    B, after its next()
+  A, after its next()
+observer (RequestInfo, exactly once)
+```
 
-  `503 SlowDown` is S3's own throttling answer, and the SDKs already retry it with backoff. The keying rules are the same as for bandwidth limiters: share the semaphore at the granularity you mean to cap, and key on tenant or user, not access key ids. Refusing before `next` also bounds per-request memory, because everything an operation allocates happens inside it — the largest single allocation is the 16 MiB cap on XML request bodies (DeleteObjects, CompleteMultipartUpload); object bodies stream through in constant memory whatever their size, so what this cap bounds is operations, not gigabytes. What it cannot bound is traffic that never authenticates — a hook runs only after verification and the policies — so it needs the global backstop from [In front of the gateway](#in-front-of-the-gateway) underneath it.
-- A client that disconnects mid-response cancels the request context, which also aborts the backend transfer — `next` still returns promptly, with `op.BytesOut` counting what was actually sent (a truncated download reports the status it already sent, usually 200, and no error). The trap: the `ctx` your after-`next` code holds **is that canceled context**, so metering I/O that uses it fails with `context.Canceled` precisely for disconnected clients — and only for them, since on a normal completion the context outlives the hooks. Use `context.WithoutCancel(ctx)` for your own writes, or hand the self-contained `Op`/`RequestInfo` to a queue and drop the context entirely.
+Returning from an interceptor without calling `next` refuses the request: nothing inside runs and the backend is never contacted. An inner layer's error is the outer layer's `next()` result, and whatever the outermost returns is what the client is told. The byte counts are set at the innermost point, so metering code placed after `next` sees the same counts in any layer; a duration measured in A includes B, as in any middleware stack.
 
-  ```go
-  gw.Use(func(ctx context.Context, op *s3gw.Op, next func() error) error {
-  	err := next()
-  	// ctx is canceled when the client disconnected mid-response; detached,
-  	// the usage write succeeds for exactly the requests it would otherwise
-  	// silently miss
-  	recordUsage(context.WithoutCancel(ctx), op.Tenant, op.BytesIn, op.BytesOut)
-  	return err
-  })
-  ```
-- A client that retries sends a **new request**, which is verified, authorized and metered on its own. Whether that should count toward a quota or an invoice is the application's decision — and on a write it may have left something behind: [Retries and write side effects](#retries-and-write-side-effects).
-- `Op.Operation` is the S3 API operation name (`PutObject`, `CopyObject`, `DeleteObjects`, ...) and is the field to aggregate on: the `s3:*` actions in `Op.Actions` are what was *authorized*, which several operations share (`GetObject` and `HeadObject`, every multipart write) and which is empty where authorization happens per object (`DeleteObjects`). `Operation` is also set for the operations the gateway refuses outright — `DeleteBucket`, `PutBucketPolicy`, `PutBucketAcl` and the other `NotImplemented` / `AccessControlListNotSupported` responses — so a service can count which unsupported operations its users attempt. A request matching no known operation at all is recorded as `s3gw.OpUnknown` (`"Unknown"`).
-- `Op.Actions` lists every action the request was authorized for before the hooks ran, the operation's own first. A header can add one, as on Amazon S3: `x-amz-tagging` on an upload needs `s3:PutObjectTagging`, the `x-amz-object-lock-*` headers `s3:PutObjectRetention` / `s3:PutObjectLegalHold`, `x-amz-bypass-governance-retention` `s3:BypassGovernanceRetention`, and a copy reads its source under `s3:GetObject`. This is the seam for refusing what a header does — tags, a retention period — without reading headers: what S3 models as a permission stays a permission, so it is either a policy `Deny` on the action or an `Authorizer` matching it here, and the values never appear on `Op.Request` (which is why `Request` does not grow a field per header). Match with `slices.Contains`, never by position beyond the first.
+The topics, in the order you are likely to need them:
 
-  ```go
-  func (p plan) Authorize(_ context.Context, op *s3gw.Op) error {
-  	if !p.allowsTagging && slices.Contains(op.Actions, "s3:PutObjectTagging") {
-  		return s3err.AccessDenied()
-  	}
-  	return nil
-  }
-  ```
-- `Op.BytesIn` / `BytesOut` count bytes on the wire, so an `aws-chunked` upload includes its framing. They measure transfer, not storage: a quota over bytes at rest needs the backend's inventory (deletes, overwrites and versions carry no sizes through the hooks).
-- `Op.Request` is what the client asked for about the object, `Op.Response` what the backend reported. Both are nil when there is nothing to report, so a hook never has to tell a zero value from an absent one, and their `Metadata` maps are excluded from the JSON like the store's.
+- [What `Op` tells you](#what-op-tells-you) — the fields to aggregate and decide on
+- [Refusing in the Authorizer](#refusing-in-the-authorizer)
+- [Metering in an interceptor](#metering-in-an-interceptor) — and the disconnected-client trap
+- [Concurrency limiting](#concurrency-limiting)
+- [Bandwidth limiting](#bandwidth-limiting)
+- [Storage classes](#storage-classes) — the mapper, and where per-class billing comes from
+- [Panics in hooks](#panics-in-hooks)
+
+### What `Op` tells you
+
+- **`Op.Operation`** is the S3 API operation name (`PutObject`, `CopyObject`, `DeleteObjects`, ...) and the field to aggregate on. It is set even for operations the gateway refuses outright (`DeleteBucket`, `PutBucketPolicy`, the other `NotImplemented` answers), so you can count what your users attempt; a request matching nothing is `s3gw.OpUnknown`.
+- **`Op.Actions`** lists the `s3:*` actions the request was authorized for, the operation's own first. Several operations share an action (`GetObject` and `HeadObject`, every multipart write) and it is empty where authorization happens per object (`DeleteObjects`), so it is the field to *decide* on, not to aggregate on. A header adds an action, as on Amazon S3: `x-amz-tagging` on an upload needs `s3:PutObjectTagging`, the `x-amz-object-lock-*` headers `s3:PutObjectRetention` / `s3:PutObjectLegalHold`, `x-amz-bypass-governance-retention` `s3:BypassGovernanceRetention`, and a copy reads its source under `s3:GetObject`. Match with `slices.Contains`, never by position beyond the first.
+- **`Op.BytesIn` / `BytesOut`** count bytes on the wire (an `aws-chunked` upload includes its framing), final once `next` returns. They measure transfer, not storage: a quota over bytes at rest needs the backend's inventory, since deletes, overwrites and versions carry no sizes through the hooks.
+- **`Op.Request`** is what the client asked for about the object, **`Op.Response`** what the backend reported. Both are nil when there is nothing to report, so a zero value is never mistaken for an absent one.
 
   | | `Op.Request` | `Op.Response` |
   |---|---|---|
   | filled | before the `Authorizer` | once `next` returns — nil in an `Authorizer`, nil for a failed operation |
   | worth | a client claim | what the backend says it did |
   | `SSE`, `SSEKMSKeyID` | the mode and key id asked for | the encryption applied; absent after a request that asked for it = a backend that ignored it |
-  | `StorageClass` | the class asked for — refuse one this tenant may not use | the class the object is in now, lifecycle transitions included, in the backend's own name. Reads only |
+  | `StorageClass` | the class asked for | the class the object is in now, lifecycle transitions included, in the backend's own name. Reads only |
   | `Metadata` | the `x-amz-meta-*` sent with the write | the object's stored metadata. Reads only |
   | `ETag`, `VersionID` | — | the version this operation read or created |
-
-  A non-nil `Request` or `Response` means **at least one** of its fields is set, never all of them: `Metadata` is nil whenever there is none, even next to a filled storage class. Guard the pointer, never the map — dereferencing a nil `*OpRequest` panics, while indexing a nil map returns the zero value:
-
-  ```go
-  if op.Request != nil {
-  	plan := op.Request.Metadata["plan"] // "" when there is no metadata at all
-  }
-  ```
-
-  Which operations fill them:
 
   | operation | `Request` | `Response` |
   |---|---|---|
@@ -402,30 +373,113 @@ Your `store.Store` implementation — and the control plane's write path that fe
   | `CompleteMultipartUpload` | — | SSE, ETag, version id |
   | `UploadPart`, `DeleteObject`, listings | — | — |
 
-- **Per-class billing must use the response side.** Nothing verifies a requested storage class — Ceph RGW refuses one it does not define with `InvalidArgument`, versitygw stores the object as `STANDARD` without a word, and no S3 write returns the class it landed in — so `Request.StorageClass` is for authorization and nothing else.
-- **The storage class is yours to decide, in both directions.** Forwarding `x-amz-storage-class` as is means the tenant names the backend's classes — physical pools, tiers — which is backend layout leaking into the API. A `StorageClassMapper` puts the gateway in between:
+  A non-nil `Request` or `Response` means at least one field is set, not all: `Metadata` is nil whenever there is none. Guard the pointer, never the map — dereferencing a nil `*OpRequest` panics, indexing a nil map returns the zero value:
 
   ```go
-  type tiering struct{}
-
-  // what each write tells the backend; size is s3gw.SizeUnknown for
-  // CreateMultipartUpload, CopyObject and POST uploads
-  func (tiering) ToBackend(op *s3gw.Op, size int64) string {
-  	if size == s3gw.SizeUnknown || size >= 64 * 1024 * 1024 {
-  		return "hdd" // the backend's name for the large-object pool
-  	}
-  	return "ssd"
+  if op.Request != nil {
+  	plan := op.Request.Metadata["plan"] // "" when there is no metadata at all
   }
-
-  // what the client is shown wherever the API reports a class
-  func (tiering) ToClient(op *s3gw.Op, backendClass string) string {
-  	return "STANDARD"
-  }
-
-  gw.SetStorageClassMapper(tiering{})
   ```
 
-  `ToBackend` runs after the policies, the Authorizer and the interceptors admitted the operation, so it sees the full `Op` — tenant, bucket, `BucketMetadata`/`KeyMetadata`, and `Request.StorageClass` should you want to honor a request — and its answer replaces the client's header entirely (`""` sends none, the backend's default). Refusing a client that names a class at all stays an Authorizer decision on `Request.StorageClass`. `ToClient` is called for every value the API would report — the `x-amz-storage-class` header of GetObject/HeadObject and the `StorageClass` element of ListObjects, ListObjectVersions, GetObjectAttributes, ListMultipartUploads and ListParts, so once per object in a listing — with the backend's name, `""` included; `""` back omits the header or element, which is what S3 does for the default class. `Op.Response.StorageClass` keeps the backend's own name, so per-class billing in an interceptor sees the truth while the client sees the front's classes. The two directions are one interface on purpose: choosing backend classes on writes while reporting them unmapped on reads would show clients names they never asked for and S3 does not define, so a mapper that means to pass one direction through writes it out: `return backendClass` in `ToClient`, and in `ToBackend` the requested class with the pointer guarded, since `Op.Request` is nil for a write that asked for nothing:
+### Refusing in the Authorizer
+
+`Authorize` is a one-shot admission check with `Op` in hand: an exhausted quota or a suspended tenant from `BucketMetadata` / `KeyMetadata`, a class or key on `Op.Request` the plan does not allow, or an action a header added. What S3 models as a permission stays a permission — tags or a retention period on an upload are refused by their action, and their values never appear on `Op.Request`:
+
+```go
+func (p plan) Authorize(_ context.Context, op *s3gw.Op) error {
+	if !p.allowsTagging && slices.Contains(op.Actions, "s3:PutObjectTagging") {
+		return s3err.AccessDenied()
+	}
+	return nil
+}
+```
+
+An `*s3err.Error` decides what the client is told; any other error becomes a generic `InternalError`. The Authorizer has no completion signal, so it cannot count what is in flight — that is an interceptor's job.
+
+### Metering in an interceptor
+
+Meter after `next()`, in any layer. Two traps:
+
+- **A client that disconnects mid-response** cancels the request context, which also aborts the backend transfer; `next` still returns promptly, with `BytesOut` counting what was actually sent (a truncated download reports the status it already sent, usually 200, and no error). The `ctx` your after-`next` code holds *is that canceled context*, so metering I/O that uses it fails with `context.Canceled` exactly for disconnected clients — and only for them. Detach it, or hand the self-contained `Op` to a queue:
+
+  ```go
+  gw.Use(func(ctx context.Context, op *s3gw.Op, next func() error) error {
+  	err := next()
+  	recordUsage(context.WithoutCancel(ctx), op.Tenant, op.BytesIn, op.BytesOut)
+  	return err
+  })
+  ```
+
+- **A client that retries** sends a new request, verified, authorized and metered on its own. Whether it counts toward a quota or an invoice is your decision, and on a write the first attempt may have left something behind: [Retries and write side effects](#retries-and-write-side-effects).
+
+### Concurrency limiting
+
+A cap on in-flight operations per tenant needs a release point, so it lives in an interceptor: acquire before `next`, release after it returns, and refuse rather than queue (a queued request holds a connection and its buffers for the whole wait):
+
+```go
+var inflight sync.Map // tenant -> *semaphore.Weighted; sized from your plan data
+gw.Use(func(ctx context.Context, op *s3gw.Op, next func() error) error {
+	s, _ := inflight.LoadOrStore(op.Tenant, semaphore.NewWeighted(32))
+	sem := s.(*semaphore.Weighted)
+	if !sem.TryAcquire(1) {
+		return s3err.New(http.StatusServiceUnavailable, "SlowDown",
+			"Please reduce your request rate.")
+	}
+	defer sem.Release(1)
+	return next()
+})
+```
+
+`503 SlowDown` is S3's own throttling answer, and the SDKs retry it with backoff. Refusing before `next` also bounds per-request memory: everything an operation allocates happens inside it, the largest single allocation being the 16 MiB cap on XML request bodies (object bodies stream in constant memory). What it cannot bound is traffic that never authenticates — hooks run only after verification — so it needs the global backstop from [In front of the gateway](#in-front-of-the-gateway) underneath it.
+
+### Bandwidth limiting
+
+Admission hooks cannot pace a stream, so `SetBandwidthLimit` selects the limiters per operation: `in` paces the request body as read off the wire (the bytes `BytesIn` counts), `out` the response body, `nil` means unlimited. The hook only selects — *sharing* a limiter is what makes it a cap, at the granularity you choose: one limiter per tenant caps that tenant's aggregate bandwidth across all its concurrent requests. `*rate.Limiter` satisfies the interface; the gateway waits in chunks of at most 32 KiB, so any burst ≥ 32 KiB works, and 256 KiB to 1 MiB is a practical range (the burst is also how far a stream runs ahead of the rate). A pacing failure aborts the request rather than letting it through unpaced.
+
+```go
+var limiters sync.Map // tenant -> *rate.Limiter; eviction is yours too
+gw.SetBandwidthLimit(func(op *s3gw.Op) (in, out s3gw.BandwidthLimiter) {
+	plan := op.KeyMetadata.(*Plan) // loaded by your store with the key
+	if plan.BytesPerSec == 0 {
+		return nil, nil // unlimited
+	}
+	l, _ := limiters.LoadOrStore(op.Tenant,
+		rate.NewLimiter(rate.Limit(plan.BytesPerSec), 1024 * 1024)) // burst 1 MiB
+	lim := l.(*rate.Limiter)
+	return lim, lim // one budget for both directions
+})
+```
+
+Key on tenant or user, never on an access key id: keys rotate (two are live during a rotation) and temporary keys can be minted in any number under one user, so a per-key budget is a multiplier the client controls, not a cap. `Op.Tenant` is the *requester's* tenant; on a cross-tenant request, whether the bill belongs to the requester (`KeyMetadata` side) or the bucket owner (`BucketMetadata` side) is your business rule. The same keying applies to the concurrency semaphores above.
+
+### Storage classes
+
+Forwarding `x-amz-storage-class` as is means the tenant names the backend's classes — physical pools, tiers — which is backend layout leaking into the API. A `StorageClassMapper` puts the gateway in between:
+
+```go
+type tiering struct{}
+
+// what each write tells the backend; size is s3gw.SizeUnknown for
+// CreateMultipartUpload, CopyObject and POST uploads
+func (tiering) ToBackend(op *s3gw.Op, size int64) string {
+	if size == s3gw.SizeUnknown || size >= 64 * 1024 * 1024 {
+		return "hdd" // the backend's name for the large-object pool
+	}
+	return "ssd"
+}
+
+// what the client is shown wherever the API reports a class
+func (tiering) ToClient(op *s3gw.Op, backendClass string) string {
+	return "STANDARD"
+}
+
+gw.SetStorageClassMapper(tiering{})
+```
+
+- `ToBackend` runs on every write after the hooks admitted it, with the full `Op` (tenant, bucket, metadata, and `Request.StorageClass` should you want to honor a request). Its answer replaces the client's header entirely; `""` sends none, the backend's default. Refusing a client that names a class at all stays an Authorizer decision.
+- `ToClient` runs for every value the API would report — the `x-amz-storage-class` header of GetObject/HeadObject, the `StorageClass` element of ListObjects, ListObjectVersions, GetObjectAttributes, ListMultipartUploads and ListParts — so once per object in a listing: keep it cheap. It gets the backend's name, `""` included; `""` back omits the header or element, as S3 does for the default class.
+- `Op.Response.StorageClass` keeps the backend's own name, before `ToClient`, so billing sees the real class.
+- The two directions are one interface on purpose: mapping writes while reporting reads unmapped would show clients names they never asked for and S3 does not define. A mapper that means to pass one direction through writes it out — `return backendClass` in `ToClient`, and in `ToBackend` the requested class behind a nil check, since `Op.Request` is nil for a write that asked for nothing:
 
   ```go
   func (passthroughWrites) ToBackend(op *s3gw.Op, size int64) string {
@@ -436,49 +490,45 @@ Your `store.Store` implementation — and the control plane's write path that fe
   }
   ```
 
-  Without a mapper both directions pass through unchanged, for a service that means to expose its backend's classes (Amazon S3 behind the gateway, say).
-- **Storage per class cannot come from the hooks at all**, because lifecycle transitions and expirations happen inside the backend and no request reaches the gateway. Sweep the backend buckets periodically instead: `ListObjectsV2` reports `Size` and `StorageClass` per object, `ListObjectVersions` the noncurrent versions, and incomplete multipart parts appear in neither. User metadata and tags are not in a listing at all, so an attribute you want to aggregate storage by belongs in the storage class — otherwise the sweep needs a `HEAD` per object.
-- **If your hook panics**, the gateway recovers at the request boundary: the client gets an `InternalError` when nothing has been written yet, or an aborted connection when the response was already on its way (it cannot be replaced by an error document), and the observer is called exactly once either way with a `*s3gw.PanicError` as `RequestInfo.Err`. Its message names the panic value; the stack is on the error, not in the message, so ask for it when you want it:
+- Without a mapper both directions pass through unchanged, for a service that means to expose its backend's classes (Amazon S3 behind the gateway, say).
 
-  ```go
-  var pe *s3gw.PanicError
-  if errors.As(info.Err, &pe) {
-  	slog.Error("panic", "request_id", info.RequestID, "value", pe.Value, "stack", string(pe.Stack))
-  }
-  ```
+Where per-class billing comes from:
 
-  Two things the gateway cannot do for you: a panic in a goroutine *your* hook starts is fatal to the process, as in any Go server, and a panic after `next()` still costs a retry of an operation that already ran ([Retries and write side effects](#retries-and-write-side-effects)). `panic(http.ErrAbortHandler)` keeps net/http's meaning: the request is aborted silently, with no observation.
-- **Bandwidth limiting** is the one thing the Authorizer/Interceptor shape cannot do — they gate admission, not the stream. `SetBandwidthLimit` installs a hook that picks pacing limiters per operation, called after the policies and the Authorizer allow it; `in` paces the request body as read off the wire (the same bytes `BytesIn` counts), `out` the response body, `nil` means unlimited. The hook only *selects* — sharing is what makes it a limit, and the keying is yours: returning one limiter per tenant caps that tenant's aggregate bandwidth across all its concurrent requests. Key on `Op.User` rather than an access key: keys rotate — two are live during a rotation — and temporary keys can be minted in any number under one user (a self-contained token is not even a row anywhere), so a per-key budget is not a cap but a multiplier the client controls. Note `Op.Tenant` is the **requester's** tenant: on a cross-tenant request, whether the bandwidth bill belongs to the requester (`KeyMetadata` side) or the bucket owner (`BucketMetadata` side) is your business rule. `*rate.Limiter` satisfies the interface; the gateway waits in chunks of at most 32 KiB, so any burst ≥ 32 KiB works, but the burst is also how far a stream runs ahead of the rate — 256 KiB to 1 MiB is a practical range. A pacing failure aborts the request rather than letting it through unpaced.
+- **Never from the request side.** Nothing verifies a requested class — Ceph RGW refuses one it does not define with `InvalidArgument`, versitygw stores the object as `STANDARD` without a word, and no S3 write returns the class it landed in. The same applies to a class `ToBackend` chose: a name the backend does not define fails every write.
+- **Reads report it** on `Op.Response.StorageClass`, which is where retrieval or request billing per class reads it.
+- **Storage per class cannot come from the hooks at all**: lifecycle transitions and expirations happen inside the backend, and no request reaches the gateway. Sweep the backend buckets periodically — `ListObjectsV2` reports `Size` and `StorageClass` per object, `ListObjectVersions` the noncurrent versions, incomplete multipart parts appear in neither. Listings carry no user metadata or tags, so an attribute you want to aggregate storage by belongs in the storage class; otherwise the sweep needs a `HEAD` per object.
 
-  ```go
-  var limiters sync.Map // tenant -> *rate.Limiter; eviction is yours too
-  gw.SetBandwidthLimit(func(op *s3gw.Op) (in, out s3gw.BandwidthLimiter) {
-  	plan := op.KeyMetadata.(*Plan) // loaded by your store with the key
-  	if plan.BytesPerSec == 0 {
-  		return nil, nil // unlimited
-  	}
-  	l, _ := limiters.LoadOrStore(op.Tenant,
-  		rate.NewLimiter(rate.Limit(plan.BytesPerSec), 1024 * 1024)) // burst 1 MiB
-  	lim := l.(*rate.Limiter)
-  	return lim, lim // one budget for both directions
-  })
-  ```
+### Panics in hooks
+
+The gateway recovers at the request boundary: the client gets an `InternalError` when nothing has been written yet, or an aborted connection when the response was already on its way, and the observer is called exactly once either way with a `*s3gw.PanicError` as `RequestInfo.Err`. Its message names the panic value; the stack is on the error:
+
+```go
+var pe *s3gw.PanicError
+if errors.As(info.Err, &pe) {
+	slog.Error("panic", "request_id", info.RequestID, "value", pe.Value, "stack", string(pe.Stack))
+}
+```
+
+Two things it cannot do: a panic in a goroutine *your* hook starts is fatal to the process, as in any Go server, and a panic after `next()` still costs a retry of an operation that already ran. `panic(http.ErrAbortHandler)` keeps net/http's meaning: the request is aborted silently, with no observation.
+
+### Do and don't
 
 **Do**
 
 - Meter after `next()` — the byte counts are final by then, in any layer.
-- Refuse a request by returning **without** calling `next`; read what the store already loaded from `Op.BucketMetadata` / `Op.KeyMetadata`.
-- Cap per-tenant in-flight operations in an interceptor — acquire before `next`, release after it returns, refuse with `503 SlowDown`.
+- Refuse by returning without calling `next`; read what the store already loaded from `Op.BucketMetadata` / `Op.KeyMetadata`.
+- Cap per-tenant in-flight operations in an interceptor: acquire before `next`, release after, refuse with `503 SlowDown`.
 - Use `context.WithoutCancel(ctx)` for your own I/O after `next`, or hand the self-contained `Op` to a queue.
-- Share bandwidth limiters at the granularity you mean to cap (per tenant/user/bucket), with a burst of 256 KiB–1 MiB.
+- Share limiters and semaphores at the granularity you mean to cap (tenant, user, bucket), with a limiter burst of 256 KiB–1 MiB.
+- Install a `StorageClassMapper` when the backend's class names are not the API you mean to expose.
 
 **Don't**
 
 - Don't query the store again in a hook for data `Metadata` already carries.
 - Don't count concurrency in the `Authorizer` — it has no release point — and don't expect a hook-level cap to shield against unauthenticated floods; that layer sits in front of the gateway.
-- Don't use the request context as-is for post-`next` writes — it is canceled exactly for disconnected clients, so their usage silently vanishes.
-- Don't key bandwidth limiters on access key ids — keys rotate (two are live during a rotation), and temporary keys can be minted in any number, so a per-key budget is a multiplier the client controls, not a cap.
-- Don't read `BytesOut` as stored bytes (it is wire transfer), and don't expect the gateway to de-duplicate client retries — each retry is a new, separately metered request.
+- Don't use the request context as-is for post-`next` writes — it is canceled exactly for disconnected clients.
+- Don't key limiters on access key ids: a per-key budget is a multiplier the client controls.
+- Don't read `BytesOut` as stored bytes, don't bill a class from `Op.Request`, and don't expect the gateway to de-duplicate client retries.
 
 ## Retries and write side effects
 
