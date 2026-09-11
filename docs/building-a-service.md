@@ -353,6 +353,7 @@ The topics, in the order you are likely to need them:
 
 ### What `Op` tells you
 
+- **`Op.Tenant` / `Op.User`** are who asked, and **`Op.BucketOwner`** whose bucket it is — the same tenant except on a cross-tenant request a bucket policy admitted. Key by-request things (rate, concurrency, egress) on the former and by-bucket things (a key namespace, bytes at rest) on the latter.
 - **`Op.Operation`** is the S3 API operation name (`PutObject`, `CopyObject`, `DeleteObjects`, ...) and the field to aggregate on. It is set even for operations the gateway refuses outright (`DeleteBucket`, `PutBucketPolicy`, the other `NotImplemented` answers), so you can count what your users attempt; a request matching nothing is `s3gw.OpUnknown`.
 - **`Op.Actions`** lists the `s3:*` actions the request was authorized for, the operation's own first. Several operations share an action (`GetObject` and `HeadObject`, every multipart write) and it is empty where authorization happens per object (`DeleteObjects`), so it is the field to *decide* on, not to aggregate on. A header adds an action, as on Amazon S3: `x-amz-tagging` on an upload needs `s3:PutObjectTagging`, the `x-amz-object-lock-*` headers `s3:PutObjectRetention` / `s3:PutObjectLegalHold`, `x-amz-bypass-governance-retention` `s3:BypassGovernanceRetention`, and a copy reads its source under `s3:GetObject`. Match with `slices.Contains`, never by position beyond the first.
 - **`Op.BytesIn` / `BytesOut`** count bytes on the wire (an `aws-chunked` upload includes its framing), final once `next` returns. They measure transfer, not storage: a quota over bytes at rest needs the backend's inventory, since deletes, overwrites and versions carry no sizes through the hooks.
@@ -453,7 +454,7 @@ gw.SetBandwidthLimit(func(op *s3gw.Op) (in, out s3gw.BandwidthLimiter) {
 })
 ```
 
-Key on tenant or user, never on an access key id: keys rotate (two are live during a rotation) and temporary keys can be minted in any number under one user, so a per-key budget is a multiplier the client controls, not a cap. `Op.Tenant` is the *requester's* tenant; on a cross-tenant request, whether the bill belongs to the requester (`KeyMetadata` side) or the bucket owner (`BucketMetadata` side) is your business rule. The same keying applies to the concurrency semaphores above.
+Key on tenant or user, never on an access key id: keys rotate (two are live during a rotation) and temporary keys can be minted in any number under one user, so a per-key budget is a multiplier the client controls, not a cap. `Op.Tenant` is the *requester's* tenant and `Op.BucketOwner` the bucket's; on a cross-tenant request, whether the bill belongs to the requester (`KeyMetadata` side) or the bucket owner (`BucketMetadata` side) is your business rule. The same keying applies to the concurrency semaphores above.
 
 ### Storage classes
 
@@ -508,18 +509,28 @@ SSE-KMS names a key, and the key id the backend understands is its KMS's namespa
 ```go
 type keyAliases struct{}
 
+// keys belong to the bucket's owner: on a cross-tenant request Op.Tenant
+// is the requester, and the object is still encrypted under the owner's key
+func namespace(op *s3gw.Op) string { return "vault/" + op.BucketOwner + "/" }
+
 // what an aws:kms write tells the backend; keyID is "" when the client
 // named no key (S3's "use the default key")
 func (keyAliases) ToBackend(op *s3gw.Op, keyID string) string {
 	if keyID == "" {
 		keyID = "default"
 	}
-	return "vault/" + op.Tenant + "/" + keyID // the backend KMS's name for it
+	return namespace(op) + keyID // the backend KMS's name for it
 }
 
-// what the client is shown for a key id the backend reported
+// what the client is shown for a key id the backend reported; an id
+// outside the owner's namespace is not something to show, so "" — never
+// the backend's id itself
 func (keyAliases) ToClient(op *s3gw.Op, keyID string) string {
-	return strings.TrimPrefix(keyID, "vault/"+op.Tenant+"/")
+	alias, ok := strings.CutPrefix(keyID, namespace(op))
+	if !ok {
+		return ""
+	}
+	return alias
 }
 
 gw.SetKMSKeyMapper(keyAliases{})
@@ -528,6 +539,7 @@ gw.SetKMSKeyMapper(keyAliases{})
 - `ToBackend` runs only for a write that asks for `aws:kms` (PutObject, POST upload, CopyObject, CreateMultipartUpload), after the hooks admitted it; SSE-S3 and unencrypted writes never consult it. Its answer replaces the client's key id entirely; `""` sends none, so the backend applies its default key. Whether the tenant may use the key it named is still the Authorizer's decision on `Request.SSEKMSKeyID`, which keeps the client's id.
 - `ToClient` runs for every key id the backend reports — the `x-amz-server-side-encryption-aws-kms-key-id` header of writes and reads, and `KMSMasterKeyID` in GetBucketEncryption — and only then: a response without a key id (SSE-S3, unencrypted) has nothing to map. `""` omits the header or element; the encryption mode header is reported regardless.
 - `Op.Response.SSEKMSKeyID` keeps the backend's own id, before `ToClient`.
+- **Key on `Op.BucketOwner`, not `Op.Tenant`.** A bucket's default encryption is the owner's key, and a writer from another tenant admitted by a bucket policy writes under it, so the namespace is the bucket's — while `Op.Tenant` is whoever asked. A mapper keyed on the requester would resolve a cross-tenant write into the wrong namespace and, on a cross-tenant read, fail to recognize the owner's id and hand the requester the backend's. Fail closed there: a `ToClient` that cannot map an id returns `""`.
 - The mapper resolves names; it does not decide whether to encrypt. Forcing encryption on a bucket is backend bucket configuration (default encryption, written by the control plane), which is exactly the case where `ToClient` matters: the backend then reports its own key id on every object.
 - Without a mapper both directions pass through unchanged. One interface for both directions, as with storage classes: mapping the request while echoing the backend's id back would hand the tenant the backend's namespace anyway.
 

@@ -46,18 +46,25 @@ func (m *keyMapper) ToClient(op *s3gw.Op, keyID string) string {
 	return m.toClient(op, keyID)
 }
 
-// aliases resolves the tenant's key names to the backend's ids and back.
+// aliases resolves the bucket owner's key names to the backend's ids and
+// back — the owner's, since the key is the bucket's, whoever is asking. An
+// id outside the owner's namespace maps to "" (shown as nothing), never to
+// itself.
 func aliases() *keyMapper {
+	ns := func(op *s3gw.Op) string { return "vault/" + op.BucketOwner + "/" }
 	return &keyMapper{
 		toBackend: func(op *s3gw.Op, keyID string) string {
-			switch keyID {
-			case "", "default":
-				return "vault/" + op.Tenant + "/default"
+			if keyID == "" {
+				keyID = "default"
 			}
-			return "vault/" + op.Tenant + "/" + keyID
+			return ns(op) + keyID
 		},
 		toClient: func(op *s3gw.Op, keyID string) string {
-			return strings.TrimPrefix(keyID, "vault/"+op.Tenant+"/")
+			alias, ok := strings.CutPrefix(keyID, ns(op))
+			if !ok {
+				return ""
+			}
+			return alias
 		},
 	}
 }
@@ -122,9 +129,57 @@ func TestKMSKeyToBackendOnWrites(t *testing.T) {
 	if diff := cmp.Diff([]string{"archive", "", "archive"}, m.requested); diff != "" {
 		t.Errorf("key ids handed to the mapper (-want +got):\n%s", diff)
 	}
-	// the Authorizer still sees the client's own id
-	if op := rec.ops[0]; op.Request == nil || op.Request.SSEKMSKeyID != "archive" {
-		t.Errorf("expect the client's key id on the op, got %+v", op.Request)
+	// the Authorizer still sees the client's own id, and the owner is the
+	// requester on a same-tenant request
+	if op := rec.ops[0]; op.Request == nil || op.Request.SSEKMSKeyID != "archive" || op.BucketOwner != "testtenant" {
+		t.Errorf("expect the client's key id and the owner on the op, got %+v owner %q", op.Request, op.BucketOwner)
+	}
+}
+
+// On a cross-tenant request the key namespace is the bucket owner's, not
+// the requester's: bob (tenant-b) reads tenant-a's bucket and is shown the
+// owner's alias, never the backend's id — and a mapper cannot recognize
+// the requester's namespace there, so an id outside the owner's is shown
+// as nothing.
+func TestKMSKeyCrossTenantUsesBucketOwner(t *testing.T) {
+	stub := &stubBackend{
+		getOut: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("x")), ContentLength: aws.Int64(1),
+			ServerSideEncryption: types.ServerSideEncryptionAwsKms, SSEKMSKeyId: aws.String("vault/tenant-a/archive")},
+	}
+	owner := []userSpec{{name: "alice", keyID: "ALICEKEY", secret: "alicesecret"}}
+	foreign := []userSpec{{name: "bob", keyID: "BOBKEY", secret: "bobsecret"}}
+	m := buildStore(t, "tenant-a", owner, []bucketSpec{{name: "open", policyText: openBucketPolicy}})
+	m.addTenant(t, "tenant-b", foreign, nil)
+	gw := gatewayFor(t, m, stub)
+	rec := &opRecorder{}
+	gw.SetAuthorizer(rec)
+	gw.SetKMSKeyMapper(aliases())
+	clients := clientsFor(t, gw, append(owner, foreign...))
+
+	get, err := clients["bob"].GetObject(t.Context(), &s3.GetObjectInput{Bucket: aws.String("open"), Key: aws.String("a")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	io.Copy(io.Discard, get.Body)
+	get.Body.Close()
+	if op := rec.ops[0]; op.Tenant != "tenant-b" || op.BucketOwner != "tenant-a" {
+		t.Errorf("expect requester tenant-b and owner tenant-a, got %q / %q", op.Tenant, op.BucketOwner)
+	}
+	if aws.ToString(get.SSEKMSKeyId) != "archive" {
+		t.Errorf("cross-tenant read shows key %q, want the owner's alias", aws.ToString(get.SSEKMSKeyId))
+	}
+
+	// an id the mapper cannot place is shown as nothing, not as itself
+	stub.getOut = &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("x")), ContentLength: aws.Int64(1),
+		ServerSideEncryption: types.ServerSideEncryptionAwsKms, SSEKMSKeyId: aws.String("vault/tenant-b/archive")}
+	get, err = clients["bob"].GetObject(t.Context(), &s3.GetObjectInput{Bucket: aws.String("open"), Key: aws.String("a")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	io.Copy(io.Discard, get.Body)
+	get.Body.Close()
+	if get.SSEKMSKeyId != nil {
+		t.Errorf("an unmappable id must be shown as nothing, got %q", *get.SSEKMSKeyId)
 	}
 }
 

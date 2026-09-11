@@ -204,6 +204,7 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, t tar
 		Tenant:         vr.Tenant,
 		User:           vr.User,
 		Bucket:         b.Name,
+		BucketOwner:    b.Tenant,
 		Key:            key,
 		Request:        postObjectRequest(fields),
 		BucketMetadata: b.Metadata,

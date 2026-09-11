@@ -58,7 +58,13 @@ type Op struct {
 	// Bucket is the front bucket name. The backend name it maps to is
 	// deliberately not exposed: nothing outside the proxy should depend on it.
 	Bucket string `json:"bucket"`
-	Key    string `json:"key,omitempty"`
+	// BucketOwner is the tenant that owns Bucket. It equals Tenant except
+	// on a cross-tenant request, where Tenant is the requester a bucket
+	// policy admitted: anything keyed by the bucket rather than by who
+	// asked — a KMS key namespace, a storage tier, a bill for bytes at
+	// rest — keys on this.
+	BucketOwner string `json:"bucket_owner"`
+	Key         string `json:"key,omitempty"`
 
 	// Request is what the client asked for about the object itself, set
 	// before the Authorizer runs so it can refuse on it. Nil when the
@@ -299,6 +305,12 @@ type StorageClassMapper interface {
 // backend is set up. With a mapper the tenant names keys in the service's
 // vocabulary and the service resolves them. Without one both directions
 // pass through unchanged.
+//
+// A key belongs to the bucket's owner, not to whoever is asking: a bucket's
+// default encryption is the owner's key, and a cross-tenant writer admitted
+// by a bucket policy writes under it. So a mapper keys its namespace on
+// Op.BucketOwner, never Op.Tenant, and a ToClient handed an id it cannot
+// map should return "" (nothing shown) rather than the id itself.
 type KMSKeyMapper interface {
 	// ToBackend returns the key id every SSE-KMS write sends the backend —
 	// PutObject, POST upload, CopyObject and CreateMultipartUpload asking
