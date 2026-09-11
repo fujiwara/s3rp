@@ -91,6 +91,10 @@ SSE-S3 (`x-amz-server-side-encryption: AES256`) and SSE-KMS (`aws:kms` + `x-amz-
 
 **SSE-C is refused** with `NotImplemented` rather than silently dropped: an ignored customer key would store the object without the encryption the client believes it requested, and later serve it back without the key.
 
+### Storage class
+
+`x-amz-storage-class` on uploads (PutObject, POST upload, CopyObject, CreateMultipartUpload) is forwarded to the backend as is, and the class the backend reports is returned as is (the `x-amz-storage-class` header of GetObject/HeadObject, the `StorageClass` element of the listings, GetObjectAttributes and ListParts) — **unless the service decides otherwise**. A service built on the gateway can install a `StorageClassMapper` that chooses the backend class of every write itself (from the object size, the tenant, the bucket) and decides what class the client is shown, so that the backend's class names never appear in the API ([Hooks and metering](building-a-service.md#hooks-and-metering)); the bundled `s3rp` binary installs none. Whether a tenant may name a class at all is a service decision made on `Op.Request.StorageClass` in the Authorizer. Note that a backend does not verify a class it does not define — Ceph RGW refuses the write with `InvalidArgument`, versitygw stores the object as `STANDARD` — and no S3 write returns the class the object landed in.
+
 Backend notes for Ceph RGW: SSE requests require TLS toward RGW by default (`rgw_crypt_require_ssl`) — terminate or disable it deliberately; the compose file's ceph service configures the built-in `testing` KMS backend with a static key (`testkey-1`) so the integration suite can exercise SSE-KMS without a real KMS.
 
 ### Bucket policies

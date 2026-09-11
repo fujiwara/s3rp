@@ -15,6 +15,7 @@ In the order you will meet them: what the gateway cannot run without, then what 
 | `s3gw.Authorizer` | refusing what the policies cannot express — an exhausted quota, a suspended tenant. Consulted after the bucket and user policies have already allowed the operation. | [Hooks and metering](#hooks-and-metering) |
 | `s3gw.Interceptor` | wrapping each operation: metering — the byte counts are filled in by the time `next` returns — and the per-tenant concurrency cap. | [Hooks and metering](#hooks-and-metering) |
 | `SetBandwidthLimit` | pacing the streams themselves, which admission hooks cannot do. | [Hooks and metering](#hooks-and-metering) |
+| `s3gw.StorageClassMapper` | deciding which backend storage class each write lands in, and what class the client is shown — keeping the backend's class names out of the tenant's hands. | [Hooks and metering](#hooks-and-metering) |
 | the wrapping handler and listener | production exposure: TLS termination and what must run **before** verification — rate limiting, request-body caps, the global connection cap, health checks — and the path-handling rules every hop in front must obey. | [In front of the gateway](#in-front-of-the-gateway) |
 | `SetClientOptions`, cache sizes | tuning: instrumenting the backend clients the gateway builds and sizing the caches they live in; the defaults are sound to start with. | [Backend clients and the gateway's caches](#backend-clients-and-the-gateways-caches) |
 
@@ -378,7 +379,7 @@ Your `store.Store` implementation — and the control plane's write path that fe
   | filled | before the `Authorizer` | once `next` returns — nil in an `Authorizer`, nil for a failed operation |
   | worth | a client claim | what the backend says it did |
   | `SSE`, `SSEKMSKeyID` | the mode and key id asked for | the encryption applied; absent after a request that asked for it = a backend that ignored it |
-  | `StorageClass` | the class asked for — refuse one this tenant may not use | the class the object is in now, lifecycle transitions included. Reads only |
+  | `StorageClass` | the class asked for — refuse one this tenant may not use | the class the object is in now, lifecycle transitions included, in the backend's own name. Reads only |
   | `Metadata` | the `x-amz-meta-*` sent with the write | the object's stored metadata. Reads only |
   | `ETag`, `VersionID` | — | the version this operation read or created |
 
@@ -402,6 +403,29 @@ Your `store.Store` implementation — and the control plane's write path that fe
   | `UploadPart`, `DeleteObject`, listings | — | — |
 
 - **Per-class billing must use the response side.** Nothing verifies a requested storage class — Ceph RGW refuses one it does not define with `InvalidArgument`, versitygw stores the object as `STANDARD` without a word, and no S3 write returns the class it landed in — so `Request.StorageClass` is for authorization and nothing else.
+- **The storage class is yours to decide, in both directions.** Forwarding `x-amz-storage-class` as is means the tenant names the backend's classes — physical pools, tiers — which is backend layout leaking into the API. A `StorageClassMapper` puts the gateway in between:
+
+  ```go
+  type tiering struct{}
+
+  // what each write tells the backend; size is s3gw.SizeUnknown for
+  // CreateMultipartUpload, CopyObject and POST uploads
+  func (tiering) ToBackend(op *s3gw.Op, size int64) string {
+  	if size == s3gw.SizeUnknown || size >= 64 * 1024 * 1024 {
+  		return "hdd" // the backend's name for the large-object pool
+  	}
+  	return "ssd"
+  }
+
+  // what the client is shown wherever the API reports a class
+  func (tiering) ToClient(op *s3gw.Op, backendClass string) string {
+  	return "STANDARD"
+  }
+
+  gw.SetStorageClassMapper(tiering{})
+  ```
+
+  `ToBackend` runs after the policies, the Authorizer and the interceptors admitted the operation, so it sees the full `Op` — tenant, bucket, `BucketMetadata`/`KeyMetadata`, and `Request.StorageClass` should you want to honor a request — and its answer replaces the client's header entirely (`""` sends none, the backend's default). Refusing a client that names a class at all stays an Authorizer decision on `Request.StorageClass`. `ToClient` is called for every value the API would report — the `x-amz-storage-class` header of GetObject/HeadObject and the `StorageClass` element of ListObjects, ListObjectVersions, GetObjectAttributes, ListMultipartUploads and ListParts, so once per object in a listing — with the backend's name, `""` included; `""` back omits the header or element, which is what S3 does for the default class. `Op.Response.StorageClass` keeps the backend's own name, so per-class billing in an interceptor sees the truth while the client sees the front's classes. The two directions are one interface on purpose: choosing backend classes on writes while reporting them unmapped on reads would show clients names they never asked for and S3 does not define, so a mapper that means to pass one direction through writes it out (`return op.Request.StorageClass`, `return backendClass`). Without a mapper both directions pass through unchanged, for a service that means to expose its backend's classes (Amazon S3 behind the gateway, say).
 - **Storage per class cannot come from the hooks at all**, because lifecycle transitions and expirations happen inside the backend and no request reaches the gateway. Sweep the backend buckets periodically instead: `ListObjectsV2` reports `Size` and `StorageClass` per object, `ListObjectVersions` the noncurrent versions, and incomplete multipart parts appear in neither. User metadata and tags are not in a listing at all, so an attribute you want to aggregate storage by belongs in the storage class — otherwise the sweep needs a `HEAD` per object.
 - **If your hook panics**, the gateway recovers at the request boundary: the client gets an `InternalError` when nothing has been written yet, or an aborted connection when the response was already on its way (it cannot be replaced by an error document), and the observer is called exactly once either way with a `*s3gw.PanicError` as `RequestInfo.Err`. Its message names the panic value; the stack is on the error, not in the message, so ask for it when you want it:
 
@@ -423,7 +447,7 @@ Your `store.Store` implementation — and the control plane's write path that fe
   		return nil, nil // unlimited
   	}
   	l, _ := limiters.LoadOrStore(op.Tenant,
-  		rate.NewLimiter(rate.Limit(plan.BytesPerSec), 1<<20)) // burst 1 MiB
+  		rate.NewLimiter(rate.Limit(plan.BytesPerSec), 1024 * 1024)) // burst 1 MiB
   	lim := l.(*rate.Limiter)
   	return lim, lim // one budget for both directions
   })

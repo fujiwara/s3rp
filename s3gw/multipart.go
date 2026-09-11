@@ -44,9 +44,7 @@ func (g *Gateway) createMultipartUpload(c *opCtx) error {
 			in.Expires = aws.Time(t)
 		}
 	}
-	if v := c.signed(hdrStorageClass); v != "" {
-		in.StorageClass = types.StorageClass(v)
-	}
+	in.StorageClass = c.backendStorageClass(c.signed(hdrStorageClass), SizeUnknown)
 	if v := c.signed(hdrTagging); v != "" {
 		in.Tagging = aws.String(v)
 	}
@@ -275,7 +273,7 @@ func (g *Gateway) listParts(c *opCtx) error {
 		Bucket:       rt.cfg.Name,
 		Key:          key,
 		UploadID:     aws.ToString(in.UploadId),
-		StorageClass: string(out.StorageClass),
+		StorageClass: c.clientStorageClass(string(out.StorageClass)),
 		Owner:        owner,
 		Initiator:    owner,
 	}
@@ -374,7 +372,7 @@ func (g *Gateway) listMultipartUploads(c *opCtx) error {
 	owner := tenantOwner(c.rt.cfg.Tenant)
 	for _, u := range out.Uploads {
 		upload := s3xml.Upload{
-			StorageClass: string(u.StorageClass),
+			StorageClass: c.clientStorageClass(string(u.StorageClass)),
 			Owner:        owner,
 			Initiator:    owner,
 		}
