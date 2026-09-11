@@ -68,7 +68,7 @@ func (g *Gateway) getObjectAttributes(c *opCtx) error {
 
 	result := &s3xml.GetObjectAttributesResult{
 		XMLNS:        s3xml.Namespace,
-		StorageClass: string(out.StorageClass),
+		StorageClass: c.clientStorageClass(string(out.StorageClass)),
 		ObjectSize:   out.ObjectSize,
 	}
 	if out.ETag != nil {

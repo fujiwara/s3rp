@@ -96,7 +96,7 @@ func (g *Gateway) listObjectVersions(c *opCtx) error {
 	owner := tenantOwner(c.rt.cfg.Tenant)
 	for _, v := range out.Versions {
 		version := s3xml.ObjectVersion{
-			StorageClass: string(v.StorageClass),
+			StorageClass: c.clientStorageClass(string(v.StorageClass)),
 			Owner:        owner,
 		}
 		if v.Key != nil {

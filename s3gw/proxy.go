@@ -95,7 +95,7 @@ func (g *Gateway) getObject(c *opCtx) error {
 		ContentEncoding:    out.ContentEncoding,
 		ContentLanguage:    out.ContentLanguage,
 		Expires:            out.ExpiresString,
-		StorageClass:       string(out.StorageClass),
+		StorageClass:       c.clientStorageClass(string(out.StorageClass)),
 		VersionID:          out.VersionId,
 		SSE:                out.ServerSideEncryption,
 		SSEKMSKeyID:        out.SSEKMSKeyId,
@@ -173,7 +173,7 @@ func (g *Gateway) headObject(c *opCtx) error {
 		ContentEncoding:    out.ContentEncoding,
 		ContentLanguage:    out.ContentLanguage,
 		Expires:            out.ExpiresString,
-		StorageClass:       string(out.StorageClass),
+		StorageClass:       c.clientStorageClass(string(out.StorageClass)),
 		VersionID:          out.VersionId,
 		SSE:                out.ServerSideEncryption,
 		SSEKMSKeyID:        out.SSEKMSKeyId,
@@ -243,9 +243,7 @@ func (g *Gateway) putObject(c *opCtx) error {
 			in.Expires = aws.Time(t)
 		}
 	}
-	if v := c.signed(hdrStorageClass); v != "" {
-		in.StorageClass = types.StorageClass(v)
-	}
+	in.StorageClass = c.backendStorageClass(c.signed(hdrStorageClass), length)
 	if v := c.signed(hdrTagging); v != "" {
 		in.Tagging = aws.String(v)
 	}
@@ -421,7 +419,7 @@ func (g *Gateway) listObjectsV2(c *opCtx) error {
 	if in.FetchOwner != nil && *in.FetchOwner {
 		owner = tenantOwner(c.rt.cfg.Tenant)
 	}
-	result.Contents = objectsFromSDK(out.Contents, owner)
+	result.Contents = c.objectsFromSDK(out.Contents, owner)
 	for _, cp := range out.CommonPrefixes {
 		if cp.Prefix != nil {
 			result.CommonPrefixes = append(result.CommonPrefixes, s3xml.CommonPrefix{Prefix: *cp.Prefix})
@@ -440,11 +438,11 @@ func tenantOwner(tenant string) *s3xml.Owner {
 
 // objectsFromSDK converts listed objects for the response; owner (nil =
 // omitted) replaces whatever owner the backend reported.
-func objectsFromSDK(objects []types.Object, owner *s3xml.Owner) []s3xml.Object {
+func (c *opCtx) objectsFromSDK(objects []types.Object, owner *s3xml.Owner) []s3xml.Object {
 	result := make([]s3xml.Object, 0, len(objects))
 	for _, obj := range objects {
 		o := s3xml.Object{
-			StorageClass: string(obj.StorageClass),
+			StorageClass: c.clientStorageClass(string(obj.StorageClass)),
 			Owner:        owner,
 		}
 		if obj.Key != nil {
@@ -520,7 +518,7 @@ func (g *Gateway) listObjectsV1(c *opCtx) error {
 		result.IsTruncated = *out.IsTruncated
 	}
 	// ListObjects (V1) always carries an Owner on AWS
-	result.Contents = objectsFromSDK(out.Contents, tenantOwner(c.rt.cfg.Tenant))
+	result.Contents = c.objectsFromSDK(out.Contents, tenantOwner(c.rt.cfg.Tenant))
 	for _, cp := range out.CommonPrefixes {
 		if cp.Prefix != nil {
 			result.CommonPrefixes = append(result.CommonPrefixes, s3xml.CommonPrefix{Prefix: *cp.Prefix})

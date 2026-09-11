@@ -76,9 +76,7 @@ func (g *Gateway) copyObject(c *opCtx) error {
 	if v := c.attr("Content-Type"); v != "" {
 		in.ContentType = aws.String(v)
 	}
-	if v := c.signed(hdrStorageClass); v != "" {
-		in.StorageClass = types.StorageClass(v)
-	}
+	in.StorageClass = c.backendStorageClass(c.signed(hdrStorageClass), SizeUnknown)
 	if v := c.signed("x-amz-tagging-directive"); v != "" {
 		in.TaggingDirective = types.TaggingDirective(v)
 	}

@@ -23,10 +23,10 @@ import (
 )
 
 // Byte-size units, so size constants read with their unit instead of as a
-// bare shift.
+// bare number.
 const (
-	kib = 1 << 10
-	mib = 1 << 20
+	kib = 1024
+	mib = 1024 * kib
 )
 
 // Gateway serves the S3 API: it verifies the SigV4 signature of each request
@@ -54,6 +54,9 @@ type Gateway struct {
 	observer       Observer
 	requestID      func(r *http.Request) string
 	bandwidthLimit func(op *Op) (in, out BandwidthLimiter)
+	// storageClass maps classes between client and backend (intercept.go);
+	// nil passes both directions through
+	storageClass StorageClassMapper
 
 	newClient     func(ctx context.Context, b *store.Backend) (BackendClient, error)
 	clientOptions func(b *store.Backend) []func(*s3.Options)

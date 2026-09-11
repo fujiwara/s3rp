@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"slices"
+
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 // Hooks a service installs to take part in each operation.
@@ -120,7 +122,9 @@ type OpRequest struct {
 	// versitygw stores the object as STANDARD without a word — and the S3
 	// API returns no class on a write, so this is what was asked for and
 	// there is no gateway-side way to learn what it became. An Authorizer
-	// is the place to refuse a class this tenant may not use.
+	// is the place to refuse a class this tenant may not use, and with a
+	// StorageClassMapper installed this is only ever a request: the mapper
+	// decides what the backend is told.
 	StorageClass string `json:"storage_class,omitempty"`
 	// Metadata is the user metadata the request carries (the x-amz-meta-*
 	// names, prefix removed), which is where a service's own per-object
@@ -157,7 +161,8 @@ type OpResponse struct {
 	// or retrieval billing must be based on. Reads only — no S3 write
 	// returns a storage class. Empty means the backend named none, which
 	// is what S3 does for an object left in the default class; it does not
-	// mean the class is unknown.
+	// mean the class is unknown. This is the backend's own name for it,
+	// before a StorageClassMapper decides what the client is shown.
 	StorageClass string `json:"storage_class,omitempty"`
 	// Metadata is the object's stored user metadata (prefix removed), on
 	// reads only, and nil when the object has none — same rule as the
@@ -229,6 +234,81 @@ func waitBandwidth(l BandwidthLimiter, ctx context.Context, n int) error {
 // docs/building-a-service.md).
 func (g *Gateway) SetBandwidthLimit(f func(op *Op) (in, out BandwidthLimiter)) {
 	g.bandwidthLimit = f
+}
+
+// SizeUnknown is the size handed to a backend storage class hook when the
+// operation's final object size is not known at the time the class must be
+// chosen: CreateMultipartUpload (the class is fixed before any part is
+// uploaded), CopyObject (the source's size would cost a HeadObject) and a
+// POST upload (the file part is read after the class is decided).
+const SizeUnknown int64 = -1
+
+// StorageClassMapper puts the service between the storage class a client
+// sees and the one the backend uses, in both directions at once. It exists
+// because a client naming the class would name the backend's classes —
+// physical pools, tiers — and expose how the backend is laid out; with a
+// mapper installed, which class a write lands in is a rule of the service
+// (size, tenant plan, bucket) and what a read reports is the service's
+// vocabulary. The two directions are one interface on purpose: choosing
+// backend classes on writes while reporting them as they are on reads would
+// show clients class names they never asked for and S3 does not define, so
+// a mapper that means to pass one direction through says so explicitly:
+// ToClient returning backendClass, and ToBackend returning the requested
+// class — guarding the pointer, since Op.Request is nil for a write that
+// asked for nothing:
+//
+//	if op.Request == nil {
+//		return ""
+//	}
+//	return op.Request.StorageClass
+//
+// Without a mapper both directions pass through unchanged.
+type StorageClassMapper interface {
+	// ToBackend returns the class every write sends the backend —
+	// PutObject, POST upload, CopyObject and CreateMultipartUpload — in
+	// place of whatever the client asked for. It is called after the
+	// policies, the Authorizer and the interceptors have admitted the
+	// operation, with the op and the object's size in bytes (SizeUnknown
+	// when the operation does not know it yet). "" sends none, which is the
+	// backend's default class. The client's x-amz-storage-class never
+	// reaches the backend on its own: it stays on Op.Request.StorageClass
+	// for the Authorizer to refuse, or for this method to return when it
+	// means to honor it.
+	ToBackend(op *Op, size int64) string
+	// ToClient returns what the client is shown wherever the S3 API
+	// reports a class: the x-amz-storage-class header of
+	// GetObject/HeadObject, and the StorageClass element of ListObjects,
+	// ListObjectVersions, GetObjectAttributes, ListMultipartUploads and
+	// ListParts. It is called once per reported value (per object in a
+	// listing, so keep it cheap) with the class the backend named — ""
+	// included, which is what S3 says for the default class. "" omits the
+	// header or element. Op.Response.StorageClass carries the backend's own
+	// value, before this method, so billing sees the real class while the
+	// client sees the front's.
+	ToClient(op *Op, backendClass string) string
+}
+
+// SetStorageClassMapper installs the storage class mapping. nil (the
+// default) forwards the client's class to the backend and the backend's
+// class to the client as they are.
+func (g *Gateway) SetStorageClassMapper(m StorageClassMapper) { g.storageClass = m }
+
+// backendStorageClass is what a write sends the backend: the mapper's
+// choice when one is installed, the client's signed request otherwise.
+func (c *opCtx) backendStorageClass(requested string, size int64) types.StorageClass {
+	if c.g.storageClass != nil {
+		return types.StorageClass(c.g.storageClass.ToBackend(c.op, size))
+	}
+	return types.StorageClass(requested)
+}
+
+// clientStorageClass is what the client is shown for a class the backend
+// reported.
+func (c *opCtx) clientStorageClass(backendClass string) string {
+	if c.g.storageClass != nil {
+		return c.g.storageClass.ToClient(c.op, backendClass)
+	}
+	return backendClass
 }
 
 // runOp applies the hooks around one operation.

@@ -12,7 +12,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/fujiwara/s3rp/cors"
 	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/s3xml"
@@ -295,9 +294,7 @@ func (g *Gateway) postPutObject(c *opCtx, fields map[string]string, file *multip
 			in.Expires = aws.Time(t)
 		}
 	}
-	if v := fields[hdrStorageClass]; v != "" {
-		in.StorageClass = types.StorageClass(v)
-	}
+	in.StorageClass = c.backendStorageClass(fields[hdrStorageClass], SizeUnknown)
 	if v := fields[hdrTagging]; v != "" {
 		in.Tagging = aws.String(v)
 	}
