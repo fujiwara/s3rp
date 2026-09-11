@@ -94,7 +94,9 @@ func (c *opCtx) clientKMSKeyID(keyID *string) *string {
 }
 
 // setSSEHeaders reports the backend's encryption result to the client. The
-// key id is the same opaque name the client sent, not a backend secret.
+// key id must be the client-facing one — clientKMSKeyID's answer, never the
+// backend's raw id — since with a mapper the two differ, and on a
+// default-encrypted read the client never sent one at all.
 func setSSEHeaders(h http.Header, enc types.ServerSideEncryption, kmsKeyID *string) {
 	if enc != "" {
 		h.Set(hdrSSE, string(enc))

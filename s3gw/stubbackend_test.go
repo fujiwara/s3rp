@@ -36,6 +36,8 @@ type stubBackend struct {
 	createMPUOut   *s3.CreateMultipartUploadOutput
 	uploadPartIns  []*s3.UploadPartInput
 	uploadPartData [][]byte
+	// uploadPartOut, when set, supplies the fields beyond the ETag (SSE)
+	uploadPartOut  *s3.UploadPartOutput
 	completeMPUIn  *s3.CompleteMultipartUploadInput
 	completeMPUOut *s3.CompleteMultipartUploadOutput
 	abortMPUIn     *s3.AbortMultipartUploadInput
@@ -135,7 +137,12 @@ func (b *stubBackend) UploadPart(ctx context.Context, in *s3.UploadPartInput, _ 
 		return nil, err
 	}
 	b.uploadPartData = append(b.uploadPartData, data)
-	return &s3.UploadPartOutput{ETag: aws.String(fmt.Sprintf(`"part-etag-%d"`, len(b.uploadPartIns)))}, nil
+	out := &s3.UploadPartOutput{}
+	if b.uploadPartOut != nil {
+		*out = *b.uploadPartOut
+	}
+	out.ETag = aws.String(fmt.Sprintf(`"part-etag-%d"`, len(b.uploadPartIns)))
+	return out, nil
 }
 
 func (b *stubBackend) CompleteMultipartUpload(ctx context.Context, in *s3.CompleteMultipartUploadInput, _ ...func(*s3.Options)) (*s3.CompleteMultipartUploadOutput, error) {

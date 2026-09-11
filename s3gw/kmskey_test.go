@@ -240,6 +240,9 @@ func TestKMSKeyToClientOnReports(t *testing.T) {
 			ServerSideEncryption: kms, SSEKMSKeyId: backendKey},
 		createMPUOut:   &s3.CreateMultipartUploadOutput{UploadId: aws.String("u1"), ServerSideEncryption: kms, SSEKMSKeyId: backendKey},
 		completeMPUOut: &s3.CompleteMultipartUploadOutput{ETag: aws.String(`"m"`), ServerSideEncryption: kms, SSEKMSKeyId: backendKey},
+		uploadPartOut:  &s3.UploadPartOutput{ServerSideEncryption: kms, SSEKMSKeyId: backendKey},
+		upcOut: &s3.UploadPartCopyOutput{CopyPartResult: &types.CopyPartResult{ETag: aws.String(`"pc"`)},
+			ServerSideEncryption: kms, SSEKMSKeyId: backendKey},
 		getEncOut: &s3.GetBucketEncryptionOutput{ServerSideEncryptionConfiguration: &types.ServerSideEncryptionConfiguration{
 			Rules: []types.ServerSideEncryptionRule{{ApplyServerSideEncryptionByDefault: &types.ServerSideEncryptionByDefault{
 				SSEAlgorithm: kms, KMSMasterKeyID: backendKey}}}}},
@@ -279,6 +282,16 @@ func TestKMSKeyToClientOnReports(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	part, err := client.UploadPart(ctx, &s3.UploadPartInput{Bucket: bucket, Key: aws.String("m"), UploadId: aws.String("u1"),
+		PartNumber: aws.Int32(1), Body: strings.NewReader("x")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	partCopy, err := client.UploadPartCopy(ctx, &s3.UploadPartCopyInput{Bucket: bucket, Key: aws.String("m"), UploadId: aws.String("u1"),
+		PartNumber: aws.Int32(2), CopySource: aws.String("testbucket/a")})
+	if err != nil {
+		t.Fatal(err)
+	}
 	done, err := client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{Bucket: bucket, Key: aws.String("m"), UploadId: aws.String("u1"),
 		MultipartUpload: &types.CompletedMultipartUpload{Parts: []types.CompletedPart{{PartNumber: aws.Int32(1), ETag: aws.String(`"p"`)}}}})
 	if err != nil {
@@ -292,6 +305,7 @@ func TestKMSKeyToClientOnReports(t *testing.T) {
 	for name, got := range map[string]*string{
 		"PutObject": put.SSEKMSKeyId, "HeadObject": head.SSEKMSKeyId, "GetObject": get.SSEKMSKeyId,
 		"CopyObject": cp.SSEKMSKeyId, "CreateMultipartUpload": mpu.SSEKMSKeyId, "CompleteMultipartUpload": done.SSEKMSKeyId,
+		"UploadPart": part.SSEKMSKeyId, "UploadPartCopy": partCopy.SSEKMSKeyId,
 		"GetBucketEncryption": enc.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.KMSMasterKeyID,
 	} {
 		if aws.ToString(got) != "archive" {
@@ -299,8 +313,10 @@ func TestKMSKeyToClientOnReports(t *testing.T) {
 		}
 	}
 	// every reported id went through the mapper, and only reported ones
-	want := []string{"vault/testtenant/archive", "vault/testtenant/archive", "vault/testtenant/archive",
-		"vault/testtenant/archive", "vault/testtenant/archive", "vault/testtenant/archive", "vault/testtenant/archive"}
+	want := make([]string, 9) // one per operation above
+	for i := range want {
+		want[i] = "vault/testtenant/archive"
+	}
 	if diff := cmp.Diff(want, m.reported); diff != "" {
 		t.Errorf("key ids handed to the mapper (-want +got):\n%s", diff)
 	}
