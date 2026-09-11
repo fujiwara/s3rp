@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.0.14](https://github.com/fujiwara/s3rp/compare/v0.0.13...v0.0.14) - 2026-09-11
+
+- Add StorageClassMapper to keep backend storage classes out of the API by @fujiwara in https://github.com/fujiwara/s3rp/pull/135
+- Restructure the hooks section of building-a-service.md by @fujiwara in https://github.com/fujiwara/s3rp/pull/137
+- Refuse x-amz-* request headers no operation reads by @fujiwara in https://github.com/fujiwara/s3rp/pull/138
+- Add KMSKeyMapper to keep backend KMS key ids out of the API by @fujiwara in https://github.com/fujiwara/s3rp/pull/139
+
 ## [v0.0.13](https://github.com/fujiwara/s3rp/compare/v0.0.12...v0.0.13) - 2026-09-02
 
 - Add a per-backend circuit breaker by @fujiwara in https://github.com/fujiwara/s3rp/pull/127
