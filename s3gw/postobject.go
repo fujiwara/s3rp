@@ -303,7 +303,7 @@ func (g *Gateway) postPutObject(c *opCtx, fields map[string]string, file *multip
 	if v := fields[hdrTagging]; v != "" {
 		in.Tagging = aws.String(v)
 	}
-	if s3e := applySSE(postFieldHeader(fields), &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
+	if s3e := c.applySSE(postFieldHeader(fields), &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
 		return s3e
 	}
 	if md := postFieldMeta(fields); len(md) > 0 {
@@ -340,7 +340,7 @@ func (g *Gateway) postPutObject(c *opCtx, fields map[string]string, file *multip
 	if out.VersionId != nil {
 		w.Header().Set("x-amz-version-id", *out.VersionId)
 	}
-	setSSEHeaders(w.Header(), out.ServerSideEncryption, out.SSEKMSKeyId)
+	setSSEHeaders(w.Header(), out.ServerSideEncryption, c.clientKMSKeyID(out.SSEKMSKeyId))
 	// the front URL of the object, never the backend's
 	location := objectURL(r, rt.target, key)
 

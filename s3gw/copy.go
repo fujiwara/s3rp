@@ -103,7 +103,7 @@ func (g *Gateway) copyObject(c *opCtx) error {
 			in.CopySourceIfUnmodifiedSince = aws.Time(t)
 		}
 	}
-	if s3e := applySSE(c.hdr, &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
+	if s3e := c.applySSE(c.hdr, &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
 		return s3e
 	}
 	out, err := rt.client.CopyObject(r.Context(), in)
@@ -122,7 +122,7 @@ func (g *Gateway) copyObject(c *opCtx) error {
 	if out.VersionId != nil {
 		w.Header().Set("x-amz-version-id", *out.VersionId)
 	}
-	setSSEHeaders(w.Header(), out.ServerSideEncryption, out.SSEKMSKeyId)
+	setSSEHeaders(w.Header(), out.ServerSideEncryption, c.clientKMSKeyID(out.SSEKMSKeyId))
 	if out.CopySourceVersionId != nil {
 		w.Header().Set("x-amz-copy-source-version-id", *out.CopySourceVersionId)
 	}
@@ -163,7 +163,7 @@ func (g *Gateway) uploadPartCopy(c *opCtx) error {
 	if out.CopySourceVersionId != nil {
 		w.Header().Set("x-amz-copy-source-version-id", *out.CopySourceVersionId)
 	}
-	setSSEHeaders(w.Header(), out.ServerSideEncryption, out.SSEKMSKeyId)
+	setSSEHeaders(w.Header(), out.ServerSideEncryption, c.clientKMSKeyID(out.SSEKMSKeyId))
 	result := &s3xml.CopyPartResult{XMLNS: s3xml.Namespace}
 	if cr := out.CopyPartResult; cr != nil {
 		if cr.ETag != nil {

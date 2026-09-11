@@ -109,9 +109,10 @@ type OpRequest struct {
 	// SSE is the server-side encryption the request asks for ("AES256" or
 	// "aws:kms", empty when none), and SSEKMSKeyID the KMS key id it
 	// names, when it does. The gateway forwards both to the backend
-	// untouched; whether this identity may use this key — or whether this
-	// bucket's backend supports encryption at all — is the service's
-	// decision, made in an Authorizer. Nothing else in the request path
+	// untouched (the key id through a KMSKeyMapper when one is installed);
+	// whether this identity may use this key — or whether this bucket's
+	// backend supports encryption at all — is the service's decision, made
+	// in an Authorizer. Nothing else in the request path
 	// knows which tenant owns which key, and a backend that lacks SSE may
 	// ignore the request silently rather than refuse it, which is what
 	// comparing this with Response.SSE reveals.
@@ -153,7 +154,9 @@ func (r *OpRequest) empty() bool {
 type OpResponse struct {
 	// SSE and SSEKMSKeyID are the encryption the backend says it applied.
 	// A write that asked for SSE and comes back without it was served by a
-	// backend that ignored the request rather than refusing it.
+	// backend that ignored the request rather than refusing it. The key id
+	// is the backend's own, before a KMSKeyMapper decides what the client
+	// is shown.
 	SSE         string `json:"sse,omitempty"`
 	SSEKMSKeyID string `json:"sse_kms_key_id,omitempty"`
 	// StorageClass is the class the object is actually in, so it accounts
@@ -287,6 +290,39 @@ type StorageClassMapper interface {
 	// client sees the front's.
 	ToClient(op *Op, backendClass string) string
 }
+
+// KMSKeyMapper puts the service between the SSE-KMS key id a client names
+// and the one the backend's KMS resolves, in both directions — the same
+// shape, and the same reason, as StorageClassMapper: the backend's key ids
+// are its KMS's namespace (a Vault path, a key ARN of the operator's
+// account), so a client naming one, or reading one back, sees how the
+// backend is set up. With a mapper the tenant names keys in the service's
+// vocabulary and the service resolves them. Without one both directions
+// pass through unchanged.
+type KMSKeyMapper interface {
+	// ToBackend returns the key id every SSE-KMS write sends the backend —
+	// PutObject, POST upload, CopyObject and CreateMultipartUpload asking
+	// for aws:kms — in place of the one the client named (keyID is "" when
+	// it named none, which on S3 means the account's default key). It is
+	// called after the policies, the Authorizer and the interceptors have
+	// admitted the operation, and only for a write that asks for aws:kms.
+	// "" sends none, so the backend applies its default key. The client's
+	// id stays on Op.Request.SSEKMSKeyID for the Authorizer to refuse, or
+	// for this method to return when it means to honor it.
+	ToBackend(op *Op, keyID string) string
+	// ToClient returns what the client is shown for a key id the backend
+	// reported: the x-amz-server-side-encryption-aws-kms-key-id header of
+	// every write and read that carries one, and the KMSMasterKeyID of
+	// GetBucketEncryption. It is called only when the backend named a key;
+	// "" omits the header or element. Op.Response.SSEKMSKeyID carries the
+	// backend's own id, before this method.
+	ToClient(op *Op, keyID string) string
+}
+
+// SetKMSKeyMapper installs the SSE-KMS key id mapping. nil (the default)
+// forwards the client's key id to the backend and the backend's to the
+// client as they are.
+func (g *Gateway) SetKMSKeyMapper(m KMSKeyMapper) { g.kmsKey = m }
 
 // SetStorageClassMapper installs the storage class mapping. nil (the
 // default) forwards the client's class to the backend and the backend's

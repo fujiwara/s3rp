@@ -55,7 +55,7 @@ func (g *Gateway) getBucketEncryption(c *opCtx) error {
 			if d := rule.ApplyServerSideEncryptionByDefault; d != nil {
 				x.ApplyServerSideEncryptionByDefault = &s3xml.ServerSideEncryptionByDefault{
 					SSEAlgorithm:   string(d.SSEAlgorithm),
-					KMSMasterKeyID: aws.ToString(d.KMSMasterKeyID),
+					KMSMasterKeyID: aws.ToString(c.clientKMSKeyID(d.KMSMasterKeyID)),
 				}
 			}
 			result.Rules = append(result.Rules, x)

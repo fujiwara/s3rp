@@ -22,7 +22,7 @@ Which request headers the gateway honors, which it refuses by name, and what hap
 | `x-amz-copy-source` | PutObject → CopyObject, UploadPart → UploadPartCopy | source resolved within the requester's tenant; same backend only |
 | `x-amz-copy-source-if-match`, `-if-none-match`, `-if-modified-since`, `-if-unmodified-since` | CopyObject | |
 | `x-amz-copy-source-range` | UploadPartCopy | |
-| `x-amz-server-side-encryption`, `x-amz-server-side-encryption-aws-kms-key-id` | PutObject, CopyObject, CreateMultipartUpload, POST upload | `AES256` or `aws:kms`; the key id is forwarded as an opaque name ([Server-side encryption](s3-api.md#server-side-encryption)) |
+| `x-amz-server-side-encryption`, `x-amz-server-side-encryption-aws-kms-key-id` | PutObject, CopyObject, CreateMultipartUpload, POST upload | `AES256` or `aws:kms`; the key id is forwarded as an opaque name, unless a service installs a `KMSKeyMapper` ([Server-side encryption](s3-api.md#server-side-encryption)) |
 | `x-amz-object-lock-mode`, `x-amz-object-lock-retain-until-date` | PutObject, CopyObject, CreateMultipartUpload | require `s3:PutObjectRetention` |
 | `x-amz-object-lock-legal-hold` | PutObject, CopyObject, CreateMultipartUpload | requires `s3:PutObjectLegalHold` |
 | `x-amz-bypass-governance-retention` | DeleteObject, DeleteObjects, PutObjectRetention | requires `s3:BypassGovernanceRetention` |
@@ -77,4 +77,4 @@ Unknown standard headers are ignored, as they are by any HTTP server.
 
 ## Response headers not relayed
 
-What the backend answers is reconstructed, not forwarded, so a few backend-side response headers never reach the client: `x-amz-expiration` (would name the operator's lifecycle rules), `x-amz-restore`, `x-amz-replication-status`, and the backend's own `x-amz-request-id` / `x-amz-id-2` (the client gets the gateway's request id, which is what the observer logs). `x-amz-storage-class` and the SSE headers are relayed, subject to the mapping a service installs.
+What the backend answers is reconstructed, not forwarded, so a few backend-side response headers never reach the client: `x-amz-expiration` (would name the operator's lifecycle rules), `x-amz-restore`, `x-amz-replication-status`, and the backend's own `x-amz-request-id` / `x-amz-id-2` (the client gets the gateway's request id, which is what the observer logs). `x-amz-storage-class` and the SSE headers are relayed, subject to the mapping a service installs (`StorageClassMapper`, `KMSKeyMapper`).

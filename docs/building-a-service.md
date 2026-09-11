@@ -16,6 +16,7 @@ In the order you will meet them: what the gateway cannot run without, then what 
 | `s3gw.Interceptor` | wrapping each operation: metering — the byte counts are filled in by the time `next` returns — and the per-tenant concurrency cap. | [Hooks and metering](#hooks-and-metering) |
 | `SetBandwidthLimit` | pacing the streams themselves, which admission hooks cannot do. | [Hooks and metering](#hooks-and-metering) |
 | `s3gw.StorageClassMapper` | deciding which backend storage class each write lands in, and what class the client is shown — keeping the backend's class names out of the tenant's hands. | [Hooks and metering](#hooks-and-metering) |
+| `s3gw.KMSKeyMapper` | the same for SSE-KMS key ids: resolving the key names tenants use to the backend KMS's ids, and back. | [Hooks and metering](#hooks-and-metering) |
 | the wrapping handler and listener | production exposure: TLS termination and what must run **before** verification — rate limiting, request-body caps, the global connection cap, health checks — and the path-handling rules every hop in front must obey. | [In front of the gateway](#in-front-of-the-gateway) |
 | `SetClientOptions`, cache sizes | tuning: instrumenting the backend clients the gateway builds and sizing the caches they live in; the defaults are sound to start with. | [Backend clients and the gateway's caches](#backend-clients-and-the-gateways-caches) |
 
@@ -318,6 +319,7 @@ Once the bucket and user policies have allowed an operation, it runs through the
 | `Interceptor` (`Use`) | around the operation, nested like middleware | metering after `next()`, per-tenant concurrency caps |
 | `SetBandwidthLimit` | after the `Authorizer`, once per operation | picking the limiters that pace the request and response bodies |
 | `StorageClassMapper` | on every write (backend side) and every read that reports a class (client side) | choosing the backend class per object; hiding the backend's class names |
+| `KMSKeyMapper` | on every `aws:kms` write (backend side) and every response that reports a key id (client side) | resolving tenant key names to backend KMS ids; hiding the backend's key namespace |
 
 All of them get the same `Op`: what is being done, by whom, to what, what the client asked for about the object and what the backend reported, plus `BucketMetadata` / `KeyMetadata` — whatever your store attached to the definitions, so a hook reads the quota or plan the lookup already loaded instead of querying again (excluded from `Op`'s JSON; a store that shares definitions across requests must make them safe for concurrent reads).
 
@@ -346,6 +348,7 @@ The topics, in the order you are likely to need them:
 - [Concurrency limiting](#concurrency-limiting)
 - [Bandwidth limiting](#bandwidth-limiting)
 - [Storage classes](#storage-classes) — the mapper, and where per-class billing comes from
+- [KMS key ids](#kms-key-ids) — the same mapping for SSE-KMS
 - [Panics in hooks](#panics-in-hooks)
 
 ### What `Op` tells you
@@ -498,6 +501,36 @@ Where per-class billing comes from:
 - **Reads report it** on `Op.Response.StorageClass`, which is where retrieval or request billing per class reads it.
 - **Storage per class cannot come from the hooks at all**: lifecycle transitions and expirations happen inside the backend, and no request reaches the gateway. Sweep the backend buckets periodically — `ListObjectsV2` reports `Size` and `StorageClass` per object, `ListObjectVersions` the noncurrent versions, incomplete multipart parts appear in neither. Listings carry no user metadata or tags, so an attribute you want to aggregate storage by belongs in the storage class; otherwise the sweep needs a `HEAD` per object.
 
+### KMS key ids
+
+SSE-KMS names a key, and the key id the backend understands is its KMS's namespace — a Vault path, a key ARN in the operator's account. Forwarded as is, that namespace is what tenants write into their requests and read back from every encrypted object. A `KMSKeyMapper` has the same shape as the storage class mapper, for the same reason:
+
+```go
+type keyAliases struct{}
+
+// what an aws:kms write tells the backend; keyID is "" when the client
+// named no key (S3's "use the default key")
+func (keyAliases) ToBackend(op *s3gw.Op, keyID string) string {
+	if keyID == "" {
+		keyID = "default"
+	}
+	return "vault/" + op.Tenant + "/" + keyID // the backend KMS's name for it
+}
+
+// what the client is shown for a key id the backend reported
+func (keyAliases) ToClient(op *s3gw.Op, keyID string) string {
+	return strings.TrimPrefix(keyID, "vault/"+op.Tenant+"/")
+}
+
+gw.SetKMSKeyMapper(keyAliases{})
+```
+
+- `ToBackend` runs only for a write that asks for `aws:kms` (PutObject, POST upload, CopyObject, CreateMultipartUpload), after the hooks admitted it; SSE-S3 and unencrypted writes never consult it. Its answer replaces the client's key id entirely; `""` sends none, so the backend applies its default key. Whether the tenant may use the key it named is still the Authorizer's decision on `Request.SSEKMSKeyID`, which keeps the client's id.
+- `ToClient` runs for every key id the backend reports — the `x-amz-server-side-encryption-aws-kms-key-id` header of writes and reads, and `KMSMasterKeyID` in GetBucketEncryption — and only then: a response without a key id (SSE-S3, unencrypted) has nothing to map. `""` omits the header or element; the encryption mode header is reported regardless.
+- `Op.Response.SSEKMSKeyID` keeps the backend's own id, before `ToClient`.
+- The mapper resolves names; it does not decide whether to encrypt. Forcing encryption on a bucket is backend bucket configuration (default encryption, written by the control plane), which is exactly the case where `ToClient` matters: the backend then reports its own key id on every object.
+- Without a mapper both directions pass through unchanged. One interface for both directions, as with storage classes: mapping the request while echoing the backend's id back would hand the tenant the backend's namespace anyway.
+
 ### Panics in hooks
 
 The gateway recovers at the request boundary: the client gets an `InternalError` when nothing has been written yet, or an aborted connection when the response was already on its way, and the observer is called exactly once either way with a `*s3gw.PanicError` as `RequestInfo.Err`. Its message names the panic value; the stack is on the error:
@@ -520,7 +553,7 @@ Two things it cannot do: a panic in a goroutine *your* hook starts is fatal to t
 - Cap per-tenant in-flight operations in an interceptor: acquire before `next`, release after, refuse with `503 SlowDown`.
 - Use `context.WithoutCancel(ctx)` for your own I/O after `next`, or hand the self-contained `Op` to a queue.
 - Share limiters and semaphores at the granularity you mean to cap (tenant, user, bucket), with a limiter burst of 256 KiB–1 MiB.
-- Install a `StorageClassMapper` when the backend's class names are not the API you mean to expose.
+- Install a `StorageClassMapper` when the backend's class names are not the API you mean to expose, and a `KMSKeyMapper` when its KMS key ids are not.
 
 **Don't**
 

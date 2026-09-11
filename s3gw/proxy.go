@@ -98,7 +98,7 @@ func (g *Gateway) getObject(c *opCtx) error {
 		StorageClass:       c.clientStorageClass(string(out.StorageClass)),
 		VersionID:          out.VersionId,
 		SSE:                out.ServerSideEncryption,
-		SSEKMSKeyID:        out.SSEKMSKeyId,
+		SSEKMSKeyID:        c.clientKMSKeyID(out.SSEKMSKeyId),
 		Metadata:           out.Metadata,
 	})
 	if out.AcceptRanges != nil {
@@ -176,7 +176,7 @@ func (g *Gateway) headObject(c *opCtx) error {
 		StorageClass:       c.clientStorageClass(string(out.StorageClass)),
 		VersionID:          out.VersionId,
 		SSE:                out.ServerSideEncryption,
-		SSEKMSKeyID:        out.SSEKMSKeyId,
+		SSEKMSKeyID:        c.clientKMSKeyID(out.SSEKMSKeyId),
 		Metadata:           out.Metadata,
 	})
 	if out.AcceptRanges != nil {
@@ -247,7 +247,7 @@ func (g *Gateway) putObject(c *opCtx) error {
 	if v := c.signed(hdrTagging); v != "" {
 		in.Tagging = aws.String(v)
 	}
-	if s3e := applySSE(c.hdr, &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
+	if s3e := c.applySSE(c.hdr, &in.ServerSideEncryption, &in.SSEKMSKeyId); s3e != nil {
 		return s3e
 	}
 	applyObjectLockHeaders(c.hdr, &in.ObjectLockMode, &in.ObjectLockRetainUntilDate, &in.ObjectLockLegalHoldStatus)
@@ -286,7 +286,7 @@ func (g *Gateway) putObject(c *opCtx) error {
 	if out.VersionId != nil {
 		w.Header().Set("x-amz-version-id", *out.VersionId)
 	}
-	setSSEHeaders(w.Header(), out.ServerSideEncryption, out.SSEKMSKeyId)
+	setSSEHeaders(w.Header(), out.ServerSideEncryption, c.clientKMSKeyID(out.SSEKMSKeyId))
 	checksum.SetHeaders(w.Header(), checksum.Values{
 		CRC32:     out.ChecksumCRC32,
 		CRC32C:    out.ChecksumCRC32C,
