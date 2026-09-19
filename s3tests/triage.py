@@ -4,7 +4,7 @@
 Usage: triage.py results.xml [harness.log] > report.md
 
 Failures are bucketed by the first matching rule. The rules encode the
-hand-verified findings of docs/s3-tests.md (see s3tests/CLAUDE.md for the
+hand-verified findings of docs/s3-tests.md (see s3tests/AGENTS.md for the
 verification method): categories named "Deliberate" are the documented
 design surface, "Backend" ones were confirmed against the backend
 directly. Name-based rules are heuristics — when a run against a new
@@ -38,7 +38,7 @@ CATEGORIES = [
     ("backend_conditional", "Backend: partial conditional-write enforcement"),
     ("rgw_extension", "RGW extension API (out of scope)"),
     ("conf_artifact", "Harness/conf artifact (create semantics, api_name, leftovers)"),
-    ("investigate", "UNMATCHED — triage by hand (see s3tests/CLAUDE.md)"),
+    ("investigate", "UNMATCHED — triage by hand (see s3tests/AGENTS.md)"),
 ]
 
 EXPECT_404 = re.compile(r"NoSuchBucket|NoSuchKey|404", re.I)  # against failure text
@@ -172,7 +172,7 @@ def main():
         print(f"## ⚠️ Triage these by hand ({len(unmatched)})\n")
         print("No known pattern explains these failures: each one is either a")
         print("new incompatibility (possibly an s3rp bug) or a pattern the")
-        print("classifier does not know yet. Follow s3tests/CLAUDE.md — read")
+        print("classifier does not know yet. Follow s3tests/AGENTS.md — read")
         print("the failure, probe the backend directly to decide proxy vs")
         print("backend, then fix or teach triage.py the verdict.\n")
         for name, _, excerpt in sorted(unmatched):

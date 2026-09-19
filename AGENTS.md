@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 Guidance for working on s3rp. See README.md for user-facing documentation.
 
