@@ -15,4 +15,4 @@ The [top-level README](../README.md) covers the bundled `s3rp` binary: what the 
 
 - **[ceph/s3-tests compatibility testing](s3-tests.md)** — how the upstream S3 compatibility suite runs against s3rp in CI and locally, and why each expected-failure category is expected.
 - **[SigV4 query canonicalization across implementations](sigv4-canonicalization.md)** — measured behavior of AWS, Ceph RGW, versitygw and s3rp on non-canonical query strings, and the divergences between client signers; the basis for the verifier's settled behavior.
-- **[CLAUDE.md](../CLAUDE.md)** — architecture notes and the design decisions not to regress, written for contributors (human or otherwise).
+- **[AGENTS.md](../AGENTS.md)** — architecture notes and the design decisions not to regress, written for contributors (human or otherwise).

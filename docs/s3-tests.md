@@ -37,7 +37,7 @@ expected category and only the `UNMATCHED` bucket needs hand triage.
 The rules are partly name-based heuristics; how to verify what lands
 where, split the 501 bucket by message text, and judge
 implementable-vs-deliberate is in
-[s3tests/CLAUDE.md](../s3tests/CLAUDE.md). Run numbers move without any
+[s3tests/AGENTS.md](../s3tests/AGENTS.md). Run numbers move without any
 repo change (the backend tracks Ceph point releases), so this document
 records none — compare runs by diffing their junit XMLs, not by counts
 remembered from a document.
@@ -56,7 +56,7 @@ The expected-failure categories, and why each failure is expected:
   SigV4-only (no anonymous access, no SigV2 — the suite's
   `test_post_object_*` tests sign with SigV2), the anti-probing 403 on
   nonexistent buckets, the stricter bucket-name charset. Rationale in
-  the root CLAUDE.md; these are do-not-regress decisions, so a test
+  the root AGENTS.md; these are do-not-regress decisions, so a test
   that starts *passing* here means a deliberate refusal disappeared —
   investigate, don't celebrate.
 - **Platform edge cases** — Go's `net/http` answers a malformed

@@ -1,4 +1,4 @@
-# CLAUDE.md — analyzing s3-tests results
+# AGENTS.md — analyzing s3-tests results
 
 How to read a suite run and, in particular, how to find operations that
 are *implementable but not implemented* — as opposed to deliberately
@@ -50,7 +50,7 @@ don't classify a failure as backend-caused without it.
 ## Judging: implementable vs deliberate
 
 Deliberate refusals — never propose implementing these (rationale in the
-root CLAUDE.md and README; several are "do not regress" decisions):
+root AGENTS.md and README; several are "do not regress" decisions):
 
 - **Bucket-configuration writes**: PutBucketVersioning / Policy / Cors /
   Encryption / Lifecycle / Logging / OwnershipControls /
