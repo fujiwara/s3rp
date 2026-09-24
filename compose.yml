@@ -8,6 +8,42 @@ services:
       - /data
       - /versions
 
+  # RustFS backend for compatibility tests.
+  # start explicitly: docker compose up -d --wait rustfs
+  rustfs:
+    image: ${RUSTFS_IMAGE:-rustfs/rustfs:1.0.0}
+    profiles: [rustfs]
+    environment:
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ENABLE: "false"
+      RUSTFS_ACCESS_KEY: backendkey
+      RUSTFS_SECRET_KEY: backendsecret
+      # a single tmpfs disk; the strict topology check targets production layouts
+      RUSTFS_UNSAFE_BYPASS_DISK_CHECK: "true"
+      # local KMS for SSE-KMS with a static public test key (testkey-1, the
+      # same key material as the ceph service), stored unencrypted, which
+      # needs the insecure dev defaults
+      RUSTFS_KMS_ENABLE: "true"
+      RUSTFS_KMS_BACKEND: local
+      RUSTFS_KMS_KEY_DIR: /kms
+      RUSTFS_KMS_ALLOW_INSECURE_DEV_DEFAULTS: "true"
+    ports:
+      - "127.0.0.1:9000:9000"
+    # the local KMS insists on an owner-only key directory, which a bind
+    # mount cannot provide, so the key is copied into a private tmpfs
+    entrypoint: ["/bin/sh", "-c", "cp /kms-src/*.key /kms/ && chmod 600 /kms/*.key && exec /entrypoint.sh rustfs"]
+    tmpfs:
+      - /data:uid=10001,gid=10001
+      - /kms:uid=10001,gid=10001,mode=0700
+    volumes:
+      - ./docker/rustfs-kms:/kms-src:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
   # heavyweight Ceph RGW backend for compatibility tests.
   # start explicitly: docker compose up -d --wait ceph
   # NOTE: access RGW via http://127.0.0.1:7480 (not localhost) — RGW

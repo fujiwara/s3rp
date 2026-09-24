@@ -173,7 +173,7 @@ $ go test ./policy -bench . -benchmem     # policy evaluation, incl. the worst c
 $ go test ./s3gw -bench VerifyKeyDiversity -benchmem   # SigV4 verification across many access keys
 ```
 
-The integration test suite runs against a real S3-compatible backend, selected by environment variables. Two backends are provided in `compose.yml`:
+The integration test suite runs against a real S3-compatible backend, selected by environment variables. Three backends are provided in `compose.yml`:
 
 ```console
 # versitygw (lightweight, default)
@@ -183,9 +183,13 @@ $ S3RP_TEST_BACKEND_ENDPOINT=http://localhost:7070 go test -race -run TestIntegr
 # Ceph RGW (heavyweight, compatibility check)
 $ docker compose up -d --wait ceph
 $ S3RP_TEST_BACKEND_ENDPOINT=http://127.0.0.1:7480 go test -race -run TestIntegration ./...
+
+# RustFS
+$ docker compose up -d --wait rustfs
+$ S3RP_TEST_BACKEND_ENDPOINT=http://127.0.0.1:9000 go test -race -run TestIntegration ./...
 ```
 
-Note: access Ceph RGW via `127.0.0.1`, not `localhost` — RGW resolves Host names that do not match its `rgw dns name` as virtual-hosted bucket names. CI runs the integration suite against both backends as a matrix.
+Note: access Ceph RGW via `127.0.0.1`, not `localhost` — RGW resolves Host names that do not match its `rgw dns name` as virtual-hosted bucket names. CI runs the integration suite against all three backends as a matrix.
 
 The [ceph/s3-tests](https://github.com/ceph/s3-tests) compatibility suite can be run against s3rp with `./s3tests/run.sh`, which wraps the gateway in a test-only harness providing the CreateBucket/DeleteBucket the suite needs (see [s3tests/README.md](s3tests/README.md)). How to read a run's classified results is covered in [docs/s3-tests.md](docs/s3-tests.md).
 

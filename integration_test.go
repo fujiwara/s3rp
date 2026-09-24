@@ -596,8 +596,8 @@ func TestIntegration(t *testing.T) {
 		}
 	})
 	t.Run("SSEKMS", func(t *testing.T) {
-		// requires a backend with a KMS: the compose ceph service
-		// configures RGW's built-in "testing" backend with testkey-1
+		// requires a backend with a KMS: the compose ceph and rustfs
+		// services configure one with testkey-1
 		keyID := envOr("S3RP_TEST_SSE_KMS_KEY_ID", "testkey-1")
 		content := "sse-kms end-to-end content"
 		put, err := client.PutObject(t.Context(), &s3.PutObjectInput{
