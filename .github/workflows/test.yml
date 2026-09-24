@@ -1,5 +1,8 @@
 name: Go
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
 jobs:
   test:
     strategy:
@@ -96,8 +99,67 @@ jobs:
         env:
           BACKEND: ${{ matrix.backend }}
 
+      # -json keeps each subtest's outcome and skip reason machine-readable
+      # for the summary job; the plain output is replayed into the log.
       - name: Integration Test
         run: |
-          go test -race -run TestIntegration -v ./...
+          go test -race -run TestIntegration -json ./... | tee test.json | jq -j 'select(.Output) | .Output'
         env:
           S3RP_TEST_BACKEND_ENDPOINT: ${{ matrix.endpoint }}
+
+      - name: Collect results
+        if: ${{ !cancelled() }}
+        run: |
+          jq -s --arg backend "$BACKEND" '
+            [.[] | select((.Test // "") | startswith("TestIntegration/"))] as $ev
+            | {backend: $backend, results: [
+                $ev[] | select(.Action == "pass" or .Action == "fail" or .Action == "skip")
+                | .Test as $t
+                | {
+                    test: ($t | ltrimstr("TestIntegration/")),
+                    result: .Action,
+                    reason: (if .Action == "skip" then
+                      [$ev[] | select(.Test == $t and .Action == "output") | .Output
+                        | select(test("^\\s+\\S+\\.go:\\d+: "))
+                        | sub("^\\s+\\S+\\.go:\\d+: "; "") | rtrimstr("\n")] | join(" ")
+                    else null end)
+                  }
+              ]}' test.json > "integration-$BACKEND.json"
+        env:
+          BACKEND: ${{ matrix.backend }}
+
+      - name: Upload results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: integration-${{ matrix.backend }}
+          path: integration-${{ matrix.backend }}.json
+
+  # One table across the backend matrix: which subtests each backend
+  # passes, fails, or skips for lack of support (with the skip reason).
+  integration-summary:
+    name: Integration summary
+    needs: integration
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download results
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: integration-*
+          merge-multiple: true
+
+      - name: Report
+        run: |
+          jq -s -r '
+            def mark: {pass: "✅", fail: "❌", skip: "⏭️"}[. // ""] // "—";
+            . as $b
+            | (reduce ($b[].results[].test) as $t ([]; if index([$t]) then . else . + [$t] end)) as $tests
+            | "| test | " + ([$b[].backend] | join(" | ")) + " |",
+              "| --- |" + ([$b[] | " :---: |"] | join("")),
+              ($tests[] as $t
+                | "| \($t) | " + ([$b[] | ([.results[] | select(.test == $t)][0].result | mark)] | join(" | ")) + " |"),
+              "",
+              ([$b[] | .backend as $n | .results[] | select(.result == "skip")
+                | "- **\($n)** \(.test): \(.reason)"] | if length > 0 then "Skipped:", "", .[] else empty end)
+          ' integration-*.json >> "$GITHUB_STEP_SUMMARY"
