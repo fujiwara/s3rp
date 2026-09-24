@@ -73,7 +73,7 @@ Conditional requests are forwarded to the backend: `If-Match` / `If-None-Match` 
 
 Object Lock (WORM) is passed through to the backend, which enforces the retention. The per-object retention and legal hold operations are proxied, and the `x-amz-object-lock-*` headers on uploads (PutObject, CopyObject, CreateMultipartUpload) and `x-amz-bypass-governance-retention` on deletes are forwarded — each requiring the corresponding action in addition to the operation's own, as on AWS (see [Actions a header adds](#actions-a-header-adds)). Bucket policies gain the corresponding actions (`s3:GetObjectRetention`, `s3:PutObjectRetention`, `s3:GetObjectLegalHold`, `s3:PutObjectLegalHold`, `s3:BypassGovernanceRetention`, `s3:GetBucketObjectLockConfiguration`). The bucket-level configuration is readable (GetObjectLockConfiguration) but not writable through the gateway: the default retention is bucket configuration, written where the bucket is created (see [Limitations](#limitations)).
 
-Object Lock must be enabled when a bucket is created, and the gateway does not proxy CreateBucket, so the backend bucket must have been created with Object Lock enabled. The exact behavior depends on the backend: Ceph RGW and Amazon S3 support it fully, while versitygw enforces retention but does not honor governance-mode bypass.
+Object Lock must be enabled when a bucket is created, and the gateway does not proxy CreateBucket, so the backend bucket must have been created with Object Lock enabled. The exact behavior depends on the backend: Ceph RGW, RustFS and Amazon S3 support it fully, while versitygw enforces retention but does not honor governance-mode bypass.
 
 ### Checksums
 
@@ -83,7 +83,7 @@ Object Lock must be enabled when a bucket is created, and the gateway does not p
 - Trailing checksums in `aws-chunked` bodies (the SDK default over https) are **verified by the proxy** against the decoded payload (`BadDigest` on mismatch). When the backend is reached over https the algorithm is forwarded so the backend recomputes and stores the checksum; over a plain-http backend it is not (the SDK can only recompute it over an unseekable body as a trailer, which it sends over https only), so the upload is still verified but the backend stores no checksum.
 - Downloads pass `x-amz-checksum-mode: ENABLED` through and return the backend's checksum headers, so client SDKs can validate response payloads. Multipart part checksums are carried through UploadPart / CompleteMultipartUpload as well.
 
-Whether a checksum is actually stored and returned depends on the backend (versitygw and Amazon S3 do; some Ceph RGW builds do not).
+Whether a checksum is actually stored and returned depends on the backend (versitygw, RustFS and Amazon S3 do; some Ceph RGW builds do not).
 
 ### Server-side encryption
 
