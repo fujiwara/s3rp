@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.0.15](https://github.com/fujiwara/s3rp/compare/v0.0.14...v0.0.15) - 2026-09-24
+
+- Rename CLAUDE.md to AGENTS.md by @fujiwara in https://github.com/fujiwara/s3rp/pull/140
+- CI: run on PRs and main pushes only, summarize integration results by @fujiwara in https://github.com/fujiwara/s3rp/pull/143
+- Add RustFS as an integration test backend by @fujiwara in https://github.com/fujiwara/s3rp/pull/142
+
 ## [v0.0.14](https://github.com/fujiwara/s3rp/compare/v0.0.13...v0.0.14) - 2026-09-11
 
 - Add StorageClassMapper to keep backend storage classes out of the API by @fujiwara in https://github.com/fujiwara/s3rp/pull/135
