@@ -1,6 +1,6 @@
 # Nightly fuzzing of the auth path. Fuzzing is two-layered here: the seed
 # corpus and every crasher committed under testdata/fuzz/ replay as
-# ordinary regressions in `go test` (test.yml, on every push), while the
+# ordinary regressions in `go test` (test.yml, on every PR and push to main), while the
 # exploration that finds new inputs runs here, on a schedule, so it never
 # blocks a PR. A failure is an input to triage, not a broken build: the
 # crasher lands as an artifact, and committing it under testdata/fuzz/
