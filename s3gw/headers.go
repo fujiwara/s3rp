@@ -48,10 +48,10 @@ var knownAmzHeaders = map[string]bool{
 	"x-amz-decoded-content-length": true, "x-amz-trailer": true,
 	// sent by the browser SDKs
 	"x-amz-user-agent": true,
-	// checksums (checksum.FromHeaders / TrailerAlgorithm)
+	// checksums; the per-algorithm value headers are added from the
+	// checksum table (checksums.go)
 	"x-amz-checksum-algorithm": true, "x-amz-checksum-type": true, "x-amz-checksum-mode": true,
-	"x-amz-checksum-crc32": true, "x-amz-checksum-crc32c": true, "x-amz-checksum-crc64nvme": true,
-	"x-amz-checksum-sha1": true, "x-amz-checksum-sha256": true, "x-amz-sdk-checksum-algorithm": true,
+	"x-amz-sdk-checksum-algorithm": true,
 	// object writes and copies
 	hdrStorageClass: true, hdrTagging: true, "x-amz-tagging-directive": true, "x-amz-metadata-directive": true,
 	hdrCopySource: true, "x-amz-copy-source-if-match": true, "x-amz-copy-source-if-none-match": true,

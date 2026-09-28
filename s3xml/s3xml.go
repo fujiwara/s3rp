@@ -122,29 +122,21 @@ type DeleteError struct {
 
 // CopyObjectResult is the response of CopyObject.
 type CopyObjectResult struct {
-	XMLName           xml.Name `xml:"CopyObjectResult"`
-	XMLNS             string   `xml:"xmlns,attr"`
-	ETag              string   `xml:"ETag"`
-	LastModified      string   `xml:"LastModified,omitempty"`
-	ChecksumType      string   `xml:"ChecksumType,omitempty"`
-	ChecksumCRC32     string   `xml:"ChecksumCRC32,omitempty"`
-	ChecksumCRC32C    string   `xml:"ChecksumCRC32C,omitempty"`
-	ChecksumCRC64NVME string   `xml:"ChecksumCRC64NVME,omitempty"`
-	ChecksumSHA1      string   `xml:"ChecksumSHA1,omitempty"`
-	ChecksumSHA256    string   `xml:"ChecksumSHA256,omitempty"`
+	XMLName      xml.Name `xml:"CopyObjectResult"`
+	XMLNS        string   `xml:"xmlns,attr"`
+	ETag         string   `xml:"ETag"`
+	LastModified string   `xml:"LastModified,omitempty"`
+	ChecksumType string   `xml:"ChecksumType,omitempty"`
+	Checksums
 }
 
 // CopyPartResult is the response of UploadPartCopy.
 type CopyPartResult struct {
-	XMLName           xml.Name `xml:"CopyPartResult"`
-	XMLNS             string   `xml:"xmlns,attr"`
-	ETag              string   `xml:"ETag"`
-	LastModified      string   `xml:"LastModified,omitempty"`
-	ChecksumCRC32     string   `xml:"ChecksumCRC32,omitempty"`
-	ChecksumCRC32C    string   `xml:"ChecksumCRC32C,omitempty"`
-	ChecksumCRC64NVME string   `xml:"ChecksumCRC64NVME,omitempty"`
-	ChecksumSHA1      string   `xml:"ChecksumSHA1,omitempty"`
-	ChecksumSHA256    string   `xml:"ChecksumSHA256,omitempty"`
+	XMLName      xml.Name `xml:"CopyPartResult"`
+	XMLNS        string   `xml:"xmlns,attr"`
+	ETag         string   `xml:"ETag"`
+	LastModified string   `xml:"LastModified,omitempty"`
+	Checksums
 }
 
 // InitiateMultipartUploadResult is the response of CreateMultipartUpload.
@@ -158,18 +150,14 @@ type InitiateMultipartUploadResult struct {
 
 // CompleteMultipartUploadResult is the response of CompleteMultipartUpload.
 type CompleteMultipartUploadResult struct {
-	XMLName           xml.Name `xml:"CompleteMultipartUploadResult"`
-	XMLNS             string   `xml:"xmlns,attr"`
-	Location          string   `xml:"Location"`
-	Bucket            string   `xml:"Bucket"`
-	Key               string   `xml:"Key"`
-	ETag              string   `xml:"ETag"`
-	ChecksumCRC32     string   `xml:"ChecksumCRC32,omitempty"`
-	ChecksumCRC32C    string   `xml:"ChecksumCRC32C,omitempty"`
-	ChecksumCRC64NVME string   `xml:"ChecksumCRC64NVME,omitempty"`
-	ChecksumSHA1      string   `xml:"ChecksumSHA1,omitempty"`
-	ChecksumSHA256    string   `xml:"ChecksumSHA256,omitempty"`
-	ChecksumType      string   `xml:"ChecksumType,omitempty"`
+	XMLName  xml.Name `xml:"CompleteMultipartUploadResult"`
+	XMLNS    string   `xml:"xmlns,attr"`
+	Location string   `xml:"Location"`
+	Bucket   string   `xml:"Bucket"`
+	Key      string   `xml:"Key"`
+	ETag     string   `xml:"ETag"`
+	Checksums
+	ChecksumType string `xml:"ChecksumType,omitempty"`
 }
 
 // CompleteMultipartUploadRequest is the request body of CompleteMultipartUpload.
@@ -179,13 +167,9 @@ type CompleteMultipartUploadRequest struct {
 }
 
 type CompletePart struct {
-	PartNumber        int32  `xml:"PartNumber"`
-	ETag              string `xml:"ETag"`
-	ChecksumCRC32     string `xml:"ChecksumCRC32,omitempty"`
-	ChecksumCRC32C    string `xml:"ChecksumCRC32C,omitempty"`
-	ChecksumCRC64NVME string `xml:"ChecksumCRC64NVME,omitempty"`
-	ChecksumSHA1      string `xml:"ChecksumSHA1,omitempty"`
-	ChecksumSHA256    string `xml:"ChecksumSHA256,omitempty"`
+	PartNumber int32  `xml:"PartNumber"`
+	ETag       string `xml:"ETag"`
+	Checksums
 }
 
 // ListPartsResult is the response of ListParts.
@@ -208,15 +192,11 @@ type ListPartsResult struct {
 }
 
 type Part struct {
-	PartNumber        int32  `xml:"PartNumber"`
-	LastModified      string `xml:"LastModified,omitempty"`
-	ETag              string `xml:"ETag"`
-	Size              int64  `xml:"Size"`
-	ChecksumCRC32     string `xml:"ChecksumCRC32,omitempty"`
-	ChecksumCRC32C    string `xml:"ChecksumCRC32C,omitempty"`
-	ChecksumCRC64NVME string `xml:"ChecksumCRC64NVME,omitempty"`
-	ChecksumSHA1      string `xml:"ChecksumSHA1,omitempty"`
-	ChecksumSHA256    string `xml:"ChecksumSHA256,omitempty"`
+	PartNumber   int32  `xml:"PartNumber"`
+	LastModified string `xml:"LastModified,omitempty"`
+	ETag         string `xml:"ETag"`
+	Size         int64  `xml:"Size"`
+	Checksums
 }
 
 // ListMultipartUploadsResult is the response of ListMultipartUploads.
@@ -466,12 +446,8 @@ type GetObjectAttributesResult struct {
 
 // AttributesChecksum is the Checksum member of GetObjectAttributesResult.
 type AttributesChecksum struct {
-	ChecksumCRC32     string `xml:"ChecksumCRC32,omitempty"`
-	ChecksumCRC32C    string `xml:"ChecksumCRC32C,omitempty"`
-	ChecksumCRC64NVME string `xml:"ChecksumCRC64NVME,omitempty"`
-	ChecksumSHA1      string `xml:"ChecksumSHA1,omitempty"`
-	ChecksumSHA256    string `xml:"ChecksumSHA256,omitempty"`
-	ChecksumType      string `xml:"ChecksumType,omitempty"`
+	Checksums
+	ChecksumType string `xml:"ChecksumType,omitempty"`
 }
 
 // ObjectAttributeParts is the ObjectParts member of GetObjectAttributesResult.
@@ -486,13 +462,9 @@ type ObjectAttributeParts struct {
 
 // ObjectAttributePart is one part of ObjectAttributeParts.
 type ObjectAttributePart struct {
-	PartNumber        int32  `xml:"PartNumber"`
-	Size              int64  `xml:"Size"`
-	ChecksumCRC32     string `xml:"ChecksumCRC32,omitempty"`
-	ChecksumCRC32C    string `xml:"ChecksumCRC32C,omitempty"`
-	ChecksumCRC64NVME string `xml:"ChecksumCRC64NVME,omitempty"`
-	ChecksumSHA1      string `xml:"ChecksumSHA1,omitempty"`
-	ChecksumSHA256    string `xml:"ChecksumSHA256,omitempty"`
+	PartNumber int32 `xml:"PartNumber"`
+	Size       int64 `xml:"Size"`
+	Checksums
 }
 
 // PostResponse is the body of a browser-based POST upload response when the

@@ -77,9 +77,11 @@ func (g *Gateway) copyObject(c *opCtx) error {
 		in.ContentType = aws.String(v)
 	}
 	in.StorageClass = c.backendStorageClass(c.signed(hdrStorageClass), SizeUnknown)
-	if v := c.signed("x-amz-checksum-algorithm"); v != "" {
-		in.ChecksumAlgorithm = types.ChecksumAlgorithm(strings.ToUpper(v))
+	alg, s3e := c.checksumAlgorithm()
+	if s3e != nil {
+		return s3e
 	}
+	in.ChecksumAlgorithm = alg
 	if v := c.signed("x-amz-tagging-directive"); v != "" {
 		in.TaggingDirective = types.TaggingDirective(v)
 	}
@@ -136,11 +138,7 @@ func (g *Gateway) copyObject(c *opCtx) error {
 			result.LastModified = s3xml.FormatTime(*cr.LastModified)
 		}
 		result.ChecksumType = string(cr.ChecksumType)
-		result.ChecksumCRC32 = aws.ToString(cr.ChecksumCRC32)
-		result.ChecksumCRC32C = aws.ToString(cr.ChecksumCRC32C)
-		result.ChecksumCRC64NVME = aws.ToString(cr.ChecksumCRC64NVME)
-		result.ChecksumSHA1 = aws.ToString(cr.ChecksumSHA1)
-		result.ChecksumSHA256 = aws.ToString(cr.ChecksumSHA256)
+		result.Checksums = xmlChecksums(checksumsFromCopyObjectResult(cr))
 	}
 	return s3xml.Write(w, result)
 }
@@ -177,11 +175,7 @@ func (g *Gateway) uploadPartCopy(c *opCtx) error {
 		if cr.LastModified != nil {
 			result.LastModified = s3xml.FormatTime(*cr.LastModified)
 		}
-		result.ChecksumCRC32 = aws.ToString(cr.ChecksumCRC32)
-		result.ChecksumCRC32C = aws.ToString(cr.ChecksumCRC32C)
-		result.ChecksumCRC64NVME = aws.ToString(cr.ChecksumCRC64NVME)
-		result.ChecksumSHA1 = aws.ToString(cr.ChecksumSHA1)
-		result.ChecksumSHA256 = aws.ToString(cr.ChecksumSHA256)
+		result.Checksums = xmlChecksums(checksumsFromCopyPartResult(cr))
 	}
 	return s3xml.Write(w, result)
 }

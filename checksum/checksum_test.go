@@ -3,6 +3,7 @@ package checksum_test
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/fujiwara/s3rp/checksum"
@@ -56,13 +57,44 @@ func TestNewHashIsIncremental(t *testing.T) {
 }
 
 func TestNewHashUnsupported(t *testing.T) {
-	// an unknown algorithm must be reported, not silently treated as one of
-	// the supported ones: the caller decides what to do with a request
-	// declaring a checksum this build cannot compute
-	for _, alg := range []string{"", "md5", "crc32C", "CRC32", "sha512"} {
+	// an algorithm the gateway does not compute must be reported, not
+	// silently treated as one it does: the caller decides what to do with a
+	// request declaring a checksum this build cannot compute
+	for _, alg := range []string{"", "md5", "sha512", "xxhash3", "crc16"} {
 		if h := checksum.NewHash(alg); h != nil {
 			t.Errorf("expect nil for %q, got %T", alg, h)
 		}
+	}
+	// names are case-insensitive, as in the headers that carry them
+	if checksum.NewHash("CRC32") == nil || checksum.NewHash("crc32C") == nil {
+		t.Error("expect a hasher regardless of case")
+	}
+}
+
+// The table's invariants: exactly the Verified algorithms compute, and
+// every name maps to its own header.
+func TestAlgorithms(t *testing.T) {
+	seen := map[string]bool{}
+	for _, a := range checksum.Algorithms() {
+		if seen[a.Name] {
+			t.Errorf("%s listed twice", a.Name)
+		}
+		seen[a.Name] = true
+		if (a.NewHash() != nil) != (a.Support == checksum.Verified) {
+			t.Errorf("%s: %s but hasher present = %v", a.Name, a.Support, a.NewHash() != nil)
+		}
+		if a.Name != strings.ToUpper(a.Name) {
+			t.Errorf("%s: names are upper-case", a.Name)
+		}
+		if got, ok := checksum.Lookup(strings.ToLower(a.Name)); !ok || got.Name != a.Name {
+			t.Errorf("Lookup(%q) = %v, %v", strings.ToLower(a.Name), got.Name, ok)
+		}
+	}
+	if _, ok := checksum.Lookup("CRC16"); ok {
+		t.Error("expect an unknown name not to be found")
+	}
+	if got := (checksum.Algorithm{Name: "CRC64NVME"}).Header(); got != "x-amz-checksum-crc64nvme" {
+		t.Errorf("unexpected header %q", got)
 	}
 }
 
@@ -70,36 +102,33 @@ func TestFromHeaders(t *testing.T) {
 	h := http.Header{}
 	h.Set("x-amz-checksum-crc32", "y/Q5Jg==")
 	h.Set("x-amz-checksum-sha256", "FeKw08M4keuw8e9gnsQZQgwg4yDOlMZfvIwzEkSOsiU=")
-	got := checksum.FromHeaders(h)
-	if got.CRC32 == nil || *got.CRC32 != "y/Q5Jg==" {
-		t.Errorf("unexpected crc32 %v", got.CRC32)
+	// read whatever the Support: refusing is the caller's gate
+	h.Set("x-amz-checksum-xxhash3", "AAAAAAAAAAA=")
+	want := checksum.Values{
+		"CRC32":   "y/Q5Jg==",
+		"SHA256":  "FeKw08M4keuw8e9gnsQZQgwg4yDOlMZfvIwzEkSOsiU=",
+		"XXHASH3": "AAAAAAAAAAA=",
 	}
-	if got.SHA256 == nil || *got.SHA256 != "FeKw08M4keuw8e9gnsQZQgwg4yDOlMZfvIwzEkSOsiU=" {
-		t.Errorf("unexpected sha256 %v", got.SHA256)
+	if diff := cmp.Diff(want, checksum.FromHeaders(h)); diff != "" {
+		t.Errorf("unexpected values (-want +got):\n%s", diff)
 	}
-	// absent headers stay nil rather than becoming an empty value, so the
-	// caller does not send an empty checksum to a backend
-	if got.CRC32C != nil || got.CRC64NVME != nil || got.SHA1 != nil {
-		t.Errorf("expect nil for absent algorithms, got %+v", got)
-	}
-	if diff := cmp.Diff(checksum.Values{}, checksum.FromHeaders(http.Header{})); diff != "" {
-		t.Errorf("empty headers must yield no values (-want +got):\n%s", diff)
+	// no headers, no values (and no allocation)
+	if got := checksum.FromHeaders(http.Header{}); got != nil {
+		t.Errorf("empty headers must yield nil, got %v", got)
 	}
 }
 
 func TestSetHeaders(t *testing.T) {
-	v := func(s string) *string { return &s }
-	empty := ""
-
 	h := http.Header{}
 	checksum.SetHeaders(h, checksum.Values{
-		CRC32:  v("y/Q5Jg=="),
-		CRC32C: &empty, // present but empty: nothing to report
-		SHA1:   nil,
+		"CRC32":  "y/Q5Jg==",
+		"CRC32C": "", // present but empty: nothing to report
+		"SHA512": "c2hhNTEy",
 	}, "FULL_OBJECT")
 	want := http.Header{
-		"X-Amz-Checksum-Crc32": {"y/Q5Jg=="},
-		"X-Amz-Checksum-Type":  {"FULL_OBJECT"},
+		"X-Amz-Checksum-Crc32":  {"y/Q5Jg=="},
+		"X-Amz-Checksum-Sha512": {"c2hhNTEy"},
+		"X-Amz-Checksum-Type":   {"FULL_OBJECT"},
 	}
 	if diff := cmp.Diff(want, h); diff != "" {
 		t.Errorf("unexpected headers (-want +got):\n%s", diff)
@@ -107,7 +136,7 @@ func TestSetHeaders(t *testing.T) {
 
 	// no checksum type means no type header
 	h = http.Header{}
-	checksum.SetHeaders(h, checksum.Values{SHA256: v("x")}, "")
+	checksum.SetHeaders(h, checksum.Values{"SHA256": "x"}, "")
 	if _, ok := h["X-Amz-Checksum-Type"]; ok {
 		t.Errorf("expect no type header, got %v", h)
 	}
@@ -144,18 +173,18 @@ func TestTrailerAlgorithm(t *testing.T) {
 }
 
 func TestValuesAlgorithm(t *testing.T) {
-	v := func(s string) *string { return &s }
 	cases := []struct {
 		name string
 		vals checksum.Values
 		want string
 	}{
-		{"none", checksum.Values{}, ""},
-		{"crc32", checksum.Values{CRC32: v("x")}, "CRC32"},
-		{"crc32c", checksum.Values{CRC32C: v("x")}, "CRC32C"},
-		{"crc64nvme", checksum.Values{CRC64NVME: v("x")}, "CRC64NVME"},
-		{"sha1", checksum.Values{SHA1: v("x")}, "SHA1"},
-		{"sha256", checksum.Values{SHA256: v("x")}, "SHA256"},
+		{"none", nil, ""},
+		{"empty value", checksum.Values{"CRC32": ""}, ""},
+		{"crc32", checksum.Values{"CRC32": "x"}, "CRC32"},
+		{"crc64nvme", checksum.Values{"CRC64NVME": "x"}, "CRC64NVME"},
+		{"sha512", checksum.Values{"SHA512": "x"}, "SHA512"},
+		// table order decides between several
+		{"two", checksum.Values{"SHA256": "x", "CRC32C": "y"}, "CRC32C"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

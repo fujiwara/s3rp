@@ -12,6 +12,7 @@ import (
 	"hash/crc32"
 	"hash/crc64"
 	"net/http"
+	"slices"
 	"strings"
 )
 
@@ -32,62 +33,127 @@ const HeaderPrefix = "x-amz-checksum-"
 // x-amz-checksum-crc64nvme.
 var crc64NVMETable = crc64.MakeTable(0x9A6C9329AC4BC9B5)
 
-// Values carries the x-amz-checksum-* values of a request or response.
-type Values struct {
-	CRC32     *string
-	CRC32C    *string
-	CRC64NVME *string
-	SHA1      *string
-	SHA256    *string
+// Support is how far the gateway itself handles an algorithm.
+type Support int
+
+const (
+	// Refused: the algorithm's value header, trailer and name are refused
+	// (501), so nothing claims a check the gateway would not pass on.
+	Refused Support = iota
+	// Forwarded: value headers and the algorithm name pass to the backend,
+	// which verifies and stores the checksum — whether it does depends on
+	// the backend. A trailer is refused: the gateway cannot verify it, and
+	// dropping it would report a check nobody made.
+	Forwarded
+	// Verified: Forwarded, and the gateway computes the algorithm itself,
+	// so an aws-chunked trailer is verified by the gateway.
+	Verified
+)
+
+func (s Support) String() string {
+	switch s {
+	case Forwarded:
+		return "forwarded"
+	case Verified:
+		return "verified"
+	}
+	return "refused"
 }
 
-// Algorithm returns the upper-case name of the algorithm a value is set
-// for ("" when none) — the form x-amz-sdk-checksum-algorithm and the SDK's
+// Algorithm is one S3 checksum algorithm and how far the gateway handles it.
+type Algorithm struct {
+	// Name is the upper-case name x-amz-checksum-algorithm and the SDK's
+	// ChecksumAlgorithm use ("CRC64NVME").
+	Name    string
+	Support Support
+	newHash func() hash.Hash // set iff Support == Verified
+}
+
+// Header is the algorithm's value header ("x-amz-checksum-crc64nvme").
+func (a Algorithm) Header() string { return HeaderPrefix + strings.ToLower(a.Name) }
+
+// NewHash returns a hasher for a Verified algorithm, nil otherwise; the
+// base64 of its Sum(nil) is the x-amz-checksum-* value.
+func (a Algorithm) NewHash() hash.Hash {
+	if a.newHash == nil {
+		return nil
+	}
+	return a.newHash()
+}
+
+// algorithms is every checksum algorithm S3 defines, the refused ones
+// included, so it is the one place that answers "what about X?". Changing
+// an algorithm's Support is the whole change: the value conversions are
+// generated for every algorithm listed here (s3gw's go:generate), and the
+// gates read Support.
+var algorithms = []Algorithm{
+	{Name: "CRC32", Support: Verified, newHash: func() hash.Hash { return crc32.NewIEEE() }},
+	{Name: "CRC32C", Support: Verified, newHash: func() hash.Hash { return crc32.New(crc32.MakeTable(crc32.Castagnoli)) }},
+	{Name: "CRC64NVME", Support: Verified, newHash: func() hash.Hash { return crc64.New(crc64NVMETable) }},
+	{Name: "SHA1", Support: Verified, newHash: sha1.New},
+	{Name: "SHA256", Support: Verified, newHash: sha256.New},
+	{Name: "SHA512", Support: Refused},
+	{Name: "MD5", Support: Refused},
+	// no implementation in the standard library, which this package is
+	// limited to
+	{Name: "XXHASH64", Support: Refused},
+	{Name: "XXHASH3", Support: Refused},
+	{Name: "XXHASH128", Support: Refused},
+}
+
+// Algorithms returns every S3 checksum algorithm in a fixed order.
+func Algorithms() []Algorithm { return slices.Clone(algorithms) }
+
+// Lookup finds an algorithm by name, case-insensitively; false means the
+// name is not an S3 checksum algorithm at all.
+func Lookup(name string) (Algorithm, bool) {
+	for _, a := range algorithms {
+		if strings.EqualFold(a.Name, name) {
+			return a, true
+		}
+	}
+	return Algorithm{}, false
+}
+
+// Values carries the x-amz-checksum-* values of a request or response,
+// keyed by Algorithm.Name. A nil Values carries none.
+type Values map[string]string
+
+// Algorithm returns the name of the algorithm a value is set for ("" when
+// none) — the form x-amz-sdk-checksum-algorithm and the SDK's
 // ChecksumAlgorithm parameter use. A request carries at most one checksum.
 func (v Values) Algorithm() string {
-	switch {
-	case v.CRC32 != nil:
-		return "CRC32"
-	case v.CRC32C != nil:
-		return "CRC32C"
-	case v.CRC64NVME != nil:
-		return "CRC64NVME"
-	case v.SHA1 != nil:
-		return "SHA1"
-	case v.SHA256 != nil:
-		return "SHA256"
+	for _, a := range algorithms {
+		if v[a.Name] != "" {
+			return a.Name
+		}
 	}
 	return ""
 }
 
+// FromHeaders reads the value header of every algorithm, whatever its
+// Support: refusing is the caller's gate (s3gw's known-header check), not
+// a silent drop here.
 func FromHeaders(h http.Header) Values {
-	get := func(alg string) *string {
-		if v := h.Get(HeaderPrefix + alg); v != "" {
-			return &v
+	var v Values
+	for _, a := range algorithms {
+		if s := h.Get(a.Header()); s != "" {
+			if v == nil {
+				v = Values{}
+			}
+			v[a.Name] = s
 		}
-		return nil
 	}
-	return Values{
-		CRC32:     get("crc32"),
-		CRC32C:    get("crc32c"),
-		CRC64NVME: get("crc64nvme"),
-		SHA1:      get("sha1"),
-		SHA256:    get("sha256"),
-	}
+	return v
 }
 
 // SetHeaders sets x-amz-checksum-* response headers.
-func SetHeaders(h http.Header, cs Values, checksumType string) {
-	set := func(alg string, v *string) {
-		if v != nil && *v != "" {
-			h.Set(HeaderPrefix+alg, *v)
+func SetHeaders(h http.Header, v Values, checksumType string) {
+	for _, a := range algorithms {
+		if s := v[a.Name]; s != "" {
+			h.Set(a.Header(), s)
 		}
 	}
-	set("crc32", cs.CRC32)
-	set("crc32c", cs.CRC32C)
-	set("crc64nvme", cs.CRC64NVME)
-	set("sha1", cs.SHA1)
-	set("sha256", cs.SHA256)
 	if checksumType != "" {
 		h.Set("x-amz-checksum-type", checksumType)
 	}
@@ -100,7 +166,7 @@ var ErrUnsupportedTrailer = errors.New("unsupported x-amz-trailer")
 // TrailerAlgorithm returns the checksum algorithm declared in the
 // x-amz-trailer header ("x-amz-trailer: x-amz-checksum-crc32" -> "crc32"),
 // or "" if the request declares no trailer. Any other declaration — an
-// algorithm NewHash does not know, a non-checksum trailer, more than one
+// algorithm that is not Verified, a non-checksum trailer, more than one
 // trailer — is ErrUnsupportedTrailer: a trailer the decoder cannot verify
 // would otherwise be dropped while the client believes it was applied.
 func TrailerAlgorithm(h http.Header) (string, error) {
@@ -119,23 +185,11 @@ func TrailerAlgorithm(h http.Header) (string, error) {
 	return alg, nil
 }
 
-// NewHash returns a hasher for the algorithm; the base64 of its
-// Sum(nil) is the x-amz-checksum-* value. Returns nil for unsupported
-// algorithms.
-func NewHash(alg string) hash.Hash {
-	switch alg {
-	case "crc32":
-		return crc32.NewIEEE()
-	case "crc32c":
-		return crc32.New(crc32.MakeTable(crc32.Castagnoli))
-	case "crc64nvme":
-		return crc64.New(crc64NVMETable)
-	case "sha1":
-		return sha1.New()
-	case "sha256":
-		return sha256.New()
-	}
-	return nil
+// NewHash returns a hasher for a Verified algorithm named case-insensitively
+// ("crc32" or "CRC32"), nil for any other.
+func NewHash(name string) hash.Hash {
+	a, _ := Lookup(name)
+	return a.NewHash()
 }
 
 func Base64(h hash.Hash) string {
