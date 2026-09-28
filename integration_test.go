@@ -86,7 +86,11 @@ func TestIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := app.Shutdown(context.Background()); err != nil {
+		// t.Context() is already done in cleanup; bound the final flush so
+		// an unreachable collector cannot hold the suite
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := app.Shutdown(ctx); err != nil {
 			t.Errorf("failed to flush metrics: %v", err)
 		}
 	})
