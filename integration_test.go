@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -653,6 +654,87 @@ func TestIntegration(t *testing.T) {
 		if got, want := aws.ToString(cr.ChecksumSHA256), aws.ToString(head.ChecksumSHA256); got != want {
 			t.Errorf("copy result SHA256 %q, stored %q", got, want)
 		}
+	})
+	t.Run("ListingChecksums", func(t *testing.T) {
+		const key = "dir/list-cksum.txt"
+		if _, err := client.PutObject(t.Context(), &s3.PutObjectInput{
+			Bucket:            aws.String("it-bucket"),
+			Key:               aws.String(key),
+			Body:              strings.NewReader("listing checksum content"),
+			ChecksumAlgorithm: types.ChecksumAlgorithmCrc32c,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		defer client.DeleteObject(t.Context(), &s3.DeleteObjectInput{Bucket: aws.String("it-bucket"), Key: aws.String(key)})
+		t.Run("Objects", func(t *testing.T) {
+			out, err := client.ListObjectsV2(t.Context(), &s3.ListObjectsV2Input{
+				Bucket: aws.String("it-bucket"),
+				Prefix: aws.String(key),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(out.Contents) != 1 {
+				t.Fatalf("expect one entry, got %d", len(out.Contents))
+			}
+			o := out.Contents[0]
+			if len(o.ChecksumAlgorithm) == 0 {
+				t.Skip("backend does not report checksum algorithms in listings")
+			}
+			if !slices.Contains(o.ChecksumAlgorithm, types.ChecksumAlgorithmCrc32c) {
+				t.Errorf("expect CRC32C in %v", o.ChecksumAlgorithm)
+			}
+		})
+		t.Run("Parts", func(t *testing.T) {
+			const mpuKey = "dir/list-cksum-mpu.bin"
+			mpu, err := client.CreateMultipartUpload(t.Context(), &s3.CreateMultipartUploadInput{
+				Bucket:            aws.String("it-bucket"),
+				Key:               aws.String(mpuKey),
+				ChecksumAlgorithm: types.ChecksumAlgorithmCrc32c,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer client.AbortMultipartUpload(t.Context(), &s3.AbortMultipartUploadInput{
+				Bucket: aws.String("it-bucket"), Key: aws.String(mpuKey), UploadId: mpu.UploadId,
+			})
+			if _, err := client.UploadPart(t.Context(), &s3.UploadPartInput{
+				Bucket:            aws.String("it-bucket"),
+				Key:               aws.String(mpuKey),
+				UploadId:          mpu.UploadId,
+				PartNumber:        aws.Int32(1),
+				Body:              strings.NewReader("part one"),
+				ChecksumAlgorithm: types.ChecksumAlgorithmCrc32c,
+			}); err != nil {
+				t.Fatal(err)
+			}
+			uploads, err := client.ListMultipartUploads(t.Context(), &s3.ListMultipartUploadsInput{
+				Bucket: aws.String("it-bucket"),
+				Prefix: aws.String(mpuKey),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			parts, err := client.ListParts(t.Context(), &s3.ListPartsInput{
+				Bucket: aws.String("it-bucket"), Key: aws.String(mpuKey), UploadId: mpu.UploadId,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(uploads.Uploads) != 1 || len(parts.Parts) != 1 {
+				t.Fatalf("expect one upload and one part, got %d and %d", len(uploads.Uploads), len(parts.Parts))
+			}
+			if parts.Parts[0].ChecksumCRC32C == nil {
+				t.Skipf("backend does not report part checksums (upload algorithm %q, parts algorithm %q)",
+					uploads.Uploads[0].ChecksumAlgorithm, parts.ChecksumAlgorithm)
+			}
+			if parts.ChecksumAlgorithm != types.ChecksumAlgorithmCrc32c {
+				t.Errorf("ListParts algorithm %q", parts.ChecksumAlgorithm)
+			}
+			if uploads.Uploads[0].ChecksumAlgorithm != types.ChecksumAlgorithmCrc32c {
+				t.Errorf("ListMultipartUploads algorithm %q", uploads.Uploads[0].ChecksumAlgorithm)
+			}
+		})
 	})
 	t.Run("SSEKMS", func(t *testing.T) {
 		// requires a backend with a KMS: the compose ceph and rustfs

@@ -78,13 +78,15 @@ func (g *Gateway) listObjectVersions(c *opCtx) error {
 	owner := tenantOwner(c.rt.cfg.Tenant)
 	for _, v := range out.Versions {
 		version := s3xml.ObjectVersion{
-			StorageClass: c.clientStorageClass(string(v.StorageClass)),
-			Owner:        owner,
-			Key:          aws.ToString(v.Key),
-			VersionID:    aws.ToString(v.VersionId),
-			IsLatest:     aws.ToBool(v.IsLatest),
-			ETag:         aws.ToString(v.ETag),
-			Size:         aws.ToInt64(v.Size),
+			StorageClass:      c.clientStorageClass(string(v.StorageClass)),
+			Owner:             owner,
+			Key:               aws.ToString(v.Key),
+			VersionID:         aws.ToString(v.VersionId),
+			IsLatest:          aws.ToBool(v.IsLatest),
+			ETag:              aws.ToString(v.ETag),
+			Size:              aws.ToInt64(v.Size),
+			ChecksumAlgorithm: checksumAlgorithms(v.ChecksumAlgorithm),
+			ChecksumType:      string(v.ChecksumType),
 		}
 		if v.LastModified != nil {
 			version.LastModified = s3xml.FormatTime(*v.LastModified)

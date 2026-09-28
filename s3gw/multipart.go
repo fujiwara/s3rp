@@ -280,12 +280,19 @@ func (g *Gateway) listParts(c *opCtx) error {
 		NextPartNumberMarker: aws.ToString(out.NextPartNumberMarker),
 		MaxParts:             aws.ToInt32(out.MaxParts),
 		IsTruncated:          aws.ToBool(out.IsTruncated),
+		ChecksumAlgorithm:    string(out.ChecksumAlgorithm),
+		ChecksumType:         string(out.ChecksumType),
 	}
 	for _, p := range out.Parts {
 		part := s3xml.Part{
-			PartNumber: aws.ToInt32(p.PartNumber),
-			ETag:       aws.ToString(p.ETag),
-			Size:       aws.ToInt64(p.Size),
+			PartNumber:        aws.ToInt32(p.PartNumber),
+			ETag:              aws.ToString(p.ETag),
+			Size:              aws.ToInt64(p.Size),
+			ChecksumCRC32:     aws.ToString(p.ChecksumCRC32),
+			ChecksumCRC32C:    aws.ToString(p.ChecksumCRC32C),
+			ChecksumCRC64NVME: aws.ToString(p.ChecksumCRC64NVME),
+			ChecksumSHA1:      aws.ToString(p.ChecksumSHA1),
+			ChecksumSHA256:    aws.ToString(p.ChecksumSHA256),
 		}
 		if p.LastModified != nil {
 			part.LastModified = s3xml.FormatTime(*p.LastModified)
@@ -343,11 +350,13 @@ func (g *Gateway) listMultipartUploads(c *opCtx) error {
 	owner := tenantOwner(c.rt.cfg.Tenant)
 	for _, u := range out.Uploads {
 		upload := s3xml.Upload{
-			StorageClass: c.clientStorageClass(string(u.StorageClass)),
-			Owner:        owner,
-			Initiator:    owner,
-			Key:          aws.ToString(u.Key),
-			UploadID:     aws.ToString(u.UploadId),
+			StorageClass:      c.clientStorageClass(string(u.StorageClass)),
+			Owner:             owner,
+			Initiator:         owner,
+			Key:               aws.ToString(u.Key),
+			UploadID:          aws.ToString(u.UploadId),
+			ChecksumAlgorithm: string(u.ChecksumAlgorithm),
+			ChecksumType:      string(u.ChecksumType),
 		}
 		if u.Initiated != nil {
 			upload.Initiated = s3xml.FormatTime(*u.Initiated)
