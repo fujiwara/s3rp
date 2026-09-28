@@ -1,6 +1,7 @@
 package checksum_test
 
 import (
+	"errors"
 	"net/http"
 	"testing"
 
@@ -113,20 +114,30 @@ func TestSetHeaders(t *testing.T) {
 }
 
 func TestTrailerAlgorithm(t *testing.T) {
-	for _, tc := range []struct{ header, want string }{
-		{"x-amz-checksum-crc32", "crc32"},
-		{"X-Amz-Checksum-CRC32C", "crc32c"},            // case-insensitive
-		{" x-amz-checksum-sha256 ", "sha256"},          // padded
-		{"x-amz-meta-foo,x-amz-checksum-sha1", "sha1"}, // picked out of a list
-		{"", ""},
-		{"x-amz-meta-foo", ""},
-		{"x-amz-checksum-md5", ""}, // declared but unsupported
+	for _, tc := range []struct {
+		header, want string
+		err          error
+	}{
+		{header: "x-amz-checksum-crc32", want: "crc32"},
+		{header: "X-Amz-Checksum-CRC32C", want: "crc32c"},   // case-insensitive
+		{header: " x-amz-checksum-sha256 ", want: "sha256"}, // padded
+		{header: "", want: ""},
+		// a trailer the decoder cannot verify must not be silently dropped
+		{header: "x-amz-checksum-sha512", err: checksum.ErrUnsupportedTrailer},
+		{header: "x-amz-checksum-md5", err: checksum.ErrUnsupportedTrailer},
+		{header: "x-amz-meta-foo", err: checksum.ErrUnsupportedTrailer},
+		{header: "x-amz-meta-foo,x-amz-checksum-sha1", err: checksum.ErrUnsupportedTrailer},
+		{header: "x-amz-checksum-crc32,x-amz-checksum-sha1", err: checksum.ErrUnsupportedTrailer},
 	} {
 		h := http.Header{}
 		if tc.header != "" {
 			h.Set("x-amz-trailer", tc.header)
 		}
-		if got := checksum.TrailerAlgorithm(h); got != tc.want {
+		got, err := checksum.TrailerAlgorithm(h)
+		if !errors.Is(err, tc.err) {
+			t.Errorf("%q: expect error %v, got %v", tc.header, tc.err, err)
+		}
+		if got != tc.want {
 			t.Errorf("%q: expect %q, got %q", tc.header, tc.want, got)
 		}
 	}

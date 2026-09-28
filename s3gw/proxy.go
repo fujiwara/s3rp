@@ -696,6 +696,16 @@ func (g *Gateway) listBuckets(w http.ResponseWriter, r *http.Request, vr *verifi
 // decoding aws-chunked framing when the request declares it.
 func requestBody(c *opCtx) (io.Reader, int64, *s3err.Error) {
 	r, vr := c.r, c.vr
+	trailerAlg, err := checksum.TrailerAlgorithm(r.Header)
+	if err != nil {
+		return nil, 0, s3err.New(http.StatusNotImplemented, "NotImplemented",
+			"The trailer declared by x-amz-trailer is not supported.").WithCause(err)
+	}
+	if trailerAlg != "" && !strings.HasSuffix(vr.PayloadHash, "-TRAILER") {
+		// the declared checksum would never be read, let alone verified
+		return nil, 0, s3err.New(http.StatusBadRequest, "InvalidRequest",
+			"x-amz-trailer is declared but the payload carries no trailer.")
+	}
 	switch {
 	case sigv4.IsStreaming(vr.PayloadHash):
 		decodedLength := c.signed("x-amz-decoded-content-length")
@@ -708,7 +718,7 @@ func requestBody(c *opCtx) (io.Reader, int64, *s3err.Error) {
 			return nil, 0, s3err.New(http.StatusBadRequest, "InvalidRequest",
 				"Invalid x-amz-decoded-content-length header")
 		}
-		return sigv4.NewChunkedReader(r.Body, vr.Verified, checksum.TrailerAlgorithm(r.Header), length), length, nil
+		return sigv4.NewChunkedReader(r.Body, vr.Verified, trailerAlg, length), length, nil
 	default:
 		if r.ContentLength < 0 {
 			return nil, 0, s3err.New(http.StatusLengthRequired, "MissingContentLength",
@@ -740,8 +750,9 @@ func requestBody(c *opCtx) (io.Reader, int64, *s3err.Error) {
 // upload is still integrity-checked by the proxy, the backend just does not
 // store a checksum.
 func trailerChecksumAlgorithm(rt *bucketRT, h http.Header) types.ChecksumAlgorithm {
-	alg := checksum.TrailerAlgorithm(h)
-	if alg == "" || !rt.cfg.Backend.IsHTTPS() {
+	// requestBody has already refused a trailer it cannot verify
+	alg, err := checksum.TrailerAlgorithm(h)
+	if err != nil || alg == "" || !rt.cfg.Backend.IsHTTPS() {
 		return ""
 	}
 	return types.ChecksumAlgorithm(strings.ToUpper(alg))

@@ -1,6 +1,7 @@
 package s3gw_test
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,8 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 
 	"github.com/fujiwara/s3rp/s3gw"
 	"github.com/fujiwara/s3rp/store"
@@ -165,5 +168,27 @@ func TestTrailerChecksumHTTPSBackend(t *testing.T) {
 	}
 	if !strings.Contains(string(got.body), content) || !strings.Contains(string(got.body), "x-amz-checksum-crc32:") {
 		t.Errorf("backend body is not an aws-chunked payload with a checksum trailer (%d bytes)", len(got.body))
+	}
+}
+
+// A trailer the proxy cannot verify must be refused, not dropped: over TLS
+// the SDK sends a SHA512 checksum as a trailer, and accepting the upload
+// would report an integrity check nobody made.
+func TestUnsupportedTrailerChecksum(t *testing.T) {
+	client, rec := trailerSetup(t, true)
+	_, err := client.PutObject(t.Context(), &s3.PutObjectInput{
+		Bucket:            aws.String("trailerbucket"),
+		Key:               aws.String("sha512.txt"),
+		Body:              strings.NewReader("sha512 trailer content"),
+		ChecksumAlgorithm: types.ChecksumAlgorithmSha512,
+	})
+	var ae smithy.APIError
+	if !errors.As(err, &ae) || ae.ErrorCode() != "NotImplemented" {
+		t.Fatalf("expect NotImplemented, got %v", err)
+	}
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if len(rec.reqs) != 0 {
+		t.Error("the refused upload reached the backend")
 	}
 }
