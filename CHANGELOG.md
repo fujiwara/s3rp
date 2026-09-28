@@ -1,5 +1,19 @@
 # Changelog
 
+## [v0.0.16](https://github.com/fujiwara/s3rp/compare/v0.0.15...v0.0.16) - 2026-09-28
+
+- Reduce code complexity and report it in CI by @fujiwara in https://github.com/fujiwara/s3rp/pull/152
+- CI: run piped test steps with pipefail by @fujiwara in https://github.com/fujiwara/s3rp/pull/155
+- Forward x-amz-checksum-algorithm on CopyObject by @fujiwara in https://github.com/fujiwara/s3rp/pull/154
+- Return backend checksums in CopyObject and UploadPartCopy results by @fujiwara in https://github.com/fujiwara/s3rp/pull/156
+- Document refusing unsupported backend features via SetClientOptions by @fujiwara in https://github.com/fujiwara/s3rp/pull/157
+- Carry checksum fields in listings and ListParts by @fujiwara in https://github.com/fujiwara/s3rp/pull/158
+- Refuse aws-chunked trailers the proxy cannot verify by @fujiwara in https://github.com/fujiwara/s3rp/pull/159
+- Manage checksum algorithms in one table with generated conversions by @fujiwara in https://github.com/fujiwara/s3rp/pull/160
+- Let a service set which checksum algorithms it offers by @fujiwara in https://github.com/fujiwara/s3rp/pull/161
+- Document that plain-http backends store no trailing checksum by @fujiwara in https://github.com/fujiwara/s3rp/pull/162
+- Pin the integration backend images and let dependabot bump them by @fujiwara in https://github.com/fujiwara/s3rp/pull/163
+
 ## [v0.0.15](https://github.com/fujiwara/s3rp/compare/v0.0.14...v0.0.15) - 2026-09-28
 
 - Rename CLAUDE.md to AGENTS.md by @fujiwara in https://github.com/fujiwara/s3rp/pull/140
