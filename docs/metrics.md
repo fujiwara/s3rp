@@ -137,6 +137,22 @@ timeout: `[0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1,
 | `s3gw.operation` | string | conditionally required: when the request reached an operation (`RequestInfo.Op` is set) | The S3 API operation the request resolved to (`Op.Operation`). Absent when the request was refused before it reached an operation — an unverifiable signature, an invisible bucket, a denied action — since `RequestInfo.Op` is nil then. `Unknown` for a request that matched no known S3 operation. |
 | `s3gw.tenant` | string | opt in | The tenant whose signature the request carried (`RequestInfo.Tenant`). The requester, which differs from the bucket owner on a cross-tenant request. Absent when the signature did not verify. Its cardinality is the number of tenants, so it is opt-in. |
 
+## Resource
+
+Resource attributes the metrics are exported with.
+
+The OpenTelemetry SDK sets the telemetry.sdk.* attributes itself; the
+service names itself with service.name (and service.version), which
+OTEL_SERVICE_NAME overrides.
+
+| Attribute | Requirement level | Description |
+| --- | --- | --- |
+| `service.name` | required | Logical name of the service. |
+| `service.version` | recommended | The version string of the service component. The format is not defined by these conventions. |
+| `telemetry.sdk.language` | recommended | The language of the telemetry SDK. |
+| `telemetry.sdk.name` | recommended | The name of the telemetry SDK as defined above. |
+| `telemetry.sdk.version` | recommended | The version string of the telemetry SDK. |
+
 ## Attribute values
 
 ### s3gw.cache.name

@@ -72,6 +72,9 @@ virtual_host_suffix: s3.example.com  # optional: also serve photos.s3.example.co
 circuit_breaker:                     # optional: fail fast toward a backend that keeps failing
   failures: 5                        #   consecutive failed attempts that open it (size above the SDK's 3 retries)
   cooldown: 30s                      #   then one probe per cooldown until one succeeds
+metrics:                             # optional: export metrics over OTLP (see Metrics below)
+  tenant: true                       #   add a per-tenant attribute (one series per tenant)
+  bucket: false                      #   add a per-bucket attribute (one series per bucket)
 tenants:
   - name: acme                       # tenant identifier
     users:
@@ -110,6 +113,17 @@ Notes:
 - When `backend.access_key_id` and `backend.secret_access_key` are omitted, the SDK default credential chain is used (environment variables, shared config, IAM roles, etc.).
 - `GET /` (ListBuckets) returns the buckets of the key's tenant, with the tenant name as the owner.
 - Copying (CopyObject / UploadPartCopy) resolves the source within the requesting key's tenant, so copying **from** another tenant's bucket is impossible. Copying **into** another tenant's bucket works when its policy grants `s3:PutObject` ([cross-tenant access](docs/s3-api.md#cross-tenant-access)).
+
+### Metrics
+
+With a `metrics:` section, s3rp exports the metrics of the [metrics convention](docs/metrics.md) — request duration, wire bytes, the gateway's cache statistics — over OTLP. Where to, and how, is the standard OpenTelemetry environment:
+
+```console
+$ OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318 s3rp --config s3rp.yaml             # OTLP/HTTP (default)
+$ OTEL_EXPORTER_OTLP_PROTOCOL=grpc OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4317 s3rp --config s3rp.yaml
+```
+
+`OTEL_METRIC_EXPORT_INTERVAL` (default 60s), `OTEL_SERVICE_NAME` (default `s3rp`) and `OTEL_RESOURCE_ATTRIBUTES` apply as usual. For Prometheus, scrape a collector's Prometheus exporter; the names become `s3gw_request_duration_seconds` and so on.
 
 ### Definition store
 
@@ -188,6 +202,17 @@ $ S3RP_TEST_BACKEND_ENDPOINT=http://127.0.0.1:7480 go test -race -run TestIntegr
 $ docker compose up -d --wait rustfs
 $ S3RP_TEST_BACKEND_ENDPOINT=http://127.0.0.1:9000 go test -race -run TestIntegration ./...
 ```
+
+With `OTEL_EXPORTER_OTLP_ENDPOINT` set, the integration suite also exports its metrics there. Pointed at [Weaver](https://github.com/open-telemetry/weaver) live-check, that checks what s3rp actually emits against the metrics registry (CI does this on the versitygw run):
+
+```console
+$ make live-check-start    # OTLP/gRPC receiver on :4317 (LIVE_CHECK_OTLP_PORT to change it)
+$ S3RP_TEST_BACKEND_ENDPOINT=http://localhost:7070 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 \
+    OTEL_EXPORTER_OTLP_PROTOCOL=grpc go test -count=1 -run TestIntegration .
+$ make live-check-stop     # prints any violation and fails on one; report in live-check/
+```
+
+The registry itself is checked, and the Go constants and docs/metrics.md regenerated from it, by `make semconv`.
 
 Note: access Ceph RGW via `127.0.0.1`, not `localhost` — RGW resolves Host names that do not match its `rgw dns name` as virtual-hosted bucket names. CI runs the integration suite against all three backends as a matrix.
 

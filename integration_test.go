@@ -1,6 +1,7 @@
 package s3rp_test
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -71,6 +72,11 @@ func TestIntegration(t *testing.T) {
 			},
 		},
 	}
+	// with a collector to send to, the run doubles as the metrics
+	// convention's live check: CI points this at weaver live-check
+	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" {
+		cfg.Metrics = &s3rp.MetricsConfig{Tenant: true, Bucket: true}
+	}
 	cfg.SetDefaults()
 	if err := cfg.Validate(); err != nil {
 		t.Fatal(err)
@@ -79,6 +85,15 @@ func TestIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		// t.Context() is already done in cleanup; bound the final flush so
+		// an unreachable collector cannot hold the suite
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := app.Shutdown(ctx); err != nil {
+			t.Errorf("failed to flush metrics: %v", err)
+		}
+	})
 	ts := httptest.NewServer(app.Handler())
 	t.Cleanup(ts.Close)
 	client := newS3Client(t, ts.URL, testAccessKeyID, testSecretAccessKey)

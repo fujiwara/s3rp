@@ -17,3 +17,4 @@ dist/
 /s3tests/work/
 /bench/out/
 __pycache__/
+/live-check/

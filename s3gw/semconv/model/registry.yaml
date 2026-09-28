@@ -52,3 +52,21 @@ groups:
               stability: development
         stability: development
         brief: Whether a cache lookup found its entry.
+  - id: s3gw.resource
+    type: attribute_group
+    brief: Resource attributes the metrics are exported with.
+    note: |
+      The OpenTelemetry SDK sets the telemetry.sdk.* attributes itself; the
+      service names itself with service.name (and service.version), which
+      OTEL_SERVICE_NAME overrides.
+    attributes:
+      - ref: service.name
+        requirement_level: required
+      - ref: service.version
+        requirement_level: recommended
+      - ref: telemetry.sdk.language
+        requirement_level: recommended
+      - ref: telemetry.sdk.name
+        requirement_level: recommended
+      - ref: telemetry.sdk.version
+        requirement_level: recommended

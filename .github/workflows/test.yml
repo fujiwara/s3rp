@@ -102,6 +102,9 @@ jobs:
         include:
           - backend: versitygw
             endpoint: "http://localhost:7070"
+            # one backend is enough to check the exported metrics against
+            # the convention
+            live_check: true
           - backend: ceph
             endpoint: "http://127.0.0.1:7480"
           - backend: rustfs
@@ -121,6 +124,12 @@ jobs:
         env:
           BACKEND: ${{ matrix.backend }}
 
+      # weaver live-check receives the metrics the integration run exports
+      # and compares them with the registry; a violation fails the job.
+      - name: Start weaver live-check
+        if: ${{ matrix.live_check }}
+        run: make live-check-start
+
       # -json keeps each subtest's outcome and skip reason machine-readable
       # for the summary job; the plain output is replayed into the log.
       - name: Integration Test
@@ -128,6 +137,26 @@ jobs:
           go test -race -run TestIntegration -json ./... | tee test.json | jq -j 'select(.Output) | .Output'
         env:
           S3RP_TEST_BACKEND_ENDPOINT: ${{ matrix.endpoint }}
+          OTEL_EXPORTER_OTLP_ENDPOINT: ${{ matrix.live_check && 'http://localhost:4317' || '' }}
+          OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+
+      - name: Weaver live-check result
+        if: ${{ matrix.live_check && !cancelled() }}
+        run: |
+          code=0
+          make live-check-stop || code=$?
+          {
+            echo "### Weaver live-check"
+            echo
+            jq -r '.statistics
+              | "- advice: \(.advice_level_counts)",
+                "- registry metrics seen: \(.seen_registry_metrics | keys | join(", "))",
+                "- non-registry metrics seen: \(.seen_non_registry_metrics | keys | join(", "))",
+                "- registry coverage: \(.registry_coverage)"' live-check/live_check.json
+            jq -r '[.. | objects | select(.level? == "violation") | .message] | unique
+              | if length > 0 then "", "Violations:", "", (.[] | "- \(.)") else empty end' live-check/live_check.json
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"
 
       - name: Collect results
         if: ${{ !cancelled() }}

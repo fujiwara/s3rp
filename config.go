@@ -37,7 +37,9 @@ type Config struct {
 	// Cooldown after that; requests to an open backend are refused with
 	// ServiceUnavailable instead of waiting on it.
 	CircuitBreaker *CircuitBreakerConfig `yaml:"circuit_breaker,omitempty" json:"circuit_breaker,omitempty"`
-	Tenants        []*TenantConfig       `yaml:"tenants,omitempty" json:"tenants,omitempty"`
+	// Metrics, when set, exports the metrics of docs/metrics.md over OTLP.
+	Metrics *MetricsConfig  `yaml:"metrics,omitempty" json:"metrics,omitempty"`
+	Tenants []*TenantConfig `yaml:"tenants,omitempty" json:"tenants,omitempty"`
 }
 
 // CircuitBreakerConfig sizes the per-backend breaker (see s3gw.NewConsecutiveFailures).

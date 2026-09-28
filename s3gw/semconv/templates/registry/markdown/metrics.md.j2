@@ -56,6 +56,18 @@ buckets, which is the service's to judge. The registry's policy
 | `{{ a.name }}` | {{ typename(a.type) }} | {{ reqlevel(a.requirement_level) }} | {{ oneline(a.brief) }}{% if own and a.note %} {{ oneline(a.note) }}{% endif %} |
 {%- endfor %}
 {% endfor %}
+## Resource
+
+{{ ctx.resource.brief | trim }}
+{% if ctx.resource.note %}
+{{ ctx.resource.note | trim }}
+{% endif %}
+| Attribute | Requirement level | Description |
+| --- | --- | --- |
+{%- for a in ctx.resource.attributes | sort(attribute="name") %}
+| `{{ a.name }}` | {{ reqlevel(a.requirement_level) }} | {{ oneline(a.brief) }} |
+{%- endfor %}
+
 ## Attribute values
 {% for a in ctx.attributes if a.type is mapping and a.name.startswith("s3gw.") %}
 ### {{ a.name }}
