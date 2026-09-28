@@ -103,7 +103,7 @@ jobs:
 
       - name: Install cccc
         id: cccc
-        uses: moznion/cccc-action@4df3f72f581c87d0792ca89ef401c4ec8e85788b # v1.1.0
+        uses: fujiwara/cccc-action@e270f89873c2d8a9719235797861349135663e65 # pin-actions-cache
         with:
           version: v1.7.0
 
