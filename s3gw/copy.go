@@ -135,6 +135,12 @@ func (g *Gateway) copyObject(c *opCtx) error {
 		if cr.LastModified != nil {
 			result.LastModified = s3xml.FormatTime(*cr.LastModified)
 		}
+		result.ChecksumType = string(cr.ChecksumType)
+		result.ChecksumCRC32 = aws.ToString(cr.ChecksumCRC32)
+		result.ChecksumCRC32C = aws.ToString(cr.ChecksumCRC32C)
+		result.ChecksumCRC64NVME = aws.ToString(cr.ChecksumCRC64NVME)
+		result.ChecksumSHA1 = aws.ToString(cr.ChecksumSHA1)
+		result.ChecksumSHA256 = aws.ToString(cr.ChecksumSHA256)
 	}
 	return s3xml.Write(w, result)
 }
@@ -171,6 +177,11 @@ func (g *Gateway) uploadPartCopy(c *opCtx) error {
 		if cr.LastModified != nil {
 			result.LastModified = s3xml.FormatTime(*cr.LastModified)
 		}
+		result.ChecksumCRC32 = aws.ToString(cr.ChecksumCRC32)
+		result.ChecksumCRC32C = aws.ToString(cr.ChecksumCRC32C)
+		result.ChecksumCRC64NVME = aws.ToString(cr.ChecksumCRC64NVME)
+		result.ChecksumSHA1 = aws.ToString(cr.ChecksumSHA1)
+		result.ChecksumSHA256 = aws.ToString(cr.ChecksumSHA256)
 	}
 	return s3xml.Write(w, result)
 }

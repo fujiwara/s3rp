@@ -621,12 +621,13 @@ func TestIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer client.DeleteObject(t.Context(), &s3.DeleteObjectInput{Bucket: aws.String("it-bucket"), Key: aws.String(src)})
-		if _, err := client.CopyObject(t.Context(), &s3.CopyObjectInput{
+		cp, err := client.CopyObject(t.Context(), &s3.CopyObjectInput{
 			Bucket:            aws.String("it-bucket"),
 			Key:               aws.String(dst),
 			CopySource:        aws.String("it-bucket/" + src),
 			ChecksumAlgorithm: types.ChecksumAlgorithmSha256,
-		}); err != nil {
+		})
+		if err != nil {
 			t.Fatal(err)
 		}
 		defer client.DeleteObject(t.Context(), &s3.DeleteObjectInput{Bucket: aws.String("it-bucket"), Key: aws.String(dst)})
@@ -638,12 +639,19 @@ func TestIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		cr := cp.CopyObjectResult
 		if head.ChecksumSHA256 == nil {
 			// e.g. Ceph RGW tentacle ignores the algorithm and keeps the
 			// source's checksum; the stub test covers that it is sent
-			t.Skipf("backend did not recompute the checksum on copy (crc32=%q crc32c=%q crc64nvme=%q sha1=%q)",
+			t.Skipf("backend did not recompute the checksum on copy (stored crc32=%q crc32c=%q crc64nvme=%q sha1=%q; copy result crc32=%q crc32c=%q crc64nvme=%q sha1=%q sha256=%q)",
 				aws.ToString(head.ChecksumCRC32), aws.ToString(head.ChecksumCRC32C),
-				aws.ToString(head.ChecksumCRC64NVME), aws.ToString(head.ChecksumSHA1))
+				aws.ToString(head.ChecksumCRC64NVME), aws.ToString(head.ChecksumSHA1),
+				aws.ToString(cr.ChecksumCRC32), aws.ToString(cr.ChecksumCRC32C),
+				aws.ToString(cr.ChecksumCRC64NVME), aws.ToString(cr.ChecksumSHA1), aws.ToString(cr.ChecksumSHA256))
+		}
+		// the copy result tells the client the algorithm was applied
+		if got, want := aws.ToString(cr.ChecksumSHA256), aws.ToString(head.ChecksumSHA256); got != want {
+			t.Errorf("copy result SHA256 %q, stored %q", got, want)
 		}
 	})
 	t.Run("SSEKMS", func(t *testing.T) {

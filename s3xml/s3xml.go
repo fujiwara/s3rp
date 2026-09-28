@@ -120,18 +120,29 @@ type DeleteError struct {
 
 // CopyObjectResult is the response of CopyObject.
 type CopyObjectResult struct {
-	XMLName      xml.Name `xml:"CopyObjectResult"`
-	XMLNS        string   `xml:"xmlns,attr"`
-	ETag         string   `xml:"ETag"`
-	LastModified string   `xml:"LastModified,omitempty"`
+	XMLName           xml.Name `xml:"CopyObjectResult"`
+	XMLNS             string   `xml:"xmlns,attr"`
+	ETag              string   `xml:"ETag"`
+	LastModified      string   `xml:"LastModified,omitempty"`
+	ChecksumType      string   `xml:"ChecksumType,omitempty"`
+	ChecksumCRC32     string   `xml:"ChecksumCRC32,omitempty"`
+	ChecksumCRC32C    string   `xml:"ChecksumCRC32C,omitempty"`
+	ChecksumCRC64NVME string   `xml:"ChecksumCRC64NVME,omitempty"`
+	ChecksumSHA1      string   `xml:"ChecksumSHA1,omitempty"`
+	ChecksumSHA256    string   `xml:"ChecksumSHA256,omitempty"`
 }
 
 // CopyPartResult is the response of UploadPartCopy.
 type CopyPartResult struct {
-	XMLName      xml.Name `xml:"CopyPartResult"`
-	XMLNS        string   `xml:"xmlns,attr"`
-	ETag         string   `xml:"ETag"`
-	LastModified string   `xml:"LastModified,omitempty"`
+	XMLName           xml.Name `xml:"CopyPartResult"`
+	XMLNS             string   `xml:"xmlns,attr"`
+	ETag              string   `xml:"ETag"`
+	LastModified      string   `xml:"LastModified,omitempty"`
+	ChecksumCRC32     string   `xml:"ChecksumCRC32,omitempty"`
+	ChecksumCRC32C    string   `xml:"ChecksumCRC32C,omitempty"`
+	ChecksumCRC64NVME string   `xml:"ChecksumCRC64NVME,omitempty"`
+	ChecksumSHA1      string   `xml:"ChecksumSHA1,omitempty"`
+	ChecksumSHA256    string   `xml:"ChecksumSHA256,omitempty"`
 }
 
 // InitiateMultipartUploadResult is the response of CreateMultipartUpload.
