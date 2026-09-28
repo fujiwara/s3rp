@@ -3,6 +3,7 @@ package s3rp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -11,14 +12,16 @@ import (
 
 	"github.com/fujiwara/s3rp/s3gw"
 	"github.com/fujiwara/s3rp/store"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 )
 
 // S3RP is the service assembled from a config: it decides where definitions
 // come from and runs the HTTP server, while the S3 API itself is the Gateway.
 type S3RP struct {
 	*s3gw.Gateway
-	cfg   *Config
-	store store.Store
+	cfg           *Config
+	store         store.Store
+	meterProvider *sdkmetric.MeterProvider
 }
 
 // New creates an S3RP from a config, serving the definitions it declares.
@@ -28,9 +31,21 @@ func New(ctx context.Context, cfg *Config) (*S3RP, error) {
 
 // NewWithStore creates an S3RP using the given Store for tenant, key and
 // bucket definitions.
-func NewWithStore(_ context.Context, cfg *Config, st store.Store) (*S3RP, error) {
+func NewWithStore(ctx context.Context, cfg *Config, st store.Store) (*S3RP, error) {
 	gw := s3gw.New(st)
+	app := &S3RP{Gateway: gw, cfg: cfg, store: st}
 	gw.SetObserver(logRequest)
+	if cfg.Metrics != nil {
+		mp, record, err := setupMetrics(ctx, cfg.Metrics, gw)
+		if err != nil {
+			return nil, fmt.Errorf("failed to set up metrics: %w", err)
+		}
+		app.meterProvider = mp
+		gw.SetObserver(func(ctx context.Context, info *s3gw.RequestInfo) {
+			record(ctx, info)
+			logRequest(ctx, info)
+		})
+	}
 	if cfg.VirtualHostSuffix != "" {
 		gw.SetVirtualHostSuffix(cfg.VirtualHostSuffix)
 	}
@@ -39,7 +54,16 @@ func NewWithStore(_ context.Context, cfg *Config, st store.Store) (*S3RP, error)
 			return s3gw.NewConsecutiveFailures(cb.Failures, cb.Cooldown)
 		})
 	}
-	return &S3RP{Gateway: gw, cfg: cfg, store: st}, nil
+	return app, nil
+}
+
+// Shutdown flushes what the app has not exported yet. Call it once the
+// server has stopped.
+func (app *S3RP) Shutdown(ctx context.Context) error {
+	if app.meterProvider == nil {
+		return nil
+	}
+	return app.meterProvider.Shutdown(ctx)
 }
 
 // logRequest writes the access log, and the reason whenever a request failed.
@@ -113,6 +137,14 @@ func Run(ctx context.Context) error {
 		// a store may hold external handles (e.g. a database connection)
 		if c, ok := app.store.(io.Closer); ok {
 			c.Close()
+		}
+	}()
+	defer func() {
+		// ctx is done by now; the final export needs a context of its own
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := app.Shutdown(shutdownCtx); err != nil {
+			slog.Error("failed to flush metrics", "error", err)
 		}
 	}()
 	return app.Serve(ctx)

@@ -3,7 +3,8 @@ templates:
     filter: >
       {
         metrics: ([.groups[] | select(.type == "metric")] | sort_by(.metric_name)),
-        attributes: ([.groups[] | select(.type == "metric") | .attributes[]] | unique_by(.name))
+        attributes: ([.groups[] | select(.type == "metric") | .attributes[]] | unique_by(.name)),
+        resource: ([.groups[] | select(.id == "s3gw.resource")][0])
       }
     application_mode: single
     file_name: metrics.md
