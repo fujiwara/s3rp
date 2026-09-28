@@ -376,13 +376,16 @@ func newCopyTestProxy(t *testing.T) (*s3.Client, *stubBackend) {
 	stub := &stubBackend{
 		copyOut: &s3.CopyObjectOutput{
 			CopyObjectResult: &types.CopyObjectResult{
-				ETag:         aws.String(`"copy-etag"`),
-				LastModified: aws.Time(time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)),
+				ETag:              aws.String(`"copy-etag"`),
+				LastModified:      aws.Time(time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)),
+				ChecksumCRC64NVME: aws.String("copy-crc64nvme"),
+				ChecksumType:      types.ChecksumTypeFullObject,
 			},
 		},
 		upcOut: &s3.UploadPartCopyOutput{
 			CopyPartResult: &types.CopyPartResult{
-				ETag: aws.String(`"part-copy-etag"`),
+				ETag:           aws.String(`"part-copy-etag"`),
+				ChecksumCRC32C: aws.String("part-copy-crc32c"),
 			},
 		},
 	}
@@ -413,6 +416,14 @@ func TestProxyCopyObject(t *testing.T) {
 	}
 	if aws.ToString(out.CopyObjectResult.ETag) != `"copy-etag"` {
 		t.Errorf("unexpected etag %v", out.CopyObjectResult.ETag)
+	}
+	// the backend's checksum shows the client whether the requested
+	// algorithm was applied
+	if got := aws.ToString(out.CopyObjectResult.ChecksumCRC64NVME); got != "copy-crc64nvme" {
+		t.Errorf("unexpected checksum %q", got)
+	}
+	if out.CopyObjectResult.ChecksumType != types.ChecksumTypeFullObject {
+		t.Errorf("unexpected checksum type %q", out.CopyObjectResult.ChecksumType)
 	}
 	in := stub.copyIn
 	if aws.ToString(in.Bucket) != "backend-dstbucket" {
@@ -480,6 +491,9 @@ func TestProxyUploadPartCopy(t *testing.T) {
 	}
 	if aws.ToString(out.CopyPartResult.ETag) != `"part-copy-etag"` {
 		t.Errorf("unexpected etag %v", out.CopyPartResult.ETag)
+	}
+	if got := aws.ToString(out.CopyPartResult.ChecksumCRC32C); got != "part-copy-crc32c" {
+		t.Errorf("unexpected checksum %q", got)
 	}
 	in := stub.upcIn
 	if aws.ToString(in.CopySource) != "backend-srcbucket/dir/src.bin" {
