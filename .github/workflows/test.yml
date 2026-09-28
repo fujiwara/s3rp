@@ -63,6 +63,8 @@ jobs:
       # the number answers "how well is this package tested" — which is what
       # matters for the packages meant to be reusable on their own.
       - name: Test with coverage
+        # explicit bash so pipefail is on, or tee's status masks a failure
+        shell: bash
         run: |
           go test -covermode=atomic -coverprofile=cover.out ./... | tee test.out
 
@@ -170,6 +172,8 @@ jobs:
       # -json keeps each subtest's outcome and skip reason machine-readable
       # for the summary job; the plain output is replayed into the log.
       - name: Integration Test
+        # explicit bash so pipefail is on, or jq's status masks a failure
+        shell: bash
         run: |
           go test -race -run TestIntegration -json ./... | tee test.json | jq -j 'select(.Output) | .Output'
         env:
