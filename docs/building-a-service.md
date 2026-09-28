@@ -753,6 +753,32 @@ The gateway's outbound side: `SetClientOptions` for tuning the clients it builds
   	}}
   })
   ```
+- **Refusing what a backend cannot do is a client option too.** Backends differ in what they honor, and some ignore a request field silently — Ceph RGW (tentacle) accepts `x-amz-checksum-algorithm` on CopyObject and keeps the source's checksum. The gateway forwards what it supports and cannot know each backend's gaps, but you do, and `SetClientOptions` receives the backend definition: an `Initialize` middleware that inspects the operation's input and returns an `*s3err.Error` refuses it before the network. That error reaches the client as it stands (code, message, status) and the observer as the request's outcome; `Initialize` runs once per operation, ahead of the SDK's retry loop, so the refusal is not retried. `s3gw/clientoptions_test.go` (`TestClientOptionsRefusal`) guards this pattern.
+
+  ```go
+  gw.SetClientOptions(func(b *store.Backend) []func(*s3.Options) {
+  	if !isRGW(b) { // your store's knowledge of the backend
+  		return nil
+  	}
+  	return []func(*s3.Options){func(o *s3.Options) {
+  		o.APIOptions = append(o.APIOptions, func(stack *middleware.Stack) error {
+  			return stack.Initialize.Add(middleware.InitializeMiddlewareFunc("RefuseCopyChecksum",
+  				func(ctx context.Context, in middleware.InitializeInput, next middleware.InitializeHandler) (
+  					middleware.InitializeOutput, middleware.Metadata, error,
+  				) {
+  					if cin, ok := in.Parameters.(*s3.CopyObjectInput); ok && cin.ChecksumAlgorithm != "" {
+  						return middleware.InitializeOutput{}, middleware.Metadata{},
+  							s3err.New(http.StatusNotImplemented, "NotImplemented",
+  								"A checksum algorithm on CopyObject is not supported.")
+  					}
+  					return next.HandleInitialize(ctx, in)
+  				}), middleware.Before)
+  		})
+  	}}
+  })
+  ```
+
+  This is for what the backend cannot do. What your plan does not allow (a storage class, a key, an action) belongs in the Authorizer, which runs before the operation and sees `Op`; a backend-client middleware sees only the SDK input, after the hooks admitted the operation.
 - One backend requirement that is not a client option: **disable Nagle on the backend's frontend** — for Ceph RGW, `tcp_nodelay=1` in `rgw_frontends` (`rgw_frontend_extra_args` under cephadm). RGW's beast frontend leaves Nagle on by default and writes response headers and body separately, so any response body smaller than one MSS stalls ~40ms against the gateway's delayed ACK before its first byte is sent. The reach depends on the MSS: ~1.4KB bodies on a standard 1500 MTU, but **~9KB with jumbo frames** — on a datacenter network that is every small-object GET, at +40ms each (measured: 16KiB GET 43ms → 1.1ms once set). Go-based backends (versitygw) and AWS S3 are unaffected, as is the gateway's own front side — Go's HTTP server sets TCP_NODELAY on accepted connections.
 - **Fault isolation is a circuit breaker per backend client, `SetBreaker`.** When a backend is down, every request for every bucket on it otherwise pays the dial or read timeout before failing, and the SDK's retries after it (bounded by its retry token bucket, but the *first* attempt is not) — enough parked handlers and the process is as down as the backend. The hook picks a `Breaker` (`Allow() bool`, `Report(ok bool)`) per client the gateway builds — once per backend identity, the client-cache key — and the gateway wraps every attempt the SDK makes, retries included: `Allow` before the network, `Report` after, with `ok` = the backend answered anything below 500. A 404 or 403 proves the backend is up; a 5xx, a transport failure or a timeout does not; a request the client abandoned (`context.Canceled`) is not reported at all, since it says nothing about the backend. A refused attempt costs serialization and signing (microseconds) and returns `503 ServiceUnavailable` to the client with a `*s3gw.BreakerOpen` cause for the observer (`errors.As(info.Err, &open)`; it names the backend by scheme and host — `aws:<region>` for Amazon S3 — never in the response). The SDK does not retry a refusal. Nothing is added to `Op`: which backend a bucket is on is your store's knowledge, and an Interceptor that needs to know can `errors.As` the error `next()` returns.
 
@@ -820,6 +846,7 @@ The gateway's outbound side: `SetClientOptions` for tuning the clients it builds
 **Do**
 
 - Set `SetClientOptions` before serving, and keep it deterministic per backend — a cached client never consults it again.
+- Refuse a request field a backend would silently ignore with an `Initialize` middleware returning an `*s3err.Error`, per backend.
 - Instrument the backend `HTTPClient` (e.g. an otelhttp transport) for per-backend latency and retry metrics; the hooks cannot see them.
 - Set `tcp_nodelay=1` on a Ceph RGW backend's frontend; without it small-object GETs stall ~40ms per request.
 - Size the caches to what is active at once and poll the stats to verify.
