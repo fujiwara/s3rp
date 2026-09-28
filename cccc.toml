@@ -1,0 +1,4 @@
+# cccc (https://github.com/moznion/cccc) settings, shared by local runs and
+# the CI complexity summary. Tests and generated code are not measured.
+languages = ["go"]
+exclude   = ["*_test.go", "*_gen.go"]
