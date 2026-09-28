@@ -71,8 +71,8 @@ func (g *Gateway) createMultipartUpload(c *opCtx) error {
 		SSE:         string(out.ServerSideEncryption),
 		SSEKMSKeyID: aws.ToString(out.SSEKMSKeyId),
 	})
-	if out.ChecksumAlgorithm != "" {
-		w.Header().Set("x-amz-checksum-algorithm", string(out.ChecksumAlgorithm))
+	if alg := c.reportAlgorithm(string(out.ChecksumAlgorithm)); alg != "" {
+		w.Header().Set("x-amz-checksum-algorithm", alg)
 	}
 	if out.ChecksumType != "" {
 		w.Header().Set("x-amz-checksum-type", string(out.ChecksumType))
@@ -129,7 +129,7 @@ func (g *Gateway) uploadPart(c *opCtx) error {
 		w.Header().Set("ETag", *out.ETag)
 	}
 	setSSEHeaders(w.Header(), out.ServerSideEncryption, c.clientKMSKeyID(out.SSEKMSKeyId))
-	checksum.SetHeaders(w.Header(), checksumsFromUploadPartOutput(out), "")
+	c.setChecksumHeaders(w.Header(), checksumsFromUploadPartOutput(out), "")
 	w.WriteHeader(http.StatusOK)
 	return nil
 }
@@ -151,7 +151,7 @@ func (g *Gateway) completeMultipartUpload(c *opCtx) error {
 			ETag:       aws.String(p.ETag),
 		}
 		cs := checksumsFromXML(p.Checksums)
-		if s3e := checkChecksums(cs); s3e != nil {
+		if s3e := c.checkChecksums(cs); s3e != nil {
 			return s3e
 		}
 		setChecksumsCompletedPart(&cp, cs)
@@ -202,7 +202,7 @@ func (g *Gateway) completeMultipartUpload(c *opCtx) error {
 		Bucket:       rt.cfg.Name,
 		Key:          key,
 		ETag:         aws.ToString(out.ETag),
-		Checksums:    xmlChecksums(checksumsFromCompleteMultipartUploadOutput(out)),
+		Checksums:    c.reportChecksums(checksumsFromCompleteMultipartUploadOutput(out)),
 		ChecksumType: string(out.ChecksumType),
 	})
 }
@@ -259,7 +259,7 @@ func (g *Gateway) listParts(c *opCtx) error {
 		NextPartNumberMarker: aws.ToString(out.NextPartNumberMarker),
 		MaxParts:             aws.ToInt32(out.MaxParts),
 		IsTruncated:          aws.ToBool(out.IsTruncated),
-		ChecksumAlgorithm:    string(out.ChecksumAlgorithm),
+		ChecksumAlgorithm:    c.reportAlgorithm(string(out.ChecksumAlgorithm)),
 		ChecksumType:         string(out.ChecksumType),
 	}
 	for _, p := range out.Parts {
@@ -267,7 +267,7 @@ func (g *Gateway) listParts(c *opCtx) error {
 			PartNumber: aws.ToInt32(p.PartNumber),
 			ETag:       aws.ToString(p.ETag),
 			Size:       aws.ToInt64(p.Size),
-			Checksums:  xmlChecksums(checksumsFromPart(&p)),
+			Checksums:  c.reportChecksums(checksumsFromPart(&p)),
 		}
 		if p.LastModified != nil {
 			part.LastModified = s3xml.FormatTime(*p.LastModified)
@@ -330,7 +330,7 @@ func (g *Gateway) listMultipartUploads(c *opCtx) error {
 			Initiator:         owner,
 			Key:               aws.ToString(u.Key),
 			UploadID:          aws.ToString(u.UploadId),
-			ChecksumAlgorithm: string(u.ChecksumAlgorithm),
+			ChecksumAlgorithm: c.reportAlgorithm(string(u.ChecksumAlgorithm)),
 			ChecksumType:      string(u.ChecksumType),
 		}
 		if u.Initiated != nil {

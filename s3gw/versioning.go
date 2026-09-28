@@ -85,7 +85,7 @@ func (g *Gateway) listObjectVersions(c *opCtx) error {
 			IsLatest:          aws.ToBool(v.IsLatest),
 			ETag:              aws.ToString(v.ETag),
 			Size:              aws.ToInt64(v.Size),
-			ChecksumAlgorithm: checksumAlgorithms(v.ChecksumAlgorithm),
+			ChecksumAlgorithm: c.reportAlgorithms(v.ChecksumAlgorithm),
 			ChecksumType:      string(v.ChecksumType),
 		}
 		if v.LastModified != nil {

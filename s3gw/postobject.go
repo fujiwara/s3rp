@@ -149,7 +149,7 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, t tar
 	}
 	// the form fields are bound by the policy; an x-amz-* HTTP header on a
 	// POST upload is read by nothing and is refused like anywhere else
-	if s3e := newSignedHeader(r, nil).checkKnownAmzHeaders(); s3e != nil {
+	if s3e := newSignedHeader(r, nil).checkKnownAmzHeaders(g.checksums); s3e != nil {
 		return s3e
 	}
 	if info := recordOf(r.Context()); info != nil {

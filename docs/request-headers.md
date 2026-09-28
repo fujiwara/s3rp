@@ -26,8 +26,8 @@ Which request headers the gateway honors, which it refuses by name, and what hap
 | `x-amz-object-lock-mode`, `x-amz-object-lock-retain-until-date` | PutObject, CopyObject, CreateMultipartUpload | require `s3:PutObjectRetention` |
 | `x-amz-object-lock-legal-hold` | PutObject, CopyObject, CreateMultipartUpload | requires `s3:PutObjectLegalHold` |
 | `x-amz-bypass-governance-retention` | DeleteObject, DeleteObjects, PutObjectRetention | requires `s3:BypassGovernanceRetention` |
-| `x-amz-checksum-<algorithm>`, `x-amz-sdk-checksum-algorithm` | PutObject, UploadPart, CompleteMultipartUpload | precomputed checksums, forwarded for the algorithms the [checksum table](s3-api.md#checksums) marks verified or forwarded; the value header of a refused one is `501` |
-| `x-amz-checksum-algorithm` | CreateMultipartUpload, CopyObject | checked against the [checksum table](s3-api.md#checksums) (`501` refused, `400` not an S3 algorithm); on CopyObject, the algorithm the backend computes for the destination |
+| `x-amz-checksum-<algorithm>`, `x-amz-sdk-checksum-algorithm` | PutObject, UploadPart, CompleteMultipartUpload | precomputed checksums, forwarded for the algorithms the service offers ([checksum support](s3-api.md#checksums)); the value header of a refused one is `501` |
+| `x-amz-checksum-algorithm` | CreateMultipartUpload, CopyObject | checked against the [checksum support](s3-api.md#checksums) (`501` refused, `400` not an S3 algorithm); on CopyObject, the algorithm the backend computes for the destination |
 | `x-amz-checksum-type` | CreateMultipartUpload, CompleteMultipartUpload | |
 | `x-amz-checksum-mode` | GetObject, HeadObject | `ENABLED` returns the stored checksum headers |
 | `x-amz-mp-object-size` | CompleteMultipartUpload | |

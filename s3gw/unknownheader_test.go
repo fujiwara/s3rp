@@ -12,7 +12,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/fujiwara/s3rp/checksum"
 	"github.com/fujiwara/s3rp/s3gw"
 )
 
@@ -218,12 +217,6 @@ func TestKnownAmzHeadersCoverSource(t *testing.T) {
 		"x-amz-date": true, "x-amz-content-sha256": true, "x-amz-security-token": true,
 		"x-amz-decoded-content-length": true, "x-amz-trailer": true, "x-amz-user-agent": true,
 		"x-amz-sdk-checksum-algorithm": true,
-	}
-	// value headers come from the checksum table, read by checksum.FromHeaders
-	for _, a := range checksum.Algorithms() {
-		if a.Support != checksum.Refused {
-			readElsewhere[a.Header()] = true
-		}
 	}
 	literal := regexp.MustCompile(`"(x-amz-[a-z0-9-]+)"`)
 	inSource := map[string]bool{}

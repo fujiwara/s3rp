@@ -249,7 +249,7 @@ func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	}
 	// a header no operation reads is refused, not ignored (headers.go);
 	// here, so ListBuckets is covered along with every dispatched operation
-	if s3e := newSignedHeader(r, vr.SignedHeaders).checkKnownAmzHeaders(); s3e != nil {
+	if s3e := newSignedHeader(r, vr.SignedHeaders).checkKnownAmzHeaders(g.checksums); s3e != nil {
 		return s3e
 	}
 	t, err := g.requestTarget(r)
