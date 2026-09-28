@@ -784,20 +784,20 @@ The gateway's outbound side: `SetClientOptions` for tuning the clients it builds
   		}
   		return l
   	}
-  	counter := func(metric string, l prometheus.Labels, get func(s3gw.CacheStats) uint64) prometheus.Collector {
-  		return prometheus.NewCounterFunc(prometheus.CounterOpts{Name: metric, ConstLabels: l},
+  	counter := func(metric, help string, l prometheus.Labels, get func(s3gw.CacheStats) uint64) prometheus.Collector {
+  		return prometheus.NewCounterFunc(prometheus.CounterOpts{Name: metric, Help: help, ConstLabels: l},
   			func() float64 { return float64(get(stats())) })
   	}
-  	gauge := func(metric string, get func(s3gw.CacheStats) int) prometheus.Collector {
-  		return prometheus.NewGaugeFunc(prometheus.GaugeOpts{Name: metric, ConstLabels: labels()},
+  	gauge := func(metric, help string, get func(s3gw.CacheStats) int) prometheus.Collector {
+  		return prometheus.NewGaugeFunc(prometheus.GaugeOpts{Name: metric, Help: help, ConstLabels: labels()},
   			func() float64 { return float64(get(stats())) })
   	}
   	reg.MustRegister(
-  		counter("s3gw_cache_lookups_total", labels("s3gw_cache_result", "hit"), func(s s3gw.CacheStats) uint64 { return s.Hits }),
-  		counter("s3gw_cache_lookups_total", labels("s3gw_cache_result", "miss"), func(s s3gw.CacheStats) uint64 { return s.Misses }),
-  		counter("s3gw_cache_evictions_total", labels(), func(s s3gw.CacheStats) uint64 { return s.Evictions }),
-  		gauge("s3gw_cache_entries", func(s s3gw.CacheStats) int { return s.Len }),
-  		gauge("s3gw_cache_capacity", func(s s3gw.CacheStats) int { return s.Capacity }),
+  		counter("s3gw_cache_lookups_total", semconv.MetricS3GWCacheLookupsDescription, labels("s3gw_cache_result", "hit"), func(s s3gw.CacheStats) uint64 { return s.Hits }),
+  		counter("s3gw_cache_lookups_total", semconv.MetricS3GWCacheLookupsDescription, labels("s3gw_cache_result", "miss"), func(s s3gw.CacheStats) uint64 { return s.Misses }),
+  		counter("s3gw_cache_evictions_total", semconv.MetricS3GWCacheEvictionsDescription, labels(), func(s s3gw.CacheStats) uint64 { return s.Evictions }),
+  		gauge("s3gw_cache_entries", semconv.MetricS3GWCacheEntriesDescription, func(s s3gw.CacheStats) int { return s.Len }),
+  		gauge("s3gw_cache_capacity", semconv.MetricS3GWCacheCapacityDescription, func(s s3gw.CacheStats) int { return s.Capacity }),
   	)
   }
 
@@ -806,7 +806,7 @@ The gateway's outbound side: `SetClientOptions` for tuning the clients it builds
   // served on the metrics listener, not under the S3 handler
   ```
 
-  Each `stats()` call takes its own snapshot, so a scrape reads the fields moments apart — fine for monitoring, which is what they are for. `SetSignerCacheSize` rebuilds the signer cache and resets its counters; a Prometheus counter handles that as an ordinary counter reset. What to look at, per cache:
+  Each `stats()` call takes its own snapshot, so a scrape reads the fields moments apart — fine for monitoring, which is what they are for. `SetSignerCacheSize` rebuilds the signer cache but carries its counters over, so they never go backwards. What to look at, per cache:
 
   | signal | reads as | do |
   |---|---|---|

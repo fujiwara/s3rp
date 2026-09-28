@@ -74,8 +74,8 @@ func (g *Gateway) ClientCacheStats() CacheStats {
 	}
 }
 
-// SignerCacheStats snapshots the per-access-key signer cache. Note
-// SetSignerCacheSize replaces that cache and resets its counters.
+// SignerCacheStats snapshots the per-access-key signer cache. Its counters
+// survive SetSignerCacheSize, which replaces the cache itself.
 func (g *Gateway) SignerCacheStats() CacheStats {
 	s := g.verifier.SignerCacheStats()
 	return CacheStats{Hits: s.Hits, Misses: s.Misses, Evictions: s.Evictions, Len: s.Len, Capacity: s.Capacity}

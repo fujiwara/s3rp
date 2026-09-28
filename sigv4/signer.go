@@ -107,10 +107,10 @@ func (c *signerCache) stats() CacheStats {
 }
 
 // CacheStats is a point-in-time snapshot of the signer cache, for sizing it
-// (SetSignerCacheSize). Counters are monotonic since the cache was created —
-// SetSignerCacheSize replaces the cache and resets them — and the fields are
-// read independently: approximately consistent, for monitoring, not
-// accounting. Evictions counts collision displacements; a high rate with Len
+// (SetSignerCacheSize). Counters are monotonic for the Verifier's lifetime —
+// SetSignerCacheSize replaces the cache but carries them over — and the
+// fields are read independently: approximately consistent, for monitoring,
+// not accounting. Evictions counts collision displacements; a high rate with Len
 // well under Capacity means hot keys colliding on a slot (more slots lower
 // the odds), while a high rate with Len near Capacity means the cache is
 // simply too small for the active key set.
