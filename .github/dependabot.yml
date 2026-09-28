@@ -3,7 +3,7 @@ updates:
   - package-ecosystem: gomod
     directory: "/"
     schedule:
-      interval: monthly
+      interval: weekly
     groups:
       aws-sdk-go-v2:
         patterns:
@@ -11,8 +11,18 @@ updates:
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
-      interval: monthly
+      interval: weekly
   - package-ecosystem: docker
     directory: "/s3gw/semconv"
     schedule:
-      interval: monthly
+      interval: weekly
+  # the integration backends in compose.yml
+  - package-ecosystem: docker-compose
+    directory: "/"
+    schedule:
+      interval: weekly
+    ignore:
+      # a Ceph major needs docker/ceph-demo.sh changes (v21 did), and its
+      # x.1 releases are RCs the tag cannot tell apart: bump it by hand
+      - dependency-name: "ceph/ceph"
+        update-types: ["version-update:semver-major"]

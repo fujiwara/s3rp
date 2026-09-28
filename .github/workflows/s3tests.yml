@@ -11,9 +11,10 @@ on:
       image:
         description: Ceph release image for the compose ceph service
         type: choice
-        default: quay.io/ceph/ceph:v20
+        # compose.yml's pinned image, which dependabot keeps current
+        default: compose default
         options:
-          - quay.io/ceph/ceph:v20
+          - compose default
           - quay.io/ceph/ceph:v19
 
 jobs:
@@ -40,12 +41,12 @@ jobs:
           docker compose up -d --wait ceph
           echo "backend: $(docker compose exec ceph ceph version)" >> "$GITHUB_STEP_SUMMARY"
         env:
-          CEPH_IMAGE: ${{ inputs.image }}
+          CEPH_IMAGE: ${{ inputs.image != 'compose default' && inputs.image || '' }}
 
       - name: Run the suite
         run: ./s3tests/run.sh
         env:
-          CEPH_IMAGE: ${{ inputs.image }}
+          CEPH_IMAGE: ${{ inputs.image != 'compose default' && inputs.image || '' }}
 
       - name: Put the triage report in the job summary
         if: always()

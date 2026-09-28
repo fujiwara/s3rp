@@ -1,6 +1,9 @@
+# Backend image tags are pinned and bumped by dependabot (docker-compose
+# ecosystem), so a backend change arrives as a PR the integration matrix
+# tests. It reads and rewrites the ${VAR:-default} forms below.
 services:
   versitygw:
-    image: versity/versitygw:latest
+    image: versity/versitygw:v1.8.0
     command: ["--access", "backendkey", "--secret", "backendsecret", "posix", "--versioning-dir", "/versions", "/data"]
     ports:
       - "127.0.0.1:7070:7070"
@@ -52,7 +55,7 @@ services:
   # image is bootstrapped by docker/ceph-demo.sh (a trimmed port of the
   # demo entrypoint: mon + mgr + one OSD + RGW + admin user).
   ceph:
-    image: ${CEPH_IMAGE:-quay.io/ceph/ceph:v20}
+    image: ${CEPH_IMAGE:-quay.io/ceph/ceph:v20.2.4}
     profiles: [ceph]
     network_mode: host
     entrypoint: ["/ceph-demo.sh"]
