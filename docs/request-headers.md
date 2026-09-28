@@ -13,7 +13,7 @@ Which request headers the gateway honors, which it refuses by name, and what hap
 
 | Header | Operations | Notes |
 |---|---|---|
-| `x-amz-date`, `x-amz-content-sha256`, `x-amz-security-token`, `x-amz-decoded-content-length`, `x-amz-trailer` | all | consumed by SigV4 verification and `aws-chunked` decoding |
+| `x-amz-date`, `x-amz-content-sha256`, `x-amz-security-token`, `x-amz-decoded-content-length`, `x-amz-trailer` | all | consumed by SigV4 verification and `aws-chunked` decoding; `x-amz-trailer` must name one supported checksum (`501` otherwise) |
 | `x-amz-user-agent` | all | sent by the browser SDKs; accepted, unused |
 | `x-amz-meta-*` | PutObject, CopyObject, CreateMultipartUpload, POST upload | user metadata, stored and returned on reads |
 | `x-amz-storage-class` | PutObject, CopyObject, CreateMultipartUpload, POST upload | forwarded, unless a service installs a `StorageClassMapper` ([Storage class](s3-api.md#storage-class)) |

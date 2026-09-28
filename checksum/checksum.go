@@ -7,6 +7,7 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"hash"
 	"hash/crc32"
 	"hash/crc64"
@@ -92,19 +93,30 @@ func SetHeaders(h http.Header, cs Values, checksumType string) {
 	}
 }
 
+// ErrUnsupportedTrailer is returned by TrailerAlgorithm when x-amz-trailer
+// declares something other than a single supported checksum.
+var ErrUnsupportedTrailer = errors.New("unsupported x-amz-trailer")
+
 // TrailerAlgorithm returns the checksum algorithm declared in the
 // x-amz-trailer header ("x-amz-trailer: x-amz-checksum-crc32" -> "crc32"),
-// or "" if the request declares no checksum trailer.
-func TrailerAlgorithm(h http.Header) string {
+// or "" if the request declares no trailer. Any other declaration — an
+// algorithm NewHash does not know, a non-checksum trailer, more than one
+// trailer — is ErrUnsupportedTrailer: a trailer the decoder cannot verify
+// would otherwise be dropped while the client believes it was applied.
+func TrailerAlgorithm(h http.Header) (string, error) {
+	var alg string
 	for t := range strings.SplitSeq(h.Get("x-amz-trailer"), ",") {
 		t = strings.ToLower(strings.TrimSpace(t))
-		if alg, ok := strings.CutPrefix(t, HeaderPrefix); ok {
-			if NewHash(alg) != nil {
-				return alg
-			}
+		if t == "" {
+			continue
 		}
+		a, ok := strings.CutPrefix(t, HeaderPrefix)
+		if !ok || NewHash(a) == nil || alg != "" {
+			return "", ErrUnsupportedTrailer
+		}
+		alg = a
 	}
-	return ""
+	return alg, nil
 }
 
 // NewHash returns a hasher for the algorithm; the base64 of its

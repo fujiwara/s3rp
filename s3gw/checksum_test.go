@@ -1,9 +1,14 @@
 package s3gw_test
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -69,6 +74,31 @@ func TestProxyPutObjectTrailerChecksum(t *testing.T) {
 	// the trailer algorithm must be forwarded so the backend stores a checksum
 	if stub.putIn.ChecksumAlgorithm == "" && stub.putIn.ChecksumCRC32 == nil && stub.putIn.ChecksumCRC64NVME == nil {
 		t.Errorf("expect a checksum algorithm or value on the backend input, got %+v", stub.putIn.ChecksumAlgorithm)
+	}
+}
+
+// A trailer declared on a payload that carries none would never be read.
+func TestProxyPutObjectTrailerWithoutTrailerPayload(t *testing.T) {
+	stub := &stubBackend{
+		putOut: &s3.PutObjectOutput{ETag: aws.String(`"e"`)},
+	}
+	gw := newTestGateway(t)
+	if err := gw.SetBackend("testbucket", stub); err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("123456789")
+	sum := sha256.Sum256(body)
+	req := signedRequest(t, http.MethodPut, "http://s3.example.com/testbucket/k.txt",
+		body, hex.EncodeToString(sum[:]), time.Now(), testCreds(), func(r *http.Request) {
+			r.Header.Set("x-amz-trailer", "x-amz-checksum-crc32")
+		})
+	w := httptest.NewRecorder()
+	gw.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "InvalidRequest") {
+		t.Errorf("expect 400 InvalidRequest, got %d: %s", w.Code, w.Body.String())
+	}
+	if stub.putIn != nil {
+		t.Error("the refused upload reached the backend")
 	}
 }
 
