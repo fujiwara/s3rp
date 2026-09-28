@@ -27,7 +27,7 @@ Which request headers the gateway honors, which it refuses by name, and what hap
 | `x-amz-object-lock-legal-hold` | PutObject, CopyObject, CreateMultipartUpload | requires `s3:PutObjectLegalHold` |
 | `x-amz-bypass-governance-retention` | DeleteObject, DeleteObjects, PutObjectRetention | requires `s3:BypassGovernanceRetention` |
 | `x-amz-checksum-crc32`, `-crc32c`, `-crc64nvme`, `-sha1`, `-sha256`, `x-amz-sdk-checksum-algorithm` | PutObject, UploadPart, CompleteMultipartUpload | precomputed checksums, forwarded ([Checksums](s3-api.md#checksums)) |
-| `x-amz-checksum-algorithm` | CreateMultipartUpload | |
+| `x-amz-checksum-algorithm` | CreateMultipartUpload, CopyObject | on CopyObject, the algorithm the backend computes for the destination |
 | `x-amz-checksum-type` | CreateMultipartUpload, CompleteMultipartUpload | |
 | `x-amz-checksum-mode` | GetObject, HeadObject | `ENABLED` returns the stored checksum headers |
 | `x-amz-mp-object-size` | CompleteMultipartUpload | |
