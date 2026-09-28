@@ -269,39 +269,26 @@ func (g *Gateway) listParts(c *opCtx) error {
 	// owner; the backend's account stays hidden
 	owner := tenantOwner(c.rt.cfg.Tenant)
 	result := &s3xml.ListPartsResult{
-		XMLNS:        s3xml.Namespace,
-		Bucket:       rt.cfg.Name,
-		Key:          key,
-		UploadID:     aws.ToString(in.UploadId),
-		StorageClass: c.clientStorageClass(string(out.StorageClass)),
-		Owner:        owner,
-		Initiator:    owner,
-	}
-	if out.PartNumberMarker != nil {
-		result.PartNumberMarker = *out.PartNumberMarker
-	}
-	if out.NextPartNumberMarker != nil {
-		result.NextPartNumberMarker = *out.NextPartNumberMarker
-	}
-	if out.MaxParts != nil {
-		result.MaxParts = *out.MaxParts
-	}
-	if out.IsTruncated != nil {
-		result.IsTruncated = *out.IsTruncated
+		XMLNS:                s3xml.Namespace,
+		Bucket:               rt.cfg.Name,
+		Key:                  key,
+		UploadID:             aws.ToString(in.UploadId),
+		StorageClass:         c.clientStorageClass(string(out.StorageClass)),
+		Owner:                owner,
+		Initiator:            owner,
+		PartNumberMarker:     aws.ToString(out.PartNumberMarker),
+		NextPartNumberMarker: aws.ToString(out.NextPartNumberMarker),
+		MaxParts:             aws.ToInt32(out.MaxParts),
+		IsTruncated:          aws.ToBool(out.IsTruncated),
 	}
 	for _, p := range out.Parts {
-		part := s3xml.Part{}
-		if p.PartNumber != nil {
-			part.PartNumber = *p.PartNumber
+		part := s3xml.Part{
+			PartNumber: aws.ToInt32(p.PartNumber),
+			ETag:       aws.ToString(p.ETag),
+			Size:       aws.ToInt64(p.Size),
 		}
 		if p.LastModified != nil {
 			part.LastModified = s3xml.FormatTime(*p.LastModified)
-		}
-		if p.ETag != nil {
-			part.ETag = *p.ETag
-		}
-		if p.Size != nil {
-			part.Size = *p.Size
 		}
 		result.Parts = append(result.Parts, part)
 	}
@@ -342,32 +329,16 @@ func (g *Gateway) listMultipartUploads(c *opCtx) error {
 		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	result := &s3xml.ListMultipartUploadsResult{
-		XMLNS:  s3xml.Namespace,
-		Bucket: rt.cfg.Name,
-	}
-	if out.KeyMarker != nil {
-		result.KeyMarker = *out.KeyMarker
-	}
-	if out.UploadIdMarker != nil {
-		result.UploadIDMarker = *out.UploadIdMarker
-	}
-	if out.NextKeyMarker != nil {
-		result.NextKeyMarker = *out.NextKeyMarker
-	}
-	if out.NextUploadIdMarker != nil {
-		result.NextUploadIDMarker = *out.NextUploadIdMarker
-	}
-	if out.Delimiter != nil {
-		result.Delimiter = *out.Delimiter
-	}
-	if out.Prefix != nil {
-		result.Prefix = *out.Prefix
-	}
-	if out.MaxUploads != nil {
-		result.MaxUploads = *out.MaxUploads
-	}
-	if out.IsTruncated != nil {
-		result.IsTruncated = *out.IsTruncated
+		XMLNS:              s3xml.Namespace,
+		Bucket:             rt.cfg.Name,
+		KeyMarker:          aws.ToString(out.KeyMarker),
+		UploadIDMarker:     aws.ToString(out.UploadIdMarker),
+		NextKeyMarker:      aws.ToString(out.NextKeyMarker),
+		NextUploadIDMarker: aws.ToString(out.NextUploadIdMarker),
+		Delimiter:          aws.ToString(out.Delimiter),
+		Prefix:             aws.ToString(out.Prefix),
+		MaxUploads:         aws.ToInt32(out.MaxUploads),
+		IsTruncated:        aws.ToBool(out.IsTruncated),
 	}
 	owner := tenantOwner(c.rt.cfg.Tenant)
 	for _, u := range out.Uploads {
@@ -375,12 +346,8 @@ func (g *Gateway) listMultipartUploads(c *opCtx) error {
 			StorageClass: c.clientStorageClass(string(u.StorageClass)),
 			Owner:        owner,
 			Initiator:    owner,
-		}
-		if u.Key != nil {
-			upload.Key = *u.Key
-		}
-		if u.UploadId != nil {
-			upload.UploadID = *u.UploadId
+			Key:          aws.ToString(u.Key),
+			UploadID:     aws.ToString(u.UploadId),
 		}
 		if u.Initiated != nil {
 			upload.Initiated = s3xml.FormatTime(*u.Initiated)

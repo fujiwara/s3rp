@@ -128,14 +128,11 @@ func (c *Config) Validate() error {
 		}
 	}
 	tenantNames := make(map[string]bool, len(c.Tenants))
-	// bucket names and access key ids must be unique across all tenants:
-	// path-style URLs carry no tenant discriminator, and a key belongs to
-	// exactly one tenant
-	bucketNames := make(map[string]bool)
-	keyIDs := make(map[string]bool)
-	// tracks which tenant owns each physical backend target (endpoint + backend
-	// bucket): two tenants mapping to the same physical bucket would share data
-	backendOwner := make(map[string]string)
+	seen := &configNames{
+		bucketNames:  make(map[string]bool),
+		keyIDs:       make(map[string]bool),
+		backendOwner: make(map[string]string),
+	}
 	for _, t := range c.Tenants {
 		if err := store.ValidateTenantName(t.Name); err != nil {
 			return err
@@ -144,87 +141,119 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("duplicate tenant name %q", t.Name)
 		}
 		tenantNames[t.Name] = true
-
-		if len(t.Users) == 0 {
-			return fmt.Errorf("tenant %s: at least one user is required", t.Name)
+		if err := seen.validateTenant(t); err != nil {
+			return err
 		}
-		userNames := make(map[string]bool, len(t.Users))
-		for _, u := range t.Users {
-			if err := store.ValidateUserName(u.Name); err != nil {
-				return fmt.Errorf("tenant %s: %w", t.Name, err)
-			}
-			if userNames[u.Name] {
-				return fmt.Errorf("tenant %s: duplicate user name %q", t.Name, u.Name)
-			}
-			userNames[u.Name] = true
-			if len(u.Keys) == 0 {
-				return fmt.Errorf("tenant %s: user %s: at least one key is required", t.Name, u.Name)
-			}
-			for _, k := range u.Keys {
-				if k.AccessKeyID == "" || k.SecretAccessKey == "" {
-					return fmt.Errorf("tenant %s: user %s: key access_key_id and secret_access_key are required", t.Name, u.Name)
-				}
-				if keyIDs[k.AccessKeyID] {
-					return fmt.Errorf("duplicate access_key_id %q", k.AccessKeyID)
-				}
-				keyIDs[k.AccessKeyID] = true
-			}
-			if len(u.Policy) > 0 {
-				up := &policy.UserPolicy{Statements: u.Policy}
-				if err := policy.ValidateUserPolicy(up); err != nil {
-					return fmt.Errorf("tenant %s: user %s: invalid policy: %w", t.Name, u.Name, err)
-				}
-				// the byte cap applies to the serialized form, which the YAML
-				// path does not otherwise produce
-				if _, err := policy.MarshalUserPolicy(up); err != nil {
-					return fmt.Errorf("tenant %s: user %s: invalid policy: %w", t.Name, u.Name, err)
-				}
-			}
+	}
+	return nil
+}
+
+// configNames tracks what must be unique across all tenants while a config
+// is validated.
+type configNames struct {
+	// bucket names and access key ids must be unique across all tenants:
+	// path-style URLs carry no tenant discriminator, and a key belongs to
+	// exactly one tenant
+	bucketNames map[string]bool
+	keyIDs      map[string]bool
+	// tracks which tenant owns each physical backend target (endpoint + backend
+	// bucket): two tenants mapping to the same physical bucket would share data
+	backendOwner map[string]string
+}
+
+func (n *configNames) validateTenant(t *TenantConfig) error {
+	if len(t.Users) == 0 {
+		return fmt.Errorf("tenant %s: at least one user is required", t.Name)
+	}
+	userNames := make(map[string]bool, len(t.Users))
+	for _, u := range t.Users {
+		if err := store.ValidateUserName(u.Name); err != nil {
+			return fmt.Errorf("tenant %s: %w", t.Name, err)
 		}
-
-		if len(t.Buckets) == 0 {
-			return fmt.Errorf("tenant %s: at least one bucket is required", t.Name)
+		if userNames[u.Name] {
+			return fmt.Errorf("tenant %s: duplicate user name %q", t.Name, u.Name)
 		}
-		for _, b := range t.Buckets {
-			if err := store.ValidateBucketName(b.Name); err != nil {
-				return err
-			}
-			if bucketNames[b.Name] {
-				return fmt.Errorf("duplicate bucket name %q", b.Name)
-			}
-			bucketNames[b.Name] = true
+		userNames[u.Name] = true
+		if err := n.validateUser(u); err != nil {
+			return fmt.Errorf("tenant %s: user %s: %w", t.Name, u.Name, err)
+		}
+	}
+	if len(t.Buckets) == 0 {
+		return fmt.Errorf("tenant %s: at least one bucket is required", t.Name)
+	}
+	for _, b := range t.Buckets {
+		if err := n.validateBucket(t.Name, b); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
-			if b.Backend == nil {
-				return fmt.Errorf("bucket %s: backend is required", b.Name)
-			}
-			if err := b.Backend.Validate(); err != nil {
-				return fmt.Errorf("bucket %s: %w", b.Name, err)
-			}
-			// two tenants must not target the same physical backend bucket, or
-			// each could read/overwrite/delete the other's objects. The backend
-			// bucket defaults to the front name (see SetDefaults).
-			backendBucket := b.Backend.Bucket
-			if backendBucket == "" {
-				backendBucket = b.Name
-			}
-			target := b.Backend.Endpoint + "\x00" + backendBucket
-			if owner, ok := backendOwner[target]; ok && owner != t.Name {
-				return fmt.Errorf("bucket %s: backend bucket %q on %q is already used by tenant %s (cross-tenant sharing is not allowed)",
-					b.Name, backendBucket, b.Backend.Endpoint, owner)
-			}
-			backendOwner[target] = t.Name
+func (n *configNames) validateUser(u *UserConfig) error {
+	if len(u.Keys) == 0 {
+		return fmt.Errorf("at least one key is required")
+	}
+	for _, k := range u.Keys {
+		if k.AccessKeyID == "" || k.SecretAccessKey == "" {
+			return fmt.Errorf("key access_key_id and secret_access_key are required")
+		}
+		if n.keyIDs[k.AccessKeyID] {
+			return fmt.Errorf("duplicate access_key_id %q", k.AccessKeyID)
+		}
+		n.keyIDs[k.AccessKeyID] = true
+	}
+	if len(u.Policy) == 0 {
+		return nil
+	}
+	up := &policy.UserPolicy{Statements: u.Policy}
+	if err := policy.ValidateUserPolicy(up); err != nil {
+		return fmt.Errorf("invalid policy: %w", err)
+	}
+	// the byte cap applies to the serialized form, which the YAML
+	// path does not otherwise produce
+	if _, err := policy.MarshalUserPolicy(up); err != nil {
+		return fmt.Errorf("invalid policy: %w", err)
+	}
+	return nil
+}
 
-			if b.Policy != "" {
-				if _, err := policy.Parse(b.Name, b.Policy); err != nil {
-					return fmt.Errorf("bucket %s: invalid policy: %w", b.Name, err)
-				}
-			}
+func (n *configNames) validateBucket(tenant string, b *BucketConfig) error {
+	if err := store.ValidateBucketName(b.Name); err != nil {
+		return err
+	}
+	if n.bucketNames[b.Name] {
+		return fmt.Errorf("duplicate bucket name %q", b.Name)
+	}
+	n.bucketNames[b.Name] = true
 
-			for _, rule := range b.CORS {
-				if err := rule.Validate(); err != nil {
-					return fmt.Errorf("bucket %s: %w", b.Name, err)
-				}
-			}
+	if b.Backend == nil {
+		return fmt.Errorf("bucket %s: backend is required", b.Name)
+	}
+	if err := b.Backend.Validate(); err != nil {
+		return fmt.Errorf("bucket %s: %w", b.Name, err)
+	}
+	// two tenants must not target the same physical backend bucket, or
+	// each could read/overwrite/delete the other's objects. The backend
+	// bucket defaults to the front name (see SetDefaults).
+	backendBucket := b.Backend.Bucket
+	if backendBucket == "" {
+		backendBucket = b.Name
+	}
+	target := b.Backend.Endpoint + "\x00" + backendBucket
+	if owner, ok := n.backendOwner[target]; ok && owner != tenant {
+		return fmt.Errorf("bucket %s: backend bucket %q on %q is already used by tenant %s (cross-tenant sharing is not allowed)",
+			b.Name, backendBucket, b.Backend.Endpoint, owner)
+	}
+	n.backendOwner[target] = tenant
+
+	if b.Policy != "" {
+		if _, err := policy.Parse(b.Name, b.Policy); err != nil {
+			return fmt.Errorf("bucket %s: invalid policy: %w", b.Name, err)
+		}
+	}
+	for _, rule := range b.CORS {
+		if err := rule.Validate(); err != nil {
+			return fmt.Errorf("bucket %s: %w", b.Name, err)
 		}
 	}
 	return nil

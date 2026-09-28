@@ -36,14 +36,10 @@ func (g *Gateway) getObjectLockConfiguration(c *opCtx) error {
 		if c.Rule != nil && c.Rule.DefaultRetention != nil {
 			dr := c.Rule.DefaultRetention
 			result.Rule = &s3xml.ObjectLockRule{DefaultRetention: &s3xml.DefaultRetention{
-				Mode: string(dr.Mode),
+				Mode:  string(dr.Mode),
+				Days:  aws.ToInt32(dr.Days),
+				Years: aws.ToInt32(dr.Years),
 			}}
-			if dr.Days != nil {
-				result.Rule.DefaultRetention.Days = *dr.Days
-			}
-			if dr.Years != nil {
-				result.Rule.DefaultRetention.Years = *dr.Years
-			}
 		}
 	}
 	return s3xml.Write(w, result)

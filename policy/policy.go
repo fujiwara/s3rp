@@ -217,8 +217,8 @@ func (p *Policy) validate() error {
 		return fmt.Errorf("policy has %d statements, at most %d are allowed", len(p.Statement), MaxStatements)
 	}
 	sids := make(map[string]int, len(p.Statement))
-	for i, st := range p.Statement {
-		name := statementName(st.Sid, i)
+	for i := range p.Statement {
+		st := &p.Statement[i]
 		// a Sid names a statement in the operator's log; two statements
 		// sharing one could not be told apart there (IAM requires the same)
 		if st.Sid != "" {
@@ -227,73 +227,92 @@ func (p *Policy) validate() error {
 			}
 			sids[st.Sid] = i
 		}
-		if st.Effect != "Allow" && st.Effect != "Deny" {
-			return fmt.Errorf("%s: effect must be Allow or Deny", name)
+		if err := st.validate(statementName(st.Sid, i)); err != nil {
+			return err
 		}
-		if (st.Principal == nil) == (st.NotPrincipal == nil) {
-			return fmt.Errorf("%s: exactly one of Principal or NotPrincipal is required", name)
+	}
+	return nil
+}
+
+func (st *Statement) validate(name string) error {
+	if st.Effect != "Allow" && st.Effect != "Deny" {
+		return fmt.Errorf("%s: effect must be Allow or Deny", name)
+	}
+	if (st.Principal == nil) == (st.NotPrincipal == nil) {
+		return fmt.Errorf("%s: exactly one of Principal or NotPrincipal is required", name)
+	}
+	if st.NotPrincipal != nil && st.NotPrincipal.All {
+		return fmt.Errorf("%s: NotPrincipal %q matches nobody", name, "*")
+	}
+	// NotPrincipal is everyone-except, so with Allow it would grant to
+	// every authenticated user of every tenant but the listed ones —
+	// a public-by-exclusion grant nobody writes on purpose (AWS
+	// discourages the combination for the same reason).
+	if st.NotPrincipal != nil && st.Effect != "Deny" {
+		return fmt.Errorf("%s: NotPrincipal is only allowed with Effect Deny", name)
+	}
+	for _, pr := range []*Principal{st.Principal, st.NotPrincipal} {
+		if err := validatePrincipal(pr, name); err != nil {
+			return err
 		}
-		if st.NotPrincipal != nil && st.NotPrincipal.All {
-			return fmt.Errorf("%s: NotPrincipal %q matches nobody", name, "*")
+	}
+	if len(st.Action) == 0 {
+		return fmt.Errorf("%s: at least one action is required", name)
+	}
+	if len(st.Action) > MaxActionsPerStatement {
+		return fmt.Errorf("%s: %d actions, at most %d are allowed", name, len(st.Action), MaxActionsPerStatement)
+	}
+	for _, a := range st.Action {
+		if err := validateAction(a); err != nil {
+			return fmt.Errorf("%s: %w", name, err)
 		}
-		// NotPrincipal is everyone-except, so with Allow it would grant to
-		// every authenticated user of every tenant but the listed ones —
-		// a public-by-exclusion grant nobody writes on purpose (AWS
-		// discourages the combination for the same reason).
-		if st.NotPrincipal != nil && st.Effect != "Deny" {
-			return fmt.Errorf("%s: NotPrincipal is only allowed with Effect Deny", name)
+	}
+	if len(st.Resource) == 0 {
+		return fmt.Errorf("%s: at least one resource is required", name)
+	}
+	if len(st.Resource) > MaxResourcesPerStatement {
+		return fmt.Errorf("%s: %d resources, at most %d are allowed", name, len(st.Resource), MaxResourcesPerStatement)
+	}
+	for _, res := range st.Resource {
+		if len(res) > MaxPatternLen {
+			return fmt.Errorf("%s: resource pattern too long (%d bytes, max %d)", name, len(res), MaxPatternLen)
 		}
-		for _, pr := range []*Principal{st.Principal, st.NotPrincipal} {
-			if pr == nil {
-				continue
-			}
-			if len(pr.Users) > MaxPrincipalUsers {
-				return fmt.Errorf("%s: %d principal users, at most %d are allowed", name, len(pr.Users), MaxPrincipalUsers)
-			}
-			for _, u := range pr.Users {
-				if !principalRegexp.MatchString(u) {
-					return fmt.Errorf("%s: invalid principal %q (must be %q or %q)", name, u, "tenant/user", "tenant/*")
-				}
-			}
+	}
+	if st.Condition != nil {
+		return validateCondition(st.Condition, name)
+	}
+	return nil
+}
+
+func validatePrincipal(pr *Principal, name string) error {
+	if pr == nil {
+		return nil
+	}
+	if len(pr.Users) > MaxPrincipalUsers {
+		return fmt.Errorf("%s: %d principal users, at most %d are allowed", name, len(pr.Users), MaxPrincipalUsers)
+	}
+	for _, u := range pr.Users {
+		if !principalRegexp.MatchString(u) {
+			return fmt.Errorf("%s: invalid principal %q (must be %q or %q)", name, u, "tenant/user", "tenant/*")
 		}
-		if len(st.Action) == 0 {
-			return fmt.Errorf("%s: at least one action is required", name)
-		}
-		if len(st.Action) > MaxActionsPerStatement {
-			return fmt.Errorf("%s: %d actions, at most %d are allowed", name, len(st.Action), MaxActionsPerStatement)
-		}
-		for _, a := range st.Action {
-			if err := validateAction(a); err != nil {
-				return fmt.Errorf("%s: %w", name, err)
-			}
-		}
-		if len(st.Resource) == 0 {
-			return fmt.Errorf("%s: at least one resource is required", name)
-		}
-		if len(st.Resource) > MaxResourcesPerStatement {
-			return fmt.Errorf("%s: %d resources, at most %d are allowed", name, len(st.Resource), MaxResourcesPerStatement)
-		}
-		for _, res := range st.Resource {
-			if len(res) > MaxPatternLen {
-				return fmt.Errorf("%s: resource pattern too long (%d bytes, max %d)", name, len(res), MaxPatternLen)
-			}
-		}
-		if c := st.Condition; c != nil {
-			if len(c.IPAddress) == 0 && len(c.NotIPAddress) == 0 {
-				return fmt.Errorf("%s: condition must contain at least one operator", name)
-			}
-			if len(c.IPAddress) > MaxConditionValues {
-				return fmt.Errorf("%s: %d %s values, at most %d are allowed", name, len(c.IPAddress), opIPAddress, MaxConditionValues)
-			}
-			if len(c.NotIPAddress) > MaxConditionValues {
-				return fmt.Errorf("%s: %d %s values, at most %d are allowed", name, len(c.NotIPAddress), opNotIPAddress, MaxConditionValues)
-			}
-			// compile also parses the values, so a bad one is the author's
-			// error here instead of a fail-closed surprise at evaluation.
-			if err := c.compile(); err != nil {
-				return fmt.Errorf("%s: %w", name, err)
-			}
-		}
+	}
+	return nil
+}
+
+func validateCondition(c *Condition, name string) error {
+	if len(c.IPAddress) == 0 && len(c.NotIPAddress) == 0 {
+		return fmt.Errorf("%s: condition must contain at least one operator", name)
+	}
+	if len(c.IPAddress) > MaxConditionValues {
+		return fmt.Errorf("%s: %d %s values, at most %d are allowed", name, len(c.IPAddress), opIPAddress, MaxConditionValues)
+	}
+	if len(c.NotIPAddress) > MaxConditionValues {
+		return fmt.Errorf("%s: %d %s values, at most %d are allowed", name, len(c.NotIPAddress), opNotIPAddress, MaxConditionValues)
+	}
+	// compile also parses the values, so a bad one is the author's
+	// error here instead of a fail-closed surprise at evaluation.
+	if err := c.compile(); err != nil {
+		return fmt.Errorf("%s: %w", name, err)
 	}
 	return nil
 }
