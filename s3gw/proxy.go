@@ -426,16 +426,29 @@ func (c *opCtx) objectsFromSDK(objects []types.Object, owner *s3xml.Owner) []s3x
 	result := make([]s3xml.Object, 0, len(objects))
 	for _, obj := range objects {
 		o := s3xml.Object{
-			StorageClass: c.clientStorageClass(string(obj.StorageClass)),
-			Owner:        owner,
-			Key:          aws.ToString(obj.Key),
-			ETag:         aws.ToString(obj.ETag),
-			Size:         aws.ToInt64(obj.Size),
+			StorageClass:      c.clientStorageClass(string(obj.StorageClass)),
+			Owner:             owner,
+			Key:               aws.ToString(obj.Key),
+			ETag:              aws.ToString(obj.ETag),
+			Size:              aws.ToInt64(obj.Size),
+			ChecksumAlgorithm: checksumAlgorithms(obj.ChecksumAlgorithm),
+			ChecksumType:      string(obj.ChecksumType),
 		}
 		if obj.LastModified != nil {
 			o.LastModified = s3xml.FormatTime(*obj.LastModified)
 		}
 		result = append(result, o)
+	}
+	return result
+}
+
+func checksumAlgorithms(algs []types.ChecksumAlgorithm) []string {
+	if len(algs) == 0 {
+		return nil
+	}
+	result := make([]string, len(algs))
+	for i, a := range algs {
+		result[i] = string(a)
 	}
 	return result
 }

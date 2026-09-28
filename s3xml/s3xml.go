@@ -40,12 +40,14 @@ type ListBucketResult struct {
 }
 
 type Object struct {
-	Key          string `xml:"Key"`
-	LastModified string `xml:"LastModified"`
-	ETag         string `xml:"ETag"`
-	Size         int64  `xml:"Size"`
-	StorageClass string `xml:"StorageClass,omitempty"`
-	Owner        *Owner `xml:"Owner,omitempty"`
+	Key               string   `xml:"Key"`
+	LastModified      string   `xml:"LastModified"`
+	ETag              string   `xml:"ETag"`
+	ChecksumAlgorithm []string `xml:"ChecksumAlgorithm,omitempty"`
+	ChecksumType      string   `xml:"ChecksumType,omitempty"`
+	Size              int64    `xml:"Size"`
+	StorageClass      string   `xml:"StorageClass,omitempty"`
+	Owner             *Owner   `xml:"Owner,omitempty"`
 }
 
 type CommonPrefix struct {
@@ -201,13 +203,20 @@ type ListPartsResult struct {
 	Initiator            *Owner   `xml:"Initiator,omitempty"`
 	Owner                *Owner   `xml:"Owner,omitempty"`
 	StorageClass         string   `xml:"StorageClass,omitempty"`
+	ChecksumAlgorithm    string   `xml:"ChecksumAlgorithm,omitempty"`
+	ChecksumType         string   `xml:"ChecksumType,omitempty"`
 }
 
 type Part struct {
-	PartNumber   int32  `xml:"PartNumber"`
-	LastModified string `xml:"LastModified,omitempty"`
-	ETag         string `xml:"ETag"`
-	Size         int64  `xml:"Size"`
+	PartNumber        int32  `xml:"PartNumber"`
+	LastModified      string `xml:"LastModified,omitempty"`
+	ETag              string `xml:"ETag"`
+	Size              int64  `xml:"Size"`
+	ChecksumCRC32     string `xml:"ChecksumCRC32,omitempty"`
+	ChecksumCRC32C    string `xml:"ChecksumCRC32C,omitempty"`
+	ChecksumCRC64NVME string `xml:"ChecksumCRC64NVME,omitempty"`
+	ChecksumSHA1      string `xml:"ChecksumSHA1,omitempty"`
+	ChecksumSHA256    string `xml:"ChecksumSHA256,omitempty"`
 }
 
 // ListMultipartUploadsResult is the response of ListMultipartUploads.
@@ -228,12 +237,14 @@ type ListMultipartUploadsResult struct {
 }
 
 type Upload struct {
-	Key          string `xml:"Key"`
-	UploadID     string `xml:"UploadId"`
-	Initiator    *Owner `xml:"Initiator,omitempty"`
-	Owner        *Owner `xml:"Owner,omitempty"`
-	StorageClass string `xml:"StorageClass,omitempty"`
-	Initiated    string `xml:"Initiated,omitempty"`
+	Key               string `xml:"Key"`
+	UploadID          string `xml:"UploadId"`
+	Initiator         *Owner `xml:"Initiator,omitempty"`
+	Owner             *Owner `xml:"Owner,omitempty"`
+	StorageClass      string `xml:"StorageClass,omitempty"`
+	Initiated         string `xml:"Initiated,omitempty"`
+	ChecksumAlgorithm string `xml:"ChecksumAlgorithm,omitempty"`
+	ChecksumType      string `xml:"ChecksumType,omitempty"`
 }
 
 // VersioningConfiguration is the request and response body of
@@ -312,14 +323,16 @@ type ListVersionsResult struct {
 }
 
 type ObjectVersion struct {
-	Key          string `xml:"Key"`
-	VersionID    string `xml:"VersionId"`
-	IsLatest     bool   `xml:"IsLatest"`
-	LastModified string `xml:"LastModified,omitempty"`
-	ETag         string `xml:"ETag"`
-	Size         int64  `xml:"Size"`
-	StorageClass string `xml:"StorageClass,omitempty"`
-	Owner        *Owner `xml:"Owner,omitempty"`
+	Key               string   `xml:"Key"`
+	VersionID         string   `xml:"VersionId"`
+	IsLatest          bool     `xml:"IsLatest"`
+	LastModified      string   `xml:"LastModified,omitempty"`
+	ETag              string   `xml:"ETag"`
+	ChecksumAlgorithm []string `xml:"ChecksumAlgorithm,omitempty"`
+	ChecksumType      string   `xml:"ChecksumType,omitempty"`
+	Size              int64    `xml:"Size"`
+	StorageClass      string   `xml:"StorageClass,omitempty"`
+	Owner             *Owner   `xml:"Owner,omitempty"`
 }
 
 type DeleteMarkerEntry struct {
