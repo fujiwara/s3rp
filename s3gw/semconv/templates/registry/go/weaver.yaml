@@ -1,0 +1,9 @@
+templates:
+  - template: semconv.go.j2
+    filter: >
+      {
+        metrics: ([.groups[] | select(.type == "metric")] | sort_by(.metric_name)),
+        attributes: ([.groups[] | select(.type == "metric") | .attributes[]] | unique_by(.name))
+      }
+    application_mode: single
+    file_name: semconv_gen.go

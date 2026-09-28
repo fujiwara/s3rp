@@ -10,6 +10,7 @@ The [top-level README](../README.md) covers the bundled `s3rp` binary: what the 
 ## For building a service on the gateway
 
 - **[Building a service on the gateway](building-a-service.md)** — embedding `s3gw` in a production service: the minimal code, implementing the store (caching, policy parsing and dialects, write-time validation, temporary credentials), observation, the hooks (Authorizer, interceptors, concurrency and bandwidth limits, the storage class mapper), retries and write side effects, what to run in front of the gateway and behind a TLS terminator, backend client options and cache sizing, and the reusable leaf packages.
+- **[Metrics](metrics.md)** — the metrics convention for a service built on the gateway: names, instruments, units, attributes and the cardinality rules. Generated from the Weaver registry in `s3gw/semconv/model`; `s3gw/otelmetric` implements it with OpenTelemetry.
 
 ## For working on this repository
 

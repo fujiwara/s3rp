@@ -1,0 +1,54 @@
+groups:
+  - id: registry.s3gw
+    type: attribute_group
+    brief: Attributes of a request served by the s3gw gateway.
+    attributes:
+      - id: s3gw.operation
+        type: string
+        stability: development
+        brief: The S3 API operation the request resolved to (`Op.Operation`).
+        note: |
+          Absent when the request was refused before it reached an operation —
+          an unverifiable signature, an invisible bucket, a denied action —
+          since `RequestInfo.Op` is nil then. `Unknown` for a request that
+          matched no known S3 operation.
+        examples: [GetObject, PutObject, DeleteObjects, Unknown]
+      - id: s3gw.tenant
+        type: string
+        stability: development
+        brief: The tenant whose signature the request carried (`RequestInfo.Tenant`).
+        note: |
+          The requester, which differs from the bucket owner on a cross-tenant
+          request. Absent when the signature did not verify. Its cardinality is
+          the number of tenants, so it is opt-in.
+        examples: [acme]
+  - id: registry.s3gw.cache
+    type: attribute_group
+    brief: Attributes of the gateway's internal caches.
+    attributes:
+      - id: s3gw.cache.name
+        type:
+          members:
+            - id: signer
+              value: signer
+              brief: The per-access-key SigV4 signer cache (`Gateway.SignerCacheStats`).
+              stability: development
+            - id: client
+              value: client
+              brief: The per-backend client cache (`Gateway.ClientCacheStats`).
+              stability: development
+        stability: development
+        brief: Which cache the measurement is about.
+      - id: s3gw.cache.result
+        type:
+          members:
+            - id: hit
+              value: hit
+              brief: The entry was in the cache.
+              stability: development
+            - id: miss
+              value: miss
+              brief: The entry had to be built.
+              stability: development
+        stability: development
+        brief: Whether a cache lookup found its entry.

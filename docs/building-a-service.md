@@ -11,7 +11,7 @@ In the order you will meet them: what the gateway cannot run without, then what 
 | Component | What it is | Where |
 |---|---|---|
 | `store.Store` | the one component the gateway cannot start without: where definitions come from — tenants, users, access keys, and where each bucket really lives. Your control plane's read side, including policy parsing and temporary credentials. | [Your store](#your-store) |
-| `s3gw.Observer` | install it next: the gateway logs nothing on its own, failures included. Once per request it reports who asked, what they asked for, what they were told and why; format, level and destination are yours. | [Observation](#observation) |
+| `s3gw.Observer` | install it next: the gateway logs nothing on its own, failures included. Once per request it reports who asked, what they asked for, what they were told and why; format, level and destination are yours, and metrics are derived from the same report under a [documented convention](metrics.md). | [Observation](#observation) |
 | `s3gw.Authorizer` | refusing what the policies cannot express — an exhausted quota, a suspended tenant. Consulted after the bucket and user policies have already allowed the operation. | [Hooks and metering](#hooks-and-metering) |
 | `s3gw.Interceptor` | wrapping each operation: metering — the byte counts are filled in by the time `next` returns — and the per-tenant concurrency cap. | [Hooks and metering](#hooks-and-metering) |
 | `SetBandwidthLimit` | pacing the streams themselves, which admission hooks cannot do. | [Hooks and metering](#hooks-and-metering) |
@@ -308,6 +308,24 @@ Your `store.Store` implementation — and the control plane's write path that fe
 
 - Don't log the request's own query string — log `RequestInfo.RawQuery`, which already masks presigned signatures.
 - Don't surface the failure cause (`RequestInfo.Err`) to clients; it may name backend endpoints and buckets, which is why the gateway kept it out of the response.
+
+### Metrics
+
+The gateway emits no metrics either; they are derived from the same `RequestInfo` and from the cache statistics. [docs/metrics.md](metrics.md) is the convention they follow — names, instruments, units, attributes, and which attributes must stay off a metric because they are unbounded (the object key, the user, the access key id, the request id: those belong in the log). It is generated from a [Weaver](https://github.com/open-telemetry/weaver) registry in `s3gw/semconv/model`, the source of truth, which also generates the names as Go constants (`s3gw/semconv`) for an implementation of your own.
+
+With OpenTelemetry, `s3gw/otelmetric` is that implementation. It depends on the metrics API only, so the SDK, the exporter and the meter provider are yours:
+
+```go
+rec, err := otelmetric.New(mp, otelmetric.WithTenant()) // WithTenant/WithBucket: opt-in, one series per tenant/bucket
+if err != nil { ... }
+if _, err := otelmetric.RegisterCacheStats(mp, gw); err != nil { ... }
+gw.SetObserver(func(ctx context.Context, info *s3gw.RequestInfo) {
+	rec.Observe(ctx, info)
+	logRequest(ctx, info) // the observer is one function: compose it with your logging
+})
+```
+
+Exported to Prometheus, the names follow the usual translation (`s3gw_request_duration_seconds`, `s3gw_io_bytes_total`, ...).
 
 ## Hooks and metering
 
@@ -754,28 +772,32 @@ The gateway's outbound side: `SetClientOptions` for tuning the clients it builds
   })
   ```
 - What the gateway does cache is derived from definitions, never a definition itself, and is bounded: backend **clients** (one per distinct endpoint/credentials, LRU, default 128 — `SetClientCacheSize`) and one SigV4 **signer** per access key (default 512 slots — `SetSignerCacheSize`). Size them to the number of distinct backends and of access keys active at once; an evicted entry is rebuilt on its next request, so undersizing costs latency, not correctness.
-- Whether they *are* sized right is answerable: `ClientCacheStats` / `SignerCacheStats` return a `CacheStats` snapshot — `Hits`, `Misses`, `Evictions` are monotonic counters, `Len` and `Capacity` the current fill and bound. The gateway keeps no history and never logs them; expose them from your metrics endpoint and let the collector derive rates. The natural shape is a set of `*Func` collectors read at scrape time — no goroutine, no sampling interval of your own, and the counters are atomics so reading them costs nothing on the request path:
+- Whether they *are* sized right is answerable: `ClientCacheStats` / `SignerCacheStats` return a `CacheStats` snapshot — `Hits`, `Misses`, `Evictions` are monotonic counters, `Len` and `Capacity` the current fill and bound. The gateway keeps no history and never logs them; expose them from your metrics endpoint and let the collector derive rates, under the names the [metrics convention](metrics.md) gives them (`s3gw.cache.lookups` by `s3gw.cache.result`, `s3gw.cache.evictions`, `s3gw.cache.entries`, `s3gw.cache.capacity`, each by `s3gw.cache.name`). With OpenTelemetry that is one call, `otelmetric.RegisterCacheStats(mp, gw)` — a callback read at collection time, so no goroutine and no sampling interval of your own, and the counters are atomics so reading them costs nothing on the request path. With the Prometheus client directly, the same shape is a set of `*Func` collectors carrying the names the OpenTelemetry-to-Prometheus translation would give:
 
   ```go
-  // one collector per cache; the name is the label
+  // one set of collectors per cache; the name is the label
   func cacheMetrics(reg prometheus.Registerer, name string, stats func() s3gw.CacheStats) {
-  	labels := prometheus.Labels{"cache": name}
-  	counter := func(field string, get func(s3gw.CacheStats) uint64) prometheus.Collector {
-  		return prometheus.NewCounterFunc(prometheus.CounterOpts{
-  			Name: "s3gw_cache_" + field + "_total", ConstLabels: labels,
-  		}, func() float64 { return float64(get(stats())) })
+  	labels := func(extra ...string) prometheus.Labels {
+  		l := prometheus.Labels{"s3gw_cache_name": name}
+  		for i := 0; i < len(extra); i += 2 {
+  			l[extra[i]] = extra[i+1]
+  		}
+  		return l
   	}
-  	gauge := func(field string, get func(s3gw.CacheStats) int) prometheus.Collector {
-  		return prometheus.NewGaugeFunc(prometheus.GaugeOpts{
-  			Name: "s3gw_cache_" + field, ConstLabels: labels,
-  		}, func() float64 { return float64(get(stats())) })
+  	counter := func(metric string, l prometheus.Labels, get func(s3gw.CacheStats) uint64) prometheus.Collector {
+  		return prometheus.NewCounterFunc(prometheus.CounterOpts{Name: metric, ConstLabels: l},
+  			func() float64 { return float64(get(stats())) })
+  	}
+  	gauge := func(metric string, get func(s3gw.CacheStats) int) prometheus.Collector {
+  		return prometheus.NewGaugeFunc(prometheus.GaugeOpts{Name: metric, ConstLabels: labels()},
+  			func() float64 { return float64(get(stats())) })
   	}
   	reg.MustRegister(
-  		counter("hits", func(s s3gw.CacheStats) uint64 { return s.Hits }),
-  		counter("misses", func(s s3gw.CacheStats) uint64 { return s.Misses }),
-  		counter("evictions", func(s s3gw.CacheStats) uint64 { return s.Evictions }),
-  		gauge("len", func(s s3gw.CacheStats) int { return s.Len }),
-  		gauge("capacity", func(s s3gw.CacheStats) int { return s.Capacity }),
+  		counter("s3gw_cache_lookups_total", labels("s3gw_cache_result", "hit"), func(s s3gw.CacheStats) uint64 { return s.Hits }),
+  		counter("s3gw_cache_lookups_total", labels("s3gw_cache_result", "miss"), func(s s3gw.CacheStats) uint64 { return s.Misses }),
+  		counter("s3gw_cache_evictions_total", labels(), func(s s3gw.CacheStats) uint64 { return s.Evictions }),
+  		gauge("s3gw_cache_entries", func(s s3gw.CacheStats) int { return s.Len }),
+  		gauge("s3gw_cache_capacity", func(s s3gw.CacheStats) int { return s.Capacity }),
   	)
   }
 
@@ -784,40 +806,14 @@ The gateway's outbound side: `SetClientOptions` for tuning the clients it builds
   // served on the metrics listener, not under the S3 handler
   ```
 
-  With OpenTelemetry metrics the same shape is one callback observing both caches — an observable counter for the monotonic fields, an observable gauge for the fill:
-
-  ```go
-  func cacheMetrics(meter metric.Meter, gw *s3gw.Gateway) error {
-  	hits, _ := meter.Int64ObservableCounter("s3gw.cache.hits")
-  	misses, _ := meter.Int64ObservableCounter("s3gw.cache.misses")
-  	evictions, _ := meter.Int64ObservableCounter("s3gw.cache.evictions")
-  	length, _ := meter.Int64ObservableGauge("s3gw.cache.len")
-  	capacity, _ := meter.Int64ObservableGauge("s3gw.cache.capacity")
-  	caches := map[string]func() s3gw.CacheStats{"client": gw.ClientCacheStats, "signer": gw.SignerCacheStats}
-  	_, err := meter.RegisterCallback(func(_ context.Context, o metric.Observer) error {
-  		for name, stats := range caches {
-  			s := stats()
-  			attrs := metric.WithAttributes(attribute.String("cache", name))
-  			o.ObserveInt64(hits, int64(s.Hits), attrs)
-  			o.ObserveInt64(misses, int64(s.Misses), attrs)
-  			o.ObserveInt64(evictions, int64(s.Evictions), attrs)
-  			o.ObserveInt64(length, int64(s.Len), attrs)
-  			o.ObserveInt64(capacity, int64(s.Capacity), attrs)
-  		}
-  		return nil
-  	}, hits, misses, evictions, length, capacity)
-  	return err
-  }
-  ```
-
   Each `stats()` call takes its own snapshot, so a scrape reads the fields moments apart — fine for monitoring, which is what they are for. `SetSignerCacheSize` rebuilds the signer cache and resets its counters; a Prometheus counter handles that as an ordinary counter reset. What to look at, per cache:
 
   | signal | reads as | do |
   |---|---|---|
-  | `rate(evictions)` rising, `len` ≈ `capacity` | more distinct backends / active keys than slots; every eviction is a client (connection pool) or signer rebuilt on the next request | raise `SetClientCacheSize` / `SetSignerCacheSize` |
-  | signer: `rate(evictions)` > 0, `len` ≪ `capacity` | hot keys colliding in the direct-mapped table (they displace each other on every alternation) | more slots lower the odds; it costs only memory |
-  | `misses` growing with `evictions` ≈ 0 | cold fills — new tenants, a restart | nothing; a miss is one build |
-  | client: `misses` keep growing, `len` small, `evictions` ≈ 0 | the same few backends miss again and again — a backend definition is varying between requests (credentials, endpoint spelling, `SetDefaults` not applied), so each variant is a new client | fix the store: a client is keyed by endpoint, region, credentials and path style, and `Backend.SetDefaults` must run before the definition is returned |
+  | `rate(evictions)` rising, `entries` ≈ `capacity` | more distinct backends / active keys than slots; every eviction is a client (connection pool) or signer rebuilt on the next request | raise `SetClientCacheSize` / `SetSignerCacheSize` |
+  | signer: `rate(evictions)` > 0, `entries` ≪ `capacity` | hot keys colliding in the direct-mapped table (they displace each other on every alternation) | more slots lower the odds; it costs only memory |
+  | `lookups{result=miss}` growing with `evictions` ≈ 0 | cold fills — new tenants, a restart | nothing; a miss is one build |
+  | client: `lookups{result=miss}` keeps growing, `entries` small, `evictions` ≈ 0 | the same few backends miss again and again — a backend definition is varying between requests (credentials, endpoint spelling, `SetDefaults` not applied), so each variant is a new client | fix the store: a client is keyed by endpoint, region, credentials and path style, and `Backend.SetDefaults` must run before the definition is returned |
 
   A one-shot check without a metrics stack is the same two calls: log `gw.ClientCacheStats()` and `gw.SignerCacheStats()` from a debug endpoint or on shutdown and compare `Evictions` with `Len`/`Capacity` as above.
 

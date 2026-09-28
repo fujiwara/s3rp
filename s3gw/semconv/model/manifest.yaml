@@ -1,0 +1,6 @@
+name: s3gw
+description: Telemetry conventions for services built on the s3gw S3 gateway.
+schema_url: https://github.com/fujiwara/s3rp/s3gw/semconv/0.1.0
+dependencies:
+  - schema_url: https://opentelemetry.io/schemas/1.43.0
+    registry_path: https://github.com/open-telemetry/semantic-conventions@v1.43.0[model]
