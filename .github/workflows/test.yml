@@ -97,23 +97,19 @@ jobs:
   complexity:
     name: Complexity
     runs-on: ubuntu-latest
-    env:
-      CCCC_VERSION: v1.7.0
-      CCCC_SHA256: 75d2fb5486238eeb40a80fec2de8fe5075e6ce567b6741a56fa511ed2082e45a
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install cccc
-        run: |
-          archive="cccc-${CCCC_VERSION}-x86_64-unknown-linux-musl.tar.gz"
-          curl -fsSL -o "$archive" "https://github.com/moznion/cccc/releases/download/${CCCC_VERSION}/${archive}"
-          echo "${CCCC_SHA256}  ${archive}" | sha256sum -c -
-          mkdir -p "$RUNNER_TEMP/cccc"
-          tar xzf "$archive" -C "$RUNNER_TEMP/cccc" cccc
-          echo "$RUNNER_TEMP/cccc" >> "$GITHUB_PATH"
+        id: cccc
+        uses: moznion/cccc-action@4df3f72f581c87d0792ca89ef401c4ec8e85788b # v1.1.0
+        with:
+          version: v1.7.0
 
       - name: Report
+        env:
+          CCCC_VERSION: ${{ steps.cccc.outputs.version }}
         run: |
           cccc . --top-cognitive 20 > cccc.json
           {
