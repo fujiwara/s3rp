@@ -17,10 +17,12 @@ install:
 dist:
 	goreleaser build --snapshot --clean
 
+SEMCONV = s3gw/semconv
+# the version lives in a Dockerfile so dependabot keeps it current
+WEAVER_IMAGE := $(shell sed -n 's/^FROM //p' $(SEMCONV)/Dockerfile)
 # HOME points weaver's registry cache at a writable place: the image's own
 # home belongs to its uid, not to the one the container runs as.
-WEAVER ?= docker run --rm -u $(shell id -u):$(shell id -g) -e HOME=/tmp -v $(CURDIR):/work -w /work otel/weaver:v0.26.1@sha256:9094862c0ab261bdbcb079bb981f9a573b3659b130a6d2ab8616eca6ba37aaec
-SEMCONV = s3gw/semconv
+WEAVER ?= docker run --rm -u $(shell id -u):$(shell id -g) -e HOME=/tmp -v $(CURDIR):/work -w /work $(WEAVER_IMAGE)
 
 # Checks the metrics registry and regenerates the Go constants and
 # docs/metrics.md from it.
