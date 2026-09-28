@@ -610,6 +610,42 @@ func TestIntegration(t *testing.T) {
 			t.Error("expect a checksum on the GetObject response")
 		}
 	})
+	t.Run("CopyChecksumAlgorithm", func(t *testing.T) {
+		// the copy's checksum algorithm is recomputed over the destination
+		const src, dst = "dir/copy-cksum-src.txt", "dir/copy-cksum-dst.txt"
+		if _, err := client.PutObject(t.Context(), &s3.PutObjectInput{
+			Bucket: aws.String("it-bucket"),
+			Key:    aws.String(src),
+			Body:   strings.NewReader("copy checksum content"),
+		}); err != nil {
+			t.Fatal(err)
+		}
+		defer client.DeleteObject(t.Context(), &s3.DeleteObjectInput{Bucket: aws.String("it-bucket"), Key: aws.String(src)})
+		if _, err := client.CopyObject(t.Context(), &s3.CopyObjectInput{
+			Bucket:            aws.String("it-bucket"),
+			Key:               aws.String(dst),
+			CopySource:        aws.String("it-bucket/" + src),
+			ChecksumAlgorithm: types.ChecksumAlgorithmSha256,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		defer client.DeleteObject(t.Context(), &s3.DeleteObjectInput{Bucket: aws.String("it-bucket"), Key: aws.String(dst)})
+		head, err := client.HeadObject(t.Context(), &s3.HeadObjectInput{
+			Bucket:       aws.String("it-bucket"),
+			Key:          aws.String(dst),
+			ChecksumMode: types.ChecksumModeEnabled,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if head.ChecksumSHA256 == nil {
+			// e.g. Ceph RGW tentacle ignores the algorithm and keeps the
+			// source's checksum; the stub test covers that it is sent
+			t.Skipf("backend did not recompute the checksum on copy (crc32=%q crc32c=%q crc64nvme=%q sha1=%q)",
+				aws.ToString(head.ChecksumCRC32), aws.ToString(head.ChecksumCRC32C),
+				aws.ToString(head.ChecksumCRC64NVME), aws.ToString(head.ChecksumSHA1))
+		}
+	})
 	t.Run("SSEKMS", func(t *testing.T) {
 		// requires a backend with a KMS: the compose ceph and rustfs
 		// services configure one with testkey-1

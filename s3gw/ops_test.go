@@ -406,6 +406,7 @@ func TestProxyCopyObject(t *testing.T) {
 		CopySource:        aws.String("srcbucket/dir/src file.txt"),
 		Metadata:          map[string]string{"copied": "yes"},
 		MetadataDirective: types.MetadataDirectiveReplace,
+		ChecksumAlgorithm: types.ChecksumAlgorithmCrc64nvme,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -426,6 +427,9 @@ func TestProxyCopyObject(t *testing.T) {
 	}
 	if in.Metadata["copied"] != "yes" {
 		t.Errorf("unexpected metadata %v", in.Metadata)
+	}
+	if in.ChecksumAlgorithm != types.ChecksumAlgorithmCrc64nvme {
+		t.Errorf("unexpected checksum algorithm %q", in.ChecksumAlgorithm)
 	}
 }
 

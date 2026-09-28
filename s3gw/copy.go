@@ -77,6 +77,9 @@ func (g *Gateway) copyObject(c *opCtx) error {
 		in.ContentType = aws.String(v)
 	}
 	in.StorageClass = c.backendStorageClass(c.signed(hdrStorageClass), SizeUnknown)
+	if v := c.signed("x-amz-checksum-algorithm"); v != "" {
+		in.ChecksumAlgorithm = types.ChecksumAlgorithm(strings.ToUpper(v))
+	}
 	if v := c.signed("x-amz-tagging-directive"); v != "" {
 		in.TaggingDirective = types.TaggingDirective(v)
 	}

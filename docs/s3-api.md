@@ -82,6 +82,7 @@ Object Lock must be enabled when a bucket is created, and the gateway does not p
 - Precomputed checksum headers on uploads pass through to the backend, which validates and stores them.
 - Trailing checksums in `aws-chunked` bodies (the SDK default over https) are **verified by the proxy** against the decoded payload (`BadDigest` on mismatch). When the backend is reached over https the algorithm is forwarded so the backend recomputes and stores the checksum; over a plain-http backend it is not (the SDK can only recompute it over an unseekable body as a trailer, which it sends over https only), so the upload is still verified but the backend stores no checksum.
 - Downloads pass `x-amz-checksum-mode: ENABLED` through and return the backend's checksum headers, so client SDKs can validate response payloads. Multipart part checksums are carried through UploadPart / CompleteMultipartUpload as well.
+- CopyObject forwards `x-amz-checksum-algorithm`, so the backend computes the destination's checksum with the requested algorithm (how S3 changes an object's checksum algorithm). Ceph RGW (tentacle) ignores it and keeps the source's checksum.
 
 Whether a checksum is actually stored and returned depends on the backend (versitygw, RustFS and Amazon S3 do; some Ceph RGW builds do not).
 
