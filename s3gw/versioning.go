@@ -61,35 +61,17 @@ func (g *Gateway) listObjectVersions(c *opCtx) error {
 		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	result := &s3xml.ListVersionsResult{
-		XMLNS: s3xml.Namespace,
-		Name:  rt.cfg.Name, // the front bucket name, not the backend one
-	}
-	if out.Prefix != nil {
-		result.Prefix = *out.Prefix
-	}
-	if out.Delimiter != nil {
-		result.Delimiter = *out.Delimiter
-	}
-	if out.KeyMarker != nil {
-		result.KeyMarker = *out.KeyMarker
-	}
-	if out.VersionIdMarker != nil {
-		result.VersionIDMarker = *out.VersionIdMarker
-	}
-	if out.NextKeyMarker != nil {
-		result.NextKeyMarker = *out.NextKeyMarker
-	}
-	if out.NextVersionIdMarker != nil {
-		result.NextVersionIDMarker = *out.NextVersionIdMarker
-	}
-	if out.MaxKeys != nil {
-		result.MaxKeys = *out.MaxKeys
-	}
-	if out.EncodingType != "" {
-		result.EncodingType = string(out.EncodingType)
-	}
-	if out.IsTruncated != nil {
-		result.IsTruncated = *out.IsTruncated
+		XMLNS:               s3xml.Namespace,
+		Name:                rt.cfg.Name, // the front bucket name, not the backend one
+		Prefix:              aws.ToString(out.Prefix),
+		Delimiter:           aws.ToString(out.Delimiter),
+		KeyMarker:           aws.ToString(out.KeyMarker),
+		VersionIDMarker:     aws.ToString(out.VersionIdMarker),
+		NextKeyMarker:       aws.ToString(out.NextKeyMarker),
+		NextVersionIDMarker: aws.ToString(out.NextVersionIdMarker),
+		MaxKeys:             aws.ToInt32(out.MaxKeys),
+		EncodingType:        string(out.EncodingType),
+		IsTruncated:         aws.ToBool(out.IsTruncated),
 	}
 	// AWS always carries an Owner on versions and delete markers; the
 	// tenant, never the backend's account
@@ -98,38 +80,22 @@ func (g *Gateway) listObjectVersions(c *opCtx) error {
 		version := s3xml.ObjectVersion{
 			StorageClass: c.clientStorageClass(string(v.StorageClass)),
 			Owner:        owner,
-		}
-		if v.Key != nil {
-			version.Key = *v.Key
-		}
-		if v.VersionId != nil {
-			version.VersionID = *v.VersionId
-		}
-		if v.IsLatest != nil {
-			version.IsLatest = *v.IsLatest
+			Key:          aws.ToString(v.Key),
+			VersionID:    aws.ToString(v.VersionId),
+			IsLatest:     aws.ToBool(v.IsLatest),
+			ETag:         aws.ToString(v.ETag),
+			Size:         aws.ToInt64(v.Size),
 		}
 		if v.LastModified != nil {
 			version.LastModified = s3xml.FormatTime(*v.LastModified)
-		}
-		if v.ETag != nil {
-			version.ETag = *v.ETag
-		}
-		if v.Size != nil {
-			version.Size = *v.Size
 		}
 		result.Versions = append(result.Versions, version)
 	}
 	for _, d := range out.DeleteMarkers {
 		marker := s3xml.DeleteMarkerEntry{Owner: owner}
-		if d.Key != nil {
-			marker.Key = *d.Key
-		}
-		if d.VersionId != nil {
-			marker.VersionID = *d.VersionId
-		}
-		if d.IsLatest != nil {
-			marker.IsLatest = *d.IsLatest
-		}
+		marker.Key = aws.ToString(d.Key)
+		marker.VersionID = aws.ToString(d.VersionId)
+		marker.IsLatest = aws.ToBool(d.IsLatest)
 		if d.LastModified != nil {
 			marker.LastModified = s3xml.FormatTime(*d.LastModified)
 		}

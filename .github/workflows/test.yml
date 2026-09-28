@@ -93,6 +93,43 @@ jobs:
           name: coverage
           path: cover.out
 
+  # Report-only: complexity is shown in the summary, never gated on.
+  complexity:
+    name: Complexity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install cccc
+        id: cccc
+        uses: moznion/cccc-action@f766d74cf323cd9085c2c9263cebdf1ec1ebfb19 # v1.1.1
+        with:
+          version: v1.7.0
+
+      - name: Report
+        env:
+          CCCC_VERSION: ${{ steps.cccc.outputs.version }}
+        run: |
+          cccc . --top-cognitive 20 > cccc.json
+          {
+            echo "### Complexity (cccc ${CCCC_VERSION})"
+            echo
+            jq -r '.summary
+              | "\(.function_count) functions in \(.file_count) files",
+                "",
+                "| | sum | max | median | p90 | p95 |",
+                "| --- | ---: | ---: | ---: | ---: | ---: |",
+                (["cognitive", "cyclomatic"][] as $m | .[$m]
+                  | "| \($m) | \(.sum) | \(.max) | \(.median) | \(.p90) | \(.p95) |")' cccc.json
+            echo
+            echo "#### Top 20 by cognitive complexity"
+            echo
+            echo "| cognitive | cyclomatic | function | location |"
+            echo "| ---: | ---: | --- | --- |"
+            jq -r '.top[] | "| \(.cognitive) | \(.cyclomatic) | `\(.name)` | \(.path | ltrimstr("./")):\(.line) |"' cccc.json
+          } >> "$GITHUB_STEP_SUMMARY"
+
   integration:
     name: Integration (${{ matrix.backend }})
     runs-on: ubuntu-latest

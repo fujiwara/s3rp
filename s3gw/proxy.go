@@ -382,37 +382,21 @@ func (g *Gateway) listObjectsV2(c *opCtx) error {
 		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	result := &s3xml.ListBucketResult{
-		XMLNS: s3xml.Namespace,
-		Name:  rt.cfg.Name, // the front bucket name, not the backend one
-	}
-	if out.Prefix != nil {
-		result.Prefix = *out.Prefix
-	}
-	if out.Delimiter != nil {
-		result.Delimiter = *out.Delimiter
-	}
-	if out.StartAfter != nil {
-		result.StartAfter = *out.StartAfter
+		XMLNS:                 s3xml.Namespace,
+		Name:                  rt.cfg.Name, // the front bucket name, not the backend one
+		Prefix:                aws.ToString(out.Prefix),
+		Delimiter:             aws.ToString(out.Delimiter),
+		StartAfter:            aws.ToString(out.StartAfter),
+		NextContinuationToken: aws.ToString(out.NextContinuationToken),
+		KeyCount:              aws.ToInt32(out.KeyCount),
+		MaxKeys:               aws.ToInt32(out.MaxKeys),
+		EncodingType:          string(out.EncodingType),
+		IsTruncated:           aws.ToBool(out.IsTruncated),
 	}
 	// echo the request's token, not the backend's: an empty token is not
 	// forwarded, but S3 still echoes it (as an empty element)
 	if query.Has("continuation-token") {
 		result.ContinuationToken = aws.String(query.Get("continuation-token"))
-	}
-	if out.NextContinuationToken != nil {
-		result.NextContinuationToken = *out.NextContinuationToken
-	}
-	if out.KeyCount != nil {
-		result.KeyCount = *out.KeyCount
-	}
-	if out.MaxKeys != nil {
-		result.MaxKeys = *out.MaxKeys
-	}
-	if out.EncodingType != "" {
-		result.EncodingType = string(out.EncodingType)
-	}
-	if out.IsTruncated != nil {
-		result.IsTruncated = *out.IsTruncated
 	}
 	// owner presence follows the request (fetch-owner), like AWS
 	var owner *s3xml.Owner
@@ -444,18 +428,12 @@ func (c *opCtx) objectsFromSDK(objects []types.Object, owner *s3xml.Owner) []s3x
 		o := s3xml.Object{
 			StorageClass: c.clientStorageClass(string(obj.StorageClass)),
 			Owner:        owner,
-		}
-		if obj.Key != nil {
-			o.Key = *obj.Key
+			Key:          aws.ToString(obj.Key),
+			ETag:         aws.ToString(obj.ETag),
+			Size:         aws.ToInt64(obj.Size),
 		}
 		if obj.LastModified != nil {
 			o.LastModified = s3xml.FormatTime(*obj.LastModified)
-		}
-		if obj.ETag != nil {
-			o.ETag = *obj.ETag
-		}
-		if obj.Size != nil {
-			o.Size = *obj.Size
 		}
 		result = append(result, o)
 	}
@@ -493,29 +471,15 @@ func (g *Gateway) listObjectsV1(c *opCtx) error {
 		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	result := &s3xml.ListBucketResultV1{
-		XMLNS: s3xml.Namespace,
-		Name:  rt.cfg.Name, // the front bucket name, not the backend one
-	}
-	if out.Prefix != nil {
-		result.Prefix = *out.Prefix
-	}
-	if out.Delimiter != nil {
-		result.Delimiter = *out.Delimiter
-	}
-	if out.Marker != nil {
-		result.Marker = *out.Marker
-	}
-	if out.NextMarker != nil {
-		result.NextMarker = *out.NextMarker
-	}
-	if out.MaxKeys != nil {
-		result.MaxKeys = *out.MaxKeys
-	}
-	if out.EncodingType != "" {
-		result.EncodingType = string(out.EncodingType)
-	}
-	if out.IsTruncated != nil {
-		result.IsTruncated = *out.IsTruncated
+		XMLNS:        s3xml.Namespace,
+		Name:         rt.cfg.Name, // the front bucket name, not the backend one
+		Prefix:       aws.ToString(out.Prefix),
+		Delimiter:    aws.ToString(out.Delimiter),
+		Marker:       aws.ToString(out.Marker),
+		NextMarker:   aws.ToString(out.NextMarker),
+		MaxKeys:      aws.ToInt32(out.MaxKeys),
+		EncodingType: string(out.EncodingType),
+		IsTruncated:  aws.ToBool(out.IsTruncated),
 	}
 	// ListObjects (V1) always carries an Owner on AWS
 	result.Contents = c.objectsFromSDK(out.Contents, tenantOwner(c.rt.cfg.Tenant))
@@ -623,7 +587,7 @@ func (g *Gateway) deleteObjects(c *opCtx) error {
 			Quiet:   aws.Bool(req.Quiet),
 		},
 	}
-	if bypassGovernanceRetention(c.hdr) {
+	if bypass {
 		in.BypassGovernanceRetention = aws.Bool(true)
 	}
 	out, err := rt.client.DeleteObjects(r.Context(), in)
@@ -631,34 +595,20 @@ func (g *Gateway) deleteObjects(c *opCtx) error {
 		return s3err.FromSDKError(err, r.URL.Path)
 	}
 	for _, d := range out.Deleted {
-		deleted := s3xml.DeletedObject{}
-		if d.Key != nil {
-			deleted.Key = *d.Key
-		}
-		if d.VersionId != nil {
-			deleted.VersionID = *d.VersionId
-		}
-		if d.DeleteMarker != nil {
-			deleted.DeleteMarker = *d.DeleteMarker
-		}
-		if d.DeleteMarkerVersionId != nil {
-			deleted.DeleteMarkerVersionID = *d.DeleteMarkerVersionId
+		deleted := s3xml.DeletedObject{
+			Key:                   aws.ToString(d.Key),
+			VersionID:             aws.ToString(d.VersionId),
+			DeleteMarker:          aws.ToBool(d.DeleteMarker),
+			DeleteMarkerVersionID: aws.ToString(d.DeleteMarkerVersionId),
 		}
 		result.Deleted = append(result.Deleted, deleted)
 	}
 	for _, e := range out.Errors {
-		derr := s3xml.DeleteError{}
-		if e.Key != nil {
-			derr.Key = *e.Key
-		}
-		if e.VersionId != nil {
-			derr.VersionID = *e.VersionId
-		}
-		if e.Code != nil {
-			derr.Code = *e.Code
-		}
-		if e.Message != nil {
-			derr.Message = *e.Message
+		derr := s3xml.DeleteError{
+			Key:       aws.ToString(e.Key),
+			VersionID: aws.ToString(e.VersionId),
+			Code:      aws.ToString(e.Code),
+			Message:   aws.ToString(e.Message),
 		}
 		result.Errors = append(result.Errors, derr)
 	}

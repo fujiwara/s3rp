@@ -128,9 +128,7 @@ func (g *Gateway) copyObject(c *opCtx) error {
 	}
 	result := &s3xml.CopyObjectResult{XMLNS: s3xml.Namespace}
 	if cr := out.CopyObjectResult; cr != nil {
-		if cr.ETag != nil {
-			result.ETag = *cr.ETag
-		}
+		result.ETag = aws.ToString(cr.ETag)
 		if cr.LastModified != nil {
 			result.LastModified = s3xml.FormatTime(*cr.LastModified)
 		}
@@ -166,9 +164,7 @@ func (g *Gateway) uploadPartCopy(c *opCtx) error {
 	setSSEHeaders(w.Header(), out.ServerSideEncryption, c.clientKMSKeyID(out.SSEKMSKeyId))
 	result := &s3xml.CopyPartResult{XMLNS: s3xml.Namespace}
 	if cr := out.CopyPartResult; cr != nil {
-		if cr.ETag != nil {
-			result.ETag = *cr.ETag
-		}
+		result.ETag = aws.ToString(cr.ETag)
 		if cr.LastModified != nil {
 			result.LastModified = s3xml.FormatTime(*cr.LastModified)
 		}
