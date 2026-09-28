@@ -110,7 +110,7 @@ func (g *Gateway) getObject(c *opCtx) error {
 	if out.PartsCount != nil {
 		h.Set("x-amz-mp-parts-count", strconv.FormatInt(int64(*out.PartsCount), 10))
 	}
-	checksum.SetHeaders(h, checksumsFromGetObjectOutput(out), string(out.ChecksumType))
+	c.setChecksumHeaders(h, checksumsFromGetObjectOutput(out), string(out.ChecksumType))
 	setObjectLockResponseHeaders(h, out.ObjectLockMode, out.ObjectLockRetainUntilDate, out.ObjectLockLegalHoldStatus)
 	status := http.StatusOK
 	if out.ContentRange != nil {
@@ -179,7 +179,7 @@ func (g *Gateway) headObject(c *opCtx) error {
 	if out.PartsCount != nil {
 		w.Header().Set("x-amz-mp-parts-count", strconv.FormatInt(int64(*out.PartsCount), 10))
 	}
-	checksum.SetHeaders(w.Header(), checksumsFromHeadObjectOutput(out), string(out.ChecksumType))
+	c.setChecksumHeaders(w.Header(), checksumsFromHeadObjectOutput(out), string(out.ChecksumType))
 	setObjectLockResponseHeaders(w.Header(), out.ObjectLockMode, out.ObjectLockRetainUntilDate, out.ObjectLockLegalHoldStatus)
 	w.WriteHeader(http.StatusOK)
 	return nil
@@ -271,7 +271,7 @@ func (g *Gateway) putObject(c *opCtx) error {
 		w.Header().Set("x-amz-version-id", *out.VersionId)
 	}
 	setSSEHeaders(w.Header(), out.ServerSideEncryption, c.clientKMSKeyID(out.SSEKMSKeyId))
-	checksum.SetHeaders(w.Header(), checksumsFromPutObjectOutput(out), string(out.ChecksumType))
+	c.setChecksumHeaders(w.Header(), checksumsFromPutObjectOutput(out), string(out.ChecksumType))
 	w.WriteHeader(http.StatusOK)
 	return nil
 }
@@ -409,24 +409,13 @@ func (c *opCtx) objectsFromSDK(objects []types.Object, owner *s3xml.Owner) []s3x
 			Key:               aws.ToString(obj.Key),
 			ETag:              aws.ToString(obj.ETag),
 			Size:              aws.ToInt64(obj.Size),
-			ChecksumAlgorithm: checksumAlgorithms(obj.ChecksumAlgorithm),
+			ChecksumAlgorithm: c.reportAlgorithms(obj.ChecksumAlgorithm),
 			ChecksumType:      string(obj.ChecksumType),
 		}
 		if obj.LastModified != nil {
 			o.LastModified = s3xml.FormatTime(*obj.LastModified)
 		}
 		result = append(result, o)
-	}
-	return result
-}
-
-func checksumAlgorithms(algs []types.ChecksumAlgorithm) []string {
-	if len(algs) == 0 {
-		return nil
-	}
-	result := make([]string, len(algs))
-	for i, a := range algs {
-		result[i] = string(a)
 	}
 	return result
 }
@@ -678,6 +667,9 @@ func requestBody(c *opCtx) (io.Reader, int64, *s3err.Error) {
 	if err != nil {
 		return nil, 0, s3err.New(http.StatusNotImplemented, "NotImplemented",
 			"The trailer declared by x-amz-trailer is not supported.").WithCause(err)
+	}
+	if s3e := c.checkTrailer(trailerAlg); s3e != nil {
+		return nil, 0, s3e
 	}
 	if trailerAlg != "" && !strings.HasSuffix(vr.PayloadHash, "-TRAILER") {
 		// the declared checksum would never be read, let alone verified

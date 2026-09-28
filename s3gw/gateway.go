@@ -60,6 +60,8 @@ type Gateway struct {
 	// kmsKey maps SSE-KMS key ids between client and backend (intercept.go);
 	// nil passes both directions through
 	kmsKey KMSKeyMapper
+	// checksums is the SetChecksumSupport policy (checksums.go)
+	checksums *checksumPolicy
 
 	newClient     func(ctx context.Context, b *store.Backend) (BackendClient, error)
 	clientOptions func(b *store.Backend) []func(*s3.Options)
@@ -111,8 +113,9 @@ func newClientCacheKey(b *store.Backend) clientCacheKey {
 // New returns a Gateway serving the definitions in st.
 func New(st store.Store) *Gateway {
 	g := &Gateway{
-		store:    st,
-		verifier: sigv4.NewVerifier(),
+		store:     st,
+		verifier:  sigv4.NewVerifier(),
+		checksums: mustChecksumPolicy(defaultChecksumSupport),
 	}
 	g.clients, _ = lru.NewWithEvict(defaultClientCacheSize,
 		func(clientCacheKey, BackendClient) { g.clientEvictions.Add(1) })

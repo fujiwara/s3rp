@@ -3,16 +3,19 @@ package s3gw_test
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
 	"github.com/fujiwara/s3rp/checksum"
+	"github.com/fujiwara/s3rp/s3gw"
 	"github.com/fujiwara/s3rp/s3gw/internal/checksumgen"
 	"github.com/google/go-cmp/cmp"
 )
@@ -53,8 +56,8 @@ func TestChecksumTableCoversSDK(t *testing.T) {
 	}
 }
 
-// The support table in docs/s3-api.md is written by hand; it must say what
-// the code does.
+// The default support table in docs/s3-api.md is written by hand; it must
+// say what the code does.
 func TestChecksumTableDocumented(t *testing.T) {
 	doc, err := os.ReadFile("../docs/s3-api.md")
 	if err != nil {
@@ -65,25 +68,42 @@ func TestChecksumTableDocumented(t *testing.T) {
 	for _, m := range row.FindAllStringSubmatch(string(doc), -1) {
 		documented = append(documented, m[1]+" "+m[2])
 	}
+	def := s3gw.DefaultChecksumSupport()
 	for _, a := range checksum.Algorithms() {
-		want = append(want, a.Name+" "+a.Support.String())
+		want = append(want, a.Name+" "+def[a.Name].String())
 	}
 	if diff := cmp.Diff(want, documented); diff != "" {
-		t.Errorf("docs/s3-api.md checksum table differs from checksum.Algorithms (-code +docs):\n%s", diff)
+		t.Errorf("docs/s3-api.md checksum table differs from DefaultChecksumSupport (-code +docs):\n%s", diff)
 	}
 }
 
-// refusedAlgorithm returns an algorithm the table refuses, skipping the
-// test when none is (every algorithm supported leaves nothing to refuse).
+// refusedAlgorithm returns an algorithm the default support refuses,
+// skipping the test when none is.
 func refusedAlgorithm(t *testing.T) checksum.Algorithm {
 	t.Helper()
+	def := s3gw.DefaultChecksumSupport()
 	for _, a := range checksum.Algorithms() {
-		if a.Support == checksum.Refused {
+		if def[a.Name] == s3gw.ChecksumRefused {
 			return a
 		}
 	}
 	t.Skip("no algorithm is refused")
 	return checksum.Algorithm{}
+}
+
+// newChecksumProxy serves stub through a gateway with the given checksum
+// support, set before the server starts.
+func newChecksumProxy(t *testing.T, stub *stubBackend, support map[string]s3gw.ChecksumSupport) *s3.Client {
+	t.Helper()
+	gw := newTestGateway(t)
+	if err := gw.SetChecksumSupport(support); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.SetBackend("testbucket", stub); err != nil {
+		t.Fatal(err)
+	}
+	client, _, _ := newSDKClientFor(t, gw)
+	return client
 }
 
 func expectAPIError(t *testing.T, err error, code string) {
@@ -161,25 +181,136 @@ func TestUnknownChecksumAlgorithm(t *testing.T) {
 	}
 }
 
-// Whatever an algorithm's Support, a checksum the backend reports reaches
-// the client: the conversions are generated for the whole table.
-func TestChecksumsRelayedForEveryAlgorithm(t *testing.T) {
+// A checksum the backend reports reaches the client exactly when the
+// service offers its algorithm: clients see the same set whatever backend
+// serves the bucket.
+func TestChecksumsReportedByPolicy(t *testing.T) {
 	for _, a := range checksum.Algorithms() {
 		t.Run(a.Name, func(t *testing.T) {
-			out := &s3.HeadObjectOutput{ContentLength: aws.Int64(0)}
-			setHeadValue(out, a.Name, "dmFsdWU=")
-			stub := &stubBackend{headOut: out}
-			client, _ := newTestProxy(t, stub)
-			got, err := client.HeadObject(t.Context(), &s3.HeadObjectInput{
-				Bucket: aws.String("testbucket"), Key: aws.String("k"), ChecksumMode: types.ChecksumModeEnabled,
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if v := headValue(got, a.Name); v != "dmFsdWU=" {
-				t.Errorf("expect the backend's %s value, got %q", a.Name, v)
+			for _, offered := range []bool{true, false} {
+				support := s3gw.DefaultChecksumSupport()
+				support[a.Name] = s3gw.ChecksumRefused
+				if offered {
+					support[a.Name] = s3gw.ChecksumForwarded
+				}
+				out := &s3.HeadObjectOutput{ContentLength: aws.Int64(0)}
+				setHeadValue(out, a.Name, "dmFsdWU=")
+				client := newChecksumProxy(t, &stubBackend{headOut: out}, support)
+				got, err := client.HeadObject(t.Context(), &s3.HeadObjectInput{
+					Bucket: aws.String("testbucket"), Key: aws.String("k"), ChecksumMode: types.ChecksumModeEnabled,
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				want := ""
+				if offered {
+					want = "dmFsdWU="
+				}
+				if v := headValue(got, a.Name); v != want {
+					t.Errorf("offered=%v: expect %q, got %q", offered, want, v)
+				}
 			}
 		})
+	}
+}
+
+func TestChecksumsFilteredInListings(t *testing.T) {
+	stub := &stubBackend{
+		listOut: &s3.ListObjectsV2Output{Contents: []types.Object{{
+			Key: aws.String("k"), LastModified: aws.Time(time.Unix(0, 0)),
+			ChecksumAlgorithm: []types.ChecksumAlgorithm{types.ChecksumAlgorithmXxhash3, types.ChecksumAlgorithmCrc32},
+		}}},
+		listPartsOut: &s3.ListPartsOutput{ChecksumAlgorithm: types.ChecksumAlgorithmXxhash3},
+	}
+	support := s3gw.DefaultChecksumSupport()
+	support["XXHASH3"] = s3gw.ChecksumRefused
+	client := newChecksumProxy(t, stub, support)
+	out, err := client.ListObjectsV2(t.Context(), &s3.ListObjectsV2Input{Bucket: aws.String("testbucket")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff([]types.ChecksumAlgorithm{types.ChecksumAlgorithmCrc32}, out.Contents[0].ChecksumAlgorithm); diff != "" {
+		t.Errorf("ListObjectsV2 algorithms (-want +got):\n%s", diff)
+	}
+	parts, err := client.ListParts(t.Context(), &s3.ListPartsInput{
+		Bucket: aws.String("testbucket"), Key: aws.String("k"), UploadId: aws.String("u"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parts.ChecksumAlgorithm != "" {
+		t.Errorf("expect a refused algorithm hidden, got %q", parts.ChecksumAlgorithm)
+	}
+}
+
+func TestSetChecksumSupport(t *testing.T) {
+	gw := newTestGateway(t)
+	for _, tc := range []struct {
+		name    string
+		support map[string]s3gw.ChecksumSupport
+		ok      bool
+	}{
+		{"default", s3gw.DefaultChecksumSupport(), true},
+		{"empty refuses everything", map[string]s3gw.ChecksumSupport{}, true},
+		{"canonical name", map[string]s3gw.ChecksumSupport{"SHA512": s3gw.ChecksumVerified}, true},
+		{"other spelling", map[string]s3gw.ChecksumSupport{"sha512": s3gw.ChecksumVerified}, false},
+		{"forwarded without an implementation", map[string]s3gw.ChecksumSupport{"XXHASH3": s3gw.ChecksumForwarded}, true},
+		{"unknown algorithm", map[string]s3gw.ChecksumSupport{"CRC16": s3gw.ChecksumForwarded}, false},
+		{"verified without an implementation", map[string]s3gw.ChecksumSupport{"XXHASH3": s3gw.ChecksumVerified}, false},
+		{"invalid support", map[string]s3gw.ChecksumSupport{"CRC32": 7}, false},
+		{"one algorithm twice", map[string]s3gw.ChecksumSupport{"sha512": s3gw.ChecksumVerified, "SHA512": s3gw.ChecksumRefused}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := gw.SetChecksumSupport(tc.support); (err == nil) != tc.ok {
+				t.Errorf("expect ok=%v, got %v", tc.ok, err)
+			}
+		})
+	}
+}
+
+// SetChecksumSupport replaces the whole policy: an algorithm left out is
+// refused, even one the default offers.
+func TestSetChecksumSupportReplaces(t *testing.T) {
+	stub := &stubBackend{putOut: &s3.PutObjectOutput{ETag: aws.String(`"e"`)}}
+	client := newChecksumProxy(t, stub, map[string]s3gw.ChecksumSupport{"SHA256": s3gw.ChecksumVerified})
+	_, err := client.PutObject(t.Context(), &s3.PutObjectInput{
+		Bucket: aws.String("testbucket"), Key: aws.String("k"), Body: strings.NewReader("123456789"),
+		ChecksumCRC32: aws.String("y/Q5Jg=="),
+	})
+	expectAPIError(t, err, "NotImplemented")
+	if stub.putIn != nil {
+		t.Error("the refused request reached the backend")
+	}
+}
+
+// An algorithm the service offers is forwarded: the value header and the
+// name reach the backend.
+func TestForwardedChecksumAlgorithm(t *testing.T) {
+	stub := &stubBackend{
+		putOut:       &s3.PutObjectOutput{ETag: aws.String(`"e"`)},
+		createMPUOut: &s3.CreateMultipartUploadOutput{UploadId: aws.String("u")},
+	}
+	support := s3gw.DefaultChecksumSupport()
+	support["XXHASH3"] = s3gw.ChecksumForwarded
+	client := newChecksumProxy(t, stub, support)
+	req := &s3.PutObjectInput{Bucket: aws.String("testbucket"), Key: aws.String("k"), Body: strings.NewReader("x")}
+	setValue(req, "XXHASH3", "AAAAAAAAAAA=")
+	if _, err := client.PutObject(t.Context(), req); err != nil {
+		t.Fatal(err)
+	}
+	if got := aws.ToString(stub.putIn.ChecksumXXHASH3); got != "AAAAAAAAAAA=" {
+		t.Errorf("expect the value forwarded, got %q", got)
+	}
+	if stub.putIn.ChecksumAlgorithm != types.ChecksumAlgorithmXxhash3 {
+		t.Errorf("expect the algorithm named alongside, got %q", stub.putIn.ChecksumAlgorithm)
+	}
+	if _, err := client.CreateMultipartUpload(t.Context(), &s3.CreateMultipartUploadInput{
+		Bucket: aws.String("testbucket"), Key: aws.String("m"), ChecksumAlgorithm: types.ChecksumAlgorithmXxhash3,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if stub.createMPUIn.ChecksumAlgorithm != types.ChecksumAlgorithmXxhash3 {
+		t.Errorf("expect the name forwarded, got %q", stub.createMPUIn.ChecksumAlgorithm)
 	}
 }
 
@@ -311,4 +442,27 @@ func headValue(o *s3.HeadObjectOutput, name string) string {
 		panic("unhandled algorithm " + name)
 	}
 	return aws.ToString(p)
+}
+
+// Responses show checksums only through the policy's filter
+// (setChecksumHeaders / reportChecksums in checksums.go); a direct
+// checksum.SetHeaders or xmlChecksums elsewhere would bypass it.
+func TestChecksumsReportedThroughPolicy(t *testing.T) {
+	direct := regexp.MustCompile(`checksum\.SetHeaders\(|[^.]xmlChecksums\(`)
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") || strings.HasSuffix(f, "_gen.go") || f == "checksums.go" {
+			continue
+		}
+		src, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if loc := direct.FindIndex(src); loc != nil {
+			t.Errorf("%s reports checksums without the policy filter: %q", f, src[loc[0]:loc[1]])
+		}
+	}
 }

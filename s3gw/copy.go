@@ -138,7 +138,7 @@ func (g *Gateway) copyObject(c *opCtx) error {
 			result.LastModified = s3xml.FormatTime(*cr.LastModified)
 		}
 		result.ChecksumType = string(cr.ChecksumType)
-		result.Checksums = xmlChecksums(checksumsFromCopyObjectResult(cr))
+		result.Checksums = c.reportChecksums(checksumsFromCopyObjectResult(cr))
 	}
 	return s3xml.Write(w, result)
 }
@@ -175,7 +175,7 @@ func (g *Gateway) uploadPartCopy(c *opCtx) error {
 		if cr.LastModified != nil {
 			result.LastModified = s3xml.FormatTime(*cr.LastModified)
 		}
-		result.Checksums = xmlChecksums(checksumsFromCopyPartResult(cr))
+		result.Checksums = c.reportChecksums(checksumsFromCopyPartResult(cr))
 	}
 	return s3xml.Write(w, result)
 }

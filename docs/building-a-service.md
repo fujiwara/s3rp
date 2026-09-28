@@ -18,6 +18,7 @@ In the order you will meet them: what the gateway cannot run without, then what 
 | `s3gw.StorageClassMapper` | deciding which backend storage class each write lands in, and what class the client is shown — keeping the backend's class names out of the tenant's hands. | [Hooks and metering](#hooks-and-metering) |
 | `s3gw.KMSKeyMapper` | the same for SSE-KMS key ids: resolving the key names tenants use to the backend KMS's ids, and back. | [Hooks and metering](#hooks-and-metering) |
 | the wrapping handler and listener | production exposure: TLS termination and what must run **before** verification — rate limiting, request-body caps, the global connection cap, health checks — and the path-handling rules every hop in front must obey. | [In front of the gateway](#in-front-of-the-gateway) |
+| `SetChecksumSupport` | which checksum algorithms your clients may use and see — the ones every backend you serve handles. The default suits the bundled backends. | [Checksum algorithms](#checksum-algorithms) |
 | `SetClientOptions`, cache sizes | tuning: instrumenting the backend clients the gateway builds and sizing the caches they live in; the defaults are sound to start with. | [Backend clients and the gateway's caches](#backend-clients-and-the-gateways-caches) |
 
 **What the gateway does**: SigV4 verification (header and presigned), `aws-chunked` decoding and checksums, bucket and user policy evaluation, CORS, the operations themselves, and the routing that reaches them — refusing unknown ones rather than passing them through.
@@ -734,6 +735,26 @@ backend gateway
 - Don't route with `http.ServeMux` or anything else that cleans paths or redirects — S3 keys and their signatures do not survive it.
 - Don't let any hop rewrite the request line, its escaping, or the `x-amz-request-id` response header.
 - Don't put rate limiting in the `Authorizer` — it runs after verification and the policies, which is too late for DoS economics.
+
+## Checksum algorithms
+
+S3 defines ten checksum algorithms; backends implement different subsets, and a client cannot tell which backend serves a bucket. So what the gateway offers is one setting for the whole service, never per backend: a service on several kinds of backend offers the algorithms **all** of them handle, and every bucket then behaves the same.
+
+`SetChecksumSupport` replaces the support of every algorithm — one it does not name is refused, so the service offers exactly what it lists and a later change of the gateway's default does not widen it. Start from `DefaultChecksumSupport()` to change a few:
+
+```go
+support := s3gw.DefaultChecksumSupport()
+// every backend we serve verifies and stores SHA512
+support["SHA512"] = s3gw.ChecksumVerified
+if err := gw.SetChecksumSupport(support); err != nil {
+	log.Fatal(err)
+}
+```
+
+- `ChecksumVerified` also lets clients send the algorithm as an `aws-chunked` trailer (the SDKs' default over https), which the gateway verifies itself; it needs an algorithm the `checksum` package computes (`checksum.Algorithm.Computable` — the XXHASH family is not, having no standard-library implementation). `ChecksumForwarded` passes value headers and the name on and leaves verification to the backend; a trailer is refused.
+- Offering an algorithm is a promise for every bucket: check each backend verifies it (a wrong value must be refused, not stored), stores it and reports it back under the standard `x-amz-checksum-*` header. Where a backend stores an algorithm but reports it differently — Ceph RGW (tentacle) returns SHA512 as `x-rgw-checksum-sha512` — a `SetClientOptions` middleware renaming the header on the way in can close the gap; otherwise leave the algorithm out.
+- A checksum of an algorithm you do not offer is not shown, even if the backend reports one (an object written to the backend directly, say): clients see the same set on every bucket.
+- The generated conversions cover every algorithm, so offering one needs no code change beyond the setting. Keys are the upper-case S3 names (`checksum.Algorithm.Name`, e.g. `"SHA512"`); `SetChecksumSupport` errors on any other key, another spelling of a name included, and on `ChecksumVerified` for an algorithm the gateway cannot compute; call it before serving.
 
 ## Backend clients and the gateway's caches
 

@@ -48,8 +48,8 @@ var knownAmzHeaders = map[string]bool{
 	"x-amz-decoded-content-length": true, "x-amz-trailer": true,
 	// sent by the browser SDKs
 	"x-amz-user-agent": true,
-	// checksums; the per-algorithm value headers are added from the
-	// checksum table (checksums.go)
+	// checksums; the per-algorithm value headers are the Gateway's
+	// checksumPolicy (checksums.go), checked alongside this list
 	"x-amz-checksum-algorithm": true, "x-amz-checksum-type": true, "x-amz-checksum-mode": true,
 	"x-amz-sdk-checksum-algorithm": true,
 	// object writes and copies
@@ -76,11 +76,12 @@ var knownAmzHeaders = map[string]bool{
 // always known. It runs on every authenticated entry path — handleRequest
 // after the signature verifies, handlePostObject after the policy does —
 // and looks at names only, so the coverage set is irrelevant to it.
-func (s signedHeader) checkKnownAmzHeaders() *s3err.Error {
+func (s signedHeader) checkKnownAmzHeaders(checksums *checksumPolicy) *s3err.Error {
 	var unknown []string
 	for name := range s.h {
 		lname := strings.ToLower(name)
-		if !strings.HasPrefix(lname, "x-amz-") || knownAmzHeaders[lname] || strings.HasPrefix(lname, amzMetaPrefix) {
+		if !strings.HasPrefix(lname, "x-amz-") || knownAmzHeaders[lname] || checksums.knownHeader(lname) ||
+			strings.HasPrefix(lname, amzMetaPrefix) {
 			continue
 		}
 		unknown = append(unknown, lname)

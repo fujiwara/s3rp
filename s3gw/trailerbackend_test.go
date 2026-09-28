@@ -69,7 +69,7 @@ func (b *recordingBackend) last(t *testing.T) recordedRequest {
 // trailerSetup serves a gateway over TLS (so the client sends trailer
 // checksums) whose "trailerbucket" lives on a recording backend served over
 // http or https, reached through the gateway's real SDK client.
-func trailerSetup(t *testing.T, backendTLS bool) (*s3.Client, *recordingBackend) {
+func trailerSetup(t *testing.T, backendTLS bool, configure ...func(*s3gw.Gateway)) (*s3.Client, *recordingBackend) {
 	t.Helper()
 	rec := &recordingBackend{}
 	var backendTS *httptest.Server
@@ -89,6 +89,9 @@ func trailerSetup(t *testing.T, backendTLS bool) (*s3.Client, *recordingBackend)
 		gw.SetClientOptions(func(*store.Backend) []func(*s3.Options) {
 			return []func(*s3.Options){func(o *s3.Options) { o.HTTPClient = backendTS.Client() }}
 		})
+	}
+	for _, f := range configure {
+		f(gw)
 	}
 	proxyTS := httptest.NewTLSServer(gw.Handler())
 	t.Cleanup(proxyTS.Close)
@@ -191,4 +194,49 @@ func TestUnsupportedTrailerChecksum(t *testing.T) {
 	if len(rec.reqs) != 0 {
 		t.Error("the refused upload reached the backend")
 	}
+}
+
+// Offered as verified, a SHA512 trailer is verified by the gateway and the
+// algorithm handed to an https backend to recompute; offered only as
+// forwarded, the gateway cannot vouch for a trailer and refuses it.
+func TestSHA512TrailerBySupport(t *testing.T) {
+	withSHA512 := func(s s3gw.ChecksumSupport) func(*s3gw.Gateway) {
+		return func(gw *s3gw.Gateway) {
+			support := s3gw.DefaultChecksumSupport()
+			support["SHA512"] = s
+			if err := gw.SetChecksumSupport(support); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	put := func(client *s3.Client) error {
+		_, err := client.PutObject(t.Context(), &s3.PutObjectInput{
+			Bucket:            aws.String("trailerbucket"),
+			Key:               aws.String("sha512.txt"),
+			Body:              strings.NewReader("sha512 trailer content"),
+			ChecksumAlgorithm: types.ChecksumAlgorithmSha512,
+		})
+		return err
+	}
+	t.Run("verified", func(t *testing.T) {
+		client, rec := trailerSetup(t, true, withSHA512(s3gw.ChecksumVerified))
+		if err := put(client); err != nil {
+			t.Fatal(err)
+		}
+		if got := rec.last(t).header.Get("X-Amz-Trailer"); got != "x-amz-checksum-sha512" {
+			t.Errorf("expect the backend SDK to send its own SHA512 trailer, got %q", got)
+		}
+	})
+	t.Run("forwarded", func(t *testing.T) {
+		client, rec := trailerSetup(t, true, withSHA512(s3gw.ChecksumForwarded))
+		var ae smithy.APIError
+		if err := put(client); !errors.As(err, &ae) || ae.ErrorCode() != "NotImplemented" {
+			t.Fatalf("expect NotImplemented, got %v", err)
+		}
+		rec.mu.Lock()
+		defer rec.mu.Unlock()
+		if len(rec.reqs) != 0 {
+			t.Error("the refused upload reached the backend")
+		}
+	})
 }

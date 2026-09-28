@@ -76,7 +76,7 @@ func (g *Gateway) getObjectAttributes(c *opCtx) error {
 	}
 	if cs := out.Checksum; cs != nil {
 		result.Checksum = &s3xml.AttributesChecksum{
-			Checksums:    xmlChecksums(checksumsFromChecksum(cs)),
+			Checksums:    c.reportChecksums(checksumsFromChecksum(cs)),
 			ChecksumType: string(cs.ChecksumType),
 		}
 	}
@@ -92,7 +92,7 @@ func (g *Gateway) getObjectAttributes(c *opCtx) error {
 			parts.Parts = append(parts.Parts, s3xml.ObjectAttributePart{
 				PartNumber: aws.ToInt32(p.PartNumber),
 				Size:       aws.ToInt64(p.Size),
-				Checksums:  xmlChecksums(checksumsFromObjectPart(&p)),
+				Checksums:  c.reportChecksums(checksumsFromObjectPart(&p)),
 			})
 		}
 		result.ObjectParts = parts

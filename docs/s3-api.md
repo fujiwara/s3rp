@@ -77,7 +77,7 @@ Object Lock must be enabled when a bucket is created, and the gateway does not p
 
 ### Checksums
 
-How far the gateway handles each algorithm S3 defines is set in one table, `checksum.Algorithms` (the `checksum` package):
+Which checksum algorithms are offered, and how far, is one setting of the service, the same for every bucket whatever backend serves it (`SetChecksumSupport`, [Checksum algorithms](building-a-service.md#checksum-algorithms)). The default, which the bundled `s3rp` binary uses:
 
 | algorithm | support |
 | --- | --- |
@@ -93,10 +93,10 @@ How far the gateway handles each algorithm S3 defines is set in one table, `chec
 | `XXHASH128` | refused |
 
 - **verified**: the value header and `x-amz-checksum-algorithm` pass to the backend, and an `aws-chunked` trailer is verified by the gateway itself.
-- **forwarded**: the value header and `x-amz-checksum-algorithm` pass to the backend, which verifies and stores the checksum — whether it does depends on the backend. A trailer is refused, since the gateway cannot verify it.
-- **refused**: the value header, a trailer, `x-amz-checksum-algorithm` and a value in a CompleteMultipartUpload part are all refused with `501 NotImplemented`. An algorithm S3 does not define is `400 InvalidRequest`.
+- **forwarded**: the value header and `x-amz-checksum-algorithm` pass to the backend, which verifies and stores the checksum. A trailer is refused, since the gateway does not verify it.
+- **refused**: the value header, a trailer, `x-amz-checksum-algorithm` and a value in a CompleteMultipartUpload part are all refused with `501 NotImplemented`, and a checksum of the algorithm the backend reports is not shown (responses and listings alike). An algorithm S3 does not define is `400 InvalidRequest`.
 
-Checksums the backend reports are returned for every algorithm, whatever its support. Beyond that, checksums flow end-to-end:
+Beyond that, checksums flow end-to-end:
 
 - Precomputed checksum headers on uploads pass through to the backend, which validates and stores them.
 - Trailing checksums in `aws-chunked` bodies (the SDK default over https) are **verified by the proxy** against the decoded payload (`BadDigest` on mismatch). When the backend is reached over https the algorithm is forwarded so the backend recomputes and stores the checksum; over a plain-http backend it is not (the SDK can only recompute it over an unseekable body as a trailer, which it sends over https only), so the upload is still verified but the backend stores no checksum. A trailer the proxy cannot verify — an algorithm that is not verified (e.g. SHA512, which the SDKs send as a trailer over https), a non-checksum trailer, more than one — is refused with `501 NotImplemented` rather than dropped, and so is a declared trailer on a payload that carries none (`400 InvalidRequest`).
