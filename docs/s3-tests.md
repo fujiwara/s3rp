@@ -19,7 +19,7 @@ script via the manually-triggered
   `not lifecycle_expiration/transition, cloud_*, s3website, sns,
   storage_class, fails_on_rgw, auth_aws2`.
 - Backend: the compose `ceph` service, locally and in CI
-  (`quay.io/ceph/ceph:v20`, tentacle, by default; `CEPH_IMAGE` — the
+  (the image pinned in `compose.yml`, tentacle, by default; `CEPH_IMAGE` — the
   workflow's input — selects another release image, and the job summary
   states the exact Ceph version). On a squid (`v19`) image `run.sh`
   deselects `test_upload_part_copy_percent_encoded_key`: it crashes that
