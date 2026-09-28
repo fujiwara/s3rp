@@ -76,12 +76,8 @@ func (g *Gateway) getObjectAttributes(c *opCtx) error {
 	}
 	if cs := out.Checksum; cs != nil {
 		result.Checksum = &s3xml.AttributesChecksum{
-			ChecksumCRC32:     aws.ToString(cs.ChecksumCRC32),
-			ChecksumCRC32C:    aws.ToString(cs.ChecksumCRC32C),
-			ChecksumCRC64NVME: aws.ToString(cs.ChecksumCRC64NVME),
-			ChecksumSHA1:      aws.ToString(cs.ChecksumSHA1),
-			ChecksumSHA256:    aws.ToString(cs.ChecksumSHA256),
-			ChecksumType:      string(cs.ChecksumType),
+			Checksums:    xmlChecksums(checksumsFromChecksum(cs)),
+			ChecksumType: string(cs.ChecksumType),
 		}
 	}
 	if op := out.ObjectParts; op != nil {
@@ -94,13 +90,9 @@ func (g *Gateway) getObjectAttributes(c *opCtx) error {
 		}
 		for _, p := range op.Parts {
 			parts.Parts = append(parts.Parts, s3xml.ObjectAttributePart{
-				PartNumber:        aws.ToInt32(p.PartNumber),
-				Size:              aws.ToInt64(p.Size),
-				ChecksumCRC32:     aws.ToString(p.ChecksumCRC32),
-				ChecksumCRC32C:    aws.ToString(p.ChecksumCRC32C),
-				ChecksumCRC64NVME: aws.ToString(p.ChecksumCRC64NVME),
-				ChecksumSHA1:      aws.ToString(p.ChecksumSHA1),
-				ChecksumSHA256:    aws.ToString(p.ChecksumSHA256),
+				PartNumber: aws.ToInt32(p.PartNumber),
+				Size:       aws.ToInt64(p.Size),
+				Checksums:  xmlChecksums(checksumsFromObjectPart(&p)),
 			})
 		}
 		result.ObjectParts = parts

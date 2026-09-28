@@ -110,13 +110,7 @@ func (g *Gateway) getObject(c *opCtx) error {
 	if out.PartsCount != nil {
 		h.Set("x-amz-mp-parts-count", strconv.FormatInt(int64(*out.PartsCount), 10))
 	}
-	checksum.SetHeaders(h, checksum.Values{
-		CRC32:     out.ChecksumCRC32,
-		CRC32C:    out.ChecksumCRC32C,
-		CRC64NVME: out.ChecksumCRC64NVME,
-		SHA1:      out.ChecksumSHA1,
-		SHA256:    out.ChecksumSHA256,
-	}, string(out.ChecksumType))
+	checksum.SetHeaders(h, checksumsFromGetObjectOutput(out), string(out.ChecksumType))
 	setObjectLockResponseHeaders(h, out.ObjectLockMode, out.ObjectLockRetainUntilDate, out.ObjectLockLegalHoldStatus)
 	status := http.StatusOK
 	if out.ContentRange != nil {
@@ -185,13 +179,7 @@ func (g *Gateway) headObject(c *opCtx) error {
 	if out.PartsCount != nil {
 		w.Header().Set("x-amz-mp-parts-count", strconv.FormatInt(int64(*out.PartsCount), 10))
 	}
-	checksum.SetHeaders(w.Header(), checksum.Values{
-		CRC32:     out.ChecksumCRC32,
-		CRC32C:    out.ChecksumCRC32C,
-		CRC64NVME: out.ChecksumCRC64NVME,
-		SHA1:      out.ChecksumSHA1,
-		SHA256:    out.ChecksumSHA256,
-	}, string(out.ChecksumType))
+	checksum.SetHeaders(w.Header(), checksumsFromHeadObjectOutput(out), string(out.ChecksumType))
 	setObjectLockResponseHeaders(w.Header(), out.ObjectLockMode, out.ObjectLockRetainUntilDate, out.ObjectLockLegalHoldStatus)
 	w.WriteHeader(http.StatusOK)
 	return nil
@@ -255,11 +243,7 @@ func (g *Gateway) putObject(c *opCtx) error {
 		in.Metadata = md
 	}
 	cs := checksum.FromHeaders(r.Header)
-	in.ChecksumCRC32 = cs.CRC32
-	in.ChecksumCRC32C = cs.CRC32C
-	in.ChecksumCRC64NVME = cs.CRC64NVME
-	in.ChecksumSHA1 = cs.SHA1
-	in.ChecksumSHA256 = cs.SHA256
+	setChecksumsPutObjectInput(in, cs)
 	if alg := cs.Algorithm(); alg != "" {
 		// name the algorithm alongside a precomputed checksum: the SDK then
 		// sends x-amz-sdk-checksum-algorithm, without which Ceph RGW does
@@ -287,13 +271,7 @@ func (g *Gateway) putObject(c *opCtx) error {
 		w.Header().Set("x-amz-version-id", *out.VersionId)
 	}
 	setSSEHeaders(w.Header(), out.ServerSideEncryption, c.clientKMSKeyID(out.SSEKMSKeyId))
-	checksum.SetHeaders(w.Header(), checksum.Values{
-		CRC32:     out.ChecksumCRC32,
-		CRC32C:    out.ChecksumCRC32C,
-		CRC64NVME: out.ChecksumCRC64NVME,
-		SHA1:      out.ChecksumSHA1,
-		SHA256:    out.ChecksumSHA256,
-	}, string(out.ChecksumType))
+	checksum.SetHeaders(w.Header(), checksumsFromPutObjectOutput(out), string(out.ChecksumType))
 	w.WriteHeader(http.StatusOK)
 	return nil
 }

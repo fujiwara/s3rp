@@ -77,10 +77,29 @@ Object Lock must be enabled when a bucket is created, and the gateway does not p
 
 ### Checksums
 
-`x-amz-checksum-*` checksums (CRC32, CRC32C, CRC64NVME, SHA1, SHA256) flow end-to-end:
+How far the gateway handles each algorithm S3 defines is set in one table, `checksum.Algorithms` (the `checksum` package):
+
+| algorithm | support |
+| --- | --- |
+| `CRC32` | verified |
+| `CRC32C` | verified |
+| `CRC64NVME` | verified |
+| `SHA1` | verified |
+| `SHA256` | verified |
+| `SHA512` | refused |
+| `MD5` | refused |
+| `XXHASH64` | refused |
+| `XXHASH3` | refused |
+| `XXHASH128` | refused |
+
+- **verified**: the value header and `x-amz-checksum-algorithm` pass to the backend, and an `aws-chunked` trailer is verified by the gateway itself.
+- **forwarded**: the value header and `x-amz-checksum-algorithm` pass to the backend, which verifies and stores the checksum — whether it does depends on the backend. A trailer is refused, since the gateway cannot verify it.
+- **refused**: the value header, a trailer, `x-amz-checksum-algorithm` and a value in a CompleteMultipartUpload part are all refused with `501 NotImplemented`. An algorithm S3 does not define is `400 InvalidRequest`.
+
+Checksums the backend reports are returned for every algorithm, whatever its support. Beyond that, checksums flow end-to-end:
 
 - Precomputed checksum headers on uploads pass through to the backend, which validates and stores them.
-- Trailing checksums in `aws-chunked` bodies (the SDK default over https) are **verified by the proxy** against the decoded payload (`BadDigest` on mismatch). When the backend is reached over https the algorithm is forwarded so the backend recomputes and stores the checksum; over a plain-http backend it is not (the SDK can only recompute it over an unseekable body as a trailer, which it sends over https only), so the upload is still verified but the backend stores no checksum. A trailer the proxy cannot verify — an algorithm outside the five above (e.g. SHA512, which the SDKs send as a trailer over https), a non-checksum trailer, more than one — is refused with `501 NotImplemented` rather than dropped, and so is a declared trailer on a payload that carries none (`400 InvalidRequest`).
+- Trailing checksums in `aws-chunked` bodies (the SDK default over https) are **verified by the proxy** against the decoded payload (`BadDigest` on mismatch). When the backend is reached over https the algorithm is forwarded so the backend recomputes and stores the checksum; over a plain-http backend it is not (the SDK can only recompute it over an unseekable body as a trailer, which it sends over https only), so the upload is still verified but the backend stores no checksum. A trailer the proxy cannot verify — an algorithm that is not verified (e.g. SHA512, which the SDKs send as a trailer over https), a non-checksum trailer, more than one — is refused with `501 NotImplemented` rather than dropped, and so is a declared trailer on a payload that carries none (`400 InvalidRequest`).
 - Downloads pass `x-amz-checksum-mode: ENABLED` through and return the backend's checksum headers, so client SDKs can validate response payloads. Multipart part checksums are carried through UploadPart / CompleteMultipartUpload as well.
 - Listings carry what the backend reports: each entry's `ChecksumAlgorithm` / `ChecksumType` in ListObjects (V1/V2), ListObjectVersions and ListMultipartUploads, and ListParts the upload's algorithm and type plus each part's checksum. What is reported varies: versitygw reports all of them, Ceph RGW (tentacle) only the part checksums, RustFS none.
 - CopyObject forwards `x-amz-checksum-algorithm`, so the backend computes the destination's checksum with the requested algorithm (how S3 changes an object's checksum algorithm), and CopyObject / UploadPartCopy results carry the checksums the backend reports, so a client sees whether the algorithm was applied. Ceph RGW (tentacle) ignores it and keeps the source's checksum; a service on such a backend can refuse it instead ([Backend clients](building-a-service.md#backend-clients-and-the-gateways-caches)).

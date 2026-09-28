@@ -52,9 +52,11 @@ func (g *Gateway) createMultipartUpload(c *opCtx) error {
 	if md := c.hdr.AmzMeta(); len(md) > 0 {
 		in.Metadata = md
 	}
-	if v := c.signed("x-amz-checksum-algorithm"); v != "" {
-		in.ChecksumAlgorithm = types.ChecksumAlgorithm(strings.ToUpper(v))
+	alg, s3e := c.checksumAlgorithm()
+	if s3e != nil {
+		return s3e
 	}
+	in.ChecksumAlgorithm = alg
 	if v := c.signed("x-amz-checksum-type"); v != "" {
 		in.ChecksumType = types.ChecksumType(strings.ToUpper(v))
 	}
@@ -110,11 +112,7 @@ func (g *Gateway) uploadPart(c *opCtx) error {
 		in.ContentMD5 = md5v
 	}
 	cs := checksum.FromHeaders(r.Header)
-	in.ChecksumCRC32 = cs.CRC32
-	in.ChecksumCRC32C = cs.CRC32C
-	in.ChecksumCRC64NVME = cs.CRC64NVME
-	in.ChecksumSHA1 = cs.SHA1
-	in.ChecksumSHA256 = cs.SHA256
+	setChecksumsUploadPartInput(in, cs)
 	if alg := cs.Algorithm(); alg != "" {
 		// see putObject: RGW stores a precomputed checksum only when the
 		// algorithm is named alongside it
@@ -131,13 +129,7 @@ func (g *Gateway) uploadPart(c *opCtx) error {
 		w.Header().Set("ETag", *out.ETag)
 	}
 	setSSEHeaders(w.Header(), out.ServerSideEncryption, c.clientKMSKeyID(out.SSEKMSKeyId))
-	checksum.SetHeaders(w.Header(), checksum.Values{
-		CRC32:     out.ChecksumCRC32,
-		CRC32C:    out.ChecksumCRC32C,
-		CRC64NVME: out.ChecksumCRC64NVME,
-		SHA1:      out.ChecksumSHA1,
-		SHA256:    out.ChecksumSHA256,
-	}, "")
+	checksum.SetHeaders(w.Header(), checksumsFromUploadPartOutput(out), "")
 	w.WriteHeader(http.StatusOK)
 	return nil
 }
@@ -158,16 +150,11 @@ func (g *Gateway) completeMultipartUpload(c *opCtx) error {
 			PartNumber: aws.Int32(p.PartNumber),
 			ETag:       aws.String(p.ETag),
 		}
-		setIfNotEmpty := func(dst **string, v string) {
-			if v != "" {
-				*dst = aws.String(v)
-			}
+		cs := checksumsFromXML(p.Checksums)
+		if s3e := checkChecksums(cs); s3e != nil {
+			return s3e
 		}
-		setIfNotEmpty(&cp.ChecksumCRC32, p.ChecksumCRC32)
-		setIfNotEmpty(&cp.ChecksumCRC32C, p.ChecksumCRC32C)
-		setIfNotEmpty(&cp.ChecksumCRC64NVME, p.ChecksumCRC64NVME)
-		setIfNotEmpty(&cp.ChecksumSHA1, p.ChecksumSHA1)
-		setIfNotEmpty(&cp.ChecksumSHA256, p.ChecksumSHA256)
+		setChecksumsCompletedPart(&cp, cs)
 		parts = append(parts, cp)
 	}
 	in := &s3.CompleteMultipartUploadInput{
@@ -188,11 +175,7 @@ func (g *Gateway) completeMultipartUpload(c *opCtx) error {
 		in.ChecksumType = types.ChecksumType(strings.ToUpper(v))
 	}
 	cs := checksum.FromHeaders(r.Header)
-	in.ChecksumCRC32 = cs.CRC32
-	in.ChecksumCRC32C = cs.CRC32C
-	in.ChecksumCRC64NVME = cs.CRC64NVME
-	in.ChecksumSHA1 = cs.SHA1
-	in.ChecksumSHA256 = cs.SHA256
+	setChecksumsCompleteMultipartUploadInput(in, cs)
 	if v := c.signed("x-amz-mp-object-size"); v != "" {
 		if size, err := strconv.ParseInt(v, 10, 64); err == nil {
 			in.MpuObjectSize = aws.Int64(size)
@@ -214,17 +197,13 @@ func (g *Gateway) completeMultipartUpload(c *opCtx) error {
 	}
 	setSSEHeaders(w.Header(), out.ServerSideEncryption, c.clientKMSKeyID(out.SSEKMSKeyId))
 	return s3xml.Write(w, &s3xml.CompleteMultipartUploadResult{
-		XMLNS:             s3xml.Namespace,
-		Location:          location,
-		Bucket:            rt.cfg.Name,
-		Key:               key,
-		ETag:              aws.ToString(out.ETag),
-		ChecksumCRC32:     aws.ToString(out.ChecksumCRC32),
-		ChecksumCRC32C:    aws.ToString(out.ChecksumCRC32C),
-		ChecksumCRC64NVME: aws.ToString(out.ChecksumCRC64NVME),
-		ChecksumSHA1:      aws.ToString(out.ChecksumSHA1),
-		ChecksumSHA256:    aws.ToString(out.ChecksumSHA256),
-		ChecksumType:      string(out.ChecksumType),
+		XMLNS:        s3xml.Namespace,
+		Location:     location,
+		Bucket:       rt.cfg.Name,
+		Key:          key,
+		ETag:         aws.ToString(out.ETag),
+		Checksums:    xmlChecksums(checksumsFromCompleteMultipartUploadOutput(out)),
+		ChecksumType: string(out.ChecksumType),
 	})
 }
 
@@ -285,14 +264,10 @@ func (g *Gateway) listParts(c *opCtx) error {
 	}
 	for _, p := range out.Parts {
 		part := s3xml.Part{
-			PartNumber:        aws.ToInt32(p.PartNumber),
-			ETag:              aws.ToString(p.ETag),
-			Size:              aws.ToInt64(p.Size),
-			ChecksumCRC32:     aws.ToString(p.ChecksumCRC32),
-			ChecksumCRC32C:    aws.ToString(p.ChecksumCRC32C),
-			ChecksumCRC64NVME: aws.ToString(p.ChecksumCRC64NVME),
-			ChecksumSHA1:      aws.ToString(p.ChecksumSHA1),
-			ChecksumSHA256:    aws.ToString(p.ChecksumSHA256),
+			PartNumber: aws.ToInt32(p.PartNumber),
+			ETag:       aws.ToString(p.ETag),
+			Size:       aws.ToInt64(p.Size),
+			Checksums:  xmlChecksums(checksumsFromPart(&p)),
 		}
 		if p.LastModified != nil {
 			part.LastModified = s3xml.FormatTime(*p.LastModified)
