@@ -252,7 +252,8 @@ func TestSetChecksumSupport(t *testing.T) {
 	}{
 		{"default", s3gw.DefaultChecksumSupport(), true},
 		{"empty refuses everything", map[string]s3gw.ChecksumSupport{}, true},
-		{"case-insensitive", map[string]s3gw.ChecksumSupport{"sha512": s3gw.ChecksumVerified}, true},
+		{"canonical name", map[string]s3gw.ChecksumSupport{"SHA512": s3gw.ChecksumVerified}, true},
+		{"other spelling", map[string]s3gw.ChecksumSupport{"sha512": s3gw.ChecksumVerified}, false},
 		{"forwarded without an implementation", map[string]s3gw.ChecksumSupport{"XXHASH3": s3gw.ChecksumForwarded}, true},
 		{"unknown algorithm", map[string]s3gw.ChecksumSupport{"CRC16": s3gw.ChecksumForwarded}, false},
 		{"verified without an implementation", map[string]s3gw.ChecksumSupport{"XXHASH3": s3gw.ChecksumVerified}, false},

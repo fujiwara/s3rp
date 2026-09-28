@@ -72,10 +72,11 @@ func DefaultChecksumSupport() map[string]ChecksumSupport {
 // SetChecksumSupport replaces the support of every checksum algorithm: an
 // algorithm m does not name is refused, so a service offers exactly what
 // it lists — a later default does not widen it. Start from
-// DefaultChecksumSupport to change a few. Names are case-insensitive. It
-// errors, changing nothing, on a name that is not an S3 checksum algorithm,
-// on ChecksumVerified for an algorithm the gateway cannot compute, and on
-// an algorithm named twice in different case. Call before serving requests.
+// DefaultChecksumSupport to change a few. Keys are the algorithms'
+// checksum.Algorithm.Name ("SHA512"). It errors, changing nothing, on a key
+// that is not one of those names (including another spelling of one) and
+// on ChecksumVerified for an algorithm the gateway cannot compute. Call
+// before serving requests.
 func (g *Gateway) SetChecksumSupport(m map[string]ChecksumSupport) error {
 	p, err := newChecksumPolicy(m)
 	if err != nil {
@@ -99,16 +100,16 @@ func newChecksumPolicy(m map[string]ChecksumSupport) (*checksumPolicy, error) {
 		if !ok {
 			return nil, fmt.Errorf("checksum support: %q is not an S3 checksum algorithm", name)
 		}
+		// keys are exactly checksum.Algorithm.Name, so one algorithm cannot
+		// be listed twice under different spellings
+		if name != a.Name {
+			return nil, fmt.Errorf("checksum support: write %q as %q", name, a.Name)
+		}
 		if s < ChecksumRefused || s > ChecksumVerified {
 			return nil, fmt.Errorf("checksum support: invalid support %d for %s", s, a.Name)
 		}
 		if s == ChecksumVerified && !a.Computable() {
 			return nil, fmt.Errorf("checksum support: %s cannot be verified by the gateway; offer it as forwarded", a.Name)
-		}
-		// names are case-insensitive, so "sha512" and "SHA512" are one
-		// algorithm; which of two entries won would depend on map order
-		if _, dup := p.byName[a.Name]; dup {
-			return nil, fmt.Errorf("checksum support: %s is listed more than once", a.Name)
 		}
 		p.byName[a.Name] = s
 		p.byHeader[a.Header()] = s
