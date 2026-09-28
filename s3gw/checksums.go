@@ -73,9 +73,9 @@ func DefaultChecksumSupport() map[string]ChecksumSupport {
 // algorithm m does not name is refused, so a service offers exactly what
 // it lists — a later default does not widen it. Start from
 // DefaultChecksumSupport to change a few. Names are case-insensitive. It
-// errors, changing nothing, on a name that is not an S3 checksum algorithm
-// and on ChecksumVerified for an algorithm the gateway cannot compute. Call
-// before serving requests.
+// errors, changing nothing, on a name that is not an S3 checksum algorithm,
+// on ChecksumVerified for an algorithm the gateway cannot compute, and on
+// an algorithm named twice in different case. Call before serving requests.
 func (g *Gateway) SetChecksumSupport(m map[string]ChecksumSupport) error {
 	p, err := newChecksumPolicy(m)
 	if err != nil {
@@ -104,6 +104,11 @@ func newChecksumPolicy(m map[string]ChecksumSupport) (*checksumPolicy, error) {
 		}
 		if s == ChecksumVerified && !a.Computable() {
 			return nil, fmt.Errorf("checksum support: %s cannot be verified by the gateway; offer it as forwarded", a.Name)
+		}
+		// names are case-insensitive, so "sha512" and "SHA512" are one
+		// algorithm; which of two entries won would depend on map order
+		if _, dup := p.byName[a.Name]; dup {
+			return nil, fmt.Errorf("checksum support: %s is listed more than once", a.Name)
 		}
 		p.byName[a.Name] = s
 		p.byHeader[a.Header()] = s

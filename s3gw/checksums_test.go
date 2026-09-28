@@ -257,6 +257,7 @@ func TestSetChecksumSupport(t *testing.T) {
 		{"unknown algorithm", map[string]s3gw.ChecksumSupport{"CRC16": s3gw.ChecksumForwarded}, false},
 		{"verified without an implementation", map[string]s3gw.ChecksumSupport{"XXHASH3": s3gw.ChecksumVerified}, false},
 		{"invalid support", map[string]s3gw.ChecksumSupport{"CRC32": 7}, false},
+		{"one algorithm twice", map[string]s3gw.ChecksumSupport{"sha512": s3gw.ChecksumVerified, "SHA512": s3gw.ChecksumRefused}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if err := gw.SetChecksumSupport(tc.support); (err == nil) != tc.ok {
