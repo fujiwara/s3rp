@@ -155,7 +155,13 @@ func NewVerifier() *Verifier {
 // before serving requests: like setting Now, it is not synchronized with
 // concurrent verification, and cached signers are discarded.
 func (v *Verifier) SetSignerCacheSize(n int) {
-	v.signers = newSignerCache(n)
+	c := newSignerCache(n)
+	// the counters outlive the cache they describe, so a metrics counter
+	// built on them never goes backwards
+	c.hits.Store(v.signers.hits.Load())
+	c.misses.Store(v.signers.misses.Load())
+	c.displacements.Store(v.signers.displacements.Load())
+	v.signers = c
 }
 
 // SetRegion pins the signing region this endpoint accepts: a request whose

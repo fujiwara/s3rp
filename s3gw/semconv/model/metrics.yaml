@@ -1,0 +1,122 @@
+groups:
+  - id: metric.s3gw.request.duration
+    type: metric
+    metric_name: s3gw.request.duration
+    instrument: histogram
+    unit: s
+    stability: development
+    brief: Duration of requests served by the gateway (`RequestInfo.Duration`).
+    note: |
+      Recorded once per request, refused and failed requests included, from
+      the RequestInfo handed to the observer.
+
+      Bucket boundaries are OpenTelemetry's HTTP server ones extended past
+      10s, since an object transfer is bounded by its size, not by a request
+      timeout: `[0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1,
+      2.5, 5, 7.5, 10, 30, 60, 300]`.
+    attributes:
+      - ref: http.request.method
+        requirement_level: required
+      - ref: http.response.status_code
+        requirement_level: required
+      - ref: s3gw.operation
+        requirement_level:
+          conditionally_required: when the request reached an operation (`RequestInfo.Op` is set)
+      - ref: error.type
+        brief: The S3 error code the client was given (`RequestInfo.Code`).
+        note: |
+          Set when the request failed: the S3 error code (`AccessDenied`,
+          `NoSuchKey`, `SlowDown`, ...), or `_OTHER` for a failure discovered
+          after the response had started, which has a cause (`RequestInfo.Err`)
+          but no code. The cause itself is never an attribute value: it may name
+          backend endpoints and buckets.
+        examples: [AccessDenied, NoSuchKey, InternalError, _OTHER]
+        requirement_level:
+          conditionally_required: when the request failed
+      - ref: s3gw.tenant
+        requirement_level: opt_in
+      - ref: aws.s3.bucket
+        brief: The front bucket name (`Op.Bucket`), never the backend bucket it maps to.
+        requirement_level: opt_in
+
+  - id: metric.s3gw.io
+    type: metric
+    metric_name: s3gw.io
+    instrument: counter
+    unit: By
+    stability: development
+    brief: Request and response body bytes as seen on the wire (`RequestInfo.BytesIn` / `BytesOut`).
+    note: |
+      aws-chunked framing is counted, since these are wire bytes. Carries the
+      same attributes as `s3gw.request.duration`, so throughput and latency can
+      be broken down alike.
+    attributes:
+      - ref: network.io.direction
+        brief: "`receive` for the request body, `transmit` for the response body."
+        requirement_level: required
+      - ref: http.request.method
+        requirement_level: required
+      - ref: http.response.status_code
+        requirement_level: required
+      - ref: s3gw.operation
+        requirement_level:
+          conditionally_required: when the request reached an operation (`RequestInfo.Op` is set)
+      - ref: error.type
+        brief: The S3 error code the client was given, `_OTHER` for a failure without one.
+        requirement_level:
+          conditionally_required: when the request failed
+      - ref: s3gw.tenant
+        requirement_level: opt_in
+      - ref: aws.s3.bucket
+        brief: The front bucket name (`Op.Bucket`).
+        requirement_level: opt_in
+
+  - id: metric.s3gw.cache.lookups
+    type: metric
+    metric_name: s3gw.cache.lookups
+    instrument: counter
+    unit: "{lookup}"
+    stability: development
+    brief: Lookups in the gateway's caches, by result (`CacheStats.Hits` / `Misses`).
+    attributes:
+      - ref: s3gw.cache.name
+        requirement_level: required
+      - ref: s3gw.cache.result
+        requirement_level: required
+
+  - id: metric.s3gw.cache.evictions
+    type: metric
+    metric_name: s3gw.cache.evictions
+    instrument: counter
+    unit: "{entry}"
+    stability: development
+    brief: Entries evicted from the gateway's caches (`CacheStats.Evictions`).
+    note: |
+      A steadily rising signer-cache count means more active access keys than
+      slots (`Gateway.SetSignerCacheSize`); for the client cache, more backends
+      than its capacity (`Gateway.SetClientCacheSize`).
+    attributes:
+      - ref: s3gw.cache.name
+        requirement_level: required
+
+  - id: metric.s3gw.cache.entries
+    type: metric
+    metric_name: s3gw.cache.entries
+    instrument: updowncounter
+    unit: "{entry}"
+    stability: development
+    brief: Entries currently held in the gateway's caches (`CacheStats.Len`).
+    attributes:
+      - ref: s3gw.cache.name
+        requirement_level: required
+
+  - id: metric.s3gw.cache.capacity
+    type: metric
+    metric_name: s3gw.cache.capacity
+    instrument: updowncounter
+    unit: "{entry}"
+    stability: development
+    brief: Capacity of the gateway's caches (`CacheStats.Capacity`).
+    attributes:
+      - ref: s3gw.cache.name
+        requirement_level: required

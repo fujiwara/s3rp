@@ -43,3 +43,18 @@ func TestSetSignerCacheSize(t *testing.T) {
 		t.Errorf("slots after SetSignerCacheSize(64) = %d, want 64", got)
 	}
 }
+
+// TestSetSignerCacheSizeKeepsCounters: the counters back metrics counters,
+// which must never go backwards.
+func TestSetSignerCacheSizeKeepsCounters(t *testing.T) {
+	v := NewVerifier()
+	v.SetSignerCacheSize(1)
+	v.signers.get("a") // miss
+	v.signers.get("a") // hit
+	v.signers.get("b") // miss, displaces a
+	v.SetSignerCacheSize(8)
+	got := v.SignerCacheStats()
+	if got.Hits != 1 || got.Misses != 2 || got.Evictions != 1 || got.Len != 0 || got.Capacity != 8 {
+		t.Errorf("stats after resize = %+v, want counters kept and an empty cache of 8", got)
+	}
+}
