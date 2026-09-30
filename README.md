@@ -75,6 +75,7 @@ circuit_breaker:                     # optional: fail fast toward a backend that
 metrics:                             # optional: export metrics over OTLP (see Metrics below)
   tenant: true                       #   add a per-tenant attribute (one series per tenant)
   bucket: false                      #   add a per-bucket attribute (one series per bucket)
+strict_actions: false                # refuse policies naming an action no operation authorizes (default: warn)
 tenants:
   - name: acme                       # tenant identifier
     users:

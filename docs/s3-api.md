@@ -6,48 +6,54 @@ Definition examples (bucket policies, user policies, CORS rules) are shown in th
 
 ## Supported operations
 
-Because operations are reconstructed rather than forwarded, each one is implemented explicitly. The list below is the surface covered so far — enough to exercise real clients (the AWS CLI and SDKs) end to end against real backends. Anything not listed returns `NotImplemented` (fail closed).
+Because operations are reconstructed rather than forwarded, each one is implemented explicitly. The table below is the surface covered so far — enough to exercise real clients (the AWS CLI and SDKs) end to end against real backends. Anything not listed returns `NotImplemented` (fail closed).
 
-- GetObject
-- PutObject
-- HeadObject
-- GetObjectAttributes
-- DeleteObject
-- DeleteObjects
-- CopyObject
-- ListObjects
-- ListObjectsV2
-- HeadBucket
-- GetBucketLocation
-- ListBuckets
-- GetObjectTagging
-- PutObjectTagging
-- DeleteObjectTagging
-- GetBucketVersioning
-- GetBucketEncryption
-- GetBucketPolicyStatus
-- GetBucketOwnershipControls
-- GetPublicAccessBlock
-- ListObjectVersions
-- GetBucketAcl
-- GetObjectAcl
-- GetBucketPolicy
-- GetBucketCors
-- GetObjectLockConfiguration
-- GetObjectRetention
-- PutObjectRetention
-- GetObjectLegalHold
-- PutObjectLegalHold
-- CreateMultipartUpload
-- UploadPart
-- UploadPartCopy
-- CompleteMultipartUpload
-- AbortMultipartUpload
-- ListParts
-- ListMultipartUploads
-- PostObject (browser-based POST upload, see [below](#browser-based-uploads-post))
+| operation | authorized actions |
+|---|---|
+| ListBuckets | — |
+| HeadBucket | `s3:ListBucket` |
+| ListObjects | `s3:ListBucket` |
+| ListObjectsV2 | `s3:ListBucket` |
+| ListObjectVersions | `s3:ListBucket` |
+| ListMultipartUploads | `s3:ListBucketMultipartUploads` |
+| GetBucketLocation | `s3:GetBucketLocation` |
+| GetBucketAcl | `s3:GetBucketAcl` |
+| GetBucketPolicy | `s3:GetBucketPolicy` |
+| GetBucketPolicyStatus | `s3:GetBucketPolicyStatus` |
+| GetBucketCors | `s3:GetBucketCORS` |
+| GetBucketVersioning | `s3:GetBucketVersioning` |
+| GetBucketEncryption | `s3:GetEncryptionConfiguration` |
+| GetBucketOwnershipControls | `s3:GetBucketOwnershipControls` |
+| GetPublicAccessBlock | `s3:GetBucketPublicAccessBlock` |
+| GetObjectLockConfiguration | `s3:GetBucketObjectLockConfiguration` |
+| DeleteObjects | `s3:DeleteObject` (each key) |
+| PostObject | `s3:PutObject` |
+| GetObject | `s3:GetObject` |
+| HeadObject | `s3:GetObject` |
+| GetObjectAttributes | `s3:GetObject` |
+| PutObject | `s3:PutObject` |
+| CopyObject | `s3:PutObject`, `s3:GetObject` (copy source) |
+| DeleteObject | `s3:DeleteObject` |
+| GetObjectTagging | `s3:GetObjectTagging` |
+| PutObjectTagging | `s3:PutObjectTagging` |
+| DeleteObjectTagging | `s3:DeleteObjectTagging` |
+| GetObjectAcl | `s3:GetObjectAcl` |
+| GetObjectRetention | `s3:GetObjectRetention` |
+| PutObjectRetention | `s3:PutObjectRetention` |
+| GetObjectLegalHold | `s3:GetObjectLegalHold` |
+| PutObjectLegalHold | `s3:PutObjectLegalHold` |
+| CreateMultipartUpload | `s3:PutObject` |
+| UploadPart | `s3:PutObject` |
+| UploadPartCopy | `s3:PutObject`, `s3:GetObject` (copy source) |
+| CompleteMultipartUpload | `s3:PutObject` |
+| AbortMultipartUpload | `s3:AbortMultipartUpload` |
+| ListParts | `s3:ListMultipartUploadParts` |
 
-Other operations return a `NotImplemented` error.
+The actions are what bucket and user policies match ([Bucket policies](#bucket-policies), [User policies](#user-policies)); some headers add one ([Actions a header adds](#actions-a-header-adds)). ListBuckets authorizes no action: it lists only the requester's own buckets. PostObject is the browser-based POST upload ([below](#browser-based-uploads-post)).
+
+These operations are recognized and always refused — `NotImplemented`, or `AccessControlListNotSupported` for the ACL writes — and recorded under their name on `Op.Operation` so a service can count attempts: CreateBucket, DeleteBucket, PutBucketAcl, PutBucketPolicy, DeleteBucketPolicy, PutBucketCors, DeleteBucketCors, PutBucketVersioning, PutObjectLockConfiguration, PutBucketEncryption, DeleteBucketEncryption, PutBucketOwnershipControls, DeleteBucketOwnershipControls, PutPublicAccessBlock, DeletePublicAccessBlock, PutObjectAcl. Any other request is `NotImplemented` as well.
+
+The same catalog is machine-readable: [`s3op/operations.json`](../s3op/operations.json), exposed to Go as package `s3op` (`Operations`, `Lookup`, `Actions`, `CheckActionPattern` and generated `Op*` / `Action*` constants), for a control plane validating the policies it stores or a console listing what a policy can grant.
 
 CopyObject and UploadPartCopy work between buckets served by the same backend (same endpoint, region and credentials); copying across different backends returns `NotImplemented`. The copy source bucket must belong to the requester's tenant; the destination may be another tenant's bucket when its policy grants `s3:PutObject` ([cross-tenant access](#cross-tenant-access)).
 
@@ -200,7 +206,7 @@ Copying across tenants works in one direction only:
 - **Into** another tenant's bucket — supported: the destination goes through the normal authorization path, so an `s3:PutObject` grant (plus the same-backend restriction) is all it takes; the source read is authorized within your own tenant as usual.
 - **From** another tenant's bucket — not supported, even with an `s3:GetObject` grant: the `x-amz-copy-source` bucket always resolves within the requester's own tenant. A server-side copy never streams through the proxy, so the source owner's request hooks would see nothing of the read; fetching with GetObject (which the grant does allow) and re-uploading achieves the same result with both sides authorized and observable.
 
-Limitations: versioned operations use the same action names as unversioned ones (no `s3:GetObjectVersion` distinction). DeleteObjects is evaluated per object: denied keys are reported in the `Error` entries of the response. Copying evaluates `s3:GetObject` on the source and `s3:PutObject` on the destination.
+Limitations: versioned operations use the same action names as unversioned ones (no `s3:GetObjectVersion` distinction), so a statement naming such an action never takes effect — see [Unknown actions](#unknown-actions). DeleteObjects is evaluated per object: denied keys are reported in the `Error` entries of the response. Copying evaluates `s3:GetObject` on the source and `s3:PutObject` on the destination.
 
 ### User policies
 
@@ -215,7 +221,7 @@ tenants:
           - { access_key_id: ..., secret_access_key: ... }
         policy:
           - effect: Allow
-            action: [s3:Get*, s3:List*, s3:HeadObject, s3:HeadBucket]
+            action: [s3:Get*, s3:List*]   # HeadObject is s3:GetObject, HeadBucket s3:ListBucket
           - effect: Deny
             action: [s3:GetObjectAcl]
       - name: admin          # no policy = allow s3:* (full access)
@@ -242,6 +248,10 @@ Some request headers require an action beyond the operation's own, exactly as on
 | `x-amz-bypass-governance-retention: true` | DeleteObject, DeleteObjects, PutObjectRetention | `s3:BypassGovernanceRetention` |
 
 A user policy of `Allow [s3:*]` + `Deny [s3:PutObjectTagging]` therefore refuses tags everywhere they can be written — the dedicated PutObjectTagging operation and an upload carrying `x-amz-tagging` alike — and a bucket policy `Deny` on `s3:PutObjectRetention` keeps a tenant from locking objects on upload. A copy also needs `s3:GetObject` on its source.
+
+#### Unknown actions
+
+A policy action that matches none of the actions in the [operations table](#supported-operations) — a typo, or an AWS action s3rp does not distinguish such as `s3:GetObjectVersion`, `s3:DeleteObjectVersion`, `s3:ListBucketVersions` or `s3:ListAllMyBuckets` — can never match a request, so its statement silently does nothing (a `Deny` on it protects nothing). The bundled binary logs a warning for each one at startup; with `strict_actions: true` in the config it refuses to start instead. A service with its own store checks the actions it stores with `s3op.CheckActionPattern`, whose error wraps `s3op.ErrUnknownAction`.
 
 Both bucket and user policies are bounded in size: at most 20 KB per document, 20 statements per policy, 30 actions and 10 resources per statement, 128 bytes per action/resource pattern, 100 principal users per statement, and 50 condition values per operator. Oversized policies are rejected when loaded.
 

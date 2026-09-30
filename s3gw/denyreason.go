@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/fujiwara/s3rp/policy"
+	"github.com/fujiwara/s3rp/s3op"
 	"github.com/fujiwara/s3rp/store"
 )
 
@@ -109,7 +110,7 @@ func copySourceReason(principal, resource string, err error) *DenyReason {
 	if err == nil {
 		err = store.ErrNotFound
 	}
-	return &DenyReason{Layer: LayerCopySource, Statement: -1, Principal: principal, Action: "s3:GetObject", Resource: resource, err: err}
+	return &DenyReason{Layer: LayerCopySource, Statement: -1, Principal: principal, Action: s3op.ActionGetObject, Resource: resource, err: err}
 }
 
 // Denial is one deciding statement's share of the per-key refusals inside

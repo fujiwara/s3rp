@@ -13,6 +13,7 @@ import (
 
 	"github.com/fujiwara/s3rp/cors"
 	"github.com/fujiwara/s3rp/s3err"
+	"github.com/fujiwara/s3rp/s3op"
 	"github.com/fujiwara/s3rp/store"
 )
 
@@ -418,31 +419,124 @@ func signedPresent(name string) func(signedHeader) bool {
 	return func(h signedHeader) bool { return h.Signed(name) != "" }
 }
 
-var (
-	bypassActions = []headerAction{{bypassGovernanceRetention, "s3:BypassGovernanceRetention"}}
-	// uploadActions apply to the writes that create an object with its
-	// attributes: PutObject, CopyObject, CreateMultipartUpload.
-	uploadActions = []headerAction{
-		{signedPresent(hdrTagging), "s3:PutObjectTagging"},
-		{signedPresent(hdrObjectLockMode), "s3:PutObjectRetention"},
-		{signedPresent(hdrObjectLockRetainUntil), "s3:PutObjectRetention"},
-		{signedPresent(hdrObjectLockLegalHold), "s3:PutObjectLegalHold"},
-	}
-)
+// headerPresence decides when a header-conditional authorization of the
+// s3op catalog applies; every header the catalog names must be listed.
+var headerPresence = map[string]func(signedHeader) bool{
+	hdrTagging:                   signedPresent(hdrTagging),
+	hdrObjectLockMode:            signedPresent(hdrObjectLockMode),
+	hdrObjectLockRetainUntil:     signedPresent(hdrObjectLockRetainUntil),
+	hdrObjectLockLegalHold:       signedPresent(hdrObjectLockLegalHold),
+	hdrBypassGovernanceRetention: bypassGovernanceRetention,
+}
 
 // route selects one operation by a query discriminator and describes the
 // checks to run before its handler. handle is a method value of *Gateway, so
 // the route table reads as a plain "discriminator -> handler" mapping.
 type route struct {
-	match      func(url.Values) bool // selects this route (nil = always, the fallback)
-	params     paramSet              // allowed query parameters (nil = skip the check)
-	aclHdr     bool                  // reject unsupported canned ACL headers first
-	hdrActions []headerAction        // actions a header adds to the authorization
-	attrs      bool                  // the operation carries the object's own attributes (SSE, storage class, user metadata)
-	name       string                // S3 operation name recorded on Op
-	copy       string                // operation name when x-amz-copy-source is present (PutObject → CopyObject)
-	action     string                // s3:* action to authorize ("" = handler authorizes itself)
-	handle     func(*Gateway, *opCtx) error
+	match  func(url.Values) bool // selects this route (nil = always, the fallback)
+	params paramSet              // allowed query parameters (nil = skip the check)
+	aclHdr bool                  // reject unsupported canned ACL headers first
+	attrs  bool                  // the operation carries the object's own attributes (SSE, storage class, user metadata)
+	name   string                // S3 operation name recorded on Op, its s3op catalog entry
+	copy   string                // operation name when x-amz-copy-source is present (PutObject → CopyObject)
+	handle func(*Gateway, *opCtx) error
+
+	// bound from the s3op catalog entry of name by bind
+	action     string         // s3:* action to authorize ("" = handler authorizes itself)
+	hdrActions []headerAction // actions a header adds to the authorization
+}
+
+// bindRoutes fills each route's authorization from the s3op catalog, so the
+// actions an operation authorizes are written in one place
+// (s3op/operations.json). An inconsistency panics at package init: every
+// test run would fail on it, so it never reaches a deployment.
+func bindRoutes(routes map[string][]route) map[string][]route {
+	for _, rs := range routes {
+		for i := range rs {
+			rs[i].bind()
+		}
+	}
+	return routes
+}
+
+func (rt *route) bind() {
+	if rt.name == OpUnknown {
+		return
+	}
+	op := mustLookup(rt.name)
+	rt.action, rt.hdrActions = targetAuthorizations(op)
+	if rt.copy == "" {
+		return
+	}
+	// the copy variant runs through the same route, so it must authorize
+	// the same for its target and add only the read of its source
+	cp := mustLookup(rt.copy)
+	want := append(onTarget(op), s3op.Authorization{Action: s3op.ActionGetObject, On: s3op.OnCopySource})
+	if !slices.Equal(onTarget(cp), onTarget(op)) || len(cp.Authorizations) != len(want) || !slices.Contains(cp.Authorizations, want[len(want)-1]) {
+		panic("s3gw: s3op catalog: " + rt.copy + " must authorize what " + rt.name + " does plus s3:GetObject on the copy source")
+	}
+}
+
+func mustLookup(name string) s3op.Operation {
+	op, ok := s3op.Lookup(name)
+	if !ok {
+		panic("s3gw: operation " + name + " is not in the s3op catalog")
+	}
+	return op
+}
+
+func onTarget(op s3op.Operation) []s3op.Authorization {
+	var out []s3op.Authorization
+	for _, a := range op.Authorizations {
+		if a.On == s3op.OnTarget {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// targetAuthorizations splits an operation's authorizations on its target
+// into the unconditional action and the header-conditional ones.
+func targetAuthorizations(op s3op.Operation) (string, []headerAction) {
+	var action string
+	var hdr []headerAction
+	for _, a := range onTarget(op) {
+		if a.Header == "" {
+			if action != "" {
+				panic("s3gw: s3op catalog: " + op.Name + " has more than one unconditional action")
+			}
+			action = a.Action
+			continue
+		}
+		present, ok := headerPresence[a.Header]
+		if !ok {
+			panic("s3gw: s3op catalog: " + op.Name + ": no presence check for header " + a.Header)
+		}
+		hdr = append(hdr, headerAction{present, a.Action})
+	}
+	return action, hdr
+}
+
+// authorizeRoute authorizes the route's actions, the unconditional one and
+// those the headers in hdr add, and returns them in authorization order.
+func (c *opCtx) authorizeRoute(rt *route, hdr signedHeader) ([]string, *s3err.Error) {
+	var actions []string
+	if rt.action != "" {
+		if err := c.authorize(rt.action); err != nil {
+			return nil, err
+		}
+		actions = append(actions, rt.action)
+	}
+	for _, ha := range rt.hdrActions {
+		if !ha.present(hdr) || slices.Contains(actions, ha.action) {
+			continue
+		}
+		if err := c.authorize(ha.action); err != nil {
+			return nil, err
+		}
+		actions = append(actions, ha.action)
+	}
+	return actions, nil
 }
 
 // dispatch runs the first matching route's checks and handler, in the
@@ -473,21 +567,9 @@ func (c *opCtx) dispatch(routes []route) error {
 				return err
 			}
 		}
-		var actions []string
-		if rt.action != "" {
-			if err := c.authorize(rt.action); err != nil {
-				return err
-			}
-			actions = append(actions, rt.action)
-		}
-		for _, ha := range rt.hdrActions {
-			if !ha.present(c.hdr) || slices.Contains(actions, ha.action) {
-				continue
-			}
-			if err := c.authorize(ha.action); err != nil {
-				return err
-			}
-			actions = append(actions, ha.action)
+		actions, s3e := c.authorizeRoute(&rt, c.hdr)
+		if s3e != nil {
+			return s3e
 		}
 		name := rt.name
 		if rt.copy != "" && c.signed(hdrCopySource) != "" {
@@ -497,7 +579,7 @@ func (c *opCtx) dispatch(routes []route) error {
 				return s3e
 			}
 			c.copySource = src
-			actions = append(actions, "s3:GetObject")
+			actions = append(actions, s3op.ActionGetObject)
 		}
 		op := &Op{
 			Method:         c.r.Method,
@@ -583,92 +665,92 @@ func (g *Gateway) uploadPartOrCopy(c *opCtx) error {
 	return g.uploadPart(c)
 }
 
-var bucketRoutes = map[string][]route{
+var bucketRoutes = bindRoutes(map[string][]route{
 	http.MethodGet: {
-		{match: has(subUploads), params: listMultipartUploadsParams, action: "s3:ListBucketMultipartUploads", name: "ListMultipartUploads", handle: (*Gateway).listMultipartUploads},
-		{match: has(subLocation), params: locationOnlyParams, action: "s3:GetBucketLocation", name: "GetBucketLocation", handle: (*Gateway).getBucketLocation},
-		{match: has(subACL), params: aclOnlyParams, action: "s3:GetBucketAcl", name: "GetBucketAcl", handle: (*Gateway).getBucketACL},
-		{match: has(subPolicy), params: policyOnlyParams, action: "s3:GetBucketPolicy", name: "GetBucketPolicy", handle: (*Gateway).getBucketPolicy},
-		{match: has(subCORS), params: corsOnlyParams, action: "s3:GetBucketCORS", name: "GetBucketCors", handle: (*Gateway).getBucketCors},
-		{match: has(subObjectLock), params: objectLockOnlyParams, action: "s3:GetBucketObjectLockConfiguration", name: "GetObjectLockConfiguration", handle: (*Gateway).getObjectLockConfiguration},
-		{match: has(subVersioning), params: versioningOnlyParams, action: "s3:GetBucketVersioning", name: "GetBucketVersioning", handle: (*Gateway).getBucketVersioning},
-		{match: has(subEncryption), params: encryptionOnlyParams, action: "s3:GetEncryptionConfiguration", name: "GetBucketEncryption", handle: (*Gateway).getBucketEncryption},
-		{match: has(subPolicyStatus), params: policyStatusOnlyParams, action: "s3:GetBucketPolicyStatus", name: "GetBucketPolicyStatus", handle: (*Gateway).getBucketPolicyStatus},
-		{match: has(subOwnership), params: ownershipOnlyParams, action: "s3:GetBucketOwnershipControls", name: "GetBucketOwnershipControls", handle: (*Gateway).getBucketOwnershipControls},
-		{match: has(subPublicAccess), params: publicAccessOnlyParams, action: "s3:GetBucketPublicAccessBlock", name: "GetPublicAccessBlock", handle: (*Gateway).getPublicAccessBlock},
-		{match: has(subVersions), params: listObjectVersionsParams, action: "s3:ListBucket", name: "ListObjectVersions", handle: (*Gateway).listObjectVersions},
-		{match: hasListTypeV2, params: listObjectsV2Params, action: "s3:ListBucket", name: "ListObjectsV2", handle: (*Gateway).listObjectsV2},
-		{params: listObjectsV1Params, action: "s3:ListBucket", name: "ListObjects", handle: (*Gateway).listObjectsV1},
+		{match: has(subUploads), params: listMultipartUploadsParams, name: s3op.OpListMultipartUploads, handle: (*Gateway).listMultipartUploads},
+		{match: has(subLocation), params: locationOnlyParams, name: s3op.OpGetBucketLocation, handle: (*Gateway).getBucketLocation},
+		{match: has(subACL), params: aclOnlyParams, name: s3op.OpGetBucketAcl, handle: (*Gateway).getBucketACL},
+		{match: has(subPolicy), params: policyOnlyParams, name: s3op.OpGetBucketPolicy, handle: (*Gateway).getBucketPolicy},
+		{match: has(subCORS), params: corsOnlyParams, name: s3op.OpGetBucketCors, handle: (*Gateway).getBucketCors},
+		{match: has(subObjectLock), params: objectLockOnlyParams, name: s3op.OpGetObjectLockConfiguration, handle: (*Gateway).getObjectLockConfiguration},
+		{match: has(subVersioning), params: versioningOnlyParams, name: s3op.OpGetBucketVersioning, handle: (*Gateway).getBucketVersioning},
+		{match: has(subEncryption), params: encryptionOnlyParams, name: s3op.OpGetBucketEncryption, handle: (*Gateway).getBucketEncryption},
+		{match: has(subPolicyStatus), params: policyStatusOnlyParams, name: s3op.OpGetBucketPolicyStatus, handle: (*Gateway).getBucketPolicyStatus},
+		{match: has(subOwnership), params: ownershipOnlyParams, name: s3op.OpGetBucketOwnershipControls, handle: (*Gateway).getBucketOwnershipControls},
+		{match: has(subPublicAccess), params: publicAccessOnlyParams, name: s3op.OpGetPublicAccessBlock, handle: (*Gateway).getPublicAccessBlock},
+		{match: has(subVersions), params: listObjectVersionsParams, name: s3op.OpListObjectVersions, handle: (*Gateway).listObjectVersions},
+		{match: hasListTypeV2, params: listObjectsV2Params, name: s3op.OpListObjectsV2, handle: (*Gateway).listObjectsV2},
+		{params: listObjectsV1Params, name: s3op.OpListObjects, handle: (*Gateway).listObjectsV1},
 	},
 	http.MethodHead: {
-		{action: "s3:ListBucket", name: "HeadBucket", handle: (*Gateway).headBucket},
+		{name: s3op.OpHeadBucket, handle: (*Gateway).headBucket},
 	},
 	http.MethodPut: {
-		{match: has(subACL), name: "PutBucketAcl", handle: rejectACL},
+		{match: has(subACL), name: s3op.OpPutBucketAcl, handle: rejectACL},
 		// bucket configuration is written where the bucket is created — the
 		// control plane / store — never via the S3 API: policies and CORS
 		// rules live in the store, and versioning / Object Lock defaults
 		// would let a data-plane key overwrite what the bucket's creator
 		// configured (the reads stay proxied)
-		notImplemented(has(subVersioning), "PutBucketVersioning"),
-		notImplemented(has(subObjectLock), "PutObjectLockConfiguration"),
-		notImplemented(has(subPolicy), "PutBucketPolicy"),
-		notImplemented(has(subCORS), "PutBucketCors"),
-		notImplemented(has(subEncryption), "PutBucketEncryption"),
-		notImplemented(has(subOwnership), "PutBucketOwnershipControls"),
-		notImplemented(has(subPublicAccess), "PutPublicAccessBlock"),
+		notImplemented(has(subVersioning), s3op.OpPutBucketVersioning),
+		notImplemented(has(subObjectLock), s3op.OpPutObjectLockConfiguration),
+		notImplemented(has(subPolicy), s3op.OpPutBucketPolicy),
+		notImplemented(has(subCORS), s3op.OpPutBucketCors),
+		notImplemented(has(subEncryption), s3op.OpPutBucketEncryption),
+		notImplemented(has(subOwnership), s3op.OpPutBucketOwnershipControls),
+		notImplemented(has(subPublicAccess), s3op.OpPutPublicAccessBlock),
 		// buckets are created and deleted by the control plane
-		notImplemented(noQuery, "CreateBucket"),
+		notImplemented(noQuery, s3op.OpCreateBucket),
 		unknownOperation("this bucket operation"),
 	},
 	http.MethodDelete: {
-		notImplemented(has(subPolicy), "DeleteBucketPolicy"),
-		notImplemented(has(subCORS), "DeleteBucketCors"),
-		notImplemented(has(subEncryption), "DeleteBucketEncryption"),
-		notImplemented(has(subOwnership), "DeleteBucketOwnershipControls"),
-		notImplemented(has(subPublicAccess), "DeletePublicAccessBlock"),
-		notImplemented(noQuery, "DeleteBucket"),
+		notImplemented(has(subPolicy), s3op.OpDeleteBucketPolicy),
+		notImplemented(has(subCORS), s3op.OpDeleteBucketCors),
+		notImplemented(has(subEncryption), s3op.OpDeleteBucketEncryption),
+		notImplemented(has(subOwnership), s3op.OpDeleteBucketOwnershipControls),
+		notImplemented(has(subPublicAccess), s3op.OpDeletePublicAccessBlock),
+		notImplemented(noQuery, s3op.OpDeleteBucket),
 		unknownOperation("this bucket operation"),
 	},
 	http.MethodPost: {
-		// s3:DeleteObject is evaluated per object inside deleteObjects
-		{match: has(subDelete), params: deleteOnlyParams, name: "DeleteObjects", handle: (*Gateway).deleteObjects},
+		// its actions are authorized per object inside deleteObjects
+		{match: has(subDelete), params: deleteOnlyParams, name: s3op.OpDeleteObjects, handle: (*Gateway).deleteObjects},
 		unknownOperation("this bucket operation"),
 	},
-}
+})
 
-var objectRoutes = map[string][]route{
+var objectRoutes = bindRoutes(map[string][]route{
 	http.MethodGet: {
-		{match: has(qpUploadID), params: listPartsParams, action: "s3:ListMultipartUploadParts", name: "ListParts", handle: (*Gateway).listParts},
-		{match: has(subTagging), params: taggingParams, action: "s3:GetObjectTagging", name: "GetObjectTagging", handle: (*Gateway).getObjectTagging},
-		{match: has(subACL), params: aclParams, action: "s3:GetObjectAcl", name: "GetObjectAcl", handle: (*Gateway).getObjectACL},
-		{match: has(subRetention), params: retentionParams, action: "s3:GetObjectRetention", name: "GetObjectRetention", handle: (*Gateway).getObjectRetention},
-		{match: has(subLegalHold), params: legalHoldParams, action: "s3:GetObjectLegalHold", name: "GetObjectLegalHold", handle: (*Gateway).getObjectLegalHold},
-		{match: has(subAttributes), params: attributesParams, action: "s3:GetObject", name: "GetObjectAttributes", handle: (*Gateway).getObjectAttributes},
-		{params: getObjectParams, action: "s3:GetObject", name: "GetObject", handle: (*Gateway).getObject},
+		{match: has(qpUploadID), params: listPartsParams, name: s3op.OpListParts, handle: (*Gateway).listParts},
+		{match: has(subTagging), params: taggingParams, name: s3op.OpGetObjectTagging, handle: (*Gateway).getObjectTagging},
+		{match: has(subACL), params: aclParams, name: s3op.OpGetObjectAcl, handle: (*Gateway).getObjectACL},
+		{match: has(subRetention), params: retentionParams, name: s3op.OpGetObjectRetention, handle: (*Gateway).getObjectRetention},
+		{match: has(subLegalHold), params: legalHoldParams, name: s3op.OpGetObjectLegalHold, handle: (*Gateway).getObjectLegalHold},
+		{match: has(subAttributes), params: attributesParams, name: s3op.OpGetObjectAttributes, handle: (*Gateway).getObjectAttributes},
+		{params: getObjectParams, name: s3op.OpGetObject, handle: (*Gateway).getObject},
 	},
 	http.MethodHead: {
-		{params: headObjectParams, action: "s3:GetObject", name: "HeadObject", handle: (*Gateway).headObject},
+		{params: headObjectParams, name: s3op.OpHeadObject, handle: (*Gateway).headObject},
 	},
 	http.MethodPut: {
-		{match: has(subTagging), params: taggingParams, action: "s3:PutObjectTagging", name: "PutObjectTagging", handle: (*Gateway).putObjectTagging},
-		{match: has(subACL), name: "PutObjectAcl", handle: rejectACL},
-		{match: has(subRetention), params: retentionParams, hdrActions: bypassActions, action: "s3:PutObjectRetention", name: "PutObjectRetention", handle: (*Gateway).putObjectRetention},
-		{match: has(subLegalHold), params: legalHoldParams, action: "s3:PutObjectLegalHold", name: "PutObjectLegalHold", handle: (*Gateway).putObjectLegalHold},
-		{match: hasUploadPart, params: uploadPartParams, name: "UploadPart", copy: "UploadPartCopy", action: "s3:PutObject", handle: (*Gateway).uploadPartOrCopy},
-		{params: noParams, aclHdr: true, hdrActions: uploadActions, attrs: true, name: "PutObject", copy: "CopyObject", action: "s3:PutObject", handle: (*Gateway).putObjectOrCopy},
+		{match: has(subTagging), params: taggingParams, name: s3op.OpPutObjectTagging, handle: (*Gateway).putObjectTagging},
+		{match: has(subACL), name: s3op.OpPutObjectAcl, handle: rejectACL},
+		{match: has(subRetention), params: retentionParams, name: s3op.OpPutObjectRetention, handle: (*Gateway).putObjectRetention},
+		{match: has(subLegalHold), params: legalHoldParams, name: s3op.OpPutObjectLegalHold, handle: (*Gateway).putObjectLegalHold},
+		{match: hasUploadPart, params: uploadPartParams, name: s3op.OpUploadPart, copy: s3op.OpUploadPartCopy, handle: (*Gateway).uploadPartOrCopy},
+		{params: noParams, aclHdr: true, attrs: true, name: s3op.OpPutObject, copy: s3op.OpCopyObject, handle: (*Gateway).putObjectOrCopy},
 	},
 	http.MethodDelete: {
-		{match: has(qpUploadID), params: uploadIDOnlyParams, action: "s3:AbortMultipartUpload", name: "AbortMultipartUpload", handle: (*Gateway).abortMultipartUpload},
-		{match: has(subTagging), params: taggingParams, action: "s3:DeleteObjectTagging", name: "DeleteObjectTagging", handle: (*Gateway).deleteObjectTagging},
-		{params: versionIDOnlyParams, hdrActions: bypassActions, action: "s3:DeleteObject", name: "DeleteObject", handle: (*Gateway).deleteObject},
+		{match: has(qpUploadID), params: uploadIDOnlyParams, name: s3op.OpAbortMultipartUpload, handle: (*Gateway).abortMultipartUpload},
+		{match: has(subTagging), params: taggingParams, name: s3op.OpDeleteObjectTagging, handle: (*Gateway).deleteObjectTagging},
+		{params: versionIDOnlyParams, name: s3op.OpDeleteObject, handle: (*Gateway).deleteObject},
 	},
 	http.MethodPost: {
-		{match: has(subUploads), params: uploadsOnlyParams, aclHdr: true, hdrActions: uploadActions, attrs: true, action: "s3:PutObject", name: "CreateMultipartUpload", handle: (*Gateway).createMultipartUpload},
-		{match: has(qpUploadID), params: uploadIDOnlyParams, action: "s3:PutObject", name: "CompleteMultipartUpload", handle: (*Gateway).completeMultipartUpload},
+		{match: has(subUploads), params: uploadsOnlyParams, aclHdr: true, attrs: true, name: s3op.OpCreateMultipartUpload, handle: (*Gateway).createMultipartUpload},
+		{match: has(qpUploadID), params: uploadIDOnlyParams, name: s3op.OpCompleteMultipartUpload, handle: (*Gateway).completeMultipartUpload},
 		unknownOperation("this operation"),
 	},
-}
+})
 
 // paramSet is the set of query parameters an operation accepts.
 type paramSet map[string]bool

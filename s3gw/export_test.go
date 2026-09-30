@@ -58,3 +58,22 @@ var BackendName = backendName
 // KnownAmzHeaders exposes the request-header allowlist to
 // TestKnownAmzHeadersCoverSource.
 var KnownAmzHeaders = knownAmzHeaders
+
+// RouteOperations lists the operation names the route tables dispatch to,
+// copy variants included.
+func RouteOperations() []string {
+	var out []string
+	for _, routes := range []map[string][]route{bucketRoutes, objectRoutes} {
+		for _, rs := range routes {
+			for _, rt := range rs {
+				if rt.name != OpUnknown {
+					out = append(out, rt.name)
+				}
+				if rt.copy != "" {
+					out = append(out, rt.copy)
+				}
+			}
+		}
+	}
+	return out
+}

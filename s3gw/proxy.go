@@ -20,6 +20,7 @@ import (
 
 	"github.com/fujiwara/s3rp/checksum"
 	"github.com/fujiwara/s3rp/s3err"
+	"github.com/fujiwara/s3rp/s3op"
 	"github.com/fujiwara/s3rp/s3xml"
 	"github.com/fujiwara/s3rp/sigv4"
 
@@ -509,10 +510,10 @@ func (g *Gateway) deleteObjects(c *opCtx) error {
 	// policy's matching Deny statements) are resolved once here so that only
 	// the resource is tested per key rather than the whole policy per object.
 	bypass := bypassGovernanceRetention(c.hdr)
-	delAuth := g.perObjectAuthorizer(vr, rt.cfg, "s3:DeleteObject")
+	delAuth := g.perObjectAuthorizer(vr, rt.cfg, s3op.ActionDeleteObject)
 	var bypassAuth perObjectAuthorizer
 	if bypass {
-		bypassAuth = g.perObjectAuthorizer(vr, rt.cfg, "s3:BypassGovernanceRetention")
+		bypassAuth = g.perObjectAuthorizer(vr, rt.cfg, s3op.ActionBypassGovernanceRetention)
 	}
 	// when nothing can deny any key, the per-object check (and building its
 	// resource string) is skipped entirely
