@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.0.17](https://github.com/fujiwara/s3rp/compare/v0.0.16...v0.0.17) - 2026-09-30
+
+- Add the s3op operation catalog and check policy actions against it by @fujiwara in https://github.com/fujiwara/s3rp/pull/164
+- Authorize versioned requests with the version actions, as on AWS by @fujiwara in https://github.com/fujiwara/s3rp/pull/166
+
 ## [v0.0.16](https://github.com/fujiwara/s3rp/compare/v0.0.15...v0.0.16) - 2026-09-28
 
 - Reduce code complexity and report it in CI by @fujiwara in https://github.com/fujiwara/s3rp/pull/152
