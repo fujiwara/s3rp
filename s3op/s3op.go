@@ -55,6 +55,12 @@ const (
 type Authorization struct {
 	Action string
 	On     Resource
+	// VersionAction, when set, is authorized instead of Action when the
+	// request names an object version — a versionId query parameter, a
+	// versionId in x-amz-copy-source, a VersionId on a DeleteObjects entry —
+	// as on Amazon S3: a policy on Action alone does not cover the versioned
+	// request.
+	VersionAction string
 	// Header, when set, makes the authorization conditional: it is required
 	// only when the request carries this header (for PostObject, the form
 	// field of that name).

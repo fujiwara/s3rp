@@ -34,9 +34,10 @@ type operation struct {
 }
 
 type authorization struct {
-	Action string `json:"action"`
-	On     string `json:"on"`
-	Header string `json:"header"`
+	Action        string `json:"action"`
+	On            string `json:"on"`
+	VersionAction string `json:"version_action"`
+	Header        string `json:"header"`
 }
 
 var (
@@ -113,6 +114,15 @@ func validate(c catalog) ([]constant, error) {
 			if !actionPattern.MatchString(a.Action) {
 				return nil, fmt.Errorf("operation %s: action %q: not an s3: action", op.Name, a.Action)
 			}
+			if a.VersionAction != "" {
+				if !actionPattern.MatchString(a.VersionAction) {
+					return nil, fmt.Errorf("operation %s: version action %q: not an s3: action", op.Name, a.VersionAction)
+				}
+				if a.Header != "" {
+					return nil, fmt.Errorf("operation %s: action %s: a header-conditional action has no version variant", op.Name, a.Action)
+				}
+				actionSet[a.VersionAction] = true
+			}
 			if resources[a.On] == "" {
 				return nil, fmt.Errorf("operation %s: action %s: unknown resource %q", op.Name, a.Action, a.On)
 			}
@@ -157,7 +167,7 @@ var operations = []Operation{
 {{- if .Authorizations}}
 		Authorizations: []Authorization{
 {{- range .Authorizations}}
-			{Action: Action{{slice .Action 3}}, On: {{index $.Resources .On}}{{if .Header}}, Header: {{printf "%q" .Header}}{{end}}},
+			{Action: Action{{slice .Action 3}}, On: {{index $.Resources .On}}{{if .VersionAction}}, VersionAction: Action{{slice .VersionAction 3}}{{end}}{{if .Header}}, Header: {{printf "%q" .Header}}{{end}}},
 {{- end}}
 		},
 {{- end}}

@@ -489,8 +489,8 @@ tenants:
       - name: bucket1
         backend: {endpoint: "http://localhost:7070"}
         policy: |
-          {"Statement": [{"Sid": "KeepVersions", "Effect": "Deny", "Principal": "*",
-            "Action": ["s3:DeleteObjectVersion", "s3:DeleteObject"], "Resource": ["bucket1/*"]}]}
+          {"Statement": [{"Sid": "NoACLs", "Effect": "Deny", "Principal": "*",
+            "Action": ["s3:PutObjectVersionAcl", "s3:DeleteObjectVersion"], "Resource": ["bucket1/*"]}]}
 `
 
 // An action the gateway never authorizes is reported apart from every other
@@ -520,7 +520,7 @@ func TestConfigUnknownActions(t *testing.T) {
 	}
 	want := []string{
 		`tenant foo: user alice: policy statement[0]: action "s3:GetObjcet" matches no action the gateway authorizes`,
-		`tenant foo: bucket bucket1: policy statement[0] "KeepVersions": action "s3:DeleteObjectVersion" matches no action the gateway authorizes`,
+		`tenant foo: bucket bucket1: policy statement[0] "NoACLs": action "s3:PutObjectVersionAcl" matches no action the gateway authorizes`,
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("unexpected errors (-want +got):\n%s", diff)

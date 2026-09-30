@@ -145,7 +145,7 @@ func TestListBucketsHooked(t *testing.T) {
 		t.Fatalf("expect one authorization, got %d", len(block.seen))
 	}
 	op := block.seen[0]
-	if op.Operation != s3op.OpListBuckets || op.Tenant == "" || op.User == "" || op.Bucket != "" || len(op.Actions) != 0 {
+	if op.Operation != s3op.OpListBuckets || op.Tenant == "" || op.User == "" || op.Bucket != "" || !slices.Equal(op.Actions, []string{s3op.ActionListAllMyBuckets}) {
 		t.Errorf("unexpected op %+v", op)
 	}
 	if op.BytesOut == 0 {

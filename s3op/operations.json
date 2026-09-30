@@ -4,7 +4,13 @@
       "name": "ListBuckets",
       "scope": "service",
       "support": "supported",
-      "note": "answered from the store; lists the requester's own buckets and authorizes no action"
+      "authorizations": [
+        {
+          "action": "s3:ListAllMyBuckets",
+          "on": "target"
+        }
+      ],
+      "note": "answered from the store; lists the requester's own buckets, authorized by the user policy alone"
     },
     {
       "name": "HeadBucket",
@@ -45,7 +51,7 @@
       "support": "supported",
       "authorizations": [
         {
-          "action": "s3:ListBucket",
+          "action": "s3:ListBucketVersions",
           "on": "target"
         }
       ]
@@ -178,7 +184,8 @@
       "authorizations": [
         {
           "action": "s3:DeleteObject",
-          "on": "each-key"
+          "on": "each-key",
+          "version_action": "s3:DeleteObjectVersion"
         },
         {
           "action": "s3:BypassGovernanceRetention",
@@ -301,7 +308,8 @@
       "authorizations": [
         {
           "action": "s3:GetObject",
-          "on": "target"
+          "on": "target",
+          "version_action": "s3:GetObjectVersion"
         }
       ]
     },
@@ -312,7 +320,8 @@
       "authorizations": [
         {
           "action": "s3:GetObject",
-          "on": "target"
+          "on": "target",
+          "version_action": "s3:GetObjectVersion"
         }
       ]
     },
@@ -323,7 +332,8 @@
       "authorizations": [
         {
           "action": "s3:GetObject",
-          "on": "target"
+          "on": "target",
+          "version_action": "s3:GetObjectVersion"
         }
       ]
     },
@@ -389,7 +399,8 @@
         },
         {
           "action": "s3:GetObject",
-          "on": "copy-source"
+          "on": "copy-source",
+          "version_action": "s3:GetObjectVersion"
         }
       ]
     },
@@ -400,7 +411,8 @@
       "authorizations": [
         {
           "action": "s3:DeleteObject",
-          "on": "target"
+          "on": "target",
+          "version_action": "s3:DeleteObjectVersion"
         },
         {
           "action": "s3:BypassGovernanceRetention",
@@ -416,7 +428,8 @@
       "authorizations": [
         {
           "action": "s3:GetObjectTagging",
-          "on": "target"
+          "on": "target",
+          "version_action": "s3:GetObjectVersionTagging"
         }
       ]
     },
@@ -427,7 +440,8 @@
       "authorizations": [
         {
           "action": "s3:PutObjectTagging",
-          "on": "target"
+          "on": "target",
+          "version_action": "s3:PutObjectVersionTagging"
         }
       ]
     },
@@ -438,7 +452,8 @@
       "authorizations": [
         {
           "action": "s3:DeleteObjectTagging",
-          "on": "target"
+          "on": "target",
+          "version_action": "s3:DeleteObjectVersionTagging"
         }
       ]
     },
@@ -449,7 +464,8 @@
       "authorizations": [
         {
           "action": "s3:GetObjectAcl",
-          "on": "target"
+          "on": "target",
+          "version_action": "s3:GetObjectVersionAcl"
         }
       ]
     },
@@ -561,7 +577,8 @@
         },
         {
           "action": "s3:GetObject",
-          "on": "copy-source"
+          "on": "copy-source",
+          "version_action": "s3:GetObjectVersion"
         }
       ]
     },

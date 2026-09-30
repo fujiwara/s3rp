@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/fujiwara/s3rp/cors"
+	"github.com/fujiwara/s3rp/policy"
 	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/s3op"
 	"github.com/fujiwara/s3rp/store"
@@ -269,11 +270,16 @@ func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) error {
 		if s3e := listBucketsParams.check(r.URL.Query()); s3e != nil {
 			return s3e
 		}
-		// no bucket: the op names only the requester, and the hooks see it
-		// like any other operation (a suspended tenant cannot list either)
+		// no bucket, so no bucket policy: the user policy alone decides
+		if d := vr.UserPolicy.Decide(s3op.ActionListAllMyBuckets); d.Effect != policy.Allow {
+			return s3err.AccessDenied().WithCause(userPolicyReason(vr.principal(), s3op.ActionListAllMyBuckets, d))
+		}
+		// the op names only the requester, and the hooks see it like any
+		// other operation (a suspended tenant cannot list either)
 		op := &Op{
 			Method:      r.Method,
 			Operation:   s3op.OpListBuckets,
+			Actions:     []string{s3op.ActionListAllMyBuckets},
 			Tenant:      vr.Tenant,
 			User:        vr.User,
 			KeyMetadata: vr.KeyMetadata,
@@ -457,8 +463,11 @@ type route struct {
 	handle func(*Gateway, *opCtx) error
 
 	// bound from the s3op catalog entry of name by bind
-	action     string         // s3:* action to authorize ("" = handler authorizes itself)
-	hdrActions []headerAction // actions a header adds to the authorization
+	action        string         // s3:* action to authorize ("" = handler authorizes itself)
+	versionAction string         // authorized instead of action when the request names a version ("" = action)
+	hdrActions    []headerAction // actions a header adds to the authorization
+	// the copy variant's read of its source, and its versioned form
+	copyAction, copyVersionAction string
 }
 
 // bindRoutes fills each route's authorization from the s3op catalog, so the
@@ -479,17 +488,23 @@ func (rt *route) bind() {
 		return
 	}
 	op := mustLookup(rt.name)
-	rt.action, rt.hdrActions = targetAuthorizations(op)
+	rt.action, rt.versionAction, rt.hdrActions = targetAuthorizations(op)
 	if rt.copy == "" {
 		return
 	}
 	// the copy variant runs through the same route, so it must authorize
 	// the same for its target and add only the read of its source
 	cp := mustLookup(rt.copy)
-	want := append(onTarget(op), s3op.Authorization{Action: s3op.ActionGetObject, On: s3op.OnCopySource})
-	if !slices.Equal(onTarget(cp), onTarget(op)) || len(cp.Authorizations) != len(want) || !slices.Contains(cp.Authorizations, want[len(want)-1]) {
-		panic("s3gw: s3op catalog: " + rt.copy + " must authorize what " + rt.name + " does plus s3:GetObject on the copy source")
+	var src []s3op.Authorization
+	for _, a := range cp.Authorizations {
+		if a.On == s3op.OnCopySource {
+			src = append(src, a)
+		}
 	}
+	if !slices.Equal(onTarget(cp), onTarget(op)) || len(src) != 1 || src[0].Header != "" || len(onTarget(cp))+1 != len(cp.Authorizations) {
+		panic("s3gw: s3op catalog: " + rt.copy + " must authorize what " + rt.name + " does plus one read of the copy source")
+	}
+	rt.copyAction, rt.copyVersionAction = src[0].Action, src[0].VersionAction
 }
 
 func mustLookup(name string) s3op.Operation {
@@ -511,16 +526,17 @@ func onTarget(op s3op.Operation) []s3op.Authorization {
 }
 
 // targetAuthorizations splits an operation's authorizations on its target
-// into the unconditional action and the header-conditional ones.
-func targetAuthorizations(op s3op.Operation) (string, []headerAction) {
-	var action string
+// into the unconditional action (with its versioned form) and the
+// header-conditional ones.
+func targetAuthorizations(op s3op.Operation) (string, string, []headerAction) {
+	var action, versionAction string
 	var hdr []headerAction
 	for _, a := range onTarget(op) {
 		if a.Header == "" {
 			if action != "" {
 				panic("s3gw: s3op catalog: " + op.Name + " has more than one unconditional action")
 			}
-			action = a.Action
+			action, versionAction = a.Action, a.VersionAction
 			continue
 		}
 		present, ok := headerPresence[a.Header]
@@ -529,18 +545,29 @@ func targetAuthorizations(op s3op.Operation) (string, []headerAction) {
 		}
 		hdr = append(hdr, headerAction{present, a.Action})
 	}
-	return action, hdr
+	return action, versionAction, hdr
 }
 
-// authorizeRoute authorizes the route's actions, the unconditional one and
-// those the headers in hdr add, and returns them in authorization order.
-func (c *opCtx) authorizeRoute(rt *route, hdr signedHeader) ([]string, *s3err.Error) {
+// versioned picks the action a request authorizes: the versioned form when
+// it names an object version and the operation has one, as on Amazon S3.
+func versioned(action, versionAction string, version bool) string {
+	if version && versionAction != "" {
+		return versionAction
+	}
+	return action
+}
+
+// authorizeRoute authorizes the route's actions, the unconditional one (its
+// versioned form when version is set) and those the headers in hdr add, and
+// returns them in authorization order.
+func (c *opCtx) authorizeRoute(rt *route, hdr signedHeader, version bool) ([]string, *s3err.Error) {
 	var actions []string
 	if rt.action != "" {
-		if err := c.authorize(rt.action); err != nil {
+		action := versioned(rt.action, rt.versionAction, version)
+		if err := c.authorize(action); err != nil {
 			return nil, err
 		}
-		actions = append(actions, rt.action)
+		actions = append(actions, action)
 	}
 	for _, ha := range rt.hdrActions {
 		if !ha.present(hdr) || slices.Contains(actions, ha.action) {
@@ -582,19 +609,19 @@ func (c *opCtx) dispatch(routes []route) error {
 				return err
 			}
 		}
-		actions, s3e := c.authorizeRoute(&rt, c.hdr)
+		actions, s3e := c.authorizeRoute(&rt, c.hdr, c.query.Get(qpVersionID) != "")
 		if s3e != nil {
 			return s3e
 		}
 		name := rt.name
 		if rt.copy != "" && c.signed(hdrCopySource) != "" {
 			name = rt.copy
-			src, s3e := c.g.resolveCopySource(c)
+			src, action, s3e := c.g.resolveCopySource(c, &rt)
 			if s3e != nil {
 				return s3e
 			}
 			c.copySource = src
-			actions = append(actions, s3op.ActionGetObject)
+			actions = append(actions, action)
 		}
 		op := &Op{
 			Method:         c.r.Method,

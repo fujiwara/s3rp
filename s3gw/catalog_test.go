@@ -32,11 +32,11 @@ func TestCatalogOperationsRouted(t *testing.T) {
 func TestCatalogHandAuthorized(t *testing.T) {
 	for name, want := range map[string][]s3op.Authorization{
 		// handleRequest answers ListBuckets from the store, for the
-		// requester's own tenant only
-		s3op.OpListBuckets: nil,
+		// requester's own tenant only, under the user policy alone
+		s3op.OpListBuckets: {{Action: s3op.ActionListAllMyBuckets, On: s3op.OnTarget}},
 		// deleteObjects authorizes per key
 		s3op.OpDeleteObjects: {
-			{Action: s3op.ActionDeleteObject, On: s3op.OnEachKey},
+			{Action: s3op.ActionDeleteObject, On: s3op.OnEachKey, VersionAction: s3op.ActionDeleteObjectVersion},
 			{Action: s3op.ActionBypassGovernanceRetention, On: s3op.OnEachKey, Header: "x-amz-bypass-governance-retention"},
 		},
 	} {
