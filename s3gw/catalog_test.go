@@ -11,7 +11,8 @@ import (
 
 // Every operation in the s3op catalog is one the gateway dispatches to, and
 // every route is in the catalog (the route tables panic at init otherwise).
-// ListBuckets and PostObject have their own entry paths in handleRequest.
+// ListBuckets and PostObject have their own entry paths in handleRequest;
+// TestListBucketsHooked and the PostObject tests check what they record.
 func TestCatalogOperationsRouted(t *testing.T) {
 	routed := append(s3gw.RouteOperations(), s3op.OpListBuckets, s3op.OpPostObject)
 	slices.Sort(routed)

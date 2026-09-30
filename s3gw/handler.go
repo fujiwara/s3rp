@@ -269,7 +269,22 @@ func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) error {
 		if s3e := listBucketsParams.check(r.URL.Query()); s3e != nil {
 			return s3e
 		}
-		return g.listBuckets(w, r, vr)
+		// no bucket: the op names only the requester, and the hooks see it
+		// like any other operation (a suspended tenant cannot list either)
+		op := &Op{
+			Method:      r.Method,
+			Operation:   s3op.OpListBuckets,
+			Tenant:      vr.Tenant,
+			User:        vr.User,
+			KeyMetadata: vr.KeyMetadata,
+		}
+		if info := recordOf(r.Context()); info != nil {
+			info.Op = op
+		}
+		c := &opCtx{g: g, w: w, r: r, vr: vr, op: op}
+		return g.runOp(r.Context(), op, c, func() error {
+			return g.listBuckets(w, r, vr)
+		})
 	}
 
 	b, s3e := g.resolveBucket(r.Context(), vr, bucket)

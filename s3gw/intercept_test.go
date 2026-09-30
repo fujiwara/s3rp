@@ -14,6 +14,7 @@ import (
 	"github.com/aws/smithy-go"
 	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/s3gw"
+	"github.com/fujiwara/s3rp/s3op"
 )
 
 // These cover the two things a service needs from the hooks: being able to
@@ -125,5 +126,39 @@ func TestInterceptorCanRefuseWithoutRunning(t *testing.T) {
 	}
 	if stub.getIn != nil {
 		t.Error("not calling next must not reach the backend")
+	}
+}
+
+// ListBuckets answers before dispatch but is an operation all the same: the
+// hooks see it under its catalog name and can refuse it.
+func TestListBucketsHooked(t *testing.T) {
+	client, _, app := newTestProxyWithGateway(t, &stubBackend{})
+	var infos []*s3gw.RequestInfo
+	app.SetObserver(func(_ context.Context, info *s3gw.RequestInfo) { infos = append(infos, info) })
+	block := &blocker{}
+	app.SetAuthorizer(block)
+
+	if _, err := client.ListBuckets(t.Context(), &s3.ListBucketsInput{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(block.seen) != 1 {
+		t.Fatalf("expect one authorization, got %d", len(block.seen))
+	}
+	op := block.seen[0]
+	if op.Operation != s3op.OpListBuckets || op.Tenant == "" || op.User == "" || op.Bucket != "" || len(op.Actions) != 0 {
+		t.Errorf("unexpected op %+v", op)
+	}
+	if op.BytesOut == 0 {
+		t.Error("expect the listing's bytes counted")
+	}
+	if len(infos) != 1 || infos[0].Op != op {
+		t.Errorf("expect the observer to receive the op, got %+v", infos)
+	}
+
+	block.err = s3err.New(http.StatusForbidden, "AccountSuspended", "suspended")
+	_, err := client.ListBuckets(t.Context(), &s3.ListBucketsInput{})
+	var apiErr smithy.APIError
+	if !errors.As(err, &apiErr) || apiErr.ErrorCode() != "AccountSuspended" {
+		t.Errorf("expect the authorizer's refusal, got %v", err)
 	}
 }
