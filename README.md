@@ -93,7 +93,7 @@ tenants:
       - name: photos                 # bucket name on the front side
         created_at: 2026-01-15T09:00:00Z # reported by ListBuckets (optional; default 1970-01-01)
         backend:
-          endpoint: http://ceph.internal:7480
+          endpoint: https://ceph.internal
           region: us-east-1          # default "us-east-1"
           bucket: photos-prod        # bucket name on the backend (default: same as name)
           access_key_id: ${CEPH_ACCESS_KEY_ID}
@@ -110,7 +110,7 @@ tenants:
 Notes:
 
 - Bucket names and access key ids must be unique across all tenants (path-style URLs carry no tenant discriminator). User names must be unique within a tenant.
-- With an `http://` backend endpoint, checksums clients send as `aws-chunked` trailers (the SDK default over https) are verified by s3rp but not stored on the backend, so later reads return none; use `https://` where stored checksums matter ([Checksums](docs/s3-api.md#checksums)).
+- Use `https://` backend endpoints in production. With an `http://` backend, checksums clients send as `aws-chunked` trailers (the SDK default over https) are verified by s3rp but not stored on the backend, so later reads return none, and the s3rp-to-backend hop is not integrity-checked at all ([Checksums](docs/s3-api.md#checksums)). Plain http backends are for development and tests.
 - When `backend.endpoint` is omitted, the backend is Amazon S3: the SDK resolves the endpoint from `region`, and `use_path_style` defaults to `false` (it defaults to `true` when an endpoint is set).
 - When `backend.access_key_id` and `backend.secret_access_key` are omitted, the SDK default credential chain is used (environment variables, shared config, IAM roles, etc.).
 - `GET /` (ListBuckets) returns the buckets of the key's tenant, with the tenant name as the owner.
