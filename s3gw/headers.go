@@ -19,14 +19,15 @@ const hdrStorageClass = "x-amz-storage-class"
 // plain upload of an empty body rather than fail.
 const hdrCopySource = "x-amz-copy-source"
 
-// the upload headers that add an action to the authorization (handler.go
-// uploadActions); the values are applied to the backend input by
+// the headers that add an action to the authorization (handler.go
+// headerPresence); the values are applied to the backend input by
 // proxy.go / multipart.go / copy.go and objectlock.go
 const (
-	hdrTagging               = "x-amz-tagging"
-	hdrObjectLockMode        = "x-amz-object-lock-mode"
-	hdrObjectLockRetainUntil = "x-amz-object-lock-retain-until-date"
-	hdrObjectLockLegalHold   = "x-amz-object-lock-legal-hold"
+	hdrTagging                   = "x-amz-tagging"
+	hdrObjectLockMode            = "x-amz-object-lock-mode"
+	hdrObjectLockRetainUntil     = "x-amz-object-lock-retain-until-date"
+	hdrObjectLockLegalHold       = "x-amz-object-lock-legal-hold"
+	hdrBypassGovernanceRetention = "x-amz-bypass-governance-retention"
 )
 
 // knownAmzHeaders is every x-amz-* request header some operation honors or

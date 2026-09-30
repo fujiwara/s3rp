@@ -1,6 +1,6 @@
 # Building a service on the gateway
 
-This document is for implementing a **production** gateway on `s3gw`. What is PoC in this repository is the packaging — the root package that assembles a gateway from a YAML file, its config store, the CLI. The gateway and the leaf packages it stands on (`store`, `policy`, `sigv4`, `s3err`, `cors`, `checksum`, `s3xml`) are built to be used as they are: a real service does not fork the proxy, it implements what is genuinely its own — where definitions live, what to admit, what to meter, what to log — and hands those to the gateway.
+This document is for implementing a **production** gateway on `s3gw`. What is PoC in this repository is the packaging — the root package that assembles a gateway from a YAML file, its config store, the CLI. The gateway and the leaf packages it stands on (`store`, `policy`, `s3op`, `sigv4`, `s3err`, `cors`, `checksum`, `s3xml`) are built to be used as they are: a real service does not fork the proxy, it implements what is genuinely its own — where definitions live, what to admit, what to meter, what to log — and hands those to the gateway.
 
 Each section of this document stands on its own: find the component you are implementing in the table below and jump straight to its section. [A minimal service](#a-minimal-service) shows them assembled.
 
@@ -197,6 +197,7 @@ Your `store.Store` implementation — and the control plane's write path that fe
   What you give up is per-credential revocation: a persisted temporary key dies with a row delete, a self-contained token lives until it expires unless you add revocation state back (a denylist of revoked token ids, a per-user session generation the token embeds, or rotating the signing key) — so keep TTLs short. Sizing note: the token rides in the `X-Amz-Security-Token` query parameter of presigned URLs, so keep it well under a few KB (AWS's own run 0.6–2 KB and the practical URL budget is ~8 KB).
 - Two tenants must not map buckets to the same physical backend bucket — the gateway cannot detect this, so validate it where definitions are written.
 - Validate names and backends where definitions are written, with the store package's validators: `store.ValidateBucketName` (bucket names are what path routing and `bucket/key` policy resources are built from), `store.ValidateTenantName` / `store.ValidateUserName` (tenant and user names share the charset of policy principals — a name outside it could never be written in a `Principal` element, so its grants would be unexpressible), and `store.Backend.Validate` (endpoint and credential shape). Like `Backend.SetDefaults`, these are the store's to call; the gateway does not re-check per request.
+- Check policy actions against the operation catalog with `s3op.CheckActionPattern` where policies are written. An action no operation authorizes — a typo, or an AWS action s3rp does not distinguish such as `s3:GetObjectVersion` — makes a statement that never takes effect, and a `Deny` on it protects nothing. The error wraps `s3op.ErrUnknownAction`, so a service that already stores such policies can warn about them first and refuse them later. The catalog itself — every operation, whether it is supported, and the actions it authorizes, including the ones a header adds — is `s3op.Operations()` in Go and [`s3op/operations.json`](../s3op/operations.json) for a control plane or console written in another language; hooks can match `Op.Operation` and `Op.Actions` against the generated `s3op.Op*` / `s3op.Action*` constants.
 - Validate CORS rules with `cors.Rule.Validate()` where definitions are written: a rule with no origins or methods can never match (a dead rule its author believes in) and an unsupported method could never be answered — AWS rejects the same at PutBucketCors time. The gateway deliberately does not re-check rules per request.
 
   Together, a control plane's write path looks like:
@@ -214,8 +215,16 @@ Your `store.Store` implementation — and the control plane's write path that fe
   		return err
   	}
   	if b.PolicyText != "" {
-  		if _, err := policy.Parse(b.Name, b.PolicyText); err != nil {
+  		p, err := policy.Parse(b.Name, b.PolicyText)
+  		if err != nil {
   			return err
+  		}
+  		for _, st := range p.Statement {
+  			for _, a := range st.Action {
+  				if err := s3op.CheckActionPattern(a); err != nil {
+  					return err // errors.Is(err, s3op.ErrUnknownAction)
+  				}
+  			}
   		}
   	}
   	for _, r := range b.CORS {
@@ -234,7 +243,7 @@ Your `store.Store` implementation — and the control plane's write path that fe
 
 - Cache the parsed `*policy.Policy` / `*policy.UserPolicy`, keyed by the policy text.
 - Parse a bucket policy with its bucket's name (`policy.Parse(bucket, text)`); with a dialect, keep the tenant's original text in `PolicyText`.
-- Run `store.Validate*`, `Backend.Validate`, `Backend.SetDefaults` and `cors.Rule.Validate` where definitions are written, and enforce global uniqueness (bucket names, access key ids) and physical-backend-bucket exclusivity there too.
+- Run `store.Validate*`, `Backend.Validate`, `Backend.SetDefaults`, `cors.Rule.Validate` and `s3op.CheckActionPattern` where definitions are written, and enforce global uniqueness (bucket names, access key ids) and physical-backend-bucket exclusivity there too.
 - Make an issued key visible to the store the gateways read **before** returning its credentials to the caller.
 
 **Don't**
@@ -372,7 +381,7 @@ The topics, in the order you are likely to need them:
 
 ### What `Op` tells you
 
-- **`Op.Tenant` / `Op.User`** are who asked, and **`Op.BucketOwner`** whose bucket it is — the same tenant except on a cross-tenant request a bucket policy admitted. Key by-request things (rate, concurrency, egress) on the former and by-bucket things (a key namespace, bytes at rest) on the latter.
+- **`Op.Tenant` / `Op.User`** are who asked, and **`Op.BucketOwner`** whose bucket it is — the same tenant except on a cross-tenant request a bucket policy admitted. Key by-request things (rate, concurrency, egress) on the former and by-bucket things (a key namespace, bytes at rest) on the latter. ListBuckets addresses no bucket, so it reaches the hooks with `Bucket` and `BucketOwner` empty — a by-bucket hook must let it through (or decide it by `Tenant`) rather than refuse an empty owner.
 - **`Op.Operation`** is the S3 API operation name (`PutObject`, `CopyObject`, `DeleteObjects`, ...) and the field to aggregate on. It is set even for operations the gateway refuses outright (`DeleteBucket`, `PutBucketPolicy`, the other `NotImplemented` answers), so you can count what your users attempt; a request matching nothing is `s3gw.OpUnknown`.
 - **`Op.Actions`** lists the `s3:*` actions the request was authorized for, the operation's own first. Several operations share an action (`GetObject` and `HeadObject`, every multipart write) and it is empty where authorization happens per object (`DeleteObjects`), so it is the field to *decide* on, not to aggregate on. A header adds an action, as on Amazon S3: `x-amz-tagging` on an upload needs `s3:PutObjectTagging`, the `x-amz-object-lock-*` headers `s3:PutObjectRetention` / `s3:PutObjectLegalHold`, `x-amz-bypass-governance-retention` `s3:BypassGovernanceRetention`, and a copy reads its source under `s3:GetObject`. Match with `slices.Contains`, never by position beyond the first.
 - **`Op.BytesIn` / `BytesOut`** count bytes on the wire (an `aws-chunked` upload includes its framing), final once `next` returns. They measure transfer, not storage: a quota over bytes at rest needs the backend's inventory, since deletes, overwrites and versions carry no sizes through the hooks.

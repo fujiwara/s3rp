@@ -1,11 +1,14 @@
 package s3rp
 
 import (
+	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
 	"github.com/fujiwara/s3rp/cors"
+	"github.com/fujiwara/s3rp/s3op"
 
 	"github.com/fujiwara/s3rp/policy"
 	"github.com/fujiwara/s3rp/store"
@@ -38,8 +41,11 @@ type Config struct {
 	// ServiceUnavailable instead of waiting on it.
 	CircuitBreaker *CircuitBreakerConfig `yaml:"circuit_breaker,omitempty" json:"circuit_breaker,omitempty"`
 	// Metrics, when set, exports the metrics of docs/metrics.md over OTLP.
-	Metrics *MetricsConfig  `yaml:"metrics,omitempty" json:"metrics,omitempty"`
-	Tenants []*TenantConfig `yaml:"tenants,omitempty" json:"tenants,omitempty"`
+	Metrics *MetricsConfig `yaml:"metrics,omitempty" json:"metrics,omitempty"`
+	// StrictActions refuses a config whose policies name an action the
+	// gateway never authorizes; unset, LoadConfig only warns about them.
+	StrictActions bool            `yaml:"strict_actions,omitempty" json:"strict_actions,omitempty"`
+	Tenants       []*TenantConfig `yaml:"tenants,omitempty" json:"tenants,omitempty"`
 }
 
 // CircuitBreakerConfig sizes the per-backend breaker (see s3gw.NewConsecutiveFailures).
@@ -99,7 +105,18 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	c.SetDefaults()
 	if err := c.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid config %s: %w", path, err)
+		if c.StrictActions || !errors.Is(err, s3op.ErrUnknownAction) {
+			return nil, fmt.Errorf("invalid config %s: %w", path, err)
+		}
+		// Validate reports unknown actions only once everything else
+		// passed, so the config is otherwise sound
+		errs := []error{err}
+		if j, ok := err.(interface{ Unwrap() []error }); ok {
+			errs = j.Unwrap()
+		}
+		for _, e := range errs {
+			slog.Warn("policy statement never takes effect; set strict_actions to refuse it", "config", path, "error", e)
+		}
 	}
 	return &c, nil
 }
@@ -118,6 +135,12 @@ func (c *Config) SetDefaults() {
 	}
 }
 
+// Validate checks the config. Policies naming an action the gateway never
+// authorizes (a typo, or an AWS action such as s3:GetObjectVersion that s3rp
+// does not distinguish) are reported last, only once everything else is
+// valid, joined as errors wrapping s3op.ErrUnknownAction: a caller seeing
+// errors.Is(err, s3op.ErrUnknownAction) knows nothing else is wrong and may
+// downgrade them to warnings.
 func (c *Config) Validate() error {
 	if len(c.Tenants) == 0 {
 		return fmt.Errorf("no tenants defined")
@@ -145,7 +168,46 @@ func (c *Config) Validate() error {
 			return err
 		}
 	}
-	return nil
+	return c.checkActions()
+}
+
+// checkActions reports every policy action pattern that matches no action
+// the gateway authorizes. It runs after the structural validation, so the
+// policies are known to parse.
+func (c *Config) checkActions() error {
+	var errs []error
+	for _, t := range c.Tenants {
+		for _, u := range t.Users {
+			for i, st := range u.Policy {
+				for _, a := range st.Action {
+					if err := s3op.CheckActionPattern(a); err != nil {
+						errs = append(errs, fmt.Errorf("tenant %s: user %s: policy statement[%d]: %w", t.Name, u.Name, i, err))
+					}
+				}
+			}
+		}
+		for _, b := range t.Buckets {
+			if b.Policy == "" {
+				continue
+			}
+			p, err := policy.Parse(b.Name, b.Policy)
+			if err != nil {
+				return fmt.Errorf("bucket %s: invalid policy: %w", b.Name, err)
+			}
+			for i, st := range p.Statement {
+				for _, a := range st.Action {
+					if err := s3op.CheckActionPattern(a); err != nil {
+						name := fmt.Sprintf("statement[%d]", i)
+						if st.Sid != "" {
+							name += fmt.Sprintf(" %q", st.Sid)
+						}
+						errs = append(errs, fmt.Errorf("tenant %s: bucket %s: policy %s: %w", t.Name, b.Name, name, err))
+					}
+				}
+			}
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // configNames tracks what must be unique across all tenants while a config

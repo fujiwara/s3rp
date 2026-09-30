@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/fujiwara/s3rp/s3err"
+	"github.com/fujiwara/s3rp/s3op"
 	"github.com/fujiwara/s3rp/s3xml"
 	"github.com/fujiwara/s3rp/store"
 
@@ -49,7 +50,7 @@ func (g *Gateway) resolveCopySource(c *opCtx) (string, *s3err.Error) {
 		return "", s3err.Internal(err, "bucket lookup failed")
 	}
 	// reading the copy source needs s3:GetObject on the source bucket
-	if s3e := g.authorize(c.vr, src, "s3:GetObject", src.Name+"/"+srcKey); s3e != nil {
+	if s3e := g.authorize(c.vr, src, s3op.ActionGetObject, src.Name+"/"+srcKey); s3e != nil {
 		return "", s3e
 	}
 	sb, db := src.Backend, c.rt.cfg.Backend

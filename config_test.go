@@ -2,11 +2,13 @@ package s3rp_test
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/fujiwara/s3rp"
+	"github.com/fujiwara/s3rp/s3op"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -471,5 +473,84 @@ func TestPasswordMasked(t *testing.T) {
 	}
 	if s3rp.Password("topsecret").String() != "topsecret" {
 		t.Error("String() must return the raw value")
+	}
+}
+
+const unknownActionsConfig = `
+tenants:
+  - name: foo
+    users:
+      - name: alice
+        keys: [{access_key_id: k1, secret_access_key: s}]
+        policy:
+          - effect: Allow
+            action: [s3:GetObjcet, s3:List*]
+    buckets:
+      - name: bucket1
+        backend: {endpoint: "http://localhost:7070"}
+        policy: |
+          {"Statement": [{"Sid": "KeepVersions", "Effect": "Deny", "Principal": "*",
+            "Action": ["s3:DeleteObjectVersion", "s3:DeleteObject"], "Resource": ["bucket1/*"]}]}
+`
+
+// An action the gateway never authorizes is reported apart from every other
+// config error, so a caller can tell a statement that never takes effect
+// from a broken config.
+func TestConfigUnknownActions(t *testing.T) {
+	dir := t.TempDir()
+	f := dir + "/unknown.yaml"
+	if err := writeFile(t, f, unknownActionsConfig); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := s3rp.LoadConfig(f)
+	if err != nil {
+		t.Fatalf("unknown actions must only warn by default: %v", err)
+	}
+
+	err = cfg.Validate()
+	if !errors.Is(err, s3op.ErrUnknownAction) {
+		t.Fatalf("got %v, want ErrUnknownAction", err)
+	}
+	var got []string
+	for _, e := range err.(interface{ Unwrap() []error }).Unwrap() {
+		if _, ok := errors.AsType[*s3op.UnknownActionError](e); !ok {
+			t.Errorf("%v is not an UnknownActionError", e)
+		}
+		got = append(got, e.Error())
+	}
+	want := []string{
+		`tenant foo: user alice: policy statement[0]: action "s3:GetObjcet" matches no action the gateway authorizes`,
+		`tenant foo: bucket bucket1: policy statement[0] "KeepVersions": action "s3:DeleteObjectVersion" matches no action the gateway authorizes`,
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("unexpected errors (-want +got):\n%s", diff)
+	}
+
+	strict := dir + "/strict.yaml"
+	if err := writeFile(t, strict, "strict_actions: true\n"+unknownActionsConfig); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s3rp.LoadConfig(strict); !errors.Is(err, s3op.ErrUnknownAction) {
+		t.Errorf("strict_actions: got %v, want ErrUnknownAction", err)
+	}
+
+	// any other error comes first and alone, so an unknown action never
+	// stands in for it
+	broken := dir + "/broken.yaml"
+	if err := writeFile(t, broken, strings.Replace(unknownActionsConfig, "k1", "", 1)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s3rp.LoadConfig(broken); err == nil || errors.Is(err, s3op.ErrUnknownAction) {
+		t.Errorf("got %v, want the structural error alone", err)
+	}
+}
+
+func TestConfigTestdataActionsKnown(t *testing.T) {
+	cfg, err := s3rp.LoadConfig("testdata/config.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Error(err)
 	}
 }

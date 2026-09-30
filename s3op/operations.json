@@ -1,0 +1,602 @@
+{
+  "operations": [
+    {
+      "name": "ListBuckets",
+      "scope": "service",
+      "support": "supported",
+      "note": "answered from the store; lists the requester's own buckets and authorizes no action"
+    },
+    {
+      "name": "HeadBucket",
+      "scope": "bucket",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:ListBucket",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "ListObjects",
+      "scope": "bucket",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:ListBucket",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "ListObjectsV2",
+      "scope": "bucket",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:ListBucket",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "ListObjectVersions",
+      "scope": "bucket",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:ListBucket",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "ListMultipartUploads",
+      "scope": "bucket",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:ListBucketMultipartUploads",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "GetBucketLocation",
+      "scope": "bucket",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:GetBucketLocation",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "GetBucketAcl",
+      "scope": "bucket",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:GetBucketAcl",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "GetBucketPolicy",
+      "scope": "bucket",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:GetBucketPolicy",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "GetBucketPolicyStatus",
+      "scope": "bucket",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:GetBucketPolicyStatus",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "GetBucketCors",
+      "scope": "bucket",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:GetBucketCORS",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "GetBucketVersioning",
+      "scope": "bucket",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:GetBucketVersioning",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "GetBucketEncryption",
+      "scope": "bucket",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:GetEncryptionConfiguration",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "GetBucketOwnershipControls",
+      "scope": "bucket",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:GetBucketOwnershipControls",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "GetPublicAccessBlock",
+      "scope": "bucket",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:GetBucketPublicAccessBlock",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "GetObjectLockConfiguration",
+      "scope": "bucket",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:GetBucketObjectLockConfiguration",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "DeleteObjects",
+      "scope": "bucket",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:DeleteObject",
+          "on": "each-key"
+        },
+        {
+          "action": "s3:BypassGovernanceRetention",
+          "on": "each-key",
+          "header": "x-amz-bypass-governance-retention"
+        }
+      ]
+    },
+    {
+      "name": "PostObject",
+      "scope": "bucket",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:PutObject",
+          "on": "target"
+        },
+        {
+          "action": "s3:PutObjectTagging",
+          "on": "target",
+          "header": "x-amz-tagging"
+        }
+      ],
+      "note": "browser-based POST upload; header names the form field"
+    },
+    {
+      "name": "CreateBucket",
+      "scope": "bucket",
+      "support": "refused",
+      "note": "buckets are created by the control plane"
+    },
+    {
+      "name": "DeleteBucket",
+      "scope": "bucket",
+      "support": "refused",
+      "note": "buckets are deleted by the control plane"
+    },
+    {
+      "name": "PutBucketAcl",
+      "scope": "bucket",
+      "support": "refused",
+      "note": "ACLs are disabled"
+    },
+    {
+      "name": "PutBucketPolicy",
+      "scope": "bucket",
+      "support": "refused",
+      "note": "bucket configuration is written where the bucket is created, not through the S3 API"
+    },
+    {
+      "name": "DeleteBucketPolicy",
+      "scope": "bucket",
+      "support": "refused",
+      "note": "bucket configuration is written where the bucket is created, not through the S3 API"
+    },
+    {
+      "name": "PutBucketCors",
+      "scope": "bucket",
+      "support": "refused",
+      "note": "bucket configuration is written where the bucket is created, not through the S3 API"
+    },
+    {
+      "name": "DeleteBucketCors",
+      "scope": "bucket",
+      "support": "refused",
+      "note": "bucket configuration is written where the bucket is created, not through the S3 API"
+    },
+    {
+      "name": "PutBucketVersioning",
+      "scope": "bucket",
+      "support": "refused",
+      "note": "bucket configuration is written where the bucket is created, not through the S3 API"
+    },
+    {
+      "name": "PutObjectLockConfiguration",
+      "scope": "bucket",
+      "support": "refused",
+      "note": "bucket configuration is written where the bucket is created, not through the S3 API"
+    },
+    {
+      "name": "PutBucketEncryption",
+      "scope": "bucket",
+      "support": "refused",
+      "note": "bucket configuration is written where the bucket is created, not through the S3 API"
+    },
+    {
+      "name": "DeleteBucketEncryption",
+      "scope": "bucket",
+      "support": "refused",
+      "note": "bucket configuration is written where the bucket is created, not through the S3 API"
+    },
+    {
+      "name": "PutBucketOwnershipControls",
+      "scope": "bucket",
+      "support": "refused",
+      "note": "bucket configuration is written where the bucket is created, not through the S3 API"
+    },
+    {
+      "name": "DeleteBucketOwnershipControls",
+      "scope": "bucket",
+      "support": "refused",
+      "note": "bucket configuration is written where the bucket is created, not through the S3 API"
+    },
+    {
+      "name": "PutPublicAccessBlock",
+      "scope": "bucket",
+      "support": "refused",
+      "note": "bucket configuration is written where the bucket is created, not through the S3 API"
+    },
+    {
+      "name": "DeletePublicAccessBlock",
+      "scope": "bucket",
+      "support": "refused",
+      "note": "bucket configuration is written where the bucket is created, not through the S3 API"
+    },
+    {
+      "name": "GetObject",
+      "scope": "object",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:GetObject",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "HeadObject",
+      "scope": "object",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:GetObject",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "GetObjectAttributes",
+      "scope": "object",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:GetObject",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "PutObject",
+      "scope": "object",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:PutObject",
+          "on": "target"
+        },
+        {
+          "action": "s3:PutObjectTagging",
+          "on": "target",
+          "header": "x-amz-tagging"
+        },
+        {
+          "action": "s3:PutObjectRetention",
+          "on": "target",
+          "header": "x-amz-object-lock-mode"
+        },
+        {
+          "action": "s3:PutObjectRetention",
+          "on": "target",
+          "header": "x-amz-object-lock-retain-until-date"
+        },
+        {
+          "action": "s3:PutObjectLegalHold",
+          "on": "target",
+          "header": "x-amz-object-lock-legal-hold"
+        }
+      ]
+    },
+    {
+      "name": "CopyObject",
+      "scope": "object",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:PutObject",
+          "on": "target"
+        },
+        {
+          "action": "s3:PutObjectTagging",
+          "on": "target",
+          "header": "x-amz-tagging"
+        },
+        {
+          "action": "s3:PutObjectRetention",
+          "on": "target",
+          "header": "x-amz-object-lock-mode"
+        },
+        {
+          "action": "s3:PutObjectRetention",
+          "on": "target",
+          "header": "x-amz-object-lock-retain-until-date"
+        },
+        {
+          "action": "s3:PutObjectLegalHold",
+          "on": "target",
+          "header": "x-amz-object-lock-legal-hold"
+        },
+        {
+          "action": "s3:GetObject",
+          "on": "copy-source"
+        }
+      ]
+    },
+    {
+      "name": "DeleteObject",
+      "scope": "object",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:DeleteObject",
+          "on": "target"
+        },
+        {
+          "action": "s3:BypassGovernanceRetention",
+          "on": "target",
+          "header": "x-amz-bypass-governance-retention"
+        }
+      ]
+    },
+    {
+      "name": "GetObjectTagging",
+      "scope": "object",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:GetObjectTagging",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "PutObjectTagging",
+      "scope": "object",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:PutObjectTagging",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "DeleteObjectTagging",
+      "scope": "object",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:DeleteObjectTagging",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "GetObjectAcl",
+      "scope": "object",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:GetObjectAcl",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "GetObjectRetention",
+      "scope": "object",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:GetObjectRetention",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "PutObjectRetention",
+      "scope": "object",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:PutObjectRetention",
+          "on": "target"
+        },
+        {
+          "action": "s3:BypassGovernanceRetention",
+          "on": "target",
+          "header": "x-amz-bypass-governance-retention"
+        }
+      ]
+    },
+    {
+      "name": "GetObjectLegalHold",
+      "scope": "object",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:GetObjectLegalHold",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "PutObjectLegalHold",
+      "scope": "object",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:PutObjectLegalHold",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "PutObjectAcl",
+      "scope": "object",
+      "support": "refused",
+      "note": "ACLs are disabled"
+    },
+    {
+      "name": "CreateMultipartUpload",
+      "scope": "object",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:PutObject",
+          "on": "target"
+        },
+        {
+          "action": "s3:PutObjectTagging",
+          "on": "target",
+          "header": "x-amz-tagging"
+        },
+        {
+          "action": "s3:PutObjectRetention",
+          "on": "target",
+          "header": "x-amz-object-lock-mode"
+        },
+        {
+          "action": "s3:PutObjectRetention",
+          "on": "target",
+          "header": "x-amz-object-lock-retain-until-date"
+        },
+        {
+          "action": "s3:PutObjectLegalHold",
+          "on": "target",
+          "header": "x-amz-object-lock-legal-hold"
+        }
+      ]
+    },
+    {
+      "name": "UploadPart",
+      "scope": "object",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:PutObject",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "UploadPartCopy",
+      "scope": "object",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:PutObject",
+          "on": "target"
+        },
+        {
+          "action": "s3:GetObject",
+          "on": "copy-source"
+        }
+      ]
+    },
+    {
+      "name": "CompleteMultipartUpload",
+      "scope": "object",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:PutObject",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "AbortMultipartUpload",
+      "scope": "object",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:AbortMultipartUpload",
+          "on": "target"
+        }
+      ]
+    },
+    {
+      "name": "ListParts",
+      "scope": "object",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:ListMultipartUploadParts",
+          "on": "target"
+        }
+      ]
+    }
+  ]
+}

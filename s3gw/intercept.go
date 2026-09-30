@@ -35,8 +35,8 @@ type Op struct {
 	// Method distinguishes operations that share an action, notably
 	// HeadObject from GetObject.
 	Method string `json:"method"`
-	// Operation is the S3 API operation name (PutObject, DeleteObjects,
-	// DeleteBucket, ...). Unlike Action it is set for operations the
+	// Operation is the S3 API operation name, one of the s3op catalog's
+	// (s3op.OpPutObject, ...). Unlike Actions it is set for operations the
 	// gateway refuses outright, so a service can count which unsupported
 	// operations its users attempt; a request matching no known operation
 	// is OpUnknown.
@@ -55,8 +55,9 @@ type Op struct {
 	Actions []string `json:"actions,omitempty"`
 	Tenant  string   `json:"tenant"`
 	User    string   `json:"user"`
-	// Bucket is the front bucket name. The backend name it maps to is
-	// deliberately not exposed: nothing outside the proxy should depend on it.
+	// Bucket is the front bucket name, empty for ListBuckets (as is
+	// BucketOwner). The backend name it maps to is deliberately not
+	// exposed: nothing outside the proxy should depend on it.
 	Bucket string `json:"bucket"`
 	// BucketOwner is the tenant that owns Bucket. It equals Tenant except
 	// on a cross-tenant request, where Tenant is the requester a bucket

@@ -144,7 +144,7 @@ func (g *Gateway) putObjectLegalHold(c *opCtx) error {
 }
 
 func bypassGovernanceRetention(hdr signedHeader) bool {
-	return hdr.Signed("x-amz-bypass-governance-retention") == "true"
+	return hdr.Signed(hdrBypassGovernanceRetention) == "true"
 }
 
 // applyObjectLockHeaders copies the object-lock upload headers onto a

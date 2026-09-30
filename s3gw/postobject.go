@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fujiwara/s3rp/cors"
 	"github.com/fujiwara/s3rp/s3err"
+	"github.com/fujiwara/s3rp/s3op"
 	"github.com/fujiwara/s3rp/s3xml"
 	"github.com/fujiwara/s3rp/sigv4"
 )
@@ -106,6 +107,14 @@ func checkPostFields(fields map[string]string) *s3err.Error {
 	return nil
 }
 
+// postObjectRoute carries the POST upload's authorization from the s3op
+// catalog; the upload has its own flow and uses no other route field.
+var postObjectRoute = func() route {
+	rt := route{name: s3op.OpPostObject}
+	rt.bind()
+	return rt
+}()
+
 func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, t target) error {
 	bucket := t.bucket
 	if err := (paramSet{}).check(r.URL.Query()); err != nil {
@@ -185,21 +194,14 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, t tar
 	}
 
 	c := &opCtx{g: g, w: w, r: r, rt: rt, vr: vr, query: r.URL.Query(), key: key}
-	if s3e := c.authorize("s3:PutObject"); s3e != nil {
+	// a form field adds its action as the header of that name does
+	actions, s3e := c.authorizeRoute(&postObjectRoute, postFieldHeader(fields))
+	if s3e != nil {
 		return s3e
-	}
-	actions := []string{"s3:PutObject"}
-	// tags on a form upload need s3:PutObjectTagging as well, as on the
-	// header path (handler.go uploadActions)
-	if fields[hdrTagging] != "" {
-		if s3e := c.authorize("s3:PutObjectTagging"); s3e != nil {
-			return s3e
-		}
-		actions = append(actions, "s3:PutObjectTagging")
 	}
 	op := &Op{
 		Method:         r.Method,
-		Operation:      "PostObject",
+		Operation:      s3op.OpPostObject,
 		Actions:        actions,
 		Tenant:         vr.Tenant,
 		User:           vr.User,
