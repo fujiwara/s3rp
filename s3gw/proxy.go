@@ -509,21 +509,44 @@ func (g *Gateway) deleteObjects(c *opCtx) error {
 	// resource-independent parts of the check (user policy, and the bucket
 	// policy's matching Deny statements) are resolved once here so that only
 	// the resource is tested per key rather than the whole policy per object.
-	bypass := bypassGovernanceRetention(c.hdr)
-	delAuth := g.perObjectAuthorizer(vr, rt.cfg, s3op.ActionDeleteObject)
-	var bypassAuth perObjectAuthorizer
-	if bypass {
-		bypassAuth = g.perObjectAuthorizer(vr, rt.cfg, s3op.ActionBypassGovernanceRetention)
+	// an entry naming a version needs s3:DeleteObjectVersion instead of
+	// s3:DeleteObject, as on AWS; each authorizer is built only when some
+	// entry needs it
+	var hasPlain, hasVersion bool
+	for _, o := range req.Objects {
+		if o.VersionID != "" {
+			hasVersion = true
+		} else {
+			hasPlain = true
+		}
 	}
 	// when nothing can deny any key, the per-object check (and building its
 	// resource string) is skipped entirely
-	checkPerObject := !delAuth.allowsEverything() || (bypass && !bypassAuth.allowsEverything())
+	var checkPerObject bool
+	var delAuth, verAuth, bypassAuth perObjectAuthorizer
+	if hasPlain {
+		delAuth = g.perObjectAuthorizer(vr, rt.cfg, s3op.ActionDeleteObject)
+		checkPerObject = !delAuth.allowsEverything()
+	}
+	if hasVersion {
+		verAuth = g.perObjectAuthorizer(vr, rt.cfg, s3op.ActionDeleteObjectVersion)
+		checkPerObject = checkPerObject || !verAuth.allowsEverything()
+	}
+	bypass := bypassGovernanceRetention(c.hdr)
+	if bypass {
+		bypassAuth = g.perObjectAuthorizer(vr, rt.cfg, s3op.ActionBypassGovernanceRetention)
+		checkPerObject = checkPerObject || !bypassAuth.allowsEverything()
+	}
 	result := &s3xml.DeleteResult{XMLNS: s3xml.Namespace}
 	objects := make([]types.ObjectIdentifier, 0, len(req.Objects))
 	for _, o := range req.Objects {
 		if checkPerObject {
 			resource := rt.cfg.Name + "/" + o.Key
-			auth, denied := delAuth, delAuth.denies(resource)
+			auth := delAuth
+			if o.VersionID != "" {
+				auth = verAuth
+			}
+			denied := auth.denies(resource)
 			if !denied && bypass && bypassAuth.denies(resource) {
 				auth, denied = bypassAuth, true
 			}

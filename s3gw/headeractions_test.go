@@ -224,7 +224,8 @@ func TestOpActions(t *testing.T) {
 			want: []string{"s3:PutObject", "s3:PutObjectTagging"},
 		},
 		{
-			// the source is read under s3:GetObject, authorized before the hooks
+			// the source is read under s3:GetObject (s3:GetObjectVersion for a
+			// version, see TestVersionActions), authorized before the hooks
 			name: "copy with tags",
 			call: func() error {
 				_, err := client.CopyObject(ctx, &s3.CopyObjectInput{Bucket: bucket, Key: key, CopySource: aws.String("testbucket/a"), TaggingDirective: types.TaggingDirectiveReplace, Tagging: aws.String("k=v")})

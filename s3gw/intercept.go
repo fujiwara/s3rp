@@ -42,12 +42,14 @@ type Op struct {
 	// is OpUnknown.
 	Operation string `json:"operation"`
 	// Actions lists the s3:* actions the request was authorized for before
-	// the hooks ran, the operation's own first. A header adds one, as on
-	// Amazon S3: x-amz-tagging on an upload needs s3:PutObjectTagging, the
-	// x-amz-object-lock-* headers s3:PutObjectRetention /
-	// s3:PutObjectLegalHold, x-amz-bypass-governance-retention
-	// s3:BypassGovernanceRetention; a copy reads its source under
-	// s3:GetObject. This is how a service refuses tags or a lock on an
+	// the hooks ran, the operation's own first — its version form
+	// (s3:GetObjectVersion, ...) when the request names a version. A header
+	// adds one, as on Amazon S3: x-amz-tagging on an upload needs
+	// s3:PutObjectTagging, the x-amz-object-lock-* headers
+	// s3:PutObjectRetention / s3:PutObjectLegalHold,
+	// x-amz-bypass-governance-retention s3:BypassGovernanceRetention; a copy
+	// reads its source under s3:GetObject (s3:GetObjectVersion for a source
+	// version). This is how a service refuses tags or a lock on an
 	// upload — a policy Deny on the action, or an Authorizer matching it
 	// here — without the values being reported on Request: what S3 models
 	// as a permission stays a permission. Empty for the few operations that

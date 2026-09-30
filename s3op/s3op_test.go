@@ -58,9 +58,11 @@ func TestCheckActionPattern(t *testing.T) {
 		{"s3:Get*", true},
 		{"s3:?etObject", true},
 		{"s3:GetObjcet", false},
-		{"s3:GetObjectVersion", false},
+		{"s3:GetObjectVersion", true},
+		{"s3:ListAllMyBuckets", true},
 		{"s3:PutBucketPolicy", false},
-		{"s3:ListAllMyBuckets", false},
+		{"s3:PutObjectVersionAcl", false},
+		{"s3:GetObjectAttributes", false},
 		{"s3:CreateBucket*", false},
 	} {
 		err := s3op.CheckActionPattern(tc.pattern)
@@ -104,8 +106,10 @@ func TestActionsSortedAndComplete(t *testing.T) {
 	var want []string
 	for _, op := range s3op.Operations() {
 		for _, a := range op.Authorizations {
-			if !slices.Contains(want, a.Action) {
-				want = append(want, a.Action)
+			for _, action := range []string{a.Action, a.VersionAction} {
+				if action != "" && !slices.Contains(want, action) {
+					want = append(want, action)
+				}
 			}
 		}
 	}
@@ -124,7 +128,7 @@ func TestCatalogDocumented(t *testing.T) {
 	}
 	doc := string(b)
 
-	onSuffix := map[s3op.Resource]string{s3op.OnTarget: "", s3op.OnCopySource: " (copy source)", s3op.OnEachKey: " (each key)"}
+	onSuffix := map[s3op.Resource]string{s3op.OnTarget: "", s3op.OnCopySource: " on the copy source", s3op.OnEachKey: " per key"}
 	var wantRows, wantRefused, wantHeaders []string
 	for _, op := range s3op.Operations() {
 		if op.Support == s3op.Refused {
@@ -137,7 +141,11 @@ func TestCatalogDocumented(t *testing.T) {
 				wantHeaders = append(wantHeaders, a.Header+" "+op.Name+" "+a.Action)
 				continue
 			}
-			acts = append(acts, "`"+a.Action+"`"+onSuffix[a.On])
+			act := "`" + a.Action + "`" + onSuffix[a.On]
+			if a.VersionAction != "" {
+				act += " (`" + a.VersionAction + "` for a version)"
+			}
+			acts = append(acts, act)
 		}
 		cell := strings.Join(acts, ", ")
 		if cell == "" {

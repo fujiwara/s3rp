@@ -195,7 +195,7 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, t tar
 
 	c := &opCtx{g: g, w: w, r: r, rt: rt, vr: vr, query: r.URL.Query(), key: key}
 	// a form field adds its action as the header of that name does
-	actions, s3e := c.authorizeRoute(&postObjectRoute, postFieldHeader(fields))
+	actions, s3e := c.authorizeRoute(&postObjectRoute, postFieldHeader(fields), false)
 	if s3e != nil {
 		return s3e
 	}

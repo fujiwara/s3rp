@@ -66,6 +66,8 @@ const (
 	ActionBypassGovernanceRetention        = "s3:BypassGovernanceRetention"
 	ActionDeleteObject                     = "s3:DeleteObject"
 	ActionDeleteObjectTagging              = "s3:DeleteObjectTagging"
+	ActionDeleteObjectVersion              = "s3:DeleteObjectVersion"
+	ActionDeleteObjectVersionTagging       = "s3:DeleteObjectVersionTagging"
 	ActionGetBucketAcl                     = "s3:GetBucketAcl"
 	ActionGetBucketCORS                    = "s3:GetBucketCORS"
 	ActionGetBucketLocation                = "s3:GetBucketLocation"
@@ -81,13 +83,19 @@ const (
 	ActionGetObjectLegalHold               = "s3:GetObjectLegalHold"
 	ActionGetObjectRetention               = "s3:GetObjectRetention"
 	ActionGetObjectTagging                 = "s3:GetObjectTagging"
+	ActionGetObjectVersion                 = "s3:GetObjectVersion"
+	ActionGetObjectVersionAcl              = "s3:GetObjectVersionAcl"
+	ActionGetObjectVersionTagging          = "s3:GetObjectVersionTagging"
+	ActionListAllMyBuckets                 = "s3:ListAllMyBuckets"
 	ActionListBucket                       = "s3:ListBucket"
 	ActionListBucketMultipartUploads       = "s3:ListBucketMultipartUploads"
+	ActionListBucketVersions               = "s3:ListBucketVersions"
 	ActionListMultipartUploadParts         = "s3:ListMultipartUploadParts"
 	ActionPutObject                        = "s3:PutObject"
 	ActionPutObjectLegalHold               = "s3:PutObjectLegalHold"
 	ActionPutObjectRetention               = "s3:PutObjectRetention"
 	ActionPutObjectTagging                 = "s3:PutObjectTagging"
+	ActionPutObjectVersionTagging          = "s3:PutObjectVersionTagging"
 )
 
 var operations = []Operation{
@@ -95,7 +103,10 @@ var operations = []Operation{
 		Name:    OpListBuckets,
 		Scope:   ScopeService,
 		Support: Supported,
-		Note:    "answered from the store; lists the requester's own buckets and authorizes no action",
+		Authorizations: []Authorization{
+			{Action: ActionListAllMyBuckets, On: OnTarget},
+		},
+		Note: "answered from the store; lists the requester's own buckets, authorized by the user policy alone",
 	},
 	{
 		Name:    OpHeadBucket,
@@ -126,7 +137,7 @@ var operations = []Operation{
 		Scope:   ScopeBucket,
 		Support: Supported,
 		Authorizations: []Authorization{
-			{Action: ActionListBucket, On: OnTarget},
+			{Action: ActionListBucketVersions, On: OnTarget},
 		},
 	},
 	{
@@ -222,7 +233,7 @@ var operations = []Operation{
 		Scope:   ScopeBucket,
 		Support: Supported,
 		Authorizations: []Authorization{
-			{Action: ActionDeleteObject, On: OnEachKey},
+			{Action: ActionDeleteObject, On: OnEachKey, VersionAction: ActionDeleteObjectVersion},
 			{Action: ActionBypassGovernanceRetention, On: OnEachKey, Header: "x-amz-bypass-governance-retention"},
 		},
 	},
@@ -331,7 +342,7 @@ var operations = []Operation{
 		Scope:   ScopeObject,
 		Support: Supported,
 		Authorizations: []Authorization{
-			{Action: ActionGetObject, On: OnTarget},
+			{Action: ActionGetObject, On: OnTarget, VersionAction: ActionGetObjectVersion},
 		},
 	},
 	{
@@ -339,7 +350,7 @@ var operations = []Operation{
 		Scope:   ScopeObject,
 		Support: Supported,
 		Authorizations: []Authorization{
-			{Action: ActionGetObject, On: OnTarget},
+			{Action: ActionGetObject, On: OnTarget, VersionAction: ActionGetObjectVersion},
 		},
 	},
 	{
@@ -347,7 +358,7 @@ var operations = []Operation{
 		Scope:   ScopeObject,
 		Support: Supported,
 		Authorizations: []Authorization{
-			{Action: ActionGetObject, On: OnTarget},
+			{Action: ActionGetObject, On: OnTarget, VersionAction: ActionGetObjectVersion},
 		},
 	},
 	{
@@ -372,7 +383,7 @@ var operations = []Operation{
 			{Action: ActionPutObjectRetention, On: OnTarget, Header: "x-amz-object-lock-mode"},
 			{Action: ActionPutObjectRetention, On: OnTarget, Header: "x-amz-object-lock-retain-until-date"},
 			{Action: ActionPutObjectLegalHold, On: OnTarget, Header: "x-amz-object-lock-legal-hold"},
-			{Action: ActionGetObject, On: OnCopySource},
+			{Action: ActionGetObject, On: OnCopySource, VersionAction: ActionGetObjectVersion},
 		},
 	},
 	{
@@ -380,7 +391,7 @@ var operations = []Operation{
 		Scope:   ScopeObject,
 		Support: Supported,
 		Authorizations: []Authorization{
-			{Action: ActionDeleteObject, On: OnTarget},
+			{Action: ActionDeleteObject, On: OnTarget, VersionAction: ActionDeleteObjectVersion},
 			{Action: ActionBypassGovernanceRetention, On: OnTarget, Header: "x-amz-bypass-governance-retention"},
 		},
 	},
@@ -389,7 +400,7 @@ var operations = []Operation{
 		Scope:   ScopeObject,
 		Support: Supported,
 		Authorizations: []Authorization{
-			{Action: ActionGetObjectTagging, On: OnTarget},
+			{Action: ActionGetObjectTagging, On: OnTarget, VersionAction: ActionGetObjectVersionTagging},
 		},
 	},
 	{
@@ -397,7 +408,7 @@ var operations = []Operation{
 		Scope:   ScopeObject,
 		Support: Supported,
 		Authorizations: []Authorization{
-			{Action: ActionPutObjectTagging, On: OnTarget},
+			{Action: ActionPutObjectTagging, On: OnTarget, VersionAction: ActionPutObjectVersionTagging},
 		},
 	},
 	{
@@ -405,7 +416,7 @@ var operations = []Operation{
 		Scope:   ScopeObject,
 		Support: Supported,
 		Authorizations: []Authorization{
-			{Action: ActionDeleteObjectTagging, On: OnTarget},
+			{Action: ActionDeleteObjectTagging, On: OnTarget, VersionAction: ActionDeleteObjectVersionTagging},
 		},
 	},
 	{
@@ -413,7 +424,7 @@ var operations = []Operation{
 		Scope:   ScopeObject,
 		Support: Supported,
 		Authorizations: []Authorization{
-			{Action: ActionGetObjectAcl, On: OnTarget},
+			{Action: ActionGetObjectAcl, On: OnTarget, VersionAction: ActionGetObjectVersionAcl},
 		},
 	},
 	{
@@ -481,7 +492,7 @@ var operations = []Operation{
 		Support: Supported,
 		Authorizations: []Authorization{
 			{Action: ActionPutObject, On: OnTarget},
-			{Action: ActionGetObject, On: OnCopySource},
+			{Action: ActionGetObject, On: OnCopySource, VersionAction: ActionGetObjectVersion},
 		},
 	},
 	{
@@ -515,6 +526,8 @@ var actions = []string{
 	ActionBypassGovernanceRetention,
 	ActionDeleteObject,
 	ActionDeleteObjectTagging,
+	ActionDeleteObjectVersion,
+	ActionDeleteObjectVersionTagging,
 	ActionGetBucketAcl,
 	ActionGetBucketCORS,
 	ActionGetBucketLocation,
@@ -530,11 +543,17 @@ var actions = []string{
 	ActionGetObjectLegalHold,
 	ActionGetObjectRetention,
 	ActionGetObjectTagging,
+	ActionGetObjectVersion,
+	ActionGetObjectVersionAcl,
+	ActionGetObjectVersionTagging,
+	ActionListAllMyBuckets,
 	ActionListBucket,
 	ActionListBucketMultipartUploads,
+	ActionListBucketVersions,
 	ActionListMultipartUploadParts,
 	ActionPutObject,
 	ActionPutObjectLegalHold,
 	ActionPutObjectRetention,
 	ActionPutObjectTagging,
+	ActionPutObjectVersionTagging,
 }

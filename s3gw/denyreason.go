@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/fujiwara/s3rp/policy"
-	"github.com/fujiwara/s3rp/s3op"
 	"github.com/fujiwara/s3rp/store"
 )
 
@@ -106,11 +105,11 @@ func visibilityReason(principal, bucket string) *DenyReason {
 	return &DenyReason{Layer: LayerVisibility, Statement: -1, Principal: principal, Resource: bucket}
 }
 
-func copySourceReason(principal, resource string, err error) *DenyReason {
+func copySourceReason(principal, action, resource string, err error) *DenyReason {
 	if err == nil {
 		err = store.ErrNotFound
 	}
-	return &DenyReason{Layer: LayerCopySource, Statement: -1, Principal: principal, Action: s3op.ActionGetObject, Resource: resource, err: err}
+	return &DenyReason{Layer: LayerCopySource, Statement: -1, Principal: principal, Action: action, Resource: resource, err: err}
 }
 
 // Denial is one deciding statement's share of the per-key refusals inside
