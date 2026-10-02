@@ -26,7 +26,7 @@ func TestParseCondition(t *testing.T) {
 				{"Effect": "Deny", "Principal": "*", "Action": "s3:DeleteObject", "Resource": "b/*",
 				 "Condition": {"NotIpAddress": {"aws:SourceIp": ["192.0.2.0/24", "2001:db8::/32"]}}}
 			]
-		}`)
+		}`, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -55,7 +55,7 @@ func TestParseCondition(t *testing.T) {
 	for _, tc := range errCases {
 		t.Run(tc.name, func(t *testing.T) {
 			text := `{"Statement": [{"Effect": "Deny", "Principal": "*", "Action": "s3:PutObject", "Resource": "b/*", "Condition": ` + tc.cond + `}]}`
-			if _, err := policy.Parse("b", text); err == nil || !strings.Contains(err.Error(), tc.errStr) {
+			if _, err := policy.Parse("b", text, nil); err == nil || !strings.Contains(err.Error(), tc.errStr) {
 				t.Errorf("expect error containing %q, got %v", tc.errStr, err)
 			}
 		})
@@ -117,7 +117,7 @@ func TestEvaluateCondition(t *testing.T) {
 				"Condition": {"IpAddress": {"aws:SourceIp": ["198.51.100.7", "2001:db8::1"]}}
 			}
 		]
-	}`)
+	}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestEvaluatorConditions(t *testing.T) {
 				"Condition": {"IpAddress": {"aws:SourceIp": "127.0.0.0/8"}}
 			}
 		]
-	}`)
+	}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +244,7 @@ func TestConditionMarshalRoundTrip(t *testing.T) {
 			}
 		]
 	}`
-	p, err := policy.Parse("b", text)
+	p, err := policy.Parse("b", text, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +252,7 @@ func TestConditionMarshalRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rp, err := policy.Parse("b", string(data))
+	rp, err := policy.Parse("b", string(data), nil)
 	if err != nil {
 		t.Fatalf("re-parse of %s: %v", data, err)
 	}

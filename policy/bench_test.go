@@ -49,7 +49,7 @@ func maxBucketPolicy(tb testing.TB) *policy.Policy {
 	for i := range stmts {
 		stmts[i] = stmt
 	}
-	p, err := policy.Parse("photos", `{"Statement":[`+strings.Join(stmts, ",")+`]}`)
+	p, err := policy.Parse("photos", `{"Statement":[`+strings.Join(stmts, ",")+`]}`, nil)
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func maxBucketPolicy(tb testing.TB) *policy.Policy {
 // benignBucketPolicy denies a different action, so it never matches
 // s3:DeleteObject: the common case the de-amplification must keep O(1) per key.
 func benignBucketPolicy(tb testing.TB) *policy.Policy {
-	p, err := policy.Parse("b", `{"Statement":[{"Effect":"Deny","Principal":{"S3RP":["ta/someone"]},"Action":"s3:PutObject","Resource":"b/*"}]}`)
+	p, err := policy.Parse("b", `{"Statement":[{"Effect":"Deny","Principal":{"S3RP":["ta/someone"]},"Action":"s3:PutObject","Resource":"b/*"}]}`, nil)
 	if err != nil {
 		tb.Fatal(err)
 	}

@@ -31,7 +31,7 @@ const crossTenantPolicy = `{
 }`
 
 func TestEvaluateQualifiedPrincipal(t *testing.T) {
-	p, err := policy.Parse("shared", crossTenantPolicy)
+	p, err := policy.Parse("shared", crossTenantPolicy, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestEvaluateWildcardPrincipals(t *testing.T) {
 			"Statement": [
 				{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "open/*"}
 			]
-		}`)
+		}`, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -78,7 +78,7 @@ func TestEvaluateWildcardPrincipals(t *testing.T) {
 			"Statement": [
 				{"Effect": "Allow", "Principal": {"S3RP": ["tb/*"]}, "Action": "s3:GetObject", "Resource": "shared/*"}
 			]
-		}`)
+		}`, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -101,7 +101,7 @@ func TestEvaluateWildcardPrincipals(t *testing.T) {
 			"Statement": [
 				{"Effect": "Deny", "NotPrincipal": {"S3RP": ["ta/*"]}, "Action": "s3:PutObject", "Resource": "b/*"}
 			]
-		}`)
+		}`, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -119,7 +119,7 @@ func TestNotPrincipalDenyOnly(t *testing.T) {
 		"Statement": [
 			{"Effect": "Allow", "NotPrincipal": {"S3RP": ["ta/alice"]}, "Action": "s3:GetObject", "Resource": "b/*"}
 		]
-	}`)
+	}`, nil)
 	if err == nil || !strings.Contains(err.Error(), "NotPrincipal is only allowed with Effect Deny") {
 		t.Errorf("Allow + NotPrincipal must be rejected, got %v", err)
 	}
@@ -132,7 +132,7 @@ func TestParseQualifiedPrincipal(t *testing.T) {
 			"Statement": [
 				{"Effect": "Allow", "Principal": {"S3RP": ["`+u+`"]}, "Action": "s3:GetObject", "Resource": "b/*"}
 			]
-		}`); err != nil {
+		}`, nil); err != nil {
 			t.Errorf("principal %q must parse: %v", u, err)
 		}
 	}
@@ -142,7 +142,7 @@ func TestParseQualifiedPrincipal(t *testing.T) {
 			"Statement": [
 				{"Effect": "Allow", "Principal": {"S3RP": ["`+u+`"]}, "Action": "s3:GetObject", "Resource": "b/*"}
 			]
-		}`)
+		}`, nil)
 		if err == nil || !strings.Contains(err.Error(), "invalid principal") {
 			t.Errorf("principal %q must be rejected, got %v", u, err)
 		}
@@ -155,7 +155,7 @@ func TestAllowEvaluator(t *testing.T) {
 			{"Effect": "Allow", "Principal": {"S3RP": ["tb/bob"]}, "Action": "s3:DeleteObject", "Resource": "shared/tmp/*"},
 			{"Effect": "Deny", "Principal": {"S3RP": ["tb/bob"]}, "Action": "s3:DeleteObject", "Resource": "shared/tmp/pinned/*"}
 		]
-	}`)
+	}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func TestAllowEvaluator(t *testing.T) {
 }
 
 func TestMentionsPrincipal(t *testing.T) {
-	p, err := policy.Parse("shared", crossTenantPolicy)
+	p, err := policy.Parse("shared", crossTenantPolicy, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +205,7 @@ func TestMentionsPrincipal(t *testing.T) {
 		"Statement": [
 			{"Effect": "Deny", "Principal": {"S3RP": ["tb/bob"]}, "Action": "s3:GetObject", "Resource": "b/*"}
 		]
-	}`)
+	}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +218,7 @@ func TestMentionsPrincipal(t *testing.T) {
 			{"Effect": "Allow", "Principal": {"S3RP": ["tb/*"]}, "Action": "s3:GetObject", "Resource": "b/*"},
 			{"Effect": "Allow", "Principal": "*", "Action": "s3:ListBucket", "Resource": "b"}
 		]
-	}`)
+	}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

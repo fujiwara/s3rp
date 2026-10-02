@@ -151,7 +151,7 @@ Your `store.Store` implementation — and the control plane's write path that fe
   	if p, ok := policies.Load(key); ok {
   		return p.(*policy.Policy), nil // compiled patterns reused, safe to share
   	}
-  	p, err := policy.Parse(bucket, text)
+  	p, err := policy.Parse(bucket, text, nil) // actions were checked when written
   	if err != nil {
   		return nil, err // a stored policy that no longer parses is a bug upstream
   	}
@@ -160,7 +160,7 @@ Your `store.Store` implementation — and the control plane's write path that fe
   }
   ```
 - The policy syntax — the `"S3RP"` principal key, `tenant/user` principals, plain-path resources — is only the default `policy.Dialect`. If your tenants should write a different key, ARN-prefixed resources (`arn:aws:s3:::bucket/*`), or their own principal syntax, parse with your own `Dialect`: `PrincipalKey` and `ResourcePrefix` cover the fixed parts, and the `NormalizePrincipal` / `NormalizeResource` hooks rewrite each value to the internal form (`"arn:myco:iam::ta:user/alice"` → `"ta/alice"`) inside the same parse pass — no pre-parsing of the tenant's JSON — with validation and the caps applied to the normalized result. Evaluation is identical in any dialect, and so is the `Condition` syntax (the IP operators and the `aws:SourceIp` key are the same everywhere). Keep the tenant's original text in `store.Bucket.PolicyText` (returned verbatim by GetBucketPolicy) and put the `Dialect`-parsed form in `Policy` — the two fields are deliberately independent.
-- Parsing takes the bucket's name — `policy.Parse(bucketName, text)` / `Dialect.Parse` — and requires every resource to refer to that bucket; there is deliberately no way to parse a bucket policy without the check. A statement naming any other bucket can never match anything — a policy is only ever evaluated against its own bucket — so accepting it would leave the author trusting a restriction that silently does nothing; AWS rejects the same mistake at PutBucketPolicy time. With a dialect the check runs on the normalized resources, so pass the plain internal bucket name.
+- Parsing takes the bucket's name — `policy.Parse(bucketName, text, check)` / `Dialect.Parse` — and requires every resource to refer to that bucket; there is deliberately no way to parse a bucket policy without the check. A statement naming any other bucket can never match anything — a policy is only ever evaluated against its own bucket — so accepting it would leave the author trusting a restriction that silently does nothing; AWS rejects the same mistake at PutBucketPolicy time. With a dialect the check runs on the normalized resources, so pass the plain internal bucket name.
 
   ```go
   // tenants write AWS-style ARNs; the gateway evaluates the internal form
@@ -178,7 +178,8 @@ Your `store.Store` implementation — and the control plane's write path that fe
   	},
   }
 
-  p, err := dialect.Parse(bucketName, text) // the plain name: the check runs post-normalization
+  // the plain name: the check runs post-normalization
+  p, err := dialect.Parse(bucketName, text, s3op.CheckActionPattern)
   if err != nil {
   	return err // reject at write time, exactly as PutBucketPolicy would
   }
@@ -197,7 +198,7 @@ Your `store.Store` implementation — and the control plane's write path that fe
   What you give up is per-credential revocation: a persisted temporary key dies with a row delete, a self-contained token lives until it expires unless you add revocation state back (a denylist of revoked token ids, a per-user session generation the token embeds, or rotating the signing key) — so keep TTLs short. Sizing note: the token rides in the `X-Amz-Security-Token` query parameter of presigned URLs, so keep it well under a few KB (AWS's own run 0.6–2 KB and the practical URL budget is ~8 KB).
 - Two tenants must not map buckets to the same physical backend bucket — the gateway cannot detect this, so validate it where definitions are written.
 - Validate names and backends where definitions are written, with the store package's validators: `store.ValidateBucketName` (bucket names are what path routing and `bucket/key` policy resources are built from), `store.ValidateTenantName` / `store.ValidateUserName` (tenant and user names share the charset of policy principals — a name outside it could never be written in a `Principal` element, so its grants would be unexpressible), and `store.Backend.Validate` (endpoint and credential shape). Like `Backend.SetDefaults`, these are the store's to call; the gateway does not re-check per request.
-- Check policy actions against the operation catalog with `s3op.CheckActionPattern` where policies are written. An action no operation authorizes — a typo, or an AWS action s3rp never authorizes such as `s3:PutBucketPolicy` — makes a statement that never takes effect, and a `Deny` on it protects nothing. The error wraps `s3op.ErrUnknownAction`, so a service that already stores such policies can warn about them first and refuse them later. The catalog itself — every operation, whether it is supported, and the actions it authorizes, including the ones a header adds — is `s3op.Operations()` in Go and [`s3op/operations.json`](../s3op/operations.json) for a control plane or console written in another language; hooks can match `Op.Operation` and `Op.Actions` against the generated `s3op.Op*` / `s3op.Action*` constants.
+- Check policy actions against the operation catalog where policies are written: `policy.Parse`, `Dialect.Parse` and `policy.ValidateUserPolicy` take a `policy.ActionChecker` as their last argument — pass `s3op.CheckActionPattern` (the `policy` package is a leaf and does not know which actions exist; `nil` explicitly skips the check, for re-parsing text that was already checked when written). An action no operation authorizes — a typo, or an AWS action s3rp never authorizes such as `s3:PutBucketPolicy` — makes a statement that never takes effect, and a `Deny` on it protects nothing. The check runs only once the policy is otherwise valid, and its errors wrap `s3op.ErrUnknownAction`, so `errors.Is` on it means nothing else is wrong: a service that already stores such policies can warn about them first and refuse them later. The catalog itself — every operation, whether it is supported, and the actions it authorizes, including the ones a header adds — is `s3op.Operations()` in Go and [`s3op/operations.json`](../s3op/operations.json) for a control plane or console written in another language; hooks can match `Op.Operation` and `Op.Actions` against the generated `s3op.Op*` / `s3op.Action*` constants.
 - Validate CORS rules with `cors.Rule.Validate()` where definitions are written: a rule with no origins or methods can never match (a dead rule its author believes in) and an unsupported method could never be answered — AWS rejects the same at PutBucketCors time. The gateway deliberately does not re-check rules per request.
 
   Together, a control plane's write path looks like:
@@ -215,16 +216,9 @@ Your `store.Store` implementation — and the control plane's write path that fe
   		return err
   	}
   	if b.PolicyText != "" {
-  		p, err := policy.Parse(b.Name, b.PolicyText)
+  		_, err := policy.Parse(b.Name, b.PolicyText, s3op.CheckActionPattern)
   		if err != nil {
-  			return err
-  		}
-  		for _, st := range p.Statement {
-  			for _, a := range st.Action {
-  				if err := s3op.CheckActionPattern(a); err != nil {
-  					return err // errors.Is(err, s3op.ErrUnknownAction)
-  				}
-  			}
+  			return err // errors.Is(err, s3op.ErrUnknownAction): only unknown actions
   		}
   	}
   	for _, r := range b.CORS {
@@ -242,8 +236,8 @@ Your `store.Store` implementation — and the control plane's write path that fe
 **Do**
 
 - Cache the parsed `*policy.Policy` / `*policy.UserPolicy`, keyed by the policy text.
-- Parse a bucket policy with its bucket's name (`policy.Parse(bucket, text)`); with a dialect, keep the tenant's original text in `PolicyText`.
-- Run `store.Validate*`, `Backend.Validate`, `Backend.SetDefaults`, `cors.Rule.Validate` and `s3op.CheckActionPattern` where definitions are written, and enforce global uniqueness (bucket names, access key ids) and physical-backend-bucket exclusivity there too.
+- Parse a bucket policy with its bucket's name (`policy.Parse(bucket, text, check)`); with a dialect, keep the tenant's original text in `PolicyText`.
+- Run `store.Validate*`, `Backend.Validate`, `Backend.SetDefaults`, `cors.Rule.Validate`, and the policy validation with `s3op.CheckActionPattern` as its checker where definitions are written, and enforce global uniqueness (bucket names, access key ids) and physical-backend-bucket exclusivity there too.
 - Make an issued key visible to the store the gateways read **before** returning its credentials to the caller.
 
 **Don't**

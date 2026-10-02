@@ -71,8 +71,9 @@ type rawStatement struct {
 // this dialect. The returned Policy is in the internal form regardless of
 // the dialect, and every resource must refer to the bucket
 // (ValidateResourcesFor, run after normalization — bucket is the plain
-// internal name even when the surface syntax is ARN-prefixed).
-func (d *Dialect) Parse(bucket, text string) (*Policy, error) {
+// internal name even when the surface syntax is ARN-prefixed). check names
+// the actions that exist (see ActionChecker); nil skips that check.
+func (d *Dialect) Parse(bucket, text string, check ActionChecker) (*Policy, error) {
 	if len(text) > MaxPolicyBytes {
 		return nil, fmt.Errorf("policy is %d bytes, at most %d are allowed", len(text), MaxPolicyBytes)
 	}
@@ -117,6 +118,11 @@ func (d *Dialect) Parse(bucket, text string) (*Policy, error) {
 		return nil, err
 	}
 	if err := p.ValidateResourcesFor(bucket); err != nil {
+		return nil, err
+	}
+	if err := checkActions(check, len(p.Statement),
+		func(i int) []string { return p.Statement[i].Action },
+		func(i int) string { return p.Statement[i].Sid }); err != nil {
 		return nil, err
 	}
 	return p, nil

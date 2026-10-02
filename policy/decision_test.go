@@ -12,7 +12,7 @@ func TestDecide(t *testing.T) {
 		{"Sid": "ReadAll", "Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "photos/*"},
 		{"Effect": "Allow", "Principal": {"S3RP": "tb/*"}, "Action": "s3:GetObject", "Resource": "photos/public/*"},
 		{"Sid": "NoLogs", "Effect": "Deny", "Principal": "*", "Action": "s3:*", "Resource": "photos/logs/*"}
-	]}`)
+	]}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestDenyingStatement(t *testing.T) {
 		{"Sid": "NoLogs", "Effect": "Deny", "Principal": "*", "Action": "s3:DeleteObject", "Resource": ["photos/logs/*", "photos/audit/*"]},
 		{"Sid": "NoTmp", "Effect": "Deny", "Principal": "*", "Action": "s3:DeleteObject", "Resource": "photos/tmp/*"},
 		{"Sid": "Other", "Effect": "Deny", "Principal": {"S3RP": "tb/*"}, "Action": "s3:DeleteObject", "Resource": "photos/*"}
-	]}`)
+	]}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestParseDuplicateSid(t *testing.T) {
 		{"Sid": "A", "Effect": "Deny", "Principal": "*", "Action": "s3:PutObject", "Resource": "photos/*"},
 		{"Effect": "Deny", "Principal": "*", "Action": "s3:PutObject", "Resource": "photos/*"},
 		{"Sid": "A", "Effect": "Deny", "Principal": "*", "Action": "s3:DeleteObject", "Resource": "photos/*"}
-	]}`)
+	]}`, nil)
 	if err == nil || !strings.Contains(err.Error(), `duplicate Sid "A" (statement[0] and statement[2])`) {
 		t.Errorf("expect the duplicate Sid error, got %v", err)
 	}
@@ -118,7 +118,7 @@ func TestParseDuplicateSid(t *testing.T) {
 	if _, err := policy.Parse("photos", `{"Statement": [
 		{"Effect": "Deny", "Principal": "*", "Action": "s3:PutObject", "Resource": "photos/*"},
 		{"Effect": "Deny", "Principal": "*", "Action": "s3:DeleteObject", "Resource": "photos/*"}
-	]}`); err != nil {
+	]}`, nil); err != nil {
 		t.Errorf("Sid-less statements must be accepted: %v", err)
 	}
 }

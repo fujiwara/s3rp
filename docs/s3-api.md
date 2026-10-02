@@ -255,7 +255,7 @@ A user policy of `Allow [s3:*]` + `Deny [s3:PutObjectTagging]` therefore refuses
 
 #### Unknown actions
 
-A policy action that matches none of the actions in the [operations table](#supported-operations) — a typo, an AWS action for an operation s3rp does not serve through the S3 API such as `s3:PutBucketPolicy`, or one it does not distinguish such as `s3:GetObjectAttributes` — can never match a request, so its statement silently does nothing (a `Deny` on it protects nothing). The bundled binary logs a warning for each one at startup; with `strict_actions: true` in the config it refuses to start instead. A service with its own store checks the actions it stores with `s3op.CheckActionPattern`, whose error wraps `s3op.ErrUnknownAction`.
+A policy action that matches none of the actions in the [operations table](#supported-operations) — a typo, an AWS action for an operation s3rp does not serve through the S3 API such as `s3:PutBucketPolicy`, or one it does not distinguish such as `s3:GetObjectAttributes` — can never match a request, so its statement silently does nothing (a `Deny` on it protects nothing). The bundled binary logs a warning for each one at startup; with `strict_actions: true` in the config it refuses to start instead. A service with its own store checks the actions it stores by passing `s3op.CheckActionPattern` to `policy.Parse` / `policy.ValidateUserPolicy`; the errors wrap `s3op.ErrUnknownAction`.
 
 Both bucket and user policies are bounded in size: at most 20 KB per document, 20 statements per policy, 30 actions and 10 resources per statement, 128 bytes per action/resource pattern, 100 principal users per statement, and 50 condition values per operator. Oversized policies are rejected when loaded.
 
