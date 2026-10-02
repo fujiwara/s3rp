@@ -34,8 +34,10 @@ func NewConfigStore(cfg *Config) store.Store {
 				CreatedAt:  b.CreatedAt,
 			}
 			if b.Policy != "" {
-				// the config is validated, so this cannot fail
-				p, err := policy.Parse(b.Name, b.Policy)
+				// the config is validated, so this cannot fail; actions
+				// are not checked again since unknown ones may have
+				// been accepted with a warning
+				p, err := policy.Parse(b.Name, b.Policy, nil)
 				if err != nil {
 					panic(fmt.Sprintf("bucket %s: invalid policy after validation: %v", b.Name, err))
 				}

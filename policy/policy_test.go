@@ -1,6 +1,8 @@
 package policy_test
 
 import (
+	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -25,7 +27,7 @@ func TestParse(t *testing.T) {
 					"Resource": ["photos", "photos/*"]
 				}
 			]
-		}`)
+		}`, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -44,7 +46,7 @@ func TestParse(t *testing.T) {
 			"Statement": [
 				{"Effect": "Deny", "Principal": "*", "Action": "s3:DeleteObject", "Resource": "photos/*"}
 			]
-		}`)
+		}`, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -58,7 +60,7 @@ func TestParse(t *testing.T) {
 			"Statement": [
 				{"Effect": "Allow", "Principal": {"S3RP": ["123456789012/0app", "123456789012/*"]}, "Action": "s3:GetObject", "Resource": "photos/*"}
 			]
-		}`)
+		}`, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -71,7 +73,7 @@ func TestParse(t *testing.T) {
 			"Statement": [
 				{"Effect": "Deny", "NotPrincipal": {"S3RP": ["ta/admin"]}, "Action": "s3:PutObject", "Resource": "photos/*"}
 			]
-		}`)
+		}`, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -151,7 +153,7 @@ func TestParse(t *testing.T) {
 	}
 	for _, tc := range errCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := policy.Parse("b", tc.text)
+			_, err := policy.Parse("b", tc.text, nil)
 			if err == nil {
 				t.Fatal("expect error")
 			}
@@ -172,7 +174,7 @@ func TestDenyEvaluator(t *testing.T) {
 			{"Effect": "Deny", "Principal": "*", "Action": "s3:DeleteObject", "Resource": "photos/archive/*"},
 			{"Effect": "Allow", "Principal": {"S3RP": ["ta/batch"]}, "Action": "s3:GetObject", "Resource": "photos/*"}
 		]
-	}`)
+	}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +237,7 @@ func TestEvaluate(t *testing.T) {
 				"Resource": "photos/*"
 			}
 		]
-	}`)
+	}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,7 +276,7 @@ func TestEvaluateNotPrincipal(t *testing.T) {
 				"Resource": ["photos", "photos/*"]
 			}
 		]
-	}`)
+	}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +300,7 @@ func TestEvaluateActionWildcard(t *testing.T) {
 			{"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": "s3:Put*", "Resource": "b/*"},
 			{"Effect": "Deny", "Principal": {"S3RP": ["ta/batch2"]}, "Action": "s3:*", "Resource": "b/*"}
 		]
-	}`)
+	}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +325,7 @@ func TestEvaluateActionMiddleWildcard(t *testing.T) {
 		"Statement": [
 			{"Effect": "Deny", "Principal": {"S3RP": ["ta/user1"]}, "Action": ["s3:*Object*", "s3:*Multipart*"], "Resource": "b/*"}
 		]
-	}`)
+	}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,7 +348,7 @@ func TestEvaluateResourceWildcard(t *testing.T) {
 			{"Effect": "Deny", "Principal": {"S3RP": ["ta/user1"]}, "Action": "s3:GetObject",
 			 "Resource": ["b/*/*", "b/2026-*"]}
 		]
-	}`)
+	}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -376,7 +378,7 @@ func TestEvaluateLiteralDotSegments(t *testing.T) {
 		"Statement": [
 			{"Effect": "Allow", "Principal": {"S3RP": ["ta/user1"]}, "Action": "s3:GetObject", "Resource": "photos/public/*"}
 		]
-	}`)
+	}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -439,7 +441,7 @@ func TestEvaluateQuestionWildcard(t *testing.T) {
 		"Statement": [
 			{"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": "s3:???Object", "Resource": "b/log-????"}
 		]
-	}`)
+	}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -526,13 +528,13 @@ func TestUserPolicyUnknownEffect(t *testing.T) {
 }
 
 func TestValidateUserPolicy(t *testing.T) {
-	if err := policy.ValidateUserPolicy(nil); err != nil {
+	if err := policy.ValidateUserPolicy(nil, nil); err != nil {
 		t.Errorf("nil policy is valid: %v", err)
 	}
 	valid := &policy.UserPolicy{Statements: []policy.ActionStatement{
 		{Effect: "Allow", Action: []string{"s3:Get*"}},
 	}}
-	if err := policy.ValidateUserPolicy(valid); err != nil {
+	if err := policy.ValidateUserPolicy(valid, nil); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 	errCases := []struct {
@@ -546,11 +548,65 @@ func TestValidateUserPolicy(t *testing.T) {
 	}
 	for _, tc := range errCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := policy.ValidateUserPolicy(tc.up)
+			err := policy.ValidateUserPolicy(tc.up, nil)
 			if err == nil || !strings.Contains(err.Error(), tc.errStr) {
 				t.Errorf("expect error containing %q, got %v", tc.errStr, err)
 			}
 		})
+	}
+}
+
+var errUnknown = errors.New("unknown action")
+
+// knownOnly is an ActionChecker knowing only s3:GetObject and s3:PutObject.
+func knownOnly(a string) error {
+	if a == "s3:GetObject" || a == "s3:PutObject" {
+		return nil
+	}
+	return errUnknown
+}
+
+func TestActionChecker(t *testing.T) {
+	text := `{"Statement": [
+		{"Effect": "Allow", "Principal": "*", "Action": ["s3:GetObject", "s3:GetObjcet"], "Resource": "b/*"},
+		{"Sid": "NoPut", "Effect": "Deny", "Principal": "*", "Action": ["s3:PutObjcet"], "Resource": "b/*"}
+	]}`
+	if _, err := policy.Parse("b", text, nil); err != nil {
+		t.Fatalf("a nil checker must skip the check: %v", err)
+	}
+	_, err := policy.Parse("b", text, knownOnly)
+	if !errors.Is(err, errUnknown) {
+		t.Fatalf("got %v, want errUnknown", err)
+	}
+	var got []string
+	for _, e := range err.(interface{ Unwrap() []error }).Unwrap() {
+		got = append(got, e.Error())
+	}
+	want := []string{`statement[0]: unknown action`, `statement[1] "NoPut": unknown action`}
+	if !slices.Equal(want, got) {
+		t.Errorf("got %q, want %q", got, want)
+	}
+
+	// a structural error comes alone: the checker runs only on an
+	// otherwise valid policy
+	broken := strings.Replace(text, `"Resource": "b/*"}`, `"Resource": "other/*"}`, 1)
+	if _, err := policy.Parse("b", broken, knownOnly); err == nil || errors.Is(err, errUnknown) {
+		t.Errorf("got %v, want the structural error alone", err)
+	}
+
+	up := &policy.UserPolicy{Statements: []policy.ActionStatement{
+		{Effect: "Allow", Action: []string{"s3:GetObject"}},
+		{Effect: "Deny", Action: []string{"s3:PutObjcet"}},
+	}}
+	if err := policy.ValidateUserPolicy(up, nil); err != nil {
+		t.Errorf("a nil checker must skip the check: %v", err)
+	}
+	if err := policy.ValidateUserPolicy(up, knownOnly); !errors.Is(err, errUnknown) || err.Error() != "statement[1]: unknown action" {
+		t.Errorf("got %v, want statement[1]: unknown action", err)
+	}
+	up.Statements[0].Effect = "Maybe"
+	if err := policy.ValidateUserPolicy(up, knownOnly); err == nil || errors.Is(err, errUnknown) {
+		t.Errorf("got %v, want the structural error alone", err)
 	}
 }
 
@@ -592,7 +648,7 @@ func TestPolicyLimits(t *testing.T) {
 	}
 	for _, tc := range bucketCases {
 		t.Run("bucket/"+tc.name, func(t *testing.T) {
-			if _, err := policy.Parse("b", tc.text); err == nil || !strings.Contains(err.Error(), tc.errStr) {
+			if _, err := policy.Parse("b", tc.text, nil); err == nil || !strings.Contains(err.Error(), tc.errStr) {
 				t.Errorf("expect error containing %q, got %v", tc.errStr, err)
 			}
 		})
@@ -628,7 +684,7 @@ func TestPolicyLimits(t *testing.T) {
 	}
 	for _, tc := range userCases {
 		t.Run("user/"+tc.name, func(t *testing.T) {
-			if err := policy.ValidateUserPolicy(tc.up); err == nil || !strings.Contains(err.Error(), tc.errStr) {
+			if err := policy.ValidateUserPolicy(tc.up, nil); err == nil || !strings.Contains(err.Error(), tc.errStr) {
 				t.Errorf("expect error containing %q, got %v", tc.errStr, err)
 			}
 		})
@@ -639,7 +695,7 @@ func TestPolicyLimits(t *testing.T) {
 	// every structural cap can still be too large once marshaled.
 	t.Run("user/policy too large", func(t *testing.T) {
 		up := &policy.UserPolicy{Statements: bigStmts}
-		if err := policy.ValidateUserPolicy(up); err != nil {
+		if err := policy.ValidateUserPolicy(up, nil); err != nil {
 			t.Fatalf("structural validation should pass: %v", err)
 		}
 		if _, err := policy.MarshalUserPolicy(up); err == nil || !strings.Contains(err.Error(), "at most") {
@@ -658,7 +714,7 @@ func TestParseBucketScope(t *testing.T) {
 			{"Effect": "Deny", "Principal": "*", "Action": "s3:PutObject", "Resource": ["photos/*", "photos/tmp/a.txt"]}
 		]
 	}`
-	if _, err := policy.Parse("photos", valid); err != nil {
+	if _, err := policy.Parse("photos", valid, nil); err != nil {
 		t.Fatalf("valid policy rejected: %v", err)
 	}
 
@@ -673,7 +729,7 @@ func TestParseBucketScope(t *testing.T) {
 	for _, tc := range errCases {
 		t.Run(tc.name, func(t *testing.T) {
 			text := `{"Statement": [{"Sid": "S1", "Effect": "Deny", "Principal": "*", "Action": "s3:PutObject", "Resource": ` + tc.resource + `}]}`
-			_, err := policy.Parse("photos", text)
+			_, err := policy.Parse("photos", text, nil)
 			if err == nil || !strings.Contains(err.Error(), "does not refer to bucket") {
 				t.Errorf("expect a scope error, got %v", err)
 			}
@@ -682,7 +738,7 @@ func TestParseBucketScope(t *testing.T) {
 			}
 			// the same document is fine as the bucket it does refer to
 			if tc.name == "another bucket" {
-				if _, err := policy.Parse("otherbucket", text); err != nil {
+				if _, err := policy.Parse("otherbucket", text, nil); err != nil {
 					t.Errorf("the document must parse for its own bucket: %v", err)
 				}
 			}
@@ -706,7 +762,7 @@ func TestEvaluateActionCaseInsensitive(t *testing.T) {
 		"Statement": [
 			{"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": ["s3:putobject", "S3:DeleteObject", "s3:Get*"], "Resource": "photos/*"}
 		]
-	}`)
+	}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

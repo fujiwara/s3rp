@@ -18,6 +18,7 @@ package policy
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -165,10 +166,42 @@ func (s *StringOrSlice) UnmarshalJSON(data []byte) error {
 // bucket's name and requires every resource to refer to it
 // (ValidateResourcesFor) — there is deliberately no way to parse a bucket
 // policy without that check. A service whose tenants write a different
-// surface syntax parses with a Dialect.
-func Parse(bucket, text string) (*Policy, error) {
+// surface syntax parses with a Dialect. check names the actions that exist
+// (see ActionChecker); nil skips that check.
+func Parse(bucket, text string, check ActionChecker) (*Policy, error) {
 	var d Dialect
-	return d.Parse(bucket, text)
+	return d.Parse(bucket, text, check)
+}
+
+// ActionChecker reports an error for an action pattern that matches no
+// action the caller ever authorizes: a statement using it never takes
+// effect. This package does not know which actions exist, so validation
+// takes the caller's checker (the gateway's is s3op.CheckActionPattern), and
+// passing nil explicitly skips the check. It runs only after the structural
+// validation passed, and its errors are returned joined, each wrapped with
+// the statement it came from, so errors.Is on the checker's sentinel tells a
+// caller that nothing else is wrong.
+type ActionChecker func(action string) error
+
+// checkActions runs check over every statement's actions; actions returns
+// the i-th statement's actions and sid its Sid ("" for none).
+func checkActions(check ActionChecker, n int, actions func(int) []string, sid func(int) string) error {
+	if check == nil {
+		return nil
+	}
+	var errs []error
+	for i := range n {
+		for _, a := range actions(i) {
+			if err := check(a); err != nil {
+				name := fmt.Sprintf("statement[%d]", i)
+				if s := sid(i); s != "" {
+					name += fmt.Sprintf(" %q", s)
+				}
+				errs = append(errs, fmt.Errorf("%s: %w", name, err))
+			}
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // statementName names a statement in an error: its Sid, or its index when
@@ -394,8 +427,9 @@ func (up *UserPolicy) compile() {
 	}
 }
 
-// ValidateUserPolicy checks a user policy's effects and actions.
-func ValidateUserPolicy(up *UserPolicy) error {
+// ValidateUserPolicy checks a user policy's effects and actions, then the
+// actions against check (see ActionChecker; nil skips that check).
+func ValidateUserPolicy(up *UserPolicy, check ActionChecker) error {
 	if up == nil {
 		return nil
 	}
@@ -418,13 +452,15 @@ func ValidateUserPolicy(up *UserPolicy) error {
 			}
 		}
 	}
-	return nil
+	return checkActions(check, len(up.Statements),
+		func(i int) []string { return up.Statements[i].Action },
+		func(int) string { return "" })
 }
 
 // MarshalUserPolicy serializes a user policy for storage and enforces
 // MaxPolicyBytes on the result. The byte cap applies to the serialized form,
 // so it lives here rather than in ValidateUserPolicy: callers that already
-// hold the serialized policy (the DB read path) check the raw string
+// hold the serialized policy (a store's read path) check the raw string
 // directly, and ValidateUserPolicy stays allocation-free for the request
 // hot path.
 func MarshalUserPolicy(up *UserPolicy) (string, error) {

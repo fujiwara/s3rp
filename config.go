@@ -136,9 +136,9 @@ func (c *Config) SetDefaults() {
 }
 
 // Validate checks the config. Policies naming an action the gateway never
-// authorizes (a typo, or an AWS action such as s3:GetObjectVersion that s3rp
-// does not distinguish) are reported last, only once everything else is
-// valid, joined as errors wrapping s3op.ErrUnknownAction: a caller seeing
+// authorizes (a typo, or an AWS action such as s3:PutObjectVersionAcl) are
+// reported last, only once everything else is valid, joined as errors
+// wrapping s3op.ErrUnknownAction: a caller seeing
 // errors.Is(err, s3op.ErrUnknownAction) knows nothing else is wrong and may
 // downgrade them to warnings.
 func (c *Config) Validate() error {
@@ -168,46 +168,7 @@ func (c *Config) Validate() error {
 			return err
 		}
 	}
-	return c.checkActions()
-}
-
-// checkActions reports every policy action pattern that matches no action
-// the gateway authorizes. It runs after the structural validation, so the
-// policies are known to parse.
-func (c *Config) checkActions() error {
-	var errs []error
-	for _, t := range c.Tenants {
-		for _, u := range t.Users {
-			for i, st := range u.Policy {
-				for _, a := range st.Action {
-					if err := s3op.CheckActionPattern(a); err != nil {
-						errs = append(errs, fmt.Errorf("tenant %s: user %s: policy statement[%d]: %w", t.Name, u.Name, i, err))
-					}
-				}
-			}
-		}
-		for _, b := range t.Buckets {
-			if b.Policy == "" {
-				continue
-			}
-			p, err := policy.Parse(b.Name, b.Policy)
-			if err != nil {
-				return fmt.Errorf("bucket %s: invalid policy: %w", b.Name, err)
-			}
-			for i, st := range p.Statement {
-				for _, a := range st.Action {
-					if err := s3op.CheckActionPattern(a); err != nil {
-						name := fmt.Sprintf("statement[%d]", i)
-						if st.Sid != "" {
-							name += fmt.Sprintf(" %q", st.Sid)
-						}
-						errs = append(errs, fmt.Errorf("tenant %s: bucket %s: policy %s: %w", t.Name, b.Name, name, err))
-					}
-				}
-			}
-		}
-	}
-	return errors.Join(errs...)
+	return errors.Join(seen.unknownActions...)
 }
 
 // configNames tracks what must be unique across all tenants while a config
@@ -221,6 +182,27 @@ type configNames struct {
 	// tracks which tenant owns each physical backend target (endpoint + backend
 	// bucket): two tenants mapping to the same physical bucket would share data
 	backendOwner map[string]string
+	// statements naming an action the gateway never authorizes, reported
+	// only once everything else is valid
+	unknownActions []error
+}
+
+// splitUnknownActions separates the action checker's errors (all of
+// them, when errors.Is finds ErrUnknownAction: policy validation runs the
+// checker only once the policy is otherwise valid) from any other policy
+// error, recording each under prefix.
+func (n *configNames) splitUnknownActions(err error, prefix string) error {
+	if err == nil || !errors.Is(err, s3op.ErrUnknownAction) {
+		return err
+	}
+	errs := []error{err}
+	if j, ok := err.(interface{ Unwrap() []error }); ok {
+		errs = j.Unwrap()
+	}
+	for _, e := range errs {
+		n.unknownActions = append(n.unknownActions, fmt.Errorf("%s%w", prefix, e))
+	}
+	return nil
 }
 
 func (n *configNames) validateTenant(t *TenantConfig) error {
@@ -236,7 +218,7 @@ func (n *configNames) validateTenant(t *TenantConfig) error {
 			return fmt.Errorf("tenant %s: duplicate user name %q", t.Name, u.Name)
 		}
 		userNames[u.Name] = true
-		if err := n.validateUser(u); err != nil {
+		if err := n.validateUser(t.Name, u); err != nil {
 			return fmt.Errorf("tenant %s: user %s: %w", t.Name, u.Name, err)
 		}
 	}
@@ -251,7 +233,7 @@ func (n *configNames) validateTenant(t *TenantConfig) error {
 	return nil
 }
 
-func (n *configNames) validateUser(u *UserConfig) error {
+func (n *configNames) validateUser(tenant string, u *UserConfig) error {
 	if len(u.Keys) == 0 {
 		return fmt.Errorf("at least one key is required")
 	}
@@ -268,7 +250,8 @@ func (n *configNames) validateUser(u *UserConfig) error {
 		return nil
 	}
 	up := &policy.UserPolicy{Statements: u.Policy}
-	if err := policy.ValidateUserPolicy(up); err != nil {
+	err := policy.ValidateUserPolicy(up, s3op.CheckActionPattern)
+	if err := n.splitUnknownActions(err, fmt.Sprintf("tenant %s: user %s: policy ", tenant, u.Name)); err != nil {
 		return fmt.Errorf("invalid policy: %w", err)
 	}
 	// the byte cap applies to the serialized form, which the YAML
@@ -309,7 +292,8 @@ func (n *configNames) validateBucket(tenant string, b *BucketConfig) error {
 	n.backendOwner[target] = tenant
 
 	if b.Policy != "" {
-		if _, err := policy.Parse(b.Name, b.Policy); err != nil {
+		_, err := policy.Parse(b.Name, b.Policy, s3op.CheckActionPattern)
+		if err := n.splitUnknownActions(err, fmt.Sprintf("tenant %s: bucket %s: policy ", tenant, b.Name)); err != nil {
 			return fmt.Errorf("bucket %s: invalid policy: %w", b.Name, err)
 		}
 	}

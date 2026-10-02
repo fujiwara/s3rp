@@ -22,7 +22,7 @@ func TestDialectPrincipalKey(t *testing.T) {
 	      "Resource": ["photos/*"]
 	    }
 	  ]
-	}`)
+	}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestDialectPrincipalKey(t *testing.T) {
 	  "Statement": [
 	    {"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": ["s3:PutObject"], "Resource": ["photos/*"]}
 	  ]
-	}`)
+	}`, nil)
 	if err == nil || !strings.Contains(err.Error(), "MyService") {
 		t.Errorf("expect an error naming the dialect's key, got %v", err)
 	}
@@ -49,7 +49,7 @@ func TestDialectPrincipalKey(t *testing.T) {
 	    {"Effect": "Deny", "Principal": "*", "Action": ["s3:DeleteObject"], "Resource": ["photos/*"]},
 	    {"Effect": "Deny", "NotPrincipal": {"MyService": ["ta/admin"]}, "Action": ["s3:PutObject"], "Resource": ["photos/*"]}
 	  ]
-	}`)
+	}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestDialectResourcePrefix(t *testing.T) {
 	      "Resource": ["arn:aws:s3:::photos/*", "arn:aws:s3:::photos"]
 	    }
 	  ]
-	}`)
+	}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestDialectResourcePrefix(t *testing.T) {
 	  "Statement": [
 	    {"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": ["s3:PutObject"], "Resource": ["photos/*"]}
 	  ]
-	}`)
+	}`, nil)
 	if err == nil || !strings.Contains(err.Error(), "arn:aws:s3:::") {
 		t.Errorf("expect an error naming the required prefix, got %v", err)
 	}
@@ -103,14 +103,14 @@ func TestDialectBucketScope(t *testing.T) {
 	  "Statement": [
 	    {"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": ["s3:PutObject"], "Resource": ["arn:aws:s3:::photos/*"]}
 	  ]
-	}`); err != nil {
+	}`, nil); err != nil {
 		t.Fatalf("valid policy rejected: %v", err)
 	}
 	_, err := d.Parse("photos", `{
 	  "Statement": [
 	    {"Effect": "Deny", "Principal": {"S3RP": ["ta/batch"]}, "Action": ["s3:PutObject"], "Resource": ["arn:aws:s3:::otherbucket/*"]}
 	  ]
-	}`)
+	}`, nil)
 	if err == nil || !strings.Contains(err.Error(), "does not refer to bucket") {
 		t.Errorf("expect a scope error on the stripped resource, got %v", err)
 	}
@@ -125,7 +125,7 @@ func TestDialectPatternLenAfterStrip(t *testing.T) {
 	  "Statement": [
 	    {"Effect": "Deny", "Principal": "*", "Action": ["s3:PutObject"], "Resource": ["`+res+`"]}
 	  ]
-	}`); err != nil {
+	}`, nil); err != nil {
 		t.Errorf("expect a max-length stripped pattern to pass, got %v", err)
 	}
 	over := "arn:aws:s3:::b/" + strings.Repeat("k", policy.MaxPatternLen-1)
@@ -133,7 +133,7 @@ func TestDialectPatternLenAfterStrip(t *testing.T) {
 	  "Statement": [
 	    {"Effect": "Deny", "Principal": "*", "Action": ["s3:PutObject"], "Resource": ["`+over+`"]}
 	  ]
-	}`); err == nil {
+	}`, nil); err == nil {
 		t.Error("expect an over-length stripped pattern to be rejected")
 	}
 }
@@ -158,7 +158,7 @@ func TestDialectNormalizePrincipal(t *testing.T) {
 	    {"Effect": "Allow", "Principal": {"AWS": ["arn:myco:iam::tb:user/bob"]}, "Action": ["s3:GetObject"], "Resource": ["photos/*"]},
 	    {"Effect": "Deny", "NotPrincipal": {"AWS": ["arn:myco:iam::ta:user/admin"]}, "Action": ["s3:PutObject"], "Resource": ["photos/*"]}
 	  ]
-	}`)
+	}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestDialectNormalizePrincipal(t *testing.T) {
 	  "Statement": [
 	    {"Effect": "Allow", "Principal": "*", "Action": ["s3:GetObject"], "Resource": ["photos/*"]}
 	  ]
-	}`); err != nil {
+	}`, nil); err != nil {
 		t.Errorf(`"*" must not go through NormalizePrincipal: %v`, err)
 	}
 
@@ -187,7 +187,7 @@ func TestDialectNormalizePrincipal(t *testing.T) {
 	  "Statement": [
 	    {"Sid": "Bad", "Effect": "Allow", "Principal": {"AWS": ["alice"]}, "Action": ["s3:GetObject"], "Resource": ["photos/*"]}
 	  ]
-	}`)
+	}`, nil)
 	if err == nil || !strings.Contains(err.Error(), "Bad") || !strings.Contains(err.Error(), "alice") {
 		t.Errorf("expect an error naming the statement and value, got %v", err)
 	}
@@ -198,7 +198,7 @@ func TestDialectNormalizePrincipal(t *testing.T) {
 	  "Statement": [
 	    {"Effect": "Allow", "Principal": {"AWS": ["arn:myco:iam::tb:user/bob"]}, "Action": ["s3:GetObject"], "Resource": ["photos/*"]}
 	  ]
-	}`)
+	}`, nil)
 	if err == nil || !strings.Contains(err.Error(), "invalid principal") {
 		t.Errorf("expect the normalized value to be validated, got %v", err)
 	}
@@ -219,7 +219,7 @@ func TestDialectNormalizeResource(t *testing.T) {
 	  "Statement": [
 	    {"Effect": "Deny", "Principal": "*", "Action": ["s3:PutObject"], "Resource": ["arn:myco:s3:us-east-1:acct-1:photos/thumb-*"]}
 	  ]
-	}`)
+	}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +235,7 @@ func TestDialectNormalizeResource(t *testing.T) {
 	  "Statement": [
 	    {"Effect": "Deny", "Principal": "*", "Action": ["s3:PutObject"], "Resource": ["photos/*"]}
 	  ]
-	}`)
+	}`, nil)
 	if err == nil || !strings.Contains(err.Error(), "photos/*") {
 		t.Errorf("expect an error naming the unrecognized resource, got %v", err)
 	}
@@ -249,11 +249,11 @@ func TestDialectZeroValueIsDefault(t *testing.T) {
 	  ]
 	}`
 	var d policy.Dialect
-	fromDialect, err := d.Parse("photos", text)
+	fromDialect, err := d.Parse("photos", text, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fromParse, err := policy.Parse("photos", text)
+	fromParse, err := policy.Parse("photos", text, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
