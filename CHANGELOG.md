@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.0.18](https://github.com/fujiwara/s3rp/compare/v0.0.17...v0.0.18) - 2026-10-02
+
+- Document that the http backend hop is unchecked and recommend https backends by @fujiwara in https://github.com/fujiwara/s3rp/pull/167
+- Take an action checker in policy validation by @fujiwara in https://github.com/fujiwara/s3rp/pull/169
+
 ## [v0.0.17](https://github.com/fujiwara/s3rp/compare/v0.0.16...v0.0.17) - 2026-09-30
 
 - Add the s3op operation catalog and check policy actions against it by @fujiwara in https://github.com/fujiwara/s3rp/pull/164
