@@ -265,6 +265,26 @@ Your `store.Store` implementation — and the control plane's write path that fe
   })
   h := otelhttp.NewHandler(gw.Handler(), "s3") // the span exists before SetRequestID runs
   ```
+- **A client's trace is linked, not adopted.** A tenant whose SDK is instrumented (an otelhttp transport, or anything injecting `traceparent`) can connect its own trace to yours. The header is added after signing and is not `x-amz-*`, so it is neither signed nor refused, and verification is unaffected. On a client-facing endpoint make otelhttp start a new root and **link** the client's span (`WithPublicEndpointFn`): the client finds its request in your trace through the link, while the trace id — and with `SetRequestID` above, the `x-amz-request-id` — stays yours. Letting the client's `traceparent` become the parent would hand it the choice of both. Return true only for requests that did not come through a hop which overwrites `traceparent`, if you have one. Configure the propagator explicitly: `propagation.TraceContext{}` alone, since `baggage` from a client is untrusted input as well.
+
+  The backend calls join the server's trace through the context the gateway passes them. `SetClientOptions` gives the backend client a tracer (the SDK's own `TracerProvider` option via `smithyoteltracing.Adapt`; the older `otelaws` contrib module is deprecated) for one span per SDK operation, and an otelhttp transport to send `traceparent` to the backend. A replaced `HTTPClient` loses the SDK's own transport tuning, so carry over the connection-pool settings your backend needs.
+
+  ```go
+  prop := propagation.TraceContext{}
+  gw.SetClientOptions(func(*store.Backend) []func(*s3.Options) {
+  	return []func(*s3.Options){func(o *s3.Options) {
+  		o.TracerProvider = smithyoteltracing.Adapt(tp)
+  		o.HTTPClient = &http.Client{Transport: otelhttp.NewTransport(transport,
+  			otelhttp.WithTracerProvider(tp), otelhttp.WithPropagators(prop))}
+  	}}
+  })
+  h := otelhttp.NewHandler(gw.Handler(), "s3",
+  	otelhttp.WithTracerProvider(tp), otelhttp.WithPropagators(prop),
+  	otelhttp.WithPublicEndpointFn(func(*http.Request) bool { return true }),
+  )
+  ```
+
+  `s3gw/trace_test.go` (`TestClientTraceThroughGateway`) runs this with a real SDK client sending `traceparent`, both linked and as a trusted parent.
 - **A refusal the gateway decided explains itself to the observer.** Every `AccessDenied` the policies produce carries a `*s3gw.DenyReason` as its cause — `errors.As(info.Err, &r)` — naming the layer (`user-policy`, `bucket-policy`, `cross-tenant`, `visibility`, `copy-source`) and, when a statement decided it, its index and `Sid`; the rendered `error` text of `RequestInfo` reads `bucket policy statement[2] "NoDeleteLogs" denies s3:DeleteObject on photos/logs/a (acme/app1)`. DeleteObjects refuses per key inside a 200, so its refusals are summarized on `Op.Denials` instead: one entry per deciding statement with the number of keys it refused. None of this reaches the client — it gets the stock `AccessDenied`, as on AWS — because a cross-tenant requester must not learn the shape of a policy it cannot read; the reason exists so that a reported request id explains a 403 without re-deriving the evaluation by hand.
 - **So does a refused authentication.** A request that never proved an identity carries a `*sigv4.AuthFailure` cause — `errors.As(info.Err, &f)` — with the reason (`unknown-key`, `signature-mismatch`, `invalid-token`, `unsigned-headers`, `expired`, `not-yet-valid`, `time-skewed`, `post-policy`, `no-auth`) and the access key id the request *claimed*, which `RequestInfo.AccessKeyID` also records for such a request; `Tenant`/`User` stay empty because nothing was proven. The claimed id is what a leaked-key hunt or a rotation left-behind ("who still signs with the old key?") needs, and it is an identifier, not a secret. The `error` text reads `signature-mismatch (access key S3RPKEY001): client signed headers "host;x-amz-content-sha256;x-amz-date", re-signed "..."`.
 - **What the backend answered travels in the context, not in `RequestInfo`.** The gateway passes the inbound request's context to every backend call, every hook and the observer, so a record your wrapping handler puts in the context can be filled by a middleware on the backend client (`SetClientOptions` → `APIOptions`, a `Deserialize` step reading the raw response) and read back in the observer — the backend's `x-amz-request-id` and `x-amz-id-2`, its response headers, one entry per attempt including the retries the SDK makes inside a single inbound request, which the hooks never see. `RequestInfo` and `Op` deliberately carry nothing of this: which backend facts matter is your call and changes with the backend, and the context is already the carrier. `s3gw/requestid_test.go` (`TestBackendResponseFactsThroughContext`) runs this pattern against the real SDK client.
@@ -305,6 +325,7 @@ Your `store.Store` implementation — and the control plane's write path that fe
 - Install an observer — it is the only place a failure's cause exists at all.
 - Log the failure cause (`RequestInfo.Err`, or the `error` field of its JSON): for a 403 it names the policy layer and statement that refused, or the authentication step that failed and the key that was tried.
 - Derive the request id from your trace (`SetRequestID`) so a reported `x-amz-request-id` opens the trace directly; take it from the hop in front only if that hop overwrites the header on every request.
+- Link a client's `traceparent` (`otelhttp.WithPublicEndpointFn`) rather than making it the parent, unless a hop in front overwrites it; give the backend client a tracer and an instrumented transport so backend calls join the trace.
 - Carry what you want to know about the backend exchange in the request context and fill it from a backend-client middleware; read it in the observer.
 - Keep it fast (it runs on the request path, after the response): buffer or sample at real request rates, or hand `RequestInfo` to a queue — it is self-contained, `Start` included.
 
