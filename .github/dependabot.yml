@@ -8,6 +8,11 @@ updates:
       aws-sdk-go-v2:
         patterns:
           - "github.com/aws/aws-sdk-go-v2*"
+          - "github.com/aws/smithy-go*"
+      # otel modules are released in lockstep; a partial bump mixes versions
+      opentelemetry:
+        patterns:
+          - "go.opentelemetry.io/*"
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
