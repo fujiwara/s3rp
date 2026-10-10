@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.0.19](https://github.com/fujiwara/s3rp/compare/v0.0.18...v0.0.19) - 2026-10-10
+
+- Document linking a client's trace through the gateway by @fujiwara in https://github.com/fujiwara/s3rp/pull/180
+- Bump OpenTelemetry to v1.47.0 and group its dependabot updates by @fujiwara in https://github.com/fujiwara/s3rp/pull/182
+- Bump otel/weaver from v0.26.1 to v0.27.0 in /s3gw/semconv by @dependabot[bot] in https://github.com/fujiwara/s3rp/pull/174
+- Bump jdx/mise-action from 4.3.0 to 5.1.1 by @dependabot[bot] in https://github.com/fujiwara/s3rp/pull/172
+- Bump actions/download-artifact from 8.0.1 to 8.0.2 by @dependabot[bot] in https://github.com/fujiwara/s3rp/pull/183
+- Bump actions/upload-artifact from 7.0.1 to 7.0.2 by @dependabot[bot] in https://github.com/fujiwara/s3rp/pull/184
+- Bump Songmu/tagpr from 1.21.0 to 1.21.2 by @dependabot[bot] in https://github.com/fujiwara/s3rp/pull/185
+- Bump rustfs/rustfs from 1.0.0 to 1.0.1 by @dependabot[bot] in https://github.com/fujiwara/s3rp/pull/173
+- Bump aws-sdk-go-v2 to the latest releases by @dependabot[bot] in https://github.com/fujiwara/s3rp/pull/175
+
 ## [v0.0.18](https://github.com/fujiwara/s3rp/compare/v0.0.17...v0.0.18) - 2026-10-02
 
 - Document that the http backend hop is unchecked and recommend https backends by @fujiwara in https://github.com/fujiwara/s3rp/pull/167
