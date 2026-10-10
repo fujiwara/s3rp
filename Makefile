@@ -26,8 +26,10 @@ WEAVER ?= docker run --rm -u $(shell id -u):$(shell id -g) -e HOME=/tmp -v $(CUR
 
 # Checks the metrics registry and regenerates the Go constants and
 # docs/metrics.md from it.
+# No --future: it makes the upstream semconv manifest's missing file_format
+# (still absent upstream) an error. Restore it once upstream sets the field.
 semconv:
-	$(WEAVER) registry check -r $(SEMCONV)/model --future -p $(SEMCONV)/policies
+	$(WEAVER) registry check -r $(SEMCONV)/model -p $(SEMCONV)/policies
 	$(WEAVER) registry generate -r $(SEMCONV)/model -t $(SEMCONV)/templates --skip-policies go $(SEMCONV)
 	$(WEAVER) registry generate -r $(SEMCONV)/model -t $(SEMCONV)/templates --skip-policies markdown docs
 	gofmt -w $(SEMCONV)/semconv_gen.go
