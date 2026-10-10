@@ -17,6 +17,9 @@ on:
           - compose default
           - quay.io/ceph/ceph:v19
 
+permissions:
+  contents: read
+
 jobs:
   s3tests:
     name: s3-tests (ceph)
@@ -47,6 +50,9 @@ jobs:
         run: ./s3tests/run.sh
         env:
           CEPH_IMAGE: ${{ inputs.image != 'compose default' && inputs.image || '' }}
+          # mise-action v5 no longer exports its token; run.sh's mise install
+          # needs one against GitHub API rate limits
+          MISE_GITHUB_TOKEN: ${{ github.token }}
 
       - name: Put the triage report in the job summary
         if: always()
