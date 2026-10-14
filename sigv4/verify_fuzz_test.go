@@ -71,6 +71,9 @@ func fuzzRegion(s string) string {
 	return r
 }
 
+// fuzzHeaderValue keeps printable ASCII only. A tab is left out on purpose:
+// aws-sdk-go-v2 signs it as-is while Amazon S3 (and the verifier) collapse
+// it to a space, so an SDK-signed tab is a request S3 itself refuses.
 func fuzzHeaderValue(s string) string {
 	return keepBytes(s, func(b byte) bool { return 0x20 <= b && b <= 0x7e }, 256)
 }

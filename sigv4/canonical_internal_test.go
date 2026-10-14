@@ -93,3 +93,23 @@ func TestCanonicalRequestSignsAnyListedHeader(t *testing.T) {
 		t.Errorf("canonical request\n%s\nwant\n%s", got, want)
 	}
 }
+
+// TestCollapseWhitespace: a run of spaces and tabs becomes one space, as
+// Amazon S3 verifies it — measured against S3, which accepts the form
+// botocore and the CRT sign ("a\tb" → "a b") and refuses aws-sdk-go-v2's,
+// which keeps the tab.
+func TestCollapseWhitespace(t *testing.T) {
+	for in, want := range map[string]string{
+		"plain":           "plain",
+		"  a  b  ":        "a b",
+		"a\tb":            "a b",
+		"a \t b":          "a b",
+		"\ta\t\tb\t":      "a b",
+		`"a   b   c"`:     `"a b c"`,
+		"no-change, here": "no-change, here",
+	} {
+		if got := collapseWhitespace(in); got != want {
+			t.Errorf("collapseWhitespace(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

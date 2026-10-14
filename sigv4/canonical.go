@@ -23,9 +23,10 @@ import (
 // canonicalized from its own value.
 //
 // The URI path and query follow aws-sdk-go-v2 exactly (the query is decoded
-// and re-encoded, see docs/sigv4-canonicalization.md), so every request the
-// SDK signs still canonicalizes to the same bytes; the differential fuzz
-// target holds the two together.
+// and re-encoded, see docs/sigv4-canonicalization.md), so a request the SDK
+// signs canonicalizes to the same bytes; the differential fuzz target holds
+// the two together. Header values with tabs are the one place the SDK and
+// Amazon S3 disagree, and there the verifier follows S3.
 
 // errSignedHeaderMissing reports a header named in SignedHeaders that the
 // request does not carry; the caller answers InvalidRequest.
@@ -132,7 +133,7 @@ func canonicalQuery(u *url.URL, drop string) string {
 }
 
 // canonicalHeaderValue is a signed header's canonical value: its values
-// joined by commas, each trimmed and with runs of spaces collapsed.
+// joined by commas, each trimmed and with runs of whitespace collapsed.
 func canonicalHeaderValue(r *http.Request, name string) (string, error) {
 	var values []string
 	switch name {
@@ -160,27 +161,33 @@ func canonicalHeaderValue(r *http.Request, name string) (string, error) {
 		if i > 0 {
 			b.WriteByte(',')
 		}
-		b.WriteString(collapseSpaces(v))
+		b.WriteString(collapseWhitespace(v))
 	}
 	return b.String(), nil
 }
 
-// collapseSpaces trims surrounding whitespace and collapses each run of
-// spaces inside the value to one.
-func collapseSpaces(v string) string {
+// collapseWhitespace trims the value and turns each run of spaces and tabs
+// inside it into one space. Tabs count as whitespace, as botocore and the
+// CRT sign them and Amazon S3 verifies them (measured: S3 refuses the
+// tab-preserving form aws-sdk-go-v2 signs).
+func collapseWhitespace(v string) string {
 	v = strings.TrimSpace(v)
-	if !strings.Contains(v, "  ") {
+	if !strings.Contains(v, "  ") && !strings.Contains(v, "\t") {
 		return v
 	}
 	var b strings.Builder
 	b.Grow(len(v))
-	prevSpace := false
+	inRun := false
 	for i := 0; i < len(v); i++ {
 		c := v[i]
-		if c == ' ' && prevSpace {
+		if c == ' ' || c == '\t' {
+			if !inRun {
+				b.WriteByte(' ')
+			}
+			inRun = true
 			continue
 		}
-		prevSpace = c == ' '
+		inRun = false
 		b.WriteByte(c)
 	}
 	return b.String()

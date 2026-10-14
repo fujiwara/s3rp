@@ -39,6 +39,8 @@ SCENARIOS = [
     ("upload-empty", ["cp", "{file}", "s3://bucket/empty"], 0, 0),
     ("download", ["cp", "s3://bucket/key%2Bplus/あ.txt", "{out}"], None, 1),
     ("delete", ["rm", "s3://bucket/a b/c.txt"], None, 0),
+    # a tab in a signed header value: the CRT signs it collapsed to a space
+    ("upload-metadata-tab", ["cp", "{file}", "s3://bucket/meta.txt", "--metadata", '{{"t": "a\\tb  c"}}'], 1000, 0),
 ]
 
 HEAD_OK = (b"HTTP/1.1 200 OK\r\nContent-Length: 1000\r\nETag: \"0123456789abcdef0123456789abcdef\"\r\n"
