@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.0.20](https://github.com/fujiwara/s3rp/compare/v0.0.19...v0.0.20) - 2026-10-14
+
+- Build the SigV4 canonical request in the verifier by @fujiwara in https://github.com/fujiwara/s3rp/pull/186
+- Add architecture decision records by @fujiwara in https://github.com/fujiwara/s3rp/pull/188
+
 ## [v0.0.19](https://github.com/fujiwara/s3rp/compare/v0.0.18...v0.0.19) - 2026-10-10
 
 - Document linking a client's trace through the gateway by @fujiwara in https://github.com/fujiwara/s3rp/pull/180
