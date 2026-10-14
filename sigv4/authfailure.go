@@ -31,8 +31,10 @@ const (
 	// ReasonInvalidToken: the session token failed validation or did not
 	// match the key's, or a token was presented for a long-lived key.
 	ReasonInvalidToken = "invalid-token"
-	// ReasonSignatureMismatch: the re-signed request differs from what the
-	// client signed (wrong secret, or a request altered in transit).
+	// ReasonSignatureMismatch: the signature computed over the request
+	// differs from the one presented, or the signed header list is malformed
+	// (wrong secret, a request altered in transit, or a client signing
+	// something other than what it sent).
 	ReasonSignatureMismatch = "signature-mismatch"
 	// ReasonUnsignedHeaders: an x-amz-* header was present but not covered
 	// by the signature.

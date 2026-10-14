@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Generate SigV4 cross-check vectors signed by botocore.
 
-The verifier re-signs a clone of the request with aws-sdk-go-v2's own
-signer, so a request that the Go SDK signed exercises none of the
-asymmetries: both sides share the signing code. botocore is an independent
+The fuzz targets sign with aws-sdk-go-v2, so they only test agreement with
+that one signer. botocore is an independent
 SigV4 implementation carried by every boto3/aws-cli client, so requests it
 signs are what non-Go clients actually send — and every one of them must
 verify. The vectors record the request exactly as it would appear on the

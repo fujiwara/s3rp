@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -16,15 +17,16 @@ import (
 	"github.com/fujiwara/s3rp/sigv4"
 )
 
-// Fuzz targets for SigV4 request verification. The signature math is the
-// SDK's own signer on both sides, so these do not test HMAC arithmetic —
-// they test everything around it, which is where the verifier's own code
-// runs: request-clone construction (escaping preservation, header
-// selection, scope parsing) and the parsers that consume attacker bytes
+// Fuzz targets for SigV4 request verification. The verifier builds the
+// canonical request itself, and the requests here are signed by
+// aws-sdk-go-v2's signer, so they are a differential test of the two
+// canonicalizations — path escaping, query re-encoding, header selection
+// and value normalization — plus the parsers that consume attacker bytes
 // before any signature is checked. Two directions:
 //
 //   - Completeness: whatever the real SDK signer signs, the verifier must
-//     accept — a refusal is a legitimate client locked out.
+//     accept — a refusal is a legitimate client locked out, or the two
+//     canonicalizations disagree.
 //   - Soundness: mutating any signed material of an accepted request must
 //     be refused — an acceptance is a fail-open.
 
@@ -92,9 +94,10 @@ func fuzzHeaderName(s string) string {
 }
 
 // signServerRequest signs a client request with the SDK signer and rebuilds
-// it as the server would see it. Returns nil when the driver-generated
+// it as the server would see it. A positive contentLength is signed as
+// content-length and arrives as the header, as a server request carries it. Returns nil when the driver-generated
 // input does not survive URL parsing — a driver artifact, not a finding.
-func signServerRequest(t *testing.T, method, pathAndQuery string, headers http.Header, payloadHash, region, token string) *http.Request {
+func signServerRequest(t *testing.T, method, pathAndQuery string, headers http.Header, contentLength int64, payloadHash, region, token string) *http.Request {
 	t.Helper()
 	if _, err := url.ParseRequestURI(pathAndQuery); err != nil {
 		return nil
@@ -110,6 +113,7 @@ func signServerRequest(t *testing.T, method, pathAndQuery string, headers http.H
 		return nil
 	}
 	maps.Copy(req.Header, headers)
+	req.ContentLength = contentLength
 	req.Header.Set("X-Amz-Content-Sha256", payloadHash)
 	if token != "" {
 		req.Header.Set("X-Amz-Security-Token", token)
@@ -121,6 +125,9 @@ func signServerRequest(t *testing.T, method, pathAndQuery string, headers http.H
 	}
 	sr := httptest.NewRequest(method, urlStr, nil)
 	sr.Header = req.Header
+	if contentLength > 0 {
+		sr.Header.Set("Content-Length", strconv.FormatInt(contentLength, 10))
+	}
 	sr.Host = req.Host
 	return sr
 }
@@ -234,13 +241,17 @@ func FuzzVerifyHeaderRoundtrip(f *testing.F) {
 		if sel&0x20 != 0 {
 			payloadHash = "UNSIGNED-PAYLOAD"
 		}
+		var contentLength int64
+		if sel&0x10 != 0 {
+			contentLength = int64(len(hVal) + 1)
+		}
 		region := fuzzRegion(rawRegion)
 		token := keepBytes(rawToken, func(b byte) bool {
 			return b == '+' || b == '/' || b == '=' || b == '-' || b == '_' ||
 				'a' <= b && b <= 'z' || 'A' <= b && b <= 'Z' || '0' <= b && b <= '9'
 		}, 128)
 
-		sr := signServerRequest(t, method, pq, headers, payloadHash, region, token)
+		sr := signServerRequest(t, method, pq, headers, contentLength, payloadHash, region, token)
 		if sr == nil {
 			return
 		}

@@ -4,8 +4,8 @@
 curl's --aws-sigv4 (lib/http_aws_sigv4.c) is a from-scratch C
 implementation that shares no code with any AWS SDK, and it ships on
 effectively every machine — a systematically different lineage from both
-botocore (generate.py) and the aws-sdk-go-v2 signer the verifier re-signs
-with. Every request it signs must verify.
+botocore (generate.py) and the aws-sdk-go-v2 signer the fuzz targets use.
+Every request it signs must verify.
 
 Vectors are captured off the wire: curl signs and sends a real request to
 a local capture socket, and the vector records exactly what curl sent.

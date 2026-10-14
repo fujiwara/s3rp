@@ -14,7 +14,7 @@ and the canonical query string can be built two ways:
 - **Sign-as-sent** (botocore): take the query string as it appears in the
   URL, split into pairs, sort the pairs as raw strings, join. No decoding,
   no re-encoding.
-- **Normalize** (aws-sdk-go-v2, which s3rp verifies with): parse the query
+- **Normalize** (aws-sdk-go-v2, and s3rp, which follows it): parse the query
   (decoding `%XX` and `+`), sort keys, sort each key's values by decoded
   form, re-encode canonically (unreserved characters literal, everything
   else `%XX` upper-case).
@@ -103,14 +103,16 @@ and no duplicate keys, the same rule the query already follows.
   cause, so an affected client — should one ever exist — is visible in the
   log, not silent.
 - **Multi-candidate verification is not worth its cost.** Accepting the
-  other orderings would mean implementing canonical-query construction by
-  hand next to the SDK's, for wire forms with no traffic; the verifier's
-  design rule is to re-sign with the SDK's own signer rather than
-  reimplement canonicalization. s3rp sits between versitygw (rejects all)
-  and AWS (accepts all), well inside ecosystem norms.
+  other orderings would mean a second canonical query and a second
+  signature per refused request, for wire forms with no traffic. The
+  verifier builds the canonical request itself (it no longer re-signs with
+  the SDK's signer, which cannot reproduce a signed `content-length:0`),
+  but it follows aws-sdk-go-v2's query canonicalization on purpose, and the
+  fuzz targets hold the two together. s3rp sits between versitygw (rejects
+  all) and AWS (accepts all), well inside ecosystem norms.
 
 The [cross-check corpora](../sigv4/testdata/crosscheck/) — botocore, curl
-`--aws-sigv4` and aws4 vectors committed and replayed in `go test`, with
+`--aws-sigv4`, aws4 and AWS CRT (aws-cli) vectors committed and replayed in `go test`, with
 fresh ones generated nightly — only ever emit canonical encodings,
 matching what real clients send. If a
 real client ever surfaces on the wrong side of this table, the revisit path

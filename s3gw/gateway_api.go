@@ -74,14 +74,14 @@ func (g *Gateway) ClientCacheStats() CacheStats {
 	}
 }
 
-// SignerCacheStats snapshots the per-access-key signer cache. Its counters
+// SignerCacheStats snapshots the per-access-key signing-key cache. Its counters
 // survive SetSignerCacheSize, which replaces the cache itself.
 func (g *Gateway) SignerCacheStats() CacheStats {
 	s := g.verifier.SignerCacheStats()
 	return CacheStats{Hits: s.Hits, Misses: s.Misses, Evictions: s.Evictions, Len: s.Len, Capacity: s.Capacity}
 }
 
-// SetSignerCacheSize resizes the per-access-key signer cache used by
+// SetSignerCacheSize resizes the per-access-key signing-key cache used by
 // signature verification. See sigv4.Verifier.SetSignerCacheSize.
 func (g *Gateway) SetSignerCacheSize(n int) { g.verifier.SetSignerCacheSize(n) }
 
