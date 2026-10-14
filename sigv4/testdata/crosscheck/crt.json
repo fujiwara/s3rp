@@ -1,0 +1,650 @@
+{
+ "generator": "sigv4/testdata/crosscheck/generate_crt.py",
+ "aws_cli_version": "aws-cli/2.38.0 Python/3.14.6 Linux/6.8.0-139-generic exe/x86_64.ubuntu.24",
+ "vectors": [
+  {
+   "name": "000-upload-multipart-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "127.0.0.1:48459",
+   "uri": "/bucket/dir/big%20file.bin?uploads",
+   "headers": [
+    [
+     "Content-Type",
+     "application/octet-stream"
+    ],
+    [
+     "amz-sdk-invocation-id",
+     "48a216f6-8a28-4cd9-afe8-0481be2fc6e8"
+    ],
+    [
+     "amz-sdk-request",
+     "attempt=1"
+    ],
+    [
+     "x-amz-checksum-algorithm",
+     "CRC64NVME"
+    ],
+    [
+     "Content-Length",
+     "0"
+    ],
+    [
+     "User-Agent",
+     "aws-cli/2.38.0 md/awscrt#0.37.0 ua/2.1 os/linux#6.8.0-139-generic md/arch#x86_64 lang/python#3.14.6 md/pyimpl#CPython m/Ae,G,W,Z,E,N,b cfg/retry-mode#standard md/installer#exe sid/0fe89429f3e8 md/distrib#ubuntu.24 md/prompt#off md/command#s3.cp CRTS3NativeClient/1.2.0 platform/unknown m/Ab"
+    ],
+    [
+     "X-Amz-Date",
+     "20261014T073950Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "UNSIGNED-PAYLOAD"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDCRTEXAMPLE000001/20261014/us-east-1/s3/aws4_request, SignedHeaders=amz-sdk-invocation-id;amz-sdk-request;content-length;content-type;host;x-amz-checksum-algorithm;x-amz-content-sha256;x-amz-date, Signature=cd6418925892e32d85fd21eb54bc82ebb9d6fffd2b642507259531ebcdf9c798"
+    ]
+   ],
+   "access_key_id": "AKIDCRTEXAMPLE000001",
+   "secret_access_key": "crtSecretKeyExample/0123456789+abcdefghij",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-10-14T07:39:50Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "001-upload-single-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "127.0.0.1:48459",
+   "uri": "/bucket/small.txt",
+   "headers": [
+    [
+     "Content-Type",
+     "application/octet-stream"
+    ],
+    [
+     "amz-sdk-invocation-id",
+     "699de5fa-f0e5-465a-b962-e6f9e13ad390"
+    ],
+    [
+     "amz-sdk-request",
+     "attempt=1"
+    ],
+    [
+     "Content-Encoding",
+     "aws-chunked"
+    ],
+    [
+     "x-amz-trailer",
+     "x-amz-checksum-crc64nvme"
+    ],
+    [
+     "x-amz-decoded-content-length",
+     "1000"
+    ],
+    [
+     "Content-Length",
+     "1051"
+    ],
+    [
+     "User-Agent",
+     "aws-cli/2.38.0 md/awscrt#0.37.0 ua/2.1 os/linux#6.8.0-139-generic md/arch#x86_64 lang/python#3.14.6 md/pyimpl#CPython m/Ae,G,W,Z,E,N,b cfg/retry-mode#standard md/installer#exe sid/0fe89429f3e8 md/distrib#ubuntu.24 md/prompt#off md/command#s3.cp CRTS3NativeClient/1.2.0 platform/unknown m/Ab"
+    ],
+    [
+     "X-Amz-Date",
+     "20261014T073951Z"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDCRTEXAMPLE000001/20261014/us-east-1/s3/aws4_request, SignedHeaders=amz-sdk-invocation-id;amz-sdk-request;content-encoding;content-length;content-type;host;x-amz-content-sha256;x-amz-date;x-amz-decoded-content-length;x-amz-trailer, Signature=f2fbeacc0a3b47394ed0466bd9912829e0eaa36fa00e3edc78990e2ca5f729c0"
+    ],
+    [
+     "x-amz-content-sha256",
+     "STREAMING-UNSIGNED-PAYLOAD-TRAILER"
+    ]
+   ],
+   "access_key_id": "AKIDCRTEXAMPLE000001",
+   "secret_access_key": "crtSecretKeyExample/0123456789+abcdefghij",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-10-14T07:39:51Z",
+   "payload_hash": "STREAMING-UNSIGNED-PAYLOAD-TRAILER"
+  },
+  {
+   "name": "002-upload-empty-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "127.0.0.1:48459",
+   "uri": "/bucket/empty",
+   "headers": [
+    [
+     "Content-Type",
+     "application/octet-stream"
+    ],
+    [
+     "amz-sdk-invocation-id",
+     "de02304f-1a72-4895-9914-04545be486be"
+    ],
+    [
+     "amz-sdk-request",
+     "attempt=1"
+    ],
+    [
+     "Content-Encoding",
+     "aws-chunked"
+    ],
+    [
+     "x-amz-trailer",
+     "x-amz-checksum-crc64nvme"
+    ],
+    [
+     "x-amz-decoded-content-length",
+     "0"
+    ],
+    [
+     "Content-Length",
+     "44"
+    ],
+    [
+     "User-Agent",
+     "aws-cli/2.38.0 md/awscrt#0.37.0 ua/2.1 os/linux#6.8.0-139-generic md/arch#x86_64 lang/python#3.14.6 md/pyimpl#CPython m/Ae,G,W,Z,E,N,b cfg/retry-mode#standard md/installer#exe sid/0fe89429f3e8 md/distrib#ubuntu.24 md/prompt#off md/command#s3.cp CRTS3NativeClient/1.2.0 platform/unknown m/Ab"
+    ],
+    [
+     "X-Amz-Date",
+     "20261014T073951Z"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDCRTEXAMPLE000001/20261014/us-east-1/s3/aws4_request, SignedHeaders=amz-sdk-invocation-id;amz-sdk-request;content-encoding;content-length;content-type;host;x-amz-content-sha256;x-amz-date;x-amz-decoded-content-length;x-amz-trailer, Signature=65e13bb3bef219acba3d9b03320ebd83f22e2338ec7b2112a2ebffcce094fe35"
+    ],
+    [
+     "x-amz-content-sha256",
+     "STREAMING-UNSIGNED-PAYLOAD-TRAILER"
+    ]
+   ],
+   "access_key_id": "AKIDCRTEXAMPLE000001",
+   "secret_access_key": "crtSecretKeyExample/0123456789+abcdefghij",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-10-14T07:39:51Z",
+   "payload_hash": "STREAMING-UNSIGNED-PAYLOAD-TRAILER"
+  },
+  {
+   "name": "003-download-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "127.0.0.1:48459",
+   "uri": "/bucket/key%252Bplus/%E3%81%82.txt",
+   "headers": [
+    [
+     "amz-sdk-invocation-id",
+     "87dac5b6-d662-4c50-9608-71edbf4250cf"
+    ],
+    [
+     "amz-sdk-request",
+     "attempt=1"
+    ],
+    [
+     "Content-Length",
+     "0"
+    ],
+    [
+     "x-amz-checksum-mode",
+     "enabled"
+    ],
+    [
+     "User-Agent",
+     "aws-cli/2.38.0 md/awscrt#0.37.0 ua/2.1 os/linux#6.8.0-139-generic md/arch#x86_64 lang/python#3.14.6 md/pyimpl#CPython m/Ae,G,Z,E,N,b cfg/retry-mode#standard md/installer#exe sid/0fe89429f3e8 md/distrib#ubuntu.24 md/prompt#off md/command#s3.cp CRTS3NativeClient/1.2.0 platform/unknown m/Ab"
+    ],
+    [
+     "X-Amz-Date",
+     "20261014T073952Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "UNSIGNED-PAYLOAD"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDCRTEXAMPLE000001/20261014/us-east-1/s3/aws4_request, SignedHeaders=amz-sdk-invocation-id;amz-sdk-request;content-length;host;x-amz-checksum-mode;x-amz-content-sha256;x-amz-date, Signature=8886d9d170707b3af5f74f8c342fa985d60d874775d3f23e1f41180e54305e42"
+    ]
+   ],
+   "access_key_id": "AKIDCRTEXAMPLE000001",
+   "secret_access_key": "crtSecretKeyExample/0123456789+abcdefghij",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-10-14T07:39:52Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "004-delete-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "127.0.0.1:48459",
+   "uri": "/bucket/a%20b/c.txt",
+   "headers": [
+    [
+     "amz-sdk-invocation-id",
+     "c627c445-3a8d-45fb-b51e-f36f336c3ae3"
+    ],
+    [
+     "amz-sdk-request",
+     "attempt=1"
+    ],
+    [
+     "Content-Length",
+     "0"
+    ],
+    [
+     "User-Agent",
+     "aws-cli/2.38.0 md/awscrt#0.37.0 ua/2.1 os/linux#6.8.0-139-generic md/arch#x86_64 lang/python#3.14.6 md/pyimpl#CPython m/Ae,G,Z,E,N,b cfg/retry-mode#standard md/installer#exe sid/0fe89429f3e8 md/distrib#ubuntu.24 md/prompt#off md/command#s3.rm CRTS3NativeClient/1.2.0 platform/unknown"
+    ],
+    [
+     "X-Amz-Date",
+     "20261014T073952Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "UNSIGNED-PAYLOAD"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDCRTEXAMPLE000001/20261014/us-east-1/s3/aws4_request, SignedHeaders=amz-sdk-invocation-id;amz-sdk-request;content-length;host;x-amz-content-sha256;x-amz-date, Signature=52879a2e6fe6f31cad4bd6ec28ea6c79179c6995e76ee8b12e1e2b7ef323d74c"
+    ]
+   ],
+   "access_key_id": "AKIDCRTEXAMPLE000001",
+   "secret_access_key": "crtSecretKeyExample/0123456789+abcdefghij",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-10-14T07:39:52Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "005-upload-metadata-tab-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "127.0.0.1:48459",
+   "uri": "/bucket/meta.txt",
+   "headers": [
+    [
+     "x-amz-meta-t",
+     "a\tb  c"
+    ],
+    [
+     "Content-Type",
+     "application/octet-stream"
+    ],
+    [
+     "amz-sdk-invocation-id",
+     "c1ca42de-39f0-467a-a50e-6c92e85a3c99"
+    ],
+    [
+     "amz-sdk-request",
+     "attempt=1"
+    ],
+    [
+     "Content-Encoding",
+     "aws-chunked"
+    ],
+    [
+     "x-amz-trailer",
+     "x-amz-checksum-crc64nvme"
+    ],
+    [
+     "x-amz-decoded-content-length",
+     "1000"
+    ],
+    [
+     "Content-Length",
+     "1051"
+    ],
+    [
+     "User-Agent",
+     "aws-cli/2.38.0 md/awscrt#0.37.0 ua/2.1 os/linux#6.8.0-139-generic md/arch#x86_64 lang/python#3.14.6 md/pyimpl#CPython m/Ae,G,W,Z,E,N,b cfg/retry-mode#standard md/installer#exe sid/0fe89429f3e8 md/distrib#ubuntu.24 md/prompt#off md/command#s3.cp CRTS3NativeClient/1.2.0 platform/unknown m/Ab"
+    ],
+    [
+     "X-Amz-Date",
+     "20261014T073953Z"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDCRTEXAMPLE000001/20261014/us-east-1/s3/aws4_request, SignedHeaders=amz-sdk-invocation-id;amz-sdk-request;content-encoding;content-length;content-type;host;x-amz-content-sha256;x-amz-date;x-amz-decoded-content-length;x-amz-meta-t;x-amz-trailer, Signature=944e0bd20f5452dda6ec8f5c53cbb7f8baf2bf8f5b10f25a78b25b6f97657846"
+    ],
+    [
+     "x-amz-content-sha256",
+     "STREAMING-UNSIGNED-PAYLOAD-TRAILER"
+    ]
+   ],
+   "access_key_id": "AKIDCRTEXAMPLE000001",
+   "secret_access_key": "crtSecretKeyExample/0123456789+abcdefghij",
+   "session_token": "",
+   "region": "us-east-1",
+   "timestamp": "2026-10-14T07:39:53Z",
+   "payload_hash": "STREAMING-UNSIGNED-PAYLOAD-TRAILER"
+  },
+  {
+   "name": "006-upload-multipart-POST",
+   "type": "header",
+   "method": "POST",
+   "host": "127.0.0.1:48459",
+   "uri": "/bucket/dir/big%20file.bin?uploads",
+   "headers": [
+    [
+     "Content-Type",
+     "application/octet-stream"
+    ],
+    [
+     "amz-sdk-invocation-id",
+     "052a811c-584c-49bf-b3ca-cf8e5f19b13b"
+    ],
+    [
+     "amz-sdk-request",
+     "attempt=1"
+    ],
+    [
+     "x-amz-checksum-algorithm",
+     "CRC64NVME"
+    ],
+    [
+     "Content-Length",
+     "0"
+    ],
+    [
+     "User-Agent",
+     "aws-cli/2.38.0 md/awscrt#0.37.0 ua/2.1 os/linux#6.8.0-139-generic md/arch#x86_64 lang/python#3.14.6 md/pyimpl#CPython m/Ae,G,W,Z,E,N,b cfg/retry-mode#standard md/installer#exe sid/0fe89429f3e8 md/distrib#ubuntu.24 md/prompt#off md/command#s3.cp CRTS3NativeClient/1.2.0 platform/unknown m/Ab"
+    ],
+    [
+     "X-Amz-Date",
+     "20261014T073954Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "UNSIGNED-PAYLOAD"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDCRTEXAMPLE000001/20261014/ap-northeast-1/s3/aws4_request, SignedHeaders=amz-sdk-invocation-id;amz-sdk-request;content-length;content-type;host;x-amz-checksum-algorithm;x-amz-content-sha256;x-amz-date, Signature=85d9ef0b3df0d619814b4bfd7749d9d1cb6505bdbfbdd65021c01a90fe6ae993"
+    ]
+   ],
+   "access_key_id": "AKIDCRTEXAMPLE000001",
+   "secret_access_key": "crtSecretKeyExample/0123456789+abcdefghij",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-10-14T07:39:54Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "007-upload-single-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "127.0.0.1:48459",
+   "uri": "/bucket/small.txt",
+   "headers": [
+    [
+     "Content-Type",
+     "application/octet-stream"
+    ],
+    [
+     "amz-sdk-invocation-id",
+     "15d3e5be-ff18-48c3-84f3-3b204bee0788"
+    ],
+    [
+     "amz-sdk-request",
+     "attempt=1"
+    ],
+    [
+     "Content-Encoding",
+     "aws-chunked"
+    ],
+    [
+     "x-amz-trailer",
+     "x-amz-checksum-crc64nvme"
+    ],
+    [
+     "x-amz-decoded-content-length",
+     "1000"
+    ],
+    [
+     "Content-Length",
+     "1051"
+    ],
+    [
+     "User-Agent",
+     "aws-cli/2.38.0 md/awscrt#0.37.0 ua/2.1 os/linux#6.8.0-139-generic md/arch#x86_64 lang/python#3.14.6 md/pyimpl#CPython m/Ae,G,W,Z,E,N,b cfg/retry-mode#standard md/installer#exe sid/0fe89429f3e8 md/distrib#ubuntu.24 md/prompt#off md/command#s3.cp CRTS3NativeClient/1.2.0 platform/unknown m/Ab"
+    ],
+    [
+     "X-Amz-Date",
+     "20261014T073954Z"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDCRTEXAMPLE000001/20261014/ap-northeast-1/s3/aws4_request, SignedHeaders=amz-sdk-invocation-id;amz-sdk-request;content-encoding;content-length;content-type;host;x-amz-content-sha256;x-amz-date;x-amz-decoded-content-length;x-amz-trailer, Signature=158668810b3442068ffe618e892732b4a1270a1e8521610cca11b45810ea6fc2"
+    ],
+    [
+     "x-amz-content-sha256",
+     "STREAMING-UNSIGNED-PAYLOAD-TRAILER"
+    ]
+   ],
+   "access_key_id": "AKIDCRTEXAMPLE000001",
+   "secret_access_key": "crtSecretKeyExample/0123456789+abcdefghij",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-10-14T07:39:54Z",
+   "payload_hash": "STREAMING-UNSIGNED-PAYLOAD-TRAILER"
+  },
+  {
+   "name": "008-upload-empty-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "127.0.0.1:48459",
+   "uri": "/bucket/empty",
+   "headers": [
+    [
+     "Content-Type",
+     "application/octet-stream"
+    ],
+    [
+     "amz-sdk-invocation-id",
+     "79fc53b9-7b62-409e-84fe-69ea06dc9ad1"
+    ],
+    [
+     "amz-sdk-request",
+     "attempt=1"
+    ],
+    [
+     "Content-Encoding",
+     "aws-chunked"
+    ],
+    [
+     "x-amz-trailer",
+     "x-amz-checksum-crc64nvme"
+    ],
+    [
+     "x-amz-decoded-content-length",
+     "0"
+    ],
+    [
+     "Content-Length",
+     "44"
+    ],
+    [
+     "User-Agent",
+     "aws-cli/2.38.0 md/awscrt#0.37.0 ua/2.1 os/linux#6.8.0-139-generic md/arch#x86_64 lang/python#3.14.6 md/pyimpl#CPython m/Ae,G,W,Z,E,N,b cfg/retry-mode#standard md/installer#exe sid/0fe89429f3e8 md/distrib#ubuntu.24 md/prompt#off md/command#s3.cp CRTS3NativeClient/1.2.0 platform/unknown m/Ab"
+    ],
+    [
+     "X-Amz-Date",
+     "20261014T073955Z"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDCRTEXAMPLE000001/20261014/ap-northeast-1/s3/aws4_request, SignedHeaders=amz-sdk-invocation-id;amz-sdk-request;content-encoding;content-length;content-type;host;x-amz-content-sha256;x-amz-date;x-amz-decoded-content-length;x-amz-trailer, Signature=8e8c202488f153394ee0a9d5f4a9c5acb6355a48d903e472f25811d6232a94c0"
+    ],
+    [
+     "x-amz-content-sha256",
+     "STREAMING-UNSIGNED-PAYLOAD-TRAILER"
+    ]
+   ],
+   "access_key_id": "AKIDCRTEXAMPLE000001",
+   "secret_access_key": "crtSecretKeyExample/0123456789+abcdefghij",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-10-14T07:39:55Z",
+   "payload_hash": "STREAMING-UNSIGNED-PAYLOAD-TRAILER"
+  },
+  {
+   "name": "009-download-HEAD",
+   "type": "header",
+   "method": "HEAD",
+   "host": "127.0.0.1:48459",
+   "uri": "/bucket/key%252Bplus/%E3%81%82.txt",
+   "headers": [
+    [
+     "amz-sdk-invocation-id",
+     "be2892bd-1484-434e-86f0-70e375ee0b69"
+    ],
+    [
+     "amz-sdk-request",
+     "attempt=1"
+    ],
+    [
+     "Content-Length",
+     "0"
+    ],
+    [
+     "x-amz-checksum-mode",
+     "enabled"
+    ],
+    [
+     "User-Agent",
+     "aws-cli/2.38.0 md/awscrt#0.37.0 ua/2.1 os/linux#6.8.0-139-generic md/arch#x86_64 lang/python#3.14.6 md/pyimpl#CPython m/Ae,G,Z,E,N,b cfg/retry-mode#standard md/installer#exe sid/0fe89429f3e8 md/distrib#ubuntu.24 md/prompt#off md/command#s3.cp CRTS3NativeClient/1.2.0 platform/unknown m/Ab"
+    ],
+    [
+     "X-Amz-Date",
+     "20261014T073955Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "UNSIGNED-PAYLOAD"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDCRTEXAMPLE000001/20261014/ap-northeast-1/s3/aws4_request, SignedHeaders=amz-sdk-invocation-id;amz-sdk-request;content-length;host;x-amz-checksum-mode;x-amz-content-sha256;x-amz-date, Signature=43915792539409e6ec1031eebae3a1b34ddb7ad2a9deb1713019aee9e2b48c73"
+    ]
+   ],
+   "access_key_id": "AKIDCRTEXAMPLE000001",
+   "secret_access_key": "crtSecretKeyExample/0123456789+abcdefghij",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-10-14T07:39:55Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "010-delete-DELETE",
+   "type": "header",
+   "method": "DELETE",
+   "host": "127.0.0.1:48459",
+   "uri": "/bucket/a%20b/c.txt",
+   "headers": [
+    [
+     "amz-sdk-invocation-id",
+     "745da647-c0ff-4eed-b5f3-67d886a56a4c"
+    ],
+    [
+     "amz-sdk-request",
+     "attempt=1"
+    ],
+    [
+     "Content-Length",
+     "0"
+    ],
+    [
+     "User-Agent",
+     "aws-cli/2.38.0 md/awscrt#0.37.0 ua/2.1 os/linux#6.8.0-139-generic md/arch#x86_64 lang/python#3.14.6 md/pyimpl#CPython m/Ae,G,Z,E,N,b cfg/retry-mode#standard md/installer#exe sid/0fe89429f3e8 md/distrib#ubuntu.24 md/prompt#off md/command#s3.rm CRTS3NativeClient/1.2.0 platform/unknown"
+    ],
+    [
+     "X-Amz-Date",
+     "20261014T073956Z"
+    ],
+    [
+     "x-amz-content-sha256",
+     "UNSIGNED-PAYLOAD"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDCRTEXAMPLE000001/20261014/ap-northeast-1/s3/aws4_request, SignedHeaders=amz-sdk-invocation-id;amz-sdk-request;content-length;host;x-amz-content-sha256;x-amz-date, Signature=9740aa0dd90f10e40d342fd5bf5105c4f5c44fc640f5ac46246766daa42cd875"
+    ]
+   ],
+   "access_key_id": "AKIDCRTEXAMPLE000001",
+   "secret_access_key": "crtSecretKeyExample/0123456789+abcdefghij",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-10-14T07:39:56Z",
+   "payload_hash": "UNSIGNED-PAYLOAD"
+  },
+  {
+   "name": "011-upload-metadata-tab-PUT",
+   "type": "header",
+   "method": "PUT",
+   "host": "127.0.0.1:48459",
+   "uri": "/bucket/meta.txt",
+   "headers": [
+    [
+     "x-amz-meta-t",
+     "a\tb  c"
+    ],
+    [
+     "Content-Type",
+     "application/octet-stream"
+    ],
+    [
+     "amz-sdk-invocation-id",
+     "4e1d07cc-8a58-41d5-8fa1-4eb3960e3a28"
+    ],
+    [
+     "amz-sdk-request",
+     "attempt=1"
+    ],
+    [
+     "Content-Encoding",
+     "aws-chunked"
+    ],
+    [
+     "x-amz-trailer",
+     "x-amz-checksum-crc64nvme"
+    ],
+    [
+     "x-amz-decoded-content-length",
+     "1000"
+    ],
+    [
+     "Content-Length",
+     "1051"
+    ],
+    [
+     "User-Agent",
+     "aws-cli/2.38.0 md/awscrt#0.37.0 ua/2.1 os/linux#6.8.0-139-generic md/arch#x86_64 lang/python#3.14.6 md/pyimpl#CPython m/Ae,G,W,Z,E,N,b cfg/retry-mode#standard md/installer#exe sid/0fe89429f3e8 md/distrib#ubuntu.24 md/prompt#off md/command#s3.cp CRTS3NativeClient/1.2.0 platform/unknown m/Ab"
+    ],
+    [
+     "X-Amz-Date",
+     "20261014T073956Z"
+    ],
+    [
+     "Authorization",
+     "AWS4-HMAC-SHA256 Credential=AKIDCRTEXAMPLE000001/20261014/ap-northeast-1/s3/aws4_request, SignedHeaders=amz-sdk-invocation-id;amz-sdk-request;content-encoding;content-length;content-type;host;x-amz-content-sha256;x-amz-date;x-amz-decoded-content-length;x-amz-meta-t;x-amz-trailer, Signature=220b565da5695dd24b44a9620cc1f3f1e1dea6bcacd6c63a9aba8e39ae2aedea"
+    ],
+    [
+     "x-amz-content-sha256",
+     "STREAMING-UNSIGNED-PAYLOAD-TRAILER"
+    ]
+   ],
+   "access_key_id": "AKIDCRTEXAMPLE000001",
+   "secret_access_key": "crtSecretKeyExample/0123456789+abcdefghij",
+   "session_token": "",
+   "region": "ap-northeast-1",
+   "timestamp": "2026-10-14T07:39:56Z",
+   "payload_hash": "STREAMING-UNSIGNED-PAYLOAD-TRAILER"
+  }
+ ]
+}

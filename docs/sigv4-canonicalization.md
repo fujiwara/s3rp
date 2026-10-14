@@ -4,7 +4,8 @@ How S3 implementations verify requests whose query string is not in
 canonical encoding — measured, because it is specified nowhere. This
 records what the [signer cross-checks](../sigv4/testdata/crosscheck/)
 surfaced, what probing real implementations showed, and why s3rp's behavior
-is deliberately left as it is.
+is deliberately left as it is. A last section covers the one header-value
+divergence measured the same way, where s3rp follows Amazon S3.
 
 ## The two schools
 
@@ -14,7 +15,7 @@ and the canonical query string can be built two ways:
 - **Sign-as-sent** (botocore): take the query string as it appears in the
   URL, split into pairs, sort the pairs as raw strings, join. No decoding,
   no re-encoding.
-- **Normalize** (aws-sdk-go-v2, which s3rp verifies with): parse the query
+- **Normalize** (aws-sdk-go-v2, and s3rp, which follows it): parse the query
   (decoding `%XX` and `+`), sort keys, sort each key's values by decoded
   form, re-encode canonically (unreserved characters literal, everything
   else `%XX` upper-case).
@@ -103,16 +104,42 @@ and no duplicate keys, the same rule the query already follows.
   cause, so an affected client — should one ever exist — is visible in the
   log, not silent.
 - **Multi-candidate verification is not worth its cost.** Accepting the
-  other orderings would mean implementing canonical-query construction by
-  hand next to the SDK's, for wire forms with no traffic; the verifier's
-  design rule is to re-sign with the SDK's own signer rather than
-  reimplement canonicalization. s3rp sits between versitygw (rejects all)
-  and AWS (accepts all), well inside ecosystem norms.
+  other orderings would mean a second canonical query and a second
+  signature per refused request, for wire forms with no traffic. The
+  verifier builds the canonical request itself (it no longer re-signs with
+  the SDK's signer, which cannot reproduce a signed `content-length:0`),
+  but it follows aws-sdk-go-v2's query canonicalization on purpose, and the
+  fuzz targets hold the two together. s3rp sits between versitygw (rejects
+  all) and AWS (accepts all), well inside ecosystem norms.
 
 The [cross-check corpora](../sigv4/testdata/crosscheck/) — botocore, curl
-`--aws-sigv4` and aws4 vectors committed and replayed in `go test`, with
+`--aws-sigv4`, aws4 and AWS CRT (aws-cli) vectors committed and replayed in `go test`, with
 fresh ones generated nightly — only ever emit canonical encodings,
 matching what real clients send. If a
 real client ever surfaces on the wrong side of this table, the revisit path
 is a second verification pass against the alternative ordering, applied
 only when the first fails.
+
+## Header values: tabs (2026-10-14)
+
+Signed header values are trimmed and their internal whitespace collapsed
+("Trimall"). The implementations disagree on whether a tab counts. botocore
+collapses every whitespace run, and so does the CRT; aws-sdk-go-v2 collapses
+only runs of spaces and keeps tabs. Measured with
+[probe_header_whitespace.py](../sigv4/testdata/crosscheck/probe_header_whitespace.py),
+signing an `x-amz-meta-*` value of `a<TAB>b` (and `a <TAB> b`) each way:
+
+| Endpoint | botocore / CRT form (`a b`) | aws-sdk-go-v2 form (tab kept) |
+|---|---|---|
+| Amazon S3 | accepted | **SignatureDoesNotMatch** |
+| versitygw v1.8.0 | SignatureDoesNotMatch | accepted |
+| Ceph RGW (tentacle) | `a<TAB>b` refused, `a <TAB> b` accepted | the converse |
+| s3rp | accepted | SignatureDoesNotMatch |
+
+Unlike the query, this divergence is reachable from mainstream clients:
+aws-cli, classic and CRT alike, signs a tab in `--metadata` collapsed. s3rp
+therefore follows Amazon S3 here, not aws-sdk-go-v2: a run of spaces and
+tabs canonicalizes to one space. A tab-carrying header signed by the Go SDK
+is refused, as S3 itself refuses it. The CRT corpus carries such a vector,
+and the fuzz targets keep tabs out of SDK-signed header values for this
+reason.

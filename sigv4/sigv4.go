@@ -1,7 +1,8 @@
 // Package sigv4 verifies inbound AWS SigV4 signatures on the server side: it
-// re-signs a clone of the request with the client's secret and compares the
-// signatures, and decodes the aws-chunked (STREAMING-*) request bodies whose
-// per-chunk signatures chain from the request signature.
+// rebuilds the canonical request from the request as sent, signs it with the
+// client's secret and compares the signatures, and decodes the aws-chunked
+// (STREAMING-*) request bodies whose per-chunk signatures chain from the
+// request signature.
 //
 // It is independent of any particular service: callers supply the secret for
 // an access key id through a SecretLookup and attach their own identity
@@ -16,13 +17,11 @@ import (
 	"fmt"
 	"github.com/fujiwara/s3rp/s3err"
 	"net/http"
-	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/aws/aws-sdk-go-v2/aws"
 )
 
 const (
@@ -147,13 +146,13 @@ func NewVerifier() *Verifier {
 	return &Verifier{signers: newSignerCache(defaultSignerSlots)}
 }
 
-// SetSignerCacheSize replaces the per-access-key signer cache with one of n
-// slots (default 512). The cache is direct-mapped, so n bounds memory to n
-// signers (a few hundred bytes each); size it to the number of access keys
+// SetSignerCacheSize replaces the per-access-key signing-key cache with one
+// of n slots (default 512). The cache is direct-mapped, so n bounds memory to
+// n entries (a few hundred bytes each); size it to the number of access keys
 // expected to verify concurrently — a displaced key just re-derives its
 // signing key on its next request. Values below 1 are treated as 1. Call
 // before serving requests: like setting Now, it is not synchronized with
-// concurrent verification, and cached signers are discarded.
+// concurrent verification, and cached keys are discarded.
 func (v *Verifier) SetSignerCacheSize(n int) {
 	c := newSignerCache(n)
 	// the counters outlive the cache they describe, so a metrics counter
@@ -293,8 +292,7 @@ func (v *Verifier) Verify(r *http.Request, lookup SecretLookup) (*Verified, *s3e
 }
 
 // verifyHeaderRequest authenticates a request signed via the Authorization
-// header by re-signing a clone of it with the secret of the access key and
-// comparing the signatures.
+// header.
 func (v *Verifier) verifyHeaderRequest(r *http.Request, lookup SecretLookup) (*Verified, *s3err.Error) {
 	authValue := r.Header.Get("Authorization")
 	auth, err := parseAuthorizationHeader(authValue)
@@ -351,31 +349,9 @@ func (v *Verifier) verifyHeaderRequest(r *http.Request, lookup SecretLookup) (*V
 			"Missing required header for this request: x-amz-content-sha256")
 	}
 
-	clone, err := cloneForSigning(r, auth.SignedHeaders)
-	if err != nil {
-		return nil, s3err.New(http.StatusBadRequest, "InvalidRequest", err.Error())
-	}
-	creds := aws.Credentials{
-		AccessKeyID:     auth.AccessKeyID,
-		SecretAccessKey: cred.SecretAccessKey,
-		SessionToken:    cred.SessionToken,
-	}
-	signer := v.signers.get(auth.AccessKeyID)
-	if err := signer.SignHTTP(r.Context(), creds, clone, payloadHash, auth.Service, auth.Region, t); err != nil {
-		return nil, s3err.Internal(err, "signing failed")
-	}
-	signed, err := parseAuthorizationHeader(clone.Header.Get("Authorization"))
-	if err != nil {
-		return nil, s3err.Internal(err, "signing failed")
-	}
-	sigOK := subtle.ConstantTimeCompare([]byte(signed.Signature), []byte(auth.Signature)) == 1
-	headersOK := strings.Join(signed.SignedHeaders, ";") == strings.Join(auth.SignedHeaders, ";")
-	if !sigOK || !headersOK {
-		// which side differs is the first thing anyone debugging a mismatch
-		// wants, and it is safe to record: no secret is involved
-		return nil, s3err.SignatureDoesNotMatch().WithCause(authFailure(ReasonSignatureMismatch, auth.AccessKeyID, fmt.Sprintf(
-			"client signed headers %q, re-signed %q",
-			strings.Join(auth.SignedHeaders, ";"), strings.Join(signed.SignedHeaders, ";"))))
+	if s3e := v.checkSignature(r, auth.AccessKeyID, cred.SecretAccessKey, auth.Date, auth.Region, t,
+		auth.SignedHeaders, "", payloadHash, auth.Signature); s3e != nil {
+		return nil, s3e
 	}
 	return &Verified{
 		AccessKeyID:     auth.AccessKeyID,
@@ -392,8 +368,7 @@ func (v *Verifier) verifyHeaderRequest(r *http.Request, lookup SecretLookup) (*V
 const maxPresignExpires = 7 * 24 * time.Hour
 
 // presignAuthParams are the query parameters that carry the SigV4
-// authentication of a presigned URL. They are removed before re-signing
-// (the signer adds them back itself).
+// authentication of a presigned URL.
 var presignAuthParams = []string{
 	"X-Amz-Algorithm",
 	"X-Amz-Credential",
@@ -404,13 +379,19 @@ var presignAuthParams = []string{
 }
 
 // verifyPresignedRequest authenticates a request signed via query string
-// parameters (a presigned URL) by re-presigning a clone of it and comparing
-// the signatures. Specified in "Authenticating Requests: Using Query
-// Parameters (AWS Signature Version 4)" in the S3 API reference.
+// parameters (a presigned URL). Specified in "Authenticating Requests: Using
+// Query Parameters (AWS Signature Version 4)" in the S3 API reference.
 func (v *Verifier) verifyPresignedRequest(r *http.Request, lookup SecretLookup) (*Verified, *s3err.Error) {
 	query := r.URL.Query()
 	queryParamsError := func(msg string) *s3err.Error {
 		return s3err.New(http.StatusBadRequest, "AuthorizationQueryParametersError", msg)
+	}
+	for _, p := range slices.Concat(presignAuthParams, []string{"X-Amz-Expires"}) {
+		// the checks below read the first value while the signature
+		// covers them all; one each keeps the two from diverging
+		if len(query[p]) > 1 {
+			return nil, queryParamsError(p + " must be specified only once")
+		}
 	}
 	if algo := query.Get("X-Amz-Algorithm"); algo != sigV4Algorithm {
 		return nil, queryParamsError("X-Amz-Algorithm only supports \"AWS4-HMAC-SHA256\"")
@@ -466,44 +447,14 @@ func (v *Verifier) verifyPresignedRequest(r *http.Request, lookup SecretLookup) 
 		return nil, s3e
 	}
 
-	clone, err := cloneForSigning(r, signedHeaders)
-	if err != nil {
-		return nil, s3err.New(http.StatusBadRequest, "InvalidRequest", err.Error())
-	}
-	cloneQuery := clone.URL.Query()
-	for _, p := range presignAuthParams {
-		cloneQuery.Del(p)
-	}
-	clone.URL.RawQuery = cloneQuery.Encode()
-
 	// presigned S3 requests conventionally use UNSIGNED-PAYLOAD
 	payloadHash := r.Header.Get(amzContentSha256)
 	if payloadHash == "" {
 		payloadHash = "UNSIGNED-PAYLOAD"
 	}
-	// the token was stripped with the other auth params; the signer re-adds
-	// it to the query when the credentials carry one, as the client's did
-	creds := aws.Credentials{AccessKeyID: akid, SecretAccessKey: cred.SecretAccessKey, SessionToken: cred.SessionToken}
-	signedURI, _, err := v.signers.get(akid).PresignHTTP(r.Context(), creds, clone, payloadHash, service, region, t)
-	if err != nil {
-		return nil, s3err.Internal(err, "signing failed")
-	}
-	// Only the query is wanted from the signed URI, so cut it out instead of
-	// re-parsing the whole URI: the clone has no scheme or host, and a path
-	// starting with "//" (a key beginning with a slash) would make url.Parse
-	// read the URI as scheme-relative and fail on the "authority".
-	_, rawSignedQuery, _ := strings.Cut(signedURI, "?")
-	signedQuery, err := url.ParseQuery(rawSignedQuery)
-	if err != nil {
-		return nil, s3err.Internal(err, "signing failed")
-	}
-	sigOK := subtle.ConstantTimeCompare(
-		[]byte(signedQuery.Get("X-Amz-Signature")), []byte(query.Get("X-Amz-Signature"))) == 1
-	headersOK := signedQuery.Get("X-Amz-SignedHeaders") == query.Get("X-Amz-SignedHeaders")
-	if !sigOK || !headersOK {
-		return nil, s3err.SignatureDoesNotMatch().WithCause(authFailure(ReasonSignatureMismatch, akid, fmt.Sprintf(
-			"presigned: client signed headers %q, re-signed %q",
-			query.Get("X-Amz-SignedHeaders"), signedQuery.Get("X-Amz-SignedHeaders"))))
+	if s3e := v.checkSignature(r, akid, cred.SecretAccessKey, scopeDate, region, t,
+		signedHeaders, "X-Amz-Signature", payloadHash, query.Get("X-Amz-Signature")); s3e != nil {
+		return nil, s3e
 	}
 	promoted := promoteHoistedQueryParams(r)
 	return &Verified{
@@ -587,37 +538,27 @@ func requireSignedAmzHeaders(akid string, h http.Header, signedHeaders []string)
 		WithCause(authFailure(ReasonUnsignedHeaders, akid, strings.Join(unsigned, ", ")))
 }
 
-// cloneForSigning builds a request containing only the headers the client
-// signed, preserving the raw escaping of the request URI so that the
-// canonical request matches the client's exactly.
-func cloneForSigning(r *http.Request, signedHeaders []string) (*http.Request, error) {
-	u, err := url.ParseRequestURI(r.RequestURI)
+// checkSignature recomputes the signature of a request from its canonical
+// form and compares it with the one the client presented.
+func (v *Verifier) checkSignature(r *http.Request, akid, secret, date, region string, t time.Time,
+	signedHeaders []string, dropQuery, payloadHash, presented string) *s3err.Error {
+	mismatch := func(detail string) *s3err.Error {
+		return s3err.SignatureDoesNotMatch().WithCause(authFailure(ReasonSignatureMismatch, akid, detail))
+	}
+	if err := checkSignedHeaderList(signedHeaders); err != nil {
+		return mismatch(err.Error())
+	}
+	canonical, err := canonicalRequest(r, signedHeaders, dropQuery, payloadHash)
 	if err != nil {
-		// not from a server (e.g. tests); fall back to the parsed URL
-		u = r.URL
+		return s3err.New(http.StatusBadRequest, "InvalidRequest", err.Error())
 	}
-	clone := &http.Request{
-		Method: r.Method,
-		URL:    u,
-		Host:   r.Host,
-		Header: make(http.Header, len(signedHeaders)),
+	key := v.signers.get(signingKeyID{accessKeyID: akid, secret: secret, date: date, region: region})
+	scope := strings.Join([]string{date, region, "s3", "aws4_request"}, "/")
+	if subtle.ConstantTimeCompare([]byte(signature(key, t, scope, canonical)), []byte(presented)) != 1 {
+		// the signed header list is the first thing anyone debugging a
+		// mismatch wants, and it is safe to record; the canonical request
+		// is not, since it carries the session token
+		return mismatch(fmt.Sprintf("client signed headers %q", strings.Join(signedHeaders, ";")))
 	}
-	for _, h := range signedHeaders {
-		switch h {
-		case "host":
-			// taken from clone.Host by the signer
-		case "content-length":
-			// the signer includes content-length based on the
-			// request's ContentLength field, not the header
-			clone.ContentLength = r.ContentLength
-		default:
-			ch := http.CanonicalHeaderKey(h)
-			if vs, ok := r.Header[ch]; ok {
-				clone.Header[ch] = vs
-			} else {
-				return nil, fmt.Errorf("signed header %q is not present in the request", h)
-			}
-		}
-	}
-	return clone, nil
+	return nil
 }

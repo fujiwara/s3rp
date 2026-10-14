@@ -55,12 +55,12 @@ jobs:
                   summary.write(f"- `{t['target']}` ({t['pkg']})\n")
           EOF
 
-  # botocore, curl --aws-sigv4 and aws4 (npm) are independent SigV4
-  # implementations: requests they sign are what non-Go clients send, and
-  # the verifier shares no signing code with any of them. Fresh vectors
-  # from the latest botocore and aws4 — deliberately unpinned — and the
-  # runner's distro curl mean a signer behavior change fails a nightly
-  # here, not a customer.
+  # botocore, curl --aws-sigv4, aws4 (npm) and the AWS CRT (aws-cli's
+  # transfer client) are independent SigV4 implementations: requests they
+  # sign are what non-Go clients send, and the verifier shares no signing
+  # code with any of them. Fresh vectors from the latest botocore, aws4 and
+  # aws-cli — deliberately unpinned — and the runner's distro curl mean a
+  # signer behavior change fails a nightly here, not a customer.
   crosscheck:
     name: signer cross-check
     runs-on: ubuntu-latest
@@ -109,9 +109,19 @@ jobs:
         env:
           SEED: ${{ github.run_id }}
 
+      - name: Generate vectors with the latest aws-cli (CRT)
+        shell: bash
+        run: |
+          curl -sSfo "$RUNNER_TEMP/awscliv2.zip" https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+          unzip -q -d "$RUNNER_TEMP" "$RUNNER_TEMP/awscliv2.zip"
+          "$RUNNER_TEMP/aws/install" -i "$RUNNER_TEMP/aws-cli" -b "$RUNNER_TEMP/aws-bin"
+          python3 sigv4/testdata/crosscheck/generate_crt.py \
+            --aws "$RUNNER_TEMP/aws-bin/aws" --out "$RUNNER_TEMP/crosscheck/crt-generated.json" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Replay against the verifier
         run: |
-          for f in botocore curl aws4; do
+          for f in botocore curl aws4 crt; do
             test -s "$S3RP_CROSSCHECK_DIR/$f-generated.json" # fresh vectors exist
           done
           go test ./sigv4 -run TestCrossCheck

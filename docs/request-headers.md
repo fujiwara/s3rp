@@ -71,7 +71,7 @@ Every other `x-amz-*` header is `501 NotImplemented`. The ones real SDK options 
 | `Range` | GetObject, HeadObject | forwarded |
 | `Origin`, `Access-Control-Request-*` | all, and unauthenticated `OPTIONS` | CORS ([CORS](s3-api.md#cors)) |
 | `Expect: 100-continue` | uploads | handled by the Go HTTP server |
-| `User-Agent` and the other headers the AWS SDK signer ignores | all | must **not** be signed, or verification fails; real SDKs and CLIs do not sign them |
+| `User-Agent`, `Content-Length` and any other header | all | may be signed: verification canonicalizes every header the client lists, `Content-Length: 0` included (aws-cli's CRT transfer client signs it on bodiless requests) |
 
 Unknown standard headers are ignored, as they are by any HTTP server.
 

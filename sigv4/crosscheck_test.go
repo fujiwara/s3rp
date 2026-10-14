@@ -14,14 +14,15 @@ import (
 )
 
 // Cross-implementation check: requests signed by independent SigV4
-// implementations must verify. The verifier re-signs a clone with
-// aws-sdk-go-v2's signer, so Go-SDK-signed requests (the fuzz targets)
-// share the signing code with the verifier and cannot catch an asymmetry
-// in how the clone is built; an independent signer can. Three lineages
-// sign the committed corpora: botocore (testdata/crosscheck/generate.py —
-// what every boto3/aws-cli client sends), curl --aws-sigv4
-// (generate_curl.py — a from-scratch C implementation), and aws4
-// (generate_aws4.js — the Node ecosystem's de-facto non-SDK signer).
+// implementations must verify. Go-SDK-signed requests (the fuzz targets)
+// only test agreement with aws-sdk-go-v2's signer; an independent signer
+// signs what that one never does. Four lineages sign the committed
+// corpora: botocore (testdata/crosscheck/generate.py — what boto3 and
+// aws-cli's classic transfers send), curl --aws-sigv4 (generate_curl.py —
+// a from-scratch C implementation), aws4 (generate_aws4.js — the Node
+// ecosystem's de-facto non-SDK signer), and the AWS CRT (generate_crt.py —
+// aws-cli's default transfer client, which signs content-length:0 on
+// bodiless requests).
 // Vectors record the wire request exactly; S3RP_CROSSCHECK_DIR names a
 // directory of additional vector files, which is how CI feeds freshly
 // generated ones.

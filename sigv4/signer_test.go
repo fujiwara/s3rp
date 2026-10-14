@@ -1,27 +1,54 @@
 package sigv4
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+)
+
+func testKeyID(akid string) signingKeyID {
+	return signingKeyID{accessKeyID: akid, secret: "secret-" + akid, date: "20261014", region: "us-east-1"}
+}
 
 func TestSignerCacheSingleSlot(t *testing.T) {
 	c := newSignerCache(1)
 	if len(c.slots) != 1 {
 		t.Fatalf("slots = %d, want 1", len(c.slots))
 	}
-	// with a single slot every key collides: each key must still get a
-	// signer, a repeated key reuses the occupant, a displaced key gets a
-	// fresh one
-	s1 := c.get("KEY1")
-	if s1 == nil {
-		t.Fatal("nil signer")
+	// with a single slot every key collides: each key must still get its
+	// own signing key, a repeated key is a hit, a displaced key re-derives
+	k1 := testKeyID("KEY1")
+	c.get(k1)
+	c.get(k1)
+	c.get(testKeyID("KEY2"))
+	got := c.get(k1)
+	if want := deriveSigningKey(k1.secret, k1.date, k1.region); !bytes.Equal(got, want) {
+		t.Error("displaced key must re-derive its own signing key")
 	}
-	if c.get("KEY1") != s1 {
-		t.Error("same key must reuse the cached signer")
+	s := c.stats()
+	if s.Hits != 1 || s.Misses != 3 || s.Evictions != 2 {
+		t.Errorf("stats = %+v, want 1 hit, 3 misses, 2 evictions", s)
 	}
-	if c.get("KEY2") == nil {
-		t.Fatal("nil signer for colliding key")
+}
+
+// TestSignerCacheKeyedByScopeAndSecret: a cached key must never answer for a
+// different date, region or secret under the same access key id — a secret
+// rotated in place must stop verifying immediately — and such a refresh is
+// not a displacement.
+func TestSignerCacheKeyedByScopeAndSecret(t *testing.T) {
+	c := newSignerCache(8)
+	base := testKeyID("KEY1")
+	c.get(base)
+	for _, id := range []signingKeyID{
+		{accessKeyID: "KEY1", secret: "rotated", date: base.date, region: base.region},
+		{accessKeyID: "KEY1", secret: base.secret, date: "20261015", region: base.region},
+		{accessKeyID: "KEY1", secret: base.secret, date: base.date, region: "ap-northeast-1"},
+	} {
+		if got, want := c.get(id), deriveSigningKey(id.secret, id.date, id.region); !bytes.Equal(got, want) {
+			t.Errorf("get(%+v) returned a key derived from something else", id)
+		}
 	}
-	if c.get("KEY1") == s1 {
-		t.Error("displaced key must get a fresh signer")
+	if s := c.stats(); s.Hits != 0 || s.Evictions != 0 {
+		t.Errorf("stats = %+v, want no hits and no evictions", s)
 	}
 }
 
@@ -49,9 +76,9 @@ func TestSetSignerCacheSize(t *testing.T) {
 func TestSetSignerCacheSizeKeepsCounters(t *testing.T) {
 	v := NewVerifier()
 	v.SetSignerCacheSize(1)
-	v.signers.get("a") // miss
-	v.signers.get("a") // hit
-	v.signers.get("b") // miss, displaces a
+	v.signers.get(testKeyID("a")) // miss
+	v.signers.get(testKeyID("a")) // hit
+	v.signers.get(testKeyID("b")) // miss, displaces a
 	v.SetSignerCacheSize(8)
 	got := v.SignerCacheStats()
 	if got.Hits != 1 || got.Misses != 2 || got.Evictions != 1 || got.Len != 0 || got.Capacity != 8 {
