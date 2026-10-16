@@ -3,7 +3,7 @@
 # tests. It reads and rewrites the ${VAR:-default} forms below.
 services:
   versitygw:
-    image: versity/versitygw:v1.8.0
+    image: versity/versitygw:v1.9.0
     command: ["--access", "backendkey", "--secret", "backendsecret", "posix", "--versioning-dir", "/versions", "/data"]
     ports:
       - "127.0.0.1:7070:7070"
