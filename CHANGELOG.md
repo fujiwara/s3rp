@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.0.21](https://github.com/fujiwara/s3rp/compare/v0.0.20...v0.0.21) - 2026-10-19
+
+- Verify SigV4 with a derived signing key by @fujiwara in https://github.com/fujiwara/s3rp/pull/195
+
 ## [v0.0.20](https://github.com/fujiwara/s3rp/compare/v0.0.19...v0.0.20) - 2026-10-14
 
 - Build the SigV4 canonical request in the verifier by @fujiwara in https://github.com/fujiwara/s3rp/pull/186
