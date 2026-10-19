@@ -196,6 +196,33 @@ Your `store.Store` implementation — and the control plane's write path that fe
   Two rules. First, the token arrives **before signature verification** — it is untrusted input; verify its MAC before trusting anything in it, and return an error wrapping `store.ErrInvalidToken` when it fails (the client sees `InvalidToken`; a plain `store.ErrNotFound` would claim the *key id* is unknown). Second, return the presented token as `Key.SessionToken` — the gateway still runs the exact-match, and echoing back what you authenticated passes it trivially.
 
   What you give up is per-credential revocation: a persisted temporary key dies with a row delete, a self-contained token lives until it expires unless you add revocation state back (a denylist of revoked token ids, a per-user session generation the token embeds, or rotating the signing key) — so keep TTLs short. Sizing note: the token rides in the `X-Amz-Security-Token` query parameter of presigned URLs, so keep it well under a few KB (AWS's own run 0.6–2 KB and the practical URL budget is ~8 KB).
+- **Keeping the secret out of the gateway.** SigV4 verification needs only the signing key derived from a secret — `kSigning`, an HMAC chain from `"AWS4"+secret` over the credential scope (date, region, `s3`, `aws4_request`) — never the secret itself. Instead of `store.Key.SecretAccessKey`, a key may carry `SigningKey` (a `store.SigningKeyFunc` returning the 32-byte key for a date and region) and `SecretVersion`; the gateway then holds only derived keys, each valid for one day and one region. Exactly one of the two must be set.
+
+  The gateway calls `SigningKey` only when its signing-key cache misses — about once per key, date and region — so it may reach a remote key service. `SecretVersion` is required with it and **must change whenever the secret does**: derived keys are cached by access key id, scope and version, so a secret replaced under the same version keeps verifying with its predecessor's key until the cache drops it. A rotation counter or the secret's creation timestamp works; return an error wrapping `store.ErrNotFound` when the key is gone (the client sees `InvalidAccessKeyId`), and anything else fails the request as an internal error.
+
+  Where the derivation runs decides what this protects:
+
+  - **A key service that holds the secret.** The strongest form: the secret never enters the gateway process at all. With a KMS HMAC key whose imported key material is `"AWS4"+secret`, `GenerateMac(date)` yields the date key and `sigv4.SigningKeyFromDateKey` completes it locally; a dedicated derivation service can return `kSigning` directly (`sigv4.DeriveSigningKey`).
+  - **Decrypting in process.** A store that keeps secrets encrypted and decrypts one on demand has the plaintext in memory for the derivation. Go's experimental `runtime/secret` (`GOEXPERIMENT=runtimesecret`, linux/amd64 and arm64 only) can erase what the derivation allocates — but only what is allocated *inside* `secret.Do`, so decrypt there too, and copy the result out into a buffer allocated outside. `DeriveSigningKey` takes the secret as `[]byte` for this reason: a Go string cannot be erased.
+
+    ```go
+    SigningKey: func(ctx context.Context, date, region string) ([]byte, error) {
+    	out := make([]byte, 32) // allocated outside Do: survives
+    	var err error
+    	secret.Do(func() {
+    		var plain []byte
+    		if plain, err = decrypt(ctx, k.EncryptedSecret); err != nil {
+    			return
+    		}
+    		copy(out, sigv4.DeriveSigningKey(plain, date, region))
+    	})
+    	return out, err
+    },
+    ```
+
+    Buffers outside the call tree — a KMS client's response body, a connection pool's read buffer — are not erased, which is why the key-service form is preferred.
+
+  What it does not protect against: code execution in the gateway, which can ask the derivation for any scope — rate-limit and audit that path, and refuse dates and regions you do not serve. A leaked derived key forges requests for its day and region only, except that a presigned URL may set `X-Amz-Expires` up to seven days, so a forged URL stays valid up to seven days past the key's date. The scope is also client-chosen before the signature is checked: anyone knowing just an access key id can make the gateway derive for any region and any date a presigned URL may still be valid on. Pin the region (`Gateway.SetRegion`) to close the region half, and expect derivation bursts at UTC midnight, when every cached key's date rolls over; collapse concurrent derivations of the same key in your `SigningKeyFunc` if the service behind it cannot absorb them, and size the cache (`SetSignerCacheSize`, watching `SignerCacheStats`) so that misses stay rare.
 - Two tenants must not map buckets to the same physical backend bucket — the gateway cannot detect this, so validate it where definitions are written.
 - Validate names and backends where definitions are written, with the store package's validators: `store.ValidateBucketName` (bucket names are what path routing and `bucket/key` policy resources are built from), `store.ValidateTenantName` / `store.ValidateUserName` (tenant and user names share the charset of policy principals — a name outside it could never be written in a `Principal` element, so its grants would be unexpressible), and `store.Backend.Validate` (endpoint and credential shape). Like `Backend.SetDefaults`, these are the store's to call; the gateway does not re-check per request.
 - Check policy actions against the operation catalog where policies are written: `policy.Parse`, `Dialect.Parse` and `policy.ValidateUserPolicy` take a `policy.ActionChecker` as their last argument — pass `s3op.CheckActionPattern` (the `policy` package is a leaf and does not know which actions exist; `nil` explicitly skips the check, for re-parsing text that was already checked when written). An action no operation authorizes — a typo, or an AWS action s3rp never authorizes such as `s3:PutBucketPolicy` — makes a statement that never takes effect, and a `Deny` on it protects nothing. The check runs only once the policy is otherwise valid, and its errors wrap `s3op.ErrUnknownAction`, so `errors.Is` on it means nothing else is wrong: a service that already stores such policies can warn about them first and refuse them later. The catalog itself — every operation, whether it is supported, and the actions it authorizes, including the ones a header adds — is `s3op.Operations()` in Go and [`s3op/operations.json`](../s3op/operations.json) for a control plane or console written in another language; hooks can match `Op.Operation` and `Op.Actions` against the generated `s3op.Op*` / `s3op.Action*` constants.
@@ -239,12 +266,14 @@ Your `store.Store` implementation — and the control plane's write path that fe
 - Parse a bucket policy with its bucket's name (`policy.Parse(bucket, text, check)`); with a dialect, keep the tenant's original text in `PolicyText`.
 - Run `store.Validate*`, `Backend.Validate`, `Backend.SetDefaults`, `cors.Rule.Validate`, and the policy validation with `s3op.CheckActionPattern` as its checker where definitions are written, and enforce global uniqueness (bucket names, access key ids) and physical-backend-bucket exclusivity there too.
 - Make an issued key visible to the store the gateways read **before** returning its credentials to the caller.
+- Change `SecretVersion` with every secret change when keys carry a `SigningKey` instead of the secret.
 
 **Don't**
 
 - Don't re-parse policy JSON per request — the compiled patterns live on the parsed object.
 - Don't hand the gateway a `Backend` that skipped `SetDefaults`, or definitions whose `Metadata` is mutated while requests share it.
 - Don't return expired keys from `GetKey` — expiry is the store's concern, the gateway has no notion of it.
+- Don't hand a `SigningKey` an empty `SecretVersion` — the gateway refuses it rather than cache by access key id alone.
 
 ## Observation
 
@@ -644,7 +673,7 @@ That costs nothing as long as an attempt fails *before* the backend runs it. The
 The handler and listener wrapping `Handler()`: everything that must run before signature verification, and the path-handling rules every hop in front must obey.
 
 - **TLS is terminated by you, not the gateway.** `Handler()` speaks plain HTTP; serve it under TLS yourself (`http.Server.ListenAndServeTLS` around the same wrapping handler), or terminate at a fronting proxy or load balancer — a hop that then sits in the signature's verification path, with rules of its own: [Behind a TLS terminator](#behind-a-tls-terminator) below.
-- Unauthenticated requests are not free. `GetKey` runs **before** signature verification — the secret is what verifies — so a well-formed `Authorization` header with a bogus access key still costs one store lookup, and a valid key with a bad signature costs the HMAC chain too. A store should negative-cache unknown key ids (weighing the TTL against how soon a freshly issued key must start working), and rate limiting belongs **outside** `Handler()`, in a wrapping handler or the fronting proxy: the `Authorizer` runs only after verification and the policies, which is too late for DoS economics.
+- Unauthenticated requests are not free. `GetKey` runs **before** signature verification — the secret is what verifies — so a well-formed `Authorization` header with a bogus access key still costs one store lookup, and a valid key with a bad signature costs the HMAC chain too — or, for a key carrying a `SigningKey`, a derivation whenever its scope misses the cache (see [Keeping the secret out of the gateway](#your-store)). A store should negative-cache unknown key ids (weighing the TTL against how soon a freshly issued key must start working), and rate limiting belongs **outside** `Handler()`, in a wrapping handler or the fronting proxy: the `Authorizer` runs only after verification and the policies, which is too late for DoS economics.
 - The same placement rule holds for the **global** concurrency cap. The per-tenant in-flight limit from [Hooks and metering](#hooks-and-metering) only sees requests that verified and passed the policies; the flood that never authenticates — bogus key ids, broken signatures, each still costing a store lookup and HMAC work — never reaches a hook. Cap total connections at the listener (`netutil.LimitListener`), or total in-flight requests with a counting wrapper in the same handler that rate-limits. The two layers do different jobs: the interceptor keeps tenants fair with each other, the front cap keeps the process alive.
 - That same wrapping layer is where a health-check endpoint and a request body cap (`http.MaxBytesReader`) go. To the gateway every path is S3 — `GET /` is an authenticated ListBuckets — and it deliberately caps nothing itself, for the same reason it sets no read or write timeouts.
 

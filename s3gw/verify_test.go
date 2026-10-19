@@ -61,8 +61,13 @@ func (m memStore) ListBuckets(_ context.Context, tenant string) ([]store.BucketE
 
 func newTestGateway(t *testing.T) *s3gw.Gateway {
 	t.Helper()
+	return s3gw.New(newTestStore())
+}
+
+// newTestStore is the store behind newTestGateway.
+func newTestStore() memStore {
 	pathStyle := true
-	return s3gw.New(memStore{
+	return memStore{
 		keys: map[string]*store.Key{
 			testAccessKeyID: {
 				AccessKeyID: testAccessKeyID, SecretAccessKey: testSecretAccessKey,
@@ -82,7 +87,7 @@ func newTestGateway(t *testing.T) *s3gw.Gateway {
 				},
 			},
 		},
-	})
+	}
 }
 
 // signedRequest builds a server-side request signed like a real S3 client.

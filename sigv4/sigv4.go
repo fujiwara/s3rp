@@ -94,9 +94,19 @@ func parseAuthorizationHeader(v string) (*authHeader, error) {
 	return a, nil
 }
 
-// Credential is what a SecretLookup returns for an access key id.
+// Credential is what a SecretLookup returns for an access key id. Exactly
+// one of SecretAccessKey and SigningKey is set.
 type Credential struct {
 	SecretAccessKey string
+	// SigningKey supplies the derived signing key instead of the secret, so
+	// that the secret never enters this process (see SigningKeyFunc).
+	SigningKey SigningKeyFunc
+	// SecretVersion identifies the secret behind SigningKey and is required
+	// with it: signing keys are cached by access key id, scope and this
+	// value, so it must change whenever the secret does — a secret rotated
+	// under an unchanged version keeps verifying with the old one's key
+	// until the cache drops it.
+	SecretVersion string
 	// SessionToken is set for a temporary credential and empty for a
 	// long-lived key. When set, the request must present exactly this
 	// token (header, presigned query, or POST form field); when empty, a
@@ -120,6 +130,37 @@ type Credential struct {
 // caller's client sees InvalidAccessKeyId rather than an internal error, and
 // ErrInvalidToken when the token itself fails the lookup's validation.
 type SecretLookup func(ctx context.Context, accessKeyID, sessionToken string) (Credential, error)
+
+// SigningKeyFunc returns the SigV4 signing key (kSigning, 32 bytes) of a
+// secret for the credential scope date (YYYYMMDD) and region, service s3. It
+// is called only when the Verifier's signing-key cache misses — once per
+// access key, date and region while the entry stays cached — and only after
+// the request's timestamp has passed the clock-skew or expiry checks. The
+// scope is client-chosen, though: a client knowing just an access key id can
+// make it run for any region (unless SetRegion pins one) and any date a
+// presigned URL may still be valid on, so an implementation backed by a
+// remote service should rate-limit, and may refuse scopes it does not serve.
+// Return ErrUnknownKey when the key no longer exists; any other error is
+// reported to the client as an internal error.
+type SigningKeyFunc func(ctx context.Context, date, region string) ([]byte, error)
+
+// DeriveSigningKey derives the SigV4 signing key of a secret for a
+// credential scope (service s3), for a SigningKeyFunc that holds the secret
+// itself. The secret is taken as bytes so that a caller erasing it (e.g.
+// within runtime/secret.Do) is not defeated by an immutable string copy.
+func DeriveSigningKey(secret []byte, date, region string) []byte {
+	return SigningKeyFromDateKey(hmacSHA256(append([]byte("AWS4"), secret...), []byte(date)), region)
+}
+
+// SigningKeyFromDateKey completes the signing key from the date key (kDate =
+// HMAC("AWS4"+secret, date)), for a SigningKeyFunc whose secret stays in a
+// key service that computes only the first, secret-keyed HMAC — such as a
+// KMS HMAC key holding "AWS4"+secret as its key material.
+func SigningKeyFromDateKey(dateKey []byte, region string) []byte {
+	k := hmacSHA256(dateKey, []byte(region))
+	k = hmacSHA256(k, []byte("s3"))
+	return hmacSHA256(k, []byte("aws4_request"))
+}
 
 // ErrUnknownKey reports that an access key id does not exist.
 var ErrUnknownKey = errors.New("unknown access key id")
@@ -195,7 +236,29 @@ func lookupSecret(r *http.Request, lookup SecretLookup, accessKeyID, sessionToke
 		}
 		return Credential{}, s3err.Internal(err, "key lookup failed")
 	}
+	if (cred.SigningKey == nil) == (cred.SecretAccessKey == "") || (cred.SigningKey != nil && cred.SecretVersion == "") {
+		// an empty version would cache the key by access key id alone,
+		// letting a rotated secret's predecessor verify
+		return Credential{}, s3err.Internal(errors.New("credential must carry either a secret or a signing key with its secret version"), "key lookup failed")
+	}
 	return cred, nil
+}
+
+// signingKey returns the signing key of a looked-up credential for a scope,
+// from the cache or deriving it.
+func (v *Verifier) signingKey(r *http.Request, akid string, cred Credential, date, region string) ([]byte, *s3err.Error) {
+	id := signingKeyID{accessKeyID: akid, version: cred.SecretAccessKey, date: date, region: region}
+	if cred.SigningKey != nil {
+		id.version, id.derived = cred.SecretVersion, true
+	}
+	k, err := v.signers.get(r.Context(), id, cred.SigningKey)
+	if err != nil {
+		if errors.Is(err, ErrUnknownKey) {
+			return nil, s3err.InvalidAccessKeyID().WithCause(&AuthFailure{Reason: ReasonUnknownKey, AccessKeyID: akid, err: err})
+		}
+		return nil, s3err.Internal(err, "signing key derivation failed")
+	}
+	return k, nil
 }
 
 func invalidTokenError() *s3err.Error {
@@ -240,16 +303,19 @@ func IsStreaming(payloadHash string) bool {
 }
 
 // Verified carries the results of a successful signature verification.
-// Signature and SecretAccessKey are needed later to verify aws-chunked
+// Signature and SigningKey are needed later to verify aws-chunked
 // (STREAMING-AWS4-HMAC-SHA256-PAYLOAD) chunk signatures.
 type Verified struct {
-	AccessKeyID     string
-	SecretAccessKey string
-	Signature       string
-	SigningTime     time.Time
-	Scope           string
-	Region          string
-	PayloadHash     string
+	AccessKeyID string
+	// SigningKey is the derived key the request verified with, scoped to
+	// its date and region — never the secret. Shared with the Verifier's
+	// cache: do not modify it.
+	SigningKey  []byte
+	Signature   string
+	SigningTime time.Time
+	Scope       string
+	Region      string
+	PayloadHash string
 	// SignedHeaders holds the lower-cased names of the request headers whose
 	// values the signature covers: the SignedHeaders list itself, plus — for
 	// presigned requests — the x-amz-* query parameters promoted into
@@ -349,19 +415,20 @@ func (v *Verifier) verifyHeaderRequest(r *http.Request, lookup SecretLookup) (*V
 			"Missing required header for this request: x-amz-content-sha256")
 	}
 
-	if s3e := v.checkSignature(r, auth.AccessKeyID, cred.SecretAccessKey, auth.Date, auth.Region, t,
-		auth.SignedHeaders, "", payloadHash, auth.Signature); s3e != nil {
+	key, s3e := v.checkSignature(r, auth.AccessKeyID, cred, auth.Date, auth.Region, t,
+		auth.SignedHeaders, "", payloadHash, auth.Signature)
+	if s3e != nil {
 		return nil, s3e
 	}
 	return &Verified{
-		AccessKeyID:     auth.AccessKeyID,
-		SecretAccessKey: cred.SecretAccessKey,
-		Signature:       auth.Signature,
-		SigningTime:     t,
-		Scope:           auth.scope(),
-		Region:          auth.Region,
-		PayloadHash:     payloadHash,
-		SignedHeaders:   signedHeaderSet(auth.SignedHeaders),
+		AccessKeyID:   auth.AccessKeyID,
+		SigningKey:    key,
+		Signature:     auth.Signature,
+		SigningTime:   t,
+		Scope:         auth.scope(),
+		Region:        auth.Region,
+		PayloadHash:   payloadHash,
+		SignedHeaders: signedHeaderSet(auth.SignedHeaders),
 	}, nil
 }
 
@@ -452,19 +519,20 @@ func (v *Verifier) verifyPresignedRequest(r *http.Request, lookup SecretLookup) 
 	if payloadHash == "" {
 		payloadHash = "UNSIGNED-PAYLOAD"
 	}
-	if s3e := v.checkSignature(r, akid, cred.SecretAccessKey, scopeDate, region, t,
-		signedHeaders, "X-Amz-Signature", payloadHash, query.Get("X-Amz-Signature")); s3e != nil {
+	key, s3e := v.checkSignature(r, akid, cred, scopeDate, region, t,
+		signedHeaders, "X-Amz-Signature", payloadHash, query.Get("X-Amz-Signature"))
+	if s3e != nil {
 		return nil, s3e
 	}
 	promoted := promoteHoistedQueryParams(r)
 	return &Verified{
-		AccessKeyID:     akid,
-		SecretAccessKey: cred.SecretAccessKey,
-		Signature:       query.Get("X-Amz-Signature"),
-		SigningTime:     t,
-		Scope:           strings.Join([]string{scopeDate, region, service, "aws4_request"}, "/"),
-		Region:          region,
-		PayloadHash:     payloadHash,
+		AccessKeyID: akid,
+		SigningKey:  key,
+		Signature:   query.Get("X-Amz-Signature"),
+		SigningTime: t,
+		Scope:       strings.Join([]string{scopeDate, region, service, "aws4_request"}, "/"),
+		Region:      region,
+		PayloadHash: payloadHash,
 		// the promoted params' values arrived in the signed query string,
 		// so they are signature-covered like the listed headers
 		SignedHeaders: signedHeaderSet(signedHeaders, promoted),
@@ -539,26 +607,30 @@ func requireSignedAmzHeaders(akid string, h http.Header, signedHeaders []string)
 }
 
 // checkSignature recomputes the signature of a request from its canonical
-// form and compares it with the one the client presented.
-func (v *Verifier) checkSignature(r *http.Request, akid, secret, date, region string, t time.Time,
-	signedHeaders []string, dropQuery, payloadHash, presented string) *s3err.Error {
+// form and compares it with the one the client presented, returning the
+// signing key it verified with.
+func (v *Verifier) checkSignature(r *http.Request, akid string, cred Credential, date, region string, t time.Time,
+	signedHeaders []string, dropQuery, payloadHash, presented string) ([]byte, *s3err.Error) {
 	mismatch := func(detail string) *s3err.Error {
 		return s3err.SignatureDoesNotMatch().WithCause(authFailure(ReasonSignatureMismatch, akid, detail))
 	}
 	if err := checkSignedHeaderList(signedHeaders); err != nil {
-		return mismatch(err.Error())
+		return nil, mismatch(err.Error())
 	}
 	canonical, err := canonicalRequest(r, signedHeaders, dropQuery, payloadHash)
 	if err != nil {
-		return s3err.New(http.StatusBadRequest, "InvalidRequest", err.Error())
+		return nil, s3err.New(http.StatusBadRequest, "InvalidRequest", err.Error())
 	}
-	key := v.signers.get(signingKeyID{accessKeyID: akid, secret: secret, date: date, region: region})
+	key, s3e := v.signingKey(r, akid, cred, date, region)
+	if s3e != nil {
+		return nil, s3e
+	}
 	scope := strings.Join([]string{date, region, "s3", "aws4_request"}, "/")
 	if subtle.ConstantTimeCompare([]byte(signature(key, t, scope, canonical)), []byte(presented)) != 1 {
 		// the signed header list is the first thing anyone debugging a
 		// mismatch wants, and it is safe to record; the canonical request
 		// is not, since it carries the session token
-		return mismatch(fmt.Sprintf("client signed headers %q", strings.Join(signedHeaders, ";")))
+		return nil, mismatch(fmt.Sprintf("client signed headers %q", strings.Join(signedHeaders, ";")))
 	}
-	return nil
+	return key, nil
 }

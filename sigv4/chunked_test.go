@@ -20,13 +20,13 @@ import (
 // Multiple Chunks" in the S3 API reference).
 func awsDocsVerifiedRequest() *sigv4.Verified {
 	return &sigv4.Verified{
-		AccessKeyID:     "AKIAIOSFODNN7EXAMPLE",
-		SecretAccessKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-		Signature:       "4f232c4386841ef735655705268965c44a0e4690baa4adea153f7db9fa80a0a9",
-		SigningTime:     time.Date(2013, 5, 24, 0, 0, 0, 0, time.UTC),
-		Scope:           "20130524/us-east-1/s3/aws4_request",
-		Region:          "us-east-1",
-		PayloadHash:     "STREAMING-AWS4-HMAC-SHA256-PAYLOAD",
+		AccessKeyID: "AKIAIOSFODNN7EXAMPLE",
+		SigningKey:  testSigningKey("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "20130524", "us-east-1"),
+		Signature:   "4f232c4386841ef735655705268965c44a0e4690baa4adea153f7db9fa80a0a9",
+		SigningTime: time.Date(2013, 5, 24, 0, 0, 0, 0, time.UTC),
+		Scope:       "20130524/us-east-1/s3/aws4_request",
+		Region:      "us-east-1",
+		PayloadHash: "STREAMING-AWS4-HMAC-SHA256-PAYLOAD",
 	}
 }
 
@@ -83,16 +83,22 @@ func TestChunkedReaderTamperedData(t *testing.T) {
 	}
 }
 
-// encodeSignedChunks encodes data as signed aws-chunked with the given chunk size.
-func encodeSignedChunks(t *testing.T, vr *sigv4.Verified, data []byte, chunkSize int) []byte {
-	t.Helper()
-	secret := vr.SecretAccessKey
+// testSigningKey derives a SigV4 signing key independently of the package,
+// so the fixtures do not take the derivation under test on trust.
+func testSigningKey(secret, date, region string) []byte {
 	key := []byte("AWS4" + secret)
-	for _, v := range []string{vr.SigningTime.Format("20060102"), vr.Region, "s3", "aws4_request"} {
+	for _, v := range []string{date, region, "s3", "aws4_request"} {
 		mac := hmac.New(sha256.New, key)
 		mac.Write([]byte(v))
 		key = mac.Sum(nil)
 	}
+	return key
+}
+
+// encodeSignedChunks encodes data as signed aws-chunked with the given chunk size.
+func encodeSignedChunks(t *testing.T, vr *sigv4.Verified, data []byte, chunkSize int) []byte {
+	t.Helper()
+	key := vr.SigningKey
 	emptyHash := sha256.Sum256(nil)
 	prevSig := vr.Signature
 	buf := new(bytes.Buffer)

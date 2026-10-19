@@ -1,6 +1,9 @@
 package sigv4
 
 import (
+	"context"
+	"crypto/sha256"
+	"fmt"
 	"hash/maphash"
 	"sync"
 	"sync/atomic"
@@ -41,11 +44,13 @@ type signerSlot struct {
 	signingKey []byte
 }
 
-// signingKeyID is everything a signing key is derived from. The secret is
-// part of it so that a secret changed under the same access key id never
-// verifies against the old one's key.
+// signingKeyID is everything a signing key is derived from. version stands
+// for the secret — the secret itself when the Credential carries one, its
+// SecretVersion otherwise (derived set) — so that a secret changed under the
+// same access key id never verifies against the old one's key.
 type signingKeyID struct {
-	accessKeyID, secret, date, region string
+	accessKeyID, version, date, region string
+	derived                            bool
 }
 
 func newSignerCache(size int) *signerCache {
@@ -55,8 +60,10 @@ func newSignerCache(size int) *signerCache {
 	return &signerCache{seed: maphash.MakeSeed(), slots: make([]signerSlot, size)}
 }
 
-// get returns the signing key for a credential scope, deriving it on a miss.
-func (c *signerCache) get(id signingKeyID) []byte {
+// get returns the signing key for a credential scope, deriving it on a miss:
+// with derive when the id is derived, from the secret in id.version
+// otherwise. A failed derivation caches nothing.
+func (c *signerCache) get(ctx context.Context, id signingKeyID, derive SigningKeyFunc) ([]byte, error) {
 	slot := &c.slots[maphash.String(c.seed, id.accessKeyID)%uint64(len(c.slots))]
 
 	slot.mu.RLock()
@@ -64,12 +71,25 @@ func (c *signerCache) get(id signingKeyID) []byte {
 		k := slot.signingKey
 		slot.mu.RUnlock()
 		c.hits.Add(1)
-		return k
+		return k, nil
 	}
 	slot.mu.RUnlock()
 	c.misses.Add(1)
 
-	k := deriveSigningKey(id.secret, id.date, id.region)
+	var k []byte
+	if id.derived {
+		var err error
+		if k, err = derive(ctx, id.date, id.region); err != nil {
+			return nil, err
+		}
+		if len(k) != sha256.Size {
+			// a wrong key would only ever surface as SignatureDoesNotMatch,
+			// blaming every client for the implementation's bug
+			return nil, fmt.Errorf("signing key is %d bytes, want %d", len(k), sha256.Size)
+		}
+	} else {
+		k = deriveSigningKey(id.version, id.date, id.region)
+	}
 	slot.mu.Lock()
 	// a new date or region for the occupant is a refresh, not a displacement
 	if slot.key.accessKeyID != "" && slot.key.accessKeyID != id.accessKeyID {
@@ -78,7 +98,7 @@ func (c *signerCache) get(id signingKeyID) []byte {
 	slot.key = id
 	slot.signingKey = k
 	slot.mu.Unlock()
-	return k
+	return k, nil
 }
 
 // stats snapshots the cache counters and scans the slots for occupancy. The
