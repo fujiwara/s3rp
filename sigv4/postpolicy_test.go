@@ -6,9 +6,11 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"maps"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -216,5 +218,59 @@ func TestVerifyPostContentLengthRange(t *testing.T) {
 	// repeated ranges intersect
 	if pp.MinLength != 10 || pp.MaxLength != 500 {
 		t.Errorf("expect the intersected range [10, 500], got %+v", pp)
+	}
+}
+
+// A POST policy's expiration is chosen by whoever signs it, so the signing
+// date itself is bounded like a presigned URL's: a policy signed more than
+// seven days ago is refused however far its expiration lies — otherwise a
+// leaked day's signing key could sign policies valid forever — and the
+// refusal comes before the key lookup.
+func TestVerifyPostSigningAge(t *testing.T) {
+	signed := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
+	policy := `{"expiration":"2036-01-01T00:00:00Z","conditions":[` +
+		`{"bucket":"testbucket"},{"key":"a.txt"},` +
+		`{"x-amz-credential":"` + testAccessKeyID + `/20260801/us-east-1/s3/aws4_request"},` +
+		`{"x-amz-algorithm":"AWS4-HMAC-SHA256"},{"x-amz-date":"20260801T120000Z"}]}`
+	b64 := base64.StdEncoding.EncodeToString([]byte(policy))
+	fields := map[string]string{
+		"bucket":           "testbucket",
+		"key":              "a.txt",
+		"x-amz-credential": testAccessKeyID + "/20260801/us-east-1/s3/aws4_request",
+		"x-amz-algorithm":  "AWS4-HMAC-SHA256",
+		"x-amz-date":       "20260801T120000Z",
+		"policy":           b64,
+		"x-amz-signature":  signPostPolicy(testSecret, "20260801", "us-east-1", b64),
+	}
+	for _, tc := range []struct {
+		name string
+		now  time.Time
+		ok   bool
+	}{
+		{"within seven days", signed.Add(7 * 24 * time.Hour), true},
+		{"older than seven days", signed.Add(7*24*time.Hour + time.Second), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls atomic.Int32
+			r := httptest.NewRequest("POST", "http://s3.example.com/testbucket", nil)
+			_, _, s3e := postVerifier(tc.now).VerifyPost(r, fields,
+				derivingLookup(testAccessKeyID, testSecret, "v1", &calls))
+			if tc.ok {
+				if s3e != nil {
+					t.Fatalf("expect success, got %v", s3e)
+				}
+				return
+			}
+			if s3e == nil || s3e.Code != "AccessDenied" {
+				t.Fatalf("expect AccessDenied, got %v", s3e)
+			}
+			var f *sigv4.AuthFailure
+			if !errors.As(s3e, &f) || f.Reason != sigv4.ReasonExpired {
+				t.Errorf("expect an expired AuthFailure cause, got %v", s3e)
+			}
+			if n := calls.Load(); n != 0 {
+				t.Errorf("derivations = %d, want none for a refused signing date", n)
+			}
+		})
 	}
 }

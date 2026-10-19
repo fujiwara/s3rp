@@ -614,10 +614,14 @@ func TestProxyListMultipartUploads(t *testing.T) {
 // TestProxyRawChunkedPut sends a hand-crafted signed aws-chunked PUT,
 // as the aws CLI does over plain http endpoints.
 func TestProxyRawChunkedPut(t *testing.T) {
+	testRawChunkedPut(t, newTestGateway(t))
+}
+
+func testRawChunkedPut(t *testing.T, gw *s3gw.Gateway) {
+	t.Helper()
 	stub := &stubBackend{
 		putOut: &s3.PutObjectOutput{ETag: aws.String(`"chunked-etag"`)},
 	}
-	gw := newTestGateway(t)
 	if err := gw.SetBackend("testbucket", stub); err != nil {
 		t.Fatal(err)
 	}
@@ -642,12 +646,12 @@ func TestProxyRawChunkedPut(t *testing.T) {
 	_, sig, _ := strings.Cut(auth, "Signature=")
 
 	vr := &sigv4.Verified{
-		SecretAccessKey: testSecretAccessKey,
-		Signature:       sig,
-		SigningTime:     signTime,
-		Scope:           strings.Join([]string{signTime.Format("20060102"), "us-east-1", "s3", "aws4_request"}, "/"),
-		Region:          "us-east-1",
-		PayloadHash:     "STREAMING-AWS4-HMAC-SHA256-PAYLOAD",
+		SigningKey:  testSigningKey(testSecretAccessKey, signTime.Format("20060102"), "us-east-1"),
+		Signature:   sig,
+		SigningTime: signTime,
+		Scope:       strings.Join([]string{signTime.Format("20060102"), "us-east-1", "s3", "aws4_request"}, "/"),
+		Region:      "us-east-1",
+		PayloadHash: "STREAMING-AWS4-HMAC-SHA256-PAYLOAD",
 	}
 	encoded := encodeSignedChunks(t, vr, data, 8192)
 	req.Body = io.NopCloser(bytes.NewReader(encoded))

@@ -90,6 +90,13 @@ func (v *Verifier) VerifyPost(r *http.Request, fields map[string]string, lookup 
 		return nil, nil, s3err.New(http.StatusForbidden, "AccessDenied", "Request is not valid yet").
 			WithCause(authFailure(ReasonNotYetValid, akid, fmt.Sprintf("signed at %s, now %s", t.Format(time.RFC3339), now.Format(time.RFC3339))))
 	}
+	// The policy's own expiration is signer-chosen, so without a bound on
+	// the signing date a leaked day's signing key could sign policies that
+	// stay valid forever. Same bound as a presigned URL.
+	if now.Sub(t) > maxPresignExpires {
+		return nil, nil, s3err.New(http.StatusForbidden, "AccessDenied", "Request has expired").
+			WithCause(authFailure(ReasonExpired, akid, fmt.Sprintf("post policy signed at %s, more than %s ago", t.Format(time.RFC3339), maxPresignExpires)))
+	}
 	policyB64 := fields["policy"]
 	if policyB64 == "" {
 		return nil, nil, invalid("Bucket POST must contain a field named 'policy'.")
@@ -113,7 +120,10 @@ func (v *Verifier) VerifyPost(r *http.Request, fields map[string]string, lookup 
 	if s3e := validateSessionToken(akid, cred.SessionToken, presentedToken); s3e != nil {
 		return nil, nil, s3e
 	}
-	key := deriveSigningKey(cred.SecretAccessKey, scopeDate, region)
+	key, s3e := v.signingKey(r, akid, cred, scopeDate, region)
+	if s3e != nil {
+		return nil, nil, s3e
+	}
 	want := hex.EncodeToString(hmacSHA256(key, []byte(policyB64)))
 	if subtle.ConstantTimeCompare([]byte(want), []byte(sig)) != 1 {
 		return nil, nil, s3err.SignatureDoesNotMatch().WithCause(authFailure(ReasonSignatureMismatch, akid, "post policy"))
@@ -139,13 +149,13 @@ func (v *Verifier) VerifyPost(r *http.Request, fields map[string]string, lookup 
 		return nil, nil, s3e.WithCause(authFailure(ReasonPostPolicy, akid, s3e.Message))
 	}
 	return &Verified{
-		AccessKeyID:     akid,
-		SecretAccessKey: cred.SecretAccessKey,
-		Signature:       sig,
-		SigningTime:     t,
-		Scope:           strings.Join([]string{scopeDate, region, service, "aws4_request"}, "/"),
-		Region:          region,
-		PayloadHash:     "UNSIGNED-PAYLOAD",
+		AccessKeyID: akid,
+		SigningKey:  key,
+		Signature:   sig,
+		SigningTime: t,
+		Scope:       strings.Join([]string{scopeDate, region, service, "aws4_request"}, "/"),
+		Region:      region,
+		PayloadHash: "UNSIGNED-PAYLOAD",
 	}, pp, nil
 }
 

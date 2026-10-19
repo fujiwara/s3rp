@@ -2,11 +2,21 @@ package sigv4
 
 import (
 	"bytes"
+	"context"
 	"testing"
 )
 
 func testKeyID(akid string) signingKeyID {
-	return signingKeyID{accessKeyID: akid, secret: "secret-" + akid, date: "20261014", region: "us-east-1"}
+	return signingKeyID{accessKeyID: akid, version: "secret-" + akid, date: "20261014", region: "us-east-1"}
+}
+
+// mustGet looks up a secret-keyed id, which cannot fail.
+func (c *signerCache) mustGet(id signingKeyID) []byte {
+	k, err := c.get(context.Background(), id, nil)
+	if err != nil {
+		panic(err)
+	}
+	return k
 }
 
 func TestSignerCacheSingleSlot(t *testing.T) {
@@ -17,11 +27,11 @@ func TestSignerCacheSingleSlot(t *testing.T) {
 	// with a single slot every key collides: each key must still get its
 	// own signing key, a repeated key is a hit, a displaced key re-derives
 	k1 := testKeyID("KEY1")
-	c.get(k1)
-	c.get(k1)
-	c.get(testKeyID("KEY2"))
-	got := c.get(k1)
-	if want := deriveSigningKey(k1.secret, k1.date, k1.region); !bytes.Equal(got, want) {
+	c.mustGet(k1)
+	c.mustGet(k1)
+	c.mustGet(testKeyID("KEY2"))
+	got := c.mustGet(k1)
+	if want := deriveSigningKey(k1.version, k1.date, k1.region); !bytes.Equal(got, want) {
 		t.Error("displaced key must re-derive its own signing key")
 	}
 	s := c.stats()
@@ -37,13 +47,13 @@ func TestSignerCacheSingleSlot(t *testing.T) {
 func TestSignerCacheKeyedByScopeAndSecret(t *testing.T) {
 	c := newSignerCache(8)
 	base := testKeyID("KEY1")
-	c.get(base)
+	c.mustGet(base)
 	for _, id := range []signingKeyID{
-		{accessKeyID: "KEY1", secret: "rotated", date: base.date, region: base.region},
-		{accessKeyID: "KEY1", secret: base.secret, date: "20261015", region: base.region},
-		{accessKeyID: "KEY1", secret: base.secret, date: base.date, region: "ap-northeast-1"},
+		{accessKeyID: "KEY1", version: "rotated", date: base.date, region: base.region},
+		{accessKeyID: "KEY1", version: base.version, date: "20261015", region: base.region},
+		{accessKeyID: "KEY1", version: base.version, date: base.date, region: "ap-northeast-1"},
 	} {
-		if got, want := c.get(id), deriveSigningKey(id.secret, id.date, id.region); !bytes.Equal(got, want) {
+		if got, want := c.mustGet(id), deriveSigningKey(id.version, id.date, id.region); !bytes.Equal(got, want) {
 			t.Errorf("get(%+v) returned a key derived from something else", id)
 		}
 	}
@@ -76,9 +86,9 @@ func TestSetSignerCacheSize(t *testing.T) {
 func TestSetSignerCacheSizeKeepsCounters(t *testing.T) {
 	v := NewVerifier()
 	v.SetSignerCacheSize(1)
-	v.signers.get(testKeyID("a")) // miss
-	v.signers.get(testKeyID("a")) // hit
-	v.signers.get(testKeyID("b")) // miss, displaces a
+	v.signers.mustGet(testKeyID("a")) // miss
+	v.signers.mustGet(testKeyID("a")) // hit
+	v.signers.mustGet(testKeyID("b")) // miss, displaces a
 	v.SetSignerCacheSize(8)
 	got := v.SignerCacheStats()
 	if got.Hits != 1 || got.Misses != 2 || got.Evictions != 1 || got.Len != 0 || got.Capacity != 8 {

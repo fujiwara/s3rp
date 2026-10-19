@@ -41,6 +41,7 @@ retroactively").
 | [0027](0027-pin-backend-images.md) | Pin the integration backend images; dependabot bumps them | 2026-09-28 | Accepted |
 | [0028](0028-versioned-requests-authorize-version-actions.md) | Versioned requests authorize the version action, as on AWS | 2026-09-30 | Accepted |
 | [0029](0029-build-sigv4-canonical-request-in-verifier.md) | Build the SigV4 canonical request in the verifier | 2026-10-14 | Accepted |
+| [0030](0030-verify-with-derived-signing-key.md) | Verify SigV4 with a derived signing key | 2026-10-19 | Accepted |
 
 ## Writing a record
 

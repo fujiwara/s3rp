@@ -67,11 +67,21 @@ type BucketEntry struct {
 
 // Key is a front-side access key. It belongs to exactly one user of a
 // tenant. The user name is the stable identity; keys rotate under it.
+// Exactly one of SecretAccessKey and SigningKey is set.
 type Key struct {
 	AccessKeyID     string
 	SecretAccessKey Password
-	Tenant          string
-	User            string
+	// SigningKey supplies the derived SigV4 signing key instead of the
+	// secret, so that the secret never enters the gateway's memory.
+	SigningKey SigningKeyFunc
+	// SecretVersion identifies the secret behind SigningKey and is required
+	// with it. Derived keys are cached by access key id, scope and this
+	// value, so it must change whenever the secret does: a secret replaced
+	// under an unchanged version keeps verifying with its predecessor's key
+	// until the cache drops it.
+	SecretVersion string
+	Tenant        string
+	User          string
 	// SessionToken marks a temporary credential (empty = long-lived key):
 	// a request signed with this key must present exactly this token.
 	// Expiry is the Store's business — an expired key is simply not
@@ -93,6 +103,19 @@ type Key struct {
 	// immutable, or synchronized internally.
 	Metadata any
 }
+
+// SigningKeyFunc returns the SigV4 signing key (kSigning = the four-step
+// HMAC chain from "AWS4"+secret over date, region, "s3" and "aws4_request";
+// 32 bytes) of a key's secret for a credential scope: date is YYYYMMDD,
+// region the client's signing region. The gateway calls it only when its
+// signing-key cache misses — about once per key, date and region — so it may
+// reach a remote key service. The scope is client-chosen, though: anyone
+// knowing just an access key id can make it run for any region (unless the
+// gateway pins one) and any date of the last seven days (how long presigned
+// URLs and POST policies stay acceptable), so a remote implementation should
+// rate-limit and may refuse scopes it does not serve. Return an error wrapping ErrNotFound when the key no longer exists;
+// any other error fails the request as an internal error.
+type SigningKeyFunc func(ctx context.Context, date, region string) ([]byte, error)
 
 // Bucket is a front-side bucket and its backend definition.
 type Bucket struct {

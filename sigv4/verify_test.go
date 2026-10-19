@@ -1,6 +1,7 @@
 package sigv4_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net/http"
@@ -66,8 +67,8 @@ func TestVerifyHeaderAuth(t *testing.T) {
 	if got.AccessKeyID != testAccessKeyID {
 		t.Errorf("unexpected access key %q", got.AccessKeyID)
 	}
-	if got.SecretAccessKey != testSecret {
-		t.Error("the secret must be carried through for chunked verification")
+	if !bytes.Equal(got.SigningKey, testSigningKey(testSecret, testTime.Format("20060102"), "us-east-1")) {
+		t.Error("the signing key must be carried through for chunked verification")
 	}
 	if got.Region != "us-east-1" || got.PayloadHash != emptyPayload {
 		t.Errorf("unexpected verified request %+v", got)

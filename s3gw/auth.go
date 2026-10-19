@@ -83,10 +83,27 @@ func (g *Gateway) secretLookup(key **store.Key) sigv4.SecretLookup {
 			return sigv4.Credential{}, err
 		}
 		*key = k
-		return sigv4.Credential{
+		cred := sigv4.Credential{
 			SecretAccessKey: k.SecretAccessKey.String(),
+			SecretVersion:   k.SecretVersion,
 			SessionToken:    k.SessionToken,
-		}, nil
+		}
+		if k.SigningKey != nil {
+			cred.SigningKey = signingKeyFunc(k.SigningKey)
+		}
+		return cred, nil
+	}
+}
+
+// signingKeyFunc adapts a store's SigningKeyFunc to the verifier's, mapping
+// the store's not-found as GetKey's is.
+func signingKeyFunc(f store.SigningKeyFunc) sigv4.SigningKeyFunc {
+	return func(ctx context.Context, date, region string) ([]byte, error) {
+		k, err := f(ctx, date, region)
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, fmt.Errorf("%w: %w", sigv4.ErrUnknownKey, err)
+		}
+		return k, err
 	}
 }
 

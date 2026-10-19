@@ -12,16 +12,22 @@ import (
 	"github.com/fujiwara/s3rp/sigv4"
 )
 
-// encodeSignedChunks encodes data as signed aws-chunked with the given chunk size.
-func encodeSignedChunks(t *testing.T, vr *sigv4.Verified, data []byte, chunkSize int) []byte {
-	t.Helper()
-	secret := vr.SecretAccessKey
+// testSigningKey derives a SigV4 signing key independently of the package,
+// so the fixtures do not take the derivation under test on trust.
+func testSigningKey(secret, date, region string) []byte {
 	key := []byte("AWS4" + secret)
-	for _, v := range []string{vr.SigningTime.Format("20060102"), vr.Region, "s3", "aws4_request"} {
+	for _, v := range []string{date, region, "s3", "aws4_request"} {
 		mac := hmac.New(sha256.New, key)
 		mac.Write([]byte(v))
 		key = mac.Sum(nil)
 	}
+	return key
+}
+
+// encodeSignedChunks encodes data as signed aws-chunked with the given chunk size.
+func encodeSignedChunks(t *testing.T, vr *sigv4.Verified, data []byte, chunkSize int) []byte {
+	t.Helper()
+	key := vr.SigningKey
 	emptyHash := sha256.Sum256(nil)
 	prevSig := vr.Signature
 	buf := new(bytes.Buffer)

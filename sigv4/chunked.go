@@ -24,13 +24,10 @@ import (
 
 var emptySHA256 = sha256.Sum256(nil)
 
-// deriveSigningKey derives the SigV4 signing key for a credential scope.
-// Shared with the POST policy verifier, which signs with the same key.
+// deriveSigningKey derives the SigV4 signing key for a credential scope from
+// a secret held as a string, as Credential.SecretAccessKey is.
 func deriveSigningKey(secret string, date, region string) []byte {
-	k := hmacSHA256([]byte("AWS4"+secret), []byte(date))
-	k = hmacSHA256(k, []byte(region))
-	k = hmacSHA256(k, []byte("s3"))
-	return hmacSHA256(k, []byte("aws4_request"))
+	return SigningKeyFromDateKey(hmacSHA256([]byte("AWS4"+secret), []byte(date)), region)
 }
 
 func hmacSHA256(key, data []byte) []byte {
@@ -106,7 +103,7 @@ func NewChunkedReader(body io.Reader, vr *Verified, trailerAlg string, decodedLe
 		undecoded: decodedLength,
 	}
 	if signed {
-		cr.signingKey = deriveSigningKey(vr.SecretAccessKey, vr.SigningTime.Format("20060102"), vr.Region)
+		cr.signingKey = vr.SigningKey
 		cr.timestamp = vr.SigningTime.Format(amzDateFormat)
 		cr.scope = vr.Scope
 		cr.prevSig = vr.Signature
