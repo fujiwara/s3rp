@@ -79,11 +79,18 @@ A credential carries either the secret or a way to get the derived key:
   disclosure then exposes derived keys, each valid for one date and region.
   A presigned URL can still be forged for up to seven days past a leaked
   key's date, since `X-Amz-Expires` allows that.
+- POST policies are bounded the same way: a form whose `x-amz-date` is more
+  than seven days old is refused, checked before the key lookup. Their
+  `expiration` is chosen by the signer, so without this a leaked day's key
+  could sign policies that stay valid forever (review finding). AWS
+  documents no such bound, so a form kept in use for more than seven days
+  after signing now fails; S3-compatible services such as OVHcloud apply the
+  same seven-day rule.
 - Code execution in the gateway can still ask the derivation for any scope;
   that is for the key service to rate-limit and audit.
 - The scope is client-chosen before the signature is checked, so anyone with
-  an access key id can trigger derivations for other regions and recent
-  dates; `SetRegion` closes the region half. Cache misses cost a remote call,
+  an access key id can trigger derivations for other regions and dates of
+  the last seven days; `SetRegion` closes the region half. Cache misses cost a remote call,
   with a burst at UTC midnight; cache sizing matters more. Documented in
   [Building a service](../building-a-service.md#your-store).
 - `sigv4.Verified.SecretAccessKey` is removed (API change for anyone building

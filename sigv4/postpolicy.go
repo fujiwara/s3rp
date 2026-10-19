@@ -90,6 +90,13 @@ func (v *Verifier) VerifyPost(r *http.Request, fields map[string]string, lookup 
 		return nil, nil, s3err.New(http.StatusForbidden, "AccessDenied", "Request is not valid yet").
 			WithCause(authFailure(ReasonNotYetValid, akid, fmt.Sprintf("signed at %s, now %s", t.Format(time.RFC3339), now.Format(time.RFC3339))))
 	}
+	// The policy's own expiration is signer-chosen, so without a bound on
+	// the signing date a leaked day's signing key could sign policies that
+	// stay valid forever. Same bound as a presigned URL.
+	if now.Sub(t) > maxPresignExpires {
+		return nil, nil, s3err.New(http.StatusForbidden, "AccessDenied", "Request has expired").
+			WithCause(authFailure(ReasonExpired, akid, fmt.Sprintf("post policy signed at %s, more than %s ago", t.Format(time.RFC3339), maxPresignExpires)))
+	}
 	policyB64 := fields["policy"]
 	if policyB64 == "" {
 		return nil, nil, invalid("Bucket POST must contain a field named 'policy'.")

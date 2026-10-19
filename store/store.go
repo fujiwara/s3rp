@@ -111,9 +111,9 @@ type Key struct {
 // signing-key cache misses — about once per key, date and region — so it may
 // reach a remote key service. The scope is client-chosen, though: anyone
 // knowing just an access key id can make it run for any region (unless the
-// gateway pins one) and any date a presigned URL may still be valid on, so a
-// remote implementation should rate-limit and may refuse scopes it does not
-// serve. Return an error wrapping ErrNotFound when the key no longer exists;
+// gateway pins one) and any date of the last seven days (how long presigned
+// URLs and POST policies stay acceptable), so a remote implementation should
+// rate-limit and may refuse scopes it does not serve. Return an error wrapping ErrNotFound when the key no longer exists;
 // any other error fails the request as an internal error.
 type SigningKeyFunc func(ctx context.Context, date, region string) ([]byte, error)
 

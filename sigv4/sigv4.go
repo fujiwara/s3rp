@@ -137,9 +137,10 @@ type SecretLookup func(ctx context.Context, accessKeyID, sessionToken string) (C
 // access key, date and region while the entry stays cached — and only after
 // the request's timestamp has passed the clock-skew or expiry checks. The
 // scope is client-chosen, though: a client knowing just an access key id can
-// make it run for any region (unless SetRegion pins one) and any date a
-// presigned URL may still be valid on, so an implementation backed by a
-// remote service should rate-limit, and may refuse scopes it does not serve.
+// make it run for any region (unless SetRegion pins one) and any date of the
+// last seven days (how long presigned URLs and POST policies stay
+// acceptable), so an implementation backed by a remote service should
+// rate-limit, and may refuse scopes it does not serve.
 // Return ErrUnknownKey when the key no longer exists; any other error is
 // reported to the client as an internal error.
 type SigningKeyFunc func(ctx context.Context, date, region string) ([]byte, error)
