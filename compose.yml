@@ -14,7 +14,7 @@ services:
   # RustFS backend for compatibility tests.
   # start explicitly: docker compose up -d --wait rustfs
   rustfs:
-    image: ${RUSTFS_IMAGE:-rustfs/rustfs:1.0.1}
+    image: ${RUSTFS_IMAGE:-rustfs/rustfs:1.0.3}
     profiles: [rustfs]
     environment:
       RUSTFS_VOLUMES: /data
