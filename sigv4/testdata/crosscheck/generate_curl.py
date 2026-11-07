@@ -16,6 +16,11 @@ curl chose and the test pins the verifier clock to it.
 
     python3 generate_curl.py --seed 20260815 --count 96 --out curl.json
 
+--curl names the binary to sign with (default: curl on PATH); the nightly
+builds the latest curl release and passes it here, since a distro curl
+can carry signer bugs long fixed upstream (8.18.0 signed a query's %2B
+as %20, curl/curl#20543).
+
 curl limitations vs generate.py: header-signing only (curl cannot
 presign), and no session tokens (curl has no --aws-sigv4 token support;
 a hand-added x-amz-security-token header is not part of its credential
@@ -116,7 +121,7 @@ def header_value(headers, name):
     raise RuntimeError(f"curl sent no {name} header")
 
 
-def sign_vector(rng, listener, lport, i):
+def sign_vector(curl, rng, listener, lport, i):
     method = rng.choice(METHODS)
     host = rng.choice(HOSTS)
     path = make_path(rng)
@@ -133,7 +138,7 @@ def sign_vector(rng, listener, lport, i):
     if query:
         url += "?" + query
     cmd = [
-        "curl", "-sS", "-o", "/dev/null", "--max-time", "10",
+        curl, "-sS", "-o", "/dev/null", "--max-time", "10",
         "--aws-sigv4", f"aws:amz:{region}:s3",
         "--user", f"{akid}:{secret}",
         "--connect-to", f"{hostname}:{port or 80}:127.0.0.1:{lport}",
@@ -169,9 +174,10 @@ def main():
     ap.add_argument("--seed", type=int, default=20260815)
     ap.add_argument("--count", type=int, default=96)
     ap.add_argument("--out", default="curl.json")
+    ap.add_argument("--curl", default="curl")
     args = ap.parse_args()
 
-    curl_version = subprocess.check_output(["curl", "--version"]).decode().splitlines()[0]
+    curl_version = subprocess.check_output([args.curl, "--version"]).decode().splitlines()[0]
 
     listener = socket.socket()
     listener.bind(("127.0.0.1", 0))
@@ -180,7 +186,7 @@ def main():
     lport = listener.getsockname()[1]
 
     rng = random.Random(args.seed)
-    vectors = [sign_vector(rng, listener, lport, i) for i in range(args.count)]
+    vectors = [sign_vector(args.curl, rng, listener, lport, i) for i in range(args.count)]
     listener.close()
     doc = {
         "generator": "sigv4/testdata/crosscheck/generate_curl.py",

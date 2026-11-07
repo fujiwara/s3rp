@@ -59,8 +59,11 @@ jobs:
   # transfer client) are independent SigV4 implementations: requests they
   # sign are what non-Go clients send, and the verifier shares no signing
   # code with any of them. Fresh vectors from the latest botocore, aws4 and
-  # aws-cli — deliberately unpinned — and the runner's distro curl mean a
-  # signer behavior change fails a nightly here, not a customer.
+  # aws-cli and the latest curl release — deliberately unpinned — mean a
+  # signer behavior change fails a nightly here, not a customer. curl is
+  # built from source rather than taken from the runner: a distro curl is
+  # frozen for the release's lifetime and keeps signer bugs fixed upstream
+  # (Ubuntu 26.04's 8.18.0 signs a query's %2B as %20, curl/curl#20543).
   crosscheck:
     name: signer cross-check
     runs-on: ubuntu-latest
@@ -89,10 +92,50 @@ jobs:
         env:
           SEED: ${{ github.run_id }}
 
-      - name: Generate vectors with the system curl
+      - name: Resolve the latest curl release
+        id: curl
+        run: |
+          tag=$(gh api repos/curl/curl/releases/latest --jq .tag_name)
+          version=${tag#curl-}
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${version//_/.}" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      # Keyed by the image too: the binary links the runner's libc.
+      - name: Restore the curl build
+        id: curl-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/curl
+          key: curl-${{ steps.curl.outputs.version }}-${{ runner.os }}-${{ env.ImageOS }}-${{ runner.arch }}
+
+      # Only plain http to the local capture socket is needed, so every
+      # optional dependency is left out.
+      - name: Build curl
+        if: steps.curl-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/curl-src"
+          curl -sSfL -o "$RUNNER_TEMP/curl.tar.xz" \
+            "https://github.com/curl/curl/releases/download/$TAG/curl-$VERSION.tar.xz"
+          tar -xf "$RUNNER_TEMP/curl.tar.xz" -C "$RUNNER_TEMP/curl-src" --strip-components=1
+          cd "$RUNNER_TEMP/curl-src"
+          ./configure --prefix="$RUNNER_TEMP/curl" --disable-shared --disable-ldap \
+            --disable-manual --disable-docs --without-ssl --without-libpsl \
+            --without-zlib --without-brotli --without-zstd --without-libidn2 \
+            --without-nghttp2 --without-libssh2 --without-libssh --without-gssapi
+          make -j"$(nproc)"
+          make install
+        env:
+          TAG: ${{ steps.curl.outputs.tag }}
+          VERSION: ${{ steps.curl.outputs.version }}
+
+      - name: Generate vectors with the latest curl
         shell: bash
         run: |
           python3 sigv4/testdata/crosscheck/generate_curl.py \
+            --curl "$RUNNER_TEMP/curl/bin/curl" \
             --seed "$SEED" --count 256 --out "$RUNNER_TEMP/crosscheck/curl-generated.json" \
             | tee -a "$GITHUB_STEP_SUMMARY"
         env:
