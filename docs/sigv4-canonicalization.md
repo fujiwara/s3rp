@@ -91,6 +91,18 @@ real aws4 clients send canonically encoded paths, where the schemes agree.
 The aws4 corpus generator therefore emits only canonical path encodings
 and no duplicate keys, the same rule the query already follows.
 
+## curl 8.18.0's `%2B` (2026-11-07)
+
+curl 8.18.0 signs an encoded plus in the query (`a%2Bb` on the wire) as
+`a%20b`, treating it as a space ([curl/curl#20543], fixed in 8.19.0). The
+signature claims a value the request does not carry, so no as-sent or
+decode-re-encode verifier accepts it — a curl bug, not a canonicalization
+school. It surfaced when the nightly's runner moved to Ubuntu 26.04, whose
+curl stays 8.18.0 for the release's lifetime, so the nightly now builds
+the latest curl release instead of using the runner's.
+
+[curl/curl#20543]: https://github.com/curl/curl/issues/20543
+
 ## Why s3rp stays as it is
 
 - **No real client reaches the divergence.** Every SDK serializer emits
