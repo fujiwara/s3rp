@@ -99,6 +99,8 @@ jobs:
           version=${tag#curl-}
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=${version//_/.}" >> "$GITHUB_OUTPUT"
+          # the runner's shell environment, not the expression env context
+          echo "image=$ImageOS" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -108,7 +110,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/curl
-          key: curl-${{ steps.curl.outputs.version }}-${{ runner.os }}-${{ env.ImageOS }}-${{ runner.arch }}
+          key: curl-${{ steps.curl.outputs.version }}-${{ runner.os }}-${{ steps.curl.outputs.image }}-${{ runner.arch }}
 
       # Only plain http to the local capture socket is needed, so every
       # optional dependency is left out.
