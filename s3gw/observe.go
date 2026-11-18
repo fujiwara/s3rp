@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/fujiwara/s3rp/s3err"
@@ -20,9 +21,18 @@ import (
 // Everything a failure can be explained by is present, so an observer is
 // enough to write both an access log and a failure log.
 type RequestInfo struct {
-	Method     string `json:"method"`
-	Path       string `json:"path"`
+	Method string `json:"method"`
+	Path   string `json:"path"`
+	// Host is the Host header as sent. With virtual-hosted-style addressing
+	// it is where the bucket is named, and Path alone does not identify
+	// what a request refused before reaching an operation was aimed at.
+	Host       string `json:"host"`
 	RemoteAddr string `json:"remote_addr"`
+	// UserAgent is the User-Agent header, cut to maxUserAgentLen bytes. It
+	// is for diagnosis only — which SDK and version sent a request the
+	// gateway refused — and is whatever the client chose to send: no
+	// signature covers it, so nothing may be decided on it.
+	UserAgent string `json:"user_agent,omitempty"`
 	// RawQuery has the presigned authentication parameters masked. Log this
 	// rather than the request's own query string: a presigned URL's signature
 	// is a bearer credential until it expires, and recognizing one is this
@@ -89,6 +99,19 @@ func (i RequestInfo) MarshalJSON() ([]byte, error) {
 		info
 		Error string `json:"error,omitempty"`
 	}{info(i), msg})
+}
+
+// maxUserAgentLen bounds RequestInfo.UserAgent. The SDKs' own are a few
+// hundred bytes at most; the header itself is limited only by the server's
+// header size, and it goes into every log line.
+const maxUserAgentLen = 512
+
+func clipUserAgent(ua string) string {
+	if len(ua) <= maxUserAgentLen {
+		return ua
+	}
+	// not in the middle of a character: the record is emitted as JSON
+	return strings.ToValidUTF8(ua[:maxUserAgentLen], "")
 }
 
 type infoKey struct{}

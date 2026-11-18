@@ -144,6 +144,54 @@ func TestObserverSeesTheMessageOfARefusal(t *testing.T) {
 	}
 }
 
+// A request refused before it reaches an operation has no Op: the host is
+// what names its bucket under virtual-hosted-style addressing, and the user
+// agent what tells which client sent it.
+func TestObserverSeesHostAndUserAgent(t *testing.T) {
+	tests := []struct {
+		name      string
+		userAgent string
+		want      string
+	}{
+		{name: "as sent", userAgent: "aws-sdk-java/2.25.0 Linux/6.8", want: "aws-sdk-java/2.25.0 Linux/6.8"},
+		{name: "absent"},
+		{name: "cut to the limit", userAgent: strings.Repeat("a", 2000), want: strings.Repeat("a", 512)},
+		{
+			// 511 bytes and a two-byte character across the limit
+			name: "not cut inside a character", userAgent: strings.Repeat("a", 511) + "é",
+			want: strings.Repeat("a", 511),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gw := newTestGateway(t)
+			var got *s3gw.RequestInfo
+			gw.SetObserver(func(_ context.Context, info *s3gw.RequestInfo) { got = info })
+			if err := gw.SetBackend("testbucket", stubGet{body: "hello"}); err != nil {
+				t.Fatal(err)
+			}
+			// refused for its unknown header, before any operation
+			req := signedRequest(t, "GET", "http://bucket.s3.example.com/a.txt",
+				nil, emptyPayloadHash, time.Now(), testCreds(), func(r *http.Request) {
+					r.Header.Set("x-amz-request-payer", "requester")
+				})
+			if tt.userAgent != "" {
+				req.Header.Set("User-Agent", tt.userAgent)
+			}
+			gw.Handler().ServeHTTP(httptest.NewRecorder(), req)
+			if got == nil || got.Op != nil {
+				t.Fatalf("expect an observation without an op, got %+v", got)
+			}
+			if got.Host != "bucket.s3.example.com" {
+				t.Errorf("unexpected host %q", got.Host)
+			}
+			if got.UserAgent != tt.want {
+				t.Errorf("unexpected user agent %q", got.UserAgent)
+			}
+		})
+	}
+}
+
 // Without an observer the gateway says nothing at all: a service that
 // installs none gets no log rather than one it cannot control.
 func TestNoObserverIsSilent(t *testing.T) {
@@ -163,8 +211,9 @@ func TestNoObserverIsSilent(t *testing.T) {
 // rather than the empty object an error marshals to on its own.
 func TestRequestInfoJSON(t *testing.T) {
 	info := &s3gw.RequestInfo{
-		Method: "GET", Path: "/photos/a.jpg", RemoteAddr: "10.0.0.5:1234",
-		RawQuery: "X-Amz-Signature=REDACTED", RequestID: "abc123",
+		Method: "GET", Path: "/photos/a.jpg", Host: "s3.example.com", RemoteAddr: "10.0.0.5:1234",
+		UserAgent: "aws-sdk-go-v2/1.30.3",
+		RawQuery:  "X-Amz-Signature=REDACTED", RequestID: "abc123",
 		Tenant: "ta", User: "app1", AccessKeyID: "S3RPKEY001",
 		Status: 502, Code: "InternalError", Message: "We encountered an internal error.",
 		Err:      errors.New("connection refused"),
@@ -181,8 +230,9 @@ func TestRequestInfoJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string]any{
-		"method": "GET", "path": "/photos/a.jpg", "remote_addr": "10.0.0.5:1234",
-		"raw_query": "X-Amz-Signature=REDACTED", "request_id": "abc123",
+		"method": "GET", "path": "/photos/a.jpg", "host": "s3.example.com", "remote_addr": "10.0.0.5:1234",
+		"user_agent": "aws-sdk-go-v2/1.30.3",
+		"raw_query":  "X-Amz-Signature=REDACTED", "request_id": "abc123",
 		"tenant": "ta", "user": "app1", "access_key_id": "S3RPKEY001",
 		"status": float64(502), "code": "InternalError", "message": "We encountered an internal error.",
 		"error":    "connection refused", // not {}

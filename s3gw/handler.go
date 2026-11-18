@@ -101,7 +101,9 @@ func (g *Gateway) wrapHandler(h handlerFunc) http.HandlerFunc {
 			info = &RequestInfo{
 				Method:     r.Method,
 				Path:       r.URL.Path,
+				Host:       r.Host,
 				RemoteAddr: r.RemoteAddr,
+				UserAgent:  clipUserAgent(r.UserAgent()),
 				RequestID:  requestID,
 				Start:      start,
 			}
