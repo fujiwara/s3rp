@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/fujiwara/s3rp/s3err"
+	"maps"
 	"net/http"
 	"slices"
 	"sort"
@@ -576,6 +577,24 @@ func promoteHoistedQueryParams(r *http.Request) []string {
 	return promoted
 }
 
+// intermediaryAmzHeaders are the x-amz-* headers a hop in front of the
+// service adds to every request it forwards: CloudFront's request id
+// (X-Amz-Cf-Id), which no setting turns off. They pass the signed-header
+// gate unsigned, which is sound only while nothing reads them — an exempt
+// header is attacker-controlled by definition. A header may be added here
+// only when it carries no instruction, and the caller must never act on
+// one; IntermediaryAmzHeaders lets it pin that.
+var intermediaryAmzHeaders = map[string]bool{
+	"x-amz-cf-id": true,
+}
+
+// IntermediaryAmzHeaders lists, lower-case and sorted, the x-amz-* headers
+// Verify accepts unsigned. Their values are not covered by the signature
+// and must not drive anything.
+func IntermediaryAmzHeaders() []string {
+	return slices.Sorted(maps.Keys(intermediaryAmzHeaders))
+}
+
 // requireSignedAmzHeaders enforces AWS's rule that every x-amz-* request
 // header must be covered by the signature. The signature only commits to the
 // headers in SignedHeaders, so an x-amz-* header outside that set is
@@ -586,6 +605,9 @@ func promoteHoistedQueryParams(r *http.Request) []string {
 // listed sorted so the message is deterministic. Called once per request,
 // before the signature is compared, so an unsigned x-amz-* header never
 // reaches an operation handler.
+//
+// intermediaryAmzHeaders are exempt: the client could not have signed what
+// a hop in front added after it.
 func requireSignedAmzHeaders(akid string, h http.Header, signedHeaders []string) *s3err.Error {
 	signed := make(map[string]bool, len(signedHeaders))
 	for _, s := range signedHeaders {
@@ -594,7 +616,7 @@ func requireSignedAmzHeaders(akid string, h http.Header, signedHeaders []string)
 	var unsigned []string
 	for name := range h {
 		lname := strings.ToLower(name)
-		if strings.HasPrefix(lname, amzPrefix) && !signed[lname] {
+		if strings.HasPrefix(lname, amzPrefix) && !signed[lname] && !intermediaryAmzHeaders[lname] {
 			unsigned = append(unsigned, lname)
 		}
 	}

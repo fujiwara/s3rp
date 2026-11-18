@@ -707,7 +707,7 @@ The gateway serves plain HTTP, so a real deployment puts a reverse proxy in fron
 
 **What breaks every request.** Verification recomputes the signature over the request as it arrived, from `RequestURI`, the `Host` header and the headers the client listed as signed:
 
-- **Preserve `Host`.** It is signed. CloudFront sends the *origin's* hostname unless the Host header is forwarded, which fails every signature; ALB preserves it.
+- **Preserve `Host`.** It is signed. CloudFront sends the *origin's* hostname unless the Host header is forwarded, which fails every signature; ALB preserves it. CloudFront also adds `X-Amz-Cf-Id` to every origin request; the gateway accepts that one `x-amz-*` header unsigned and never reads it.
 - **Pass the request URI byte-for-byte** — no normalization, no re-encoding, no merging of `//`. Beyond the signature, this decides what the object key *is*: `a//b` and `a/b` are different keys, and `%2F` in a key is not a separator.
 - **Do not alter signed headers.** Adding headers is safe — `X-Forwarded-*` is not signed — but rewriting or dropping one the client signed is not. That includes `Content-Length: 0` on a bodiless request: aws-cli's CRT transfer client signs it on CreateMultipartUpload, HeadObject and DeleteObject (the nginx and HAProxy configurations below pass it through).
 

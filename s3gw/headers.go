@@ -80,9 +80,14 @@ var knownAmzHeaders = map[string]bool{
 // the response carries x-amz-transfer-encoding: append-md5, which the
 // gateway never sends. A header whose effect the client assumes without an
 // acknowledgement must not be added here.
+//
+// The headers the verifier accepts unsigned (sigv4.IntermediaryAmzHeaders,
+// CloudFront's x-amz-cf-id) must all be here: being unsigned they are
+// attacker-controlled, and this list is what keeps them unread.
 var ignoredAmzHeaders = map[string]bool{
 	"x-amz-user-agent": true, // sent by the browser SDKs
 	"x-amz-te":         true,
+	"x-amz-cf-id":      true,
 }
 
 // checkKnownAmzHeaders refuses a request carrying an x-amz-* header no
