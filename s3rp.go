@@ -93,6 +93,7 @@ func logRequest(ctx context.Context, info *s3gw.RequestInfo) {
 	attrs := []any{
 		"remote", info.RemoteAddr,
 		"method", info.Method,
+		"host", info.Host,
 		"path", info.Path,
 		"query", info.RawQuery,
 		"status", info.Status,
@@ -101,6 +102,7 @@ func logRequest(ctx context.Context, info *s3gw.RequestInfo) {
 		"bytes_out", info.BytesOut,
 		"duration", info.Duration.String(),
 		"request_id", info.RequestID,
+		"user_agent", info.UserAgent,
 	}
 	// who asked is known as soon as the signature verifies, so it is logged
 	// even for a request that is then refused; what they asked for is only
