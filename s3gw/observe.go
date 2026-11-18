@@ -37,6 +37,10 @@ type RequestInfo struct {
 	// started, where there was no way left to tell the client anything.
 	// Err says what happened in both cases.
 	Code string `json:"code,omitempty"`
+	// Message is the error message the client was given with Code. It is
+	// what tells apart refusals that share a code — which header or query
+	// parameter a NotImplemented refused — and those carry no Err.
+	Message string `json:"message,omitempty"`
 	// Tenant and User are the identity the signature proved, known from the
 	// moment it verifies — so they are recorded even for a request that is
 	// then refused, which is when knowing who asked matters most. They are

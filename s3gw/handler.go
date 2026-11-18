@@ -122,7 +122,7 @@ func (g *Gateway) wrapHandler(h handlerFunc) http.HandlerFunc {
 				return
 			}
 			reported = true
-			var code string
+			var code, message string
 			var cause error
 			if err != nil {
 				var s3e *s3err.Error
@@ -140,7 +140,7 @@ func (g *Gateway) wrapHandler(h handlerFunc) http.HandlerFunc {
 				// parses as neither. Code stays empty then because it records
 				// what the client was told, and it was told nothing.
 				if !sw.started {
-					code = s3e.Code
+					code, message = s3e.Code, s3e.Message
 					s3err.Write(sw, r, s3e, requestID)
 				}
 			}
@@ -149,7 +149,7 @@ func (g *Gateway) wrapHandler(h handlerFunc) http.HandlerFunc {
 			}
 			info.RawQuery = redactQuery(r.URL.Query())
 			info.Status = sw.status
-			info.Code = code
+			info.Code, info.Message = code, message
 			info.Err = cause
 			info.Duration = time.Since(start)
 			info.BytesIn, info.BytesOut = body.n, sw.written
