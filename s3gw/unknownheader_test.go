@@ -80,6 +80,11 @@ func TestUnknownAmzHeaderRefused(t *testing.T) {
 			headers: map[string]string{"x-amz-user-agent": "aws-sdk-js/3.0.0"},
 		},
 		{
+			// what the AWS SDK for Java v2 sends on every GetObject
+			name: "x-amz-te", method: "GET",
+			headers: map[string]string{"x-amz-te": "append-md5"},
+		},
+		{
 			name: "known headers on a route that ignores them", method: "GET",
 			headers: map[string]string{"x-amz-tagging": "a=b", "x-amz-storage-class": "STANDARD"},
 		},
@@ -109,6 +114,11 @@ func TestUnknownAmzHeaderRefused(t *testing.T) {
 			if tt.wantCode == "" {
 				if w.Code != http.StatusOK {
 					t.Fatalf("unexpected status %d: %s", w.Code, w.Body.String())
+				}
+				// the acknowledgement of x-amz-te: sending it would make
+				// the client strip an MD5 the body does not carry
+				if v := w.Header().Get("x-amz-transfer-encoding"); v != "" {
+					t.Errorf("unexpected x-amz-transfer-encoding %q", v)
 				}
 				return
 			}
@@ -215,7 +225,7 @@ func TestKnownAmzHeadersCoverSource(t *testing.T) {
 	// shared leaf package, or consumed by the verifier
 	readElsewhere := map[string]bool{
 		"x-amz-date": true, "x-amz-content-sha256": true, "x-amz-security-token": true,
-		"x-amz-decoded-content-length": true, "x-amz-trailer": true, "x-amz-user-agent": true,
+		"x-amz-decoded-content-length": true, "x-amz-trailer": true,
 		"x-amz-sdk-checksum-algorithm": true,
 	}
 	literal := regexp.MustCompile(`"(x-amz-[a-z0-9-]+)"`)
@@ -241,6 +251,14 @@ func TestKnownAmzHeadersCoverSource(t *testing.T) {
 				t.Fatal("knownAmzHeaders definition not found in headers.go")
 			}
 			src = append(append([]byte{}, src[:start]...), src[start+end:]...)
+			// likewise the ignored list, so that a read of one of its
+			// headers elsewhere is what the check below finds
+			start = strings.Index(string(src), "var ignoredAmzHeaders = ")
+			end = strings.Index(string(src[max(start, 0):]), "\n}\n")
+			if start < 0 || end < 0 {
+				t.Fatal("ignoredAmzHeaders definition not found in headers.go")
+			}
+			src = append(append([]byte{}, src[:start]...), src[start+end:]...)
 		}
 		for _, m := range literal.FindAllStringSubmatch(string(src), -1) {
 			name := m[1]
@@ -248,9 +266,18 @@ func TestKnownAmzHeadersCoverSource(t *testing.T) {
 				continue
 			}
 			inSource[name] = true
+			if s3gw.IgnoredAmzHeaders[name] {
+				t.Errorf("%s reads %q, which ignoredAmzHeaders lists as not acted on: move it to knownAmzHeaders", f, name)
+				continue
+			}
 			if !s3gw.KnownAmzHeaders[name] {
 				t.Errorf("%s reads %q, which knownAmzHeaders does not list: it would be refused", f, name)
 			}
+		}
+	}
+	for name := range s3gw.IgnoredAmzHeaders {
+		if s3gw.KnownAmzHeaders[name] {
+			t.Errorf("%q is in both knownAmzHeaders and ignoredAmzHeaders", name)
 		}
 	}
 	for name := range s3gw.KnownAmzHeaders {

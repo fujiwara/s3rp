@@ -42,13 +42,12 @@ const (
 // A header handled on one route is known on every route (x-amz-tagging on a
 // GET is ignored, as on Amazon S3); what matters is that no header the
 // gateway never reads gets through. TestKnownAmzHeadersCoverSource keeps
-// the list in step with the headers the operation files read.
+// the list in step with the headers the operation files read. A header
+// accepted without being read belongs in ignoredAmzHeaders instead.
 var knownAmzHeaders = map[string]bool{
 	// consumed by the verifier
 	"x-amz-date": true, "x-amz-content-sha256": true, "x-amz-security-token": true,
 	"x-amz-decoded-content-length": true, "x-amz-trailer": true,
-	// sent by the browser SDKs
-	"x-amz-user-agent": true,
 	// checksums; the per-algorithm value headers are the Gateway's
 	// checksumPolicy (checksums.go), checked alongside this list
 	"x-amz-checksum-algorithm": true, "x-amz-checksum-type": true, "x-amz-checksum-mode": true,
@@ -72,16 +71,32 @@ var knownAmzHeaders = map[string]bool{
 	"x-amz-if-match-size": true, "x-amz-if-match-last-modified-time": true,
 }
 
+// ignoredAmzHeaders are the x-amz-* request headers accepted and
+// deliberately not acted on. Ignoring is sound only when the client cannot
+// come to believe the header applied: it carries no instruction (a user
+// agent), or it asks for something the client uses only after the response
+// acknowledges it. x-amz-te: append-md5 is the latter — the AWS SDK for Java
+// v2 sends it on every GetObject and validates the appended MD5 only when
+// the response carries x-amz-transfer-encoding: append-md5, which the
+// gateway never sends. A header whose effect the client assumes without an
+// acknowledgement must not be added here.
+var ignoredAmzHeaders = map[string]bool{
+	"x-amz-user-agent": true, // sent by the browser SDKs
+	"x-amz-te":         true,
+}
+
 // checkKnownAmzHeaders refuses a request carrying an x-amz-* header no
-// operation handles (see knownAmzHeaders); x-amz-meta-* is user metadata and
-// always known. It runs on every authenticated entry path — handleRequest
+// operation handles (see knownAmzHeaders) and that is not deliberately
+// ignored (ignoredAmzHeaders); x-amz-meta-* is user metadata and always
+// known. It runs on every authenticated entry path — handleRequest
 // after the signature verifies, handlePostObject after the policy does —
 // and looks at names only, so the coverage set is irrelevant to it.
 func (s signedHeader) checkKnownAmzHeaders(checksums *checksumPolicy) *s3err.Error {
 	var unknown []string
 	for name := range s.h {
 		lname := strings.ToLower(name)
-		if !strings.HasPrefix(lname, "x-amz-") || knownAmzHeaders[lname] || checksums.knownHeader(lname) ||
+		if !strings.HasPrefix(lname, "x-amz-") || knownAmzHeaders[lname] || ignoredAmzHeaders[lname] ||
+			checksums.knownHeader(lname) ||
 			strings.HasPrefix(lname, amzMetaPrefix) {
 			continue
 		}

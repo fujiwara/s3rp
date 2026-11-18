@@ -5,7 +5,7 @@ Which request headers the gateway honors, which it refuses by name, and what hap
 ## The rules
 
 - **Every `x-amz-*` header must be signed.** One outside `SignedHeaders` is refused with `403 AccessDenied`, as on Amazon S3 — the signature does not commit to it, so honoring it would let a presigned-URL holder attach what the grantor never signed.
-- **An `x-amz-*` header no operation reads is refused with `501 NotImplemented`**, naming the header, never ignored. Ignoring a signed header would apply less than the client believes (an encryption context, a redirect, a grant). The same rule already covers unknown query subresources and unknown POST form fields.
+- **An `x-amz-*` header no operation reads is refused with `501 NotImplemented`**, naming the header, never ignored. Ignoring a signed header would apply less than the client believes (an encryption context, a redirect, a grant). The same rule already covers unknown query subresources and unknown POST form fields. The exceptions are the few headers whose protocol makes ignoring safe, listed under [Accepted and ignored](#accepted-and-ignored).
 - **The list of known headers is global.** A header some operation reads is accepted on every operation and ignored where it has no meaning (`x-amz-tagging` on a GET), as on AWS. `x-amz-meta-*` is always accepted.
 - **Standard headers are not gated.** S3 requires only `x-amz-*` to be signed, and presigners leave `Content-Type` off a presigned PUT, so a standard header is honored signed or not — which is why a standard header only ever affects the object's own attributes or the shape of a read, never authorization.
 
@@ -14,7 +14,6 @@ Which request headers the gateway honors, which it refuses by name, and what hap
 | Header | Operations | Notes |
 |---|---|---|
 | `x-amz-date`, `x-amz-content-sha256`, `x-amz-security-token`, `x-amz-decoded-content-length`, `x-amz-trailer` | all | consumed by SigV4 verification and `aws-chunked` decoding; `x-amz-trailer` must name one supported checksum (`501` otherwise) |
-| `x-amz-user-agent` | all | sent by the browser SDKs; accepted, unused |
 | `x-amz-meta-*` | PutObject, CopyObject, CreateMultipartUpload, POST upload | user metadata, stored and returned on reads |
 | `x-amz-storage-class` | PutObject, CopyObject, CreateMultipartUpload, POST upload | forwarded, unless a service installs a `StorageClassMapper` ([Storage class](s3-api.md#storage-class)) |
 | `x-amz-tagging` | PutObject, CopyObject, CreateMultipartUpload, POST upload | requires `s3:PutObjectTagging` in addition to the operation's action |
@@ -34,6 +33,15 @@ Which request headers the gateway honors, which it refuses by name, and what hap
 | `x-amz-if-match-size`, `x-amz-if-match-last-modified-time` | DeleteObject | conditional delete, with `If-Match` |
 | `x-amz-object-attributes`, `x-amz-max-parts`, `x-amz-part-number-marker` | GetObjectAttributes | |
 | `x-amz-acl` | PutObject, CreateMultipartUpload, POST upload (`acl` field) | only `private` and `bucket-owner-full-control` are accepted — see below |
+
+## Accepted and ignored
+
+Accepted on every operation and not acted on. A header is here only when the client cannot come to believe it applied ([ADR 0032](ADR/0032-accept-headers-ignorable-by-protocol.md)):
+
+| Header | Sent by | Why ignoring is safe |
+|---|---|---|
+| `x-amz-user-agent` | the browser SDKs | carries no instruction |
+| `x-amz-te` | the AWS SDK for Java v2, as `append-md5` on every GetObject | the SDK validates the appended MD5 only when the response carries `x-amz-transfer-encoding: append-md5`, which the gateway never sends |
 
 ## Refused by name
 
