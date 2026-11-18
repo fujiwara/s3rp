@@ -45,6 +45,7 @@ retroactively").
 | [0031](0031-follow-ceph-releases.md) | The default Ceph backend is the newest GA release; EOL releases are dropped | 2026-11-18 | Accepted |
 | [0032](0032-accept-headers-ignorable-by-protocol.md) | Accept and ignore a header only when its protocol makes ignoring safe | 2026-11-18 | Accepted |
 | [0033](0033-intermediary-headers-pass-unsigned.md) | Headers an intermediary adds pass the signed-header gate unsigned | 2026-11-18 | Accepted |
+| [0034](0034-client-closed-request-is-499.md) | A request the client abandoned is recorded as 499 | 2026-11-18 | Accepted |
 
 ## Writing a record
 
