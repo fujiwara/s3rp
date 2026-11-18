@@ -80,7 +80,7 @@ func logRequest(ctx context.Context, info *s3gw.RequestInfo) {
 		if info.Status >= http.StatusInternalServerError || errors.As(info.Err, &pe) {
 			level = slog.LevelError
 		}
-		attrs := []any{"code", info.Code, "status", info.Status, "request_id", info.RequestID}
+		attrs := []any{"code", info.Code, "message", info.Message, "status", info.Status, "request_id", info.RequestID}
 		if info.Err != nil {
 			attrs = append(attrs, "error", info.Err)
 		}

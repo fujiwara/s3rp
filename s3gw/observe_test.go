@@ -114,6 +114,36 @@ func TestObserverSeesTheCauseOfAFailure(t *testing.T) {
 	}
 }
 
+// A refusal the gateway words itself has no cause, so the message the client
+// was given is the only thing that says which header was refused.
+func TestObserverSeesTheMessageOfARefusal(t *testing.T) {
+	gw := newTestGateway(t)
+	var got *s3gw.RequestInfo
+	gw.SetObserver(func(_ context.Context, info *s3gw.RequestInfo) { got = info })
+	if err := gw.SetBackend("testbucket", stubGet{body: "hello"}); err != nil {
+		t.Fatal(err)
+	}
+	req := signedRequest(t, "GET", "http://s3.example.com/testbucket/a.txt",
+		nil, emptyPayloadHash, time.Now(), testCreds(), func(r *http.Request) {
+			r.Header.Set("x-amz-request-payer", "requester")
+		})
+	w := httptest.NewRecorder()
+	gw.Handler().ServeHTTP(w, req)
+
+	if got == nil {
+		t.Fatal("expect an observation")
+	}
+	if got.Code != "NotImplemented" || got.Err != nil {
+		t.Errorf("expect a causeless NotImplemented, got %+v", got)
+	}
+	if !strings.Contains(got.Message, "x-amz-request-payer") {
+		t.Errorf("expect the message naming the header, got %q", got.Message)
+	}
+	if !strings.Contains(w.Body.String(), "<Message>"+got.Message+"</Message>") {
+		t.Errorf("expect the message the client was given, got %q vs %s", got.Message, w.Body.String())
+	}
+}
+
 // Without an observer the gateway says nothing at all: a service that
 // installs none gets no log rather than one it cannot control.
 func TestNoObserverIsSilent(t *testing.T) {
@@ -136,7 +166,7 @@ func TestRequestInfoJSON(t *testing.T) {
 		Method: "GET", Path: "/photos/a.jpg", RemoteAddr: "10.0.0.5:1234",
 		RawQuery: "X-Amz-Signature=REDACTED", RequestID: "abc123",
 		Tenant: "ta", User: "app1", AccessKeyID: "S3RPKEY001",
-		Status: 502, Code: "InternalError",
+		Status: 502, Code: "InternalError", Message: "We encountered an internal error.",
 		Err:      errors.New("connection refused"),
 		BytesOut: 217,
 		Start:    time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC),
@@ -154,7 +184,7 @@ func TestRequestInfoJSON(t *testing.T) {
 		"method": "GET", "path": "/photos/a.jpg", "remote_addr": "10.0.0.5:1234",
 		"raw_query": "X-Amz-Signature=REDACTED", "request_id": "abc123",
 		"tenant": "ta", "user": "app1", "access_key_id": "S3RPKEY001",
-		"status": float64(502), "code": "InternalError",
+		"status": float64(502), "code": "InternalError", "message": "We encountered an internal error.",
 		"error":    "connection refused", // not {}
 		"bytes_in": float64(0), "bytes_out": float64(217),
 		"start": "2026-08-01T12:00:00Z", "duration": float64(1500000), // nanoseconds
