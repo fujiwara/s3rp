@@ -51,6 +51,10 @@ triage report calls expected.
 
 - A GA release costs one hand-made PR: the swap, a bootstrap fix if needed,
   and an s3-tests run whose classification changes land with it.
+- Squid (v19) is the one exception at the time of this record: still
+  maintained, but never in the integration matrix and two weeks from its
+  estimated end of life (2026-12-02). It is not given a service only to
+  have it removed; it stays an s3-tests image choice until that date.
 - End-of-life dates in the index are estimates until upstream confirms
   them, and have slipped by months before. The issue says which kind it
   found; dropping a release on an estimate is a judgement, not automatic.
