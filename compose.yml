@@ -81,3 +81,14 @@ services:
       timeout: 3s
       retries: 60
       start_period: 20s
+
+  # The same backend on the umbrella release, so the integration suite
+  # covers both maintained Ceph lines. It takes the same ports as ceph:
+  # run one of the two at a time, and start it by name (extends merges
+  # the profile lists, so `--profile ceph` would select both).
+  # start explicitly: docker compose up -d --wait ceph-umbrella
+  ceph-umbrella:
+    extends:
+      service: ceph
+    image: ${CEPH_UMBRELLA_IMAGE:-quay.io/ceph/ceph:v21.2.0}
+    profiles: [ceph-umbrella]

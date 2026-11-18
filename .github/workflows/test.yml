@@ -146,6 +146,8 @@ jobs:
             live_check: true
           - backend: ceph
             endpoint: "http://127.0.0.1:7480"
+          - backend: ceph-umbrella
+            endpoint: "http://127.0.0.1:7480"
           - backend: rustfs
             endpoint: "http://127.0.0.1:9000"
     steps:
