@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fujiwara/s3rp/s3gw"
+	"github.com/fujiwara/s3rp/sigv4"
 )
 
 // An x-amz-* request header no operation reads is refused with
@@ -164,6 +165,37 @@ func TestUnknownAmzHeaderOnListBucketsAndPost(t *testing.T) {
 	gw.Handler().ServeHTTP(w, preq)
 	if w.Code != http.StatusNotImplemented || !strings.Contains(w.Body.String(), "x-amz-website-redirect-location") {
 		t.Errorf("POST upload: expect 501 naming the header, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// What the verifier lets through unsigned is attacker-controlled, so it must
+// be on the list of headers no operation reads.
+func TestIntermediaryAmzHeadersAreIgnored(t *testing.T) {
+	for _, name := range sigv4.IntermediaryAmzHeaders() {
+		if !s3gw.IgnoredAmzHeaders[name] {
+			t.Errorf("%q passes the verifier unsigned but is not in ignoredAmzHeaders", name)
+		}
+	}
+}
+
+// CloudFront adds X-Amz-Cf-Id after the client signed.
+func TestUnsignedCloudFrontIDAccepted(t *testing.T) {
+	for _, method := range []string{"GET", "PUT"} {
+		gw := newTestGateway(t)
+		stub := &stubBackend{
+			getOut: &s3.GetObjectOutput{Body: http.NoBody, ContentLength: aws.Int64(0)},
+			putOut: &s3.PutObjectOutput{ETag: aws.String(`"e"`)},
+		}
+		if err := gw.SetBackend("testbucket", stub); err != nil {
+			t.Fatal(err)
+		}
+		req := signedRequest(t, method, "http://s3.example.com/testbucket/a", nil, emptyPayloadHash, time.Now(), testCreds(), nil)
+		req.Header.Set("X-Amz-Cf-Id", "EXAMPLEcfid==")
+		w := httptest.NewRecorder()
+		gw.Handler().ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Errorf("%s: unexpected status %d: %s", method, w.Code, w.Body.String())
+		}
 	}
 }
 

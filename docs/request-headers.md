@@ -4,7 +4,7 @@ Which request headers the gateway honors, which it refuses by name, and what hap
 
 ## The rules
 
-- **Every `x-amz-*` header must be signed.** One outside `SignedHeaders` is refused with `403 AccessDenied`, as on Amazon S3 — the signature does not commit to it, so honoring it would let a presigned-URL holder attach what the grantor never signed.
+- **Every `x-amz-*` header must be signed.** One outside `SignedHeaders` is refused with `403 AccessDenied`, as on Amazon S3 — the signature does not commit to it, so honoring it would let a presigned-URL holder attach what the grantor never signed. The one exception is `x-amz-cf-id`, which CloudFront adds to every request it forwards: the client cannot have signed it, and no operation reads it.
 - **An `x-amz-*` header no operation reads is refused with `501 NotImplemented`**, naming the header, never ignored. Ignoring a signed header would apply less than the client believes (an encryption context, a redirect, a grant). The same rule already covers unknown query subresources and unknown POST form fields. The exceptions are the few headers whose protocol makes ignoring safe, listed under [Accepted and ignored](#accepted-and-ignored).
 - **The list of known headers is global.** A header some operation reads is accepted on every operation and ignored where it has no meaning (`x-amz-tagging` on a GET), as on AWS. `x-amz-meta-*` is always accepted.
 - **Standard headers are not gated.** S3 requires only `x-amz-*` to be signed, and presigners leave `Content-Type` off a presigned PUT, so a standard header is honored signed or not — which is why a standard header only ever affects the object's own attributes or the shape of a read, never authorization.
@@ -36,12 +36,13 @@ Which request headers the gateway honors, which it refuses by name, and what hap
 
 ## Accepted and ignored
 
-Accepted on every operation and not acted on. A header is here only when the client cannot come to believe it applied ([ADR 0032](ADR/0032-accept-headers-ignorable-by-protocol.md)):
+Accepted on every operation and not acted on. A header is here only when the client cannot come to believe it applied ([ADR 0032](ADR/0032-accept-headers-ignorable-by-protocol.md), [ADR 0033](ADR/0033-intermediary-headers-pass-unsigned.md)):
 
 | Header | Sent by | Why ignoring is safe |
 |---|---|---|
 | `x-amz-user-agent` | the browser SDKs | carries no instruction |
 | `x-amz-te` | the AWS SDK for Java v2, as `append-md5` on every GetObject | the SDK validates the appended MD5 only when the response carries `x-amz-transfer-encoding: append-md5`, which the gateway never sends |
+| `x-amz-cf-id` | CloudFront, on every request it forwards to its origin | a request id, carries no instruction; accepted unsigned as well, since it is added after the client signed |
 
 ## Refused by name
 

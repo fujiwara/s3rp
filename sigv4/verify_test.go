@@ -181,6 +181,38 @@ func TestVerifyRejectsUnsignedAmzHeader(t *testing.T) {
 	})
 }
 
+// A header a hop in front adds after the client signed cannot be in
+// SignedHeaders. CloudFront adds X-Amz-Cf-Id to every origin request, so
+// gating it would refuse every request served through CloudFront.
+func TestVerifyAllowsUnsignedIntermediaryHeader(t *testing.T) {
+	t.Run("header auth", func(t *testing.T) {
+		r := signedRequest(t, testSecret)
+		r.Header.Set("X-Amz-Cf-Id", "EXAMPLEcfid==")
+		if _, err := newVerifier().Verify(r, lookup); err != nil {
+			t.Fatalf("expect the request to verify, got %v", err)
+		}
+	})
+	t.Run("presigned auth", func(t *testing.T) {
+		r := presignedRequest(t, "http://s3.example.com/bucket/key.txt?X-Amz-Expires=300")
+		r.Header.Set("X-Amz-Cf-Id", "EXAMPLEcfid==")
+		if _, err := newVerifier().Verify(r, lookup); err != nil {
+			t.Fatalf("expect the request to verify, got %v", err)
+		}
+	})
+	t.Run("does not cover for another unsigned header", func(t *testing.T) {
+		r := signedRequest(t, testSecret)
+		r.Header.Set("X-Amz-Cf-Id", "EXAMPLEcfid==")
+		r.Header.Set("x-amz-storage-class", "GLACIER")
+		_, err := newVerifier().Verify(r, lookup)
+		if err == nil || err.Code != "AccessDenied" {
+			t.Fatalf("expect AccessDenied, got %v", err)
+		}
+		if strings.Contains(err.Message, "x-amz-cf-id") {
+			t.Errorf("expect only the gated header named, got %q", err.Message)
+		}
+	})
+}
+
 // A standard (non-x-amz) header left unsigned is legitimate: S3 requires only
 // x-amz-* headers to be signed, and presigners deliberately leave headers such
 // as Content-Type off a presigned PUT's signature. The gate must not touch it.
