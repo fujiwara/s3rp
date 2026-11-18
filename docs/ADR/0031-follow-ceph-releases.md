@@ -27,10 +27,9 @@ triage report calls expected.
 - A release past its end of life in Ceph's release index is not a test
   target: its service, matrix entry, s3-tests image choice and the
   workarounds that existed only for it are removed.
-- A weekly workflow (`ceph-releases`, logic in `internal/cephreleases`)
-  compares the repository with Ceph's `doc/releases/releases.yml` and opens
-  one issue per event. A test in that package fails when the default is not
-  the newest release under test.
+- A weekly workflow (`ceph-releases`, logic in
+  `.github/scripts/ceph-releases.sh`) compares the repository with Ceph's
+  `doc/releases/releases.yml` and opens one issue per event.
 
 ## Alternatives considered
 
@@ -57,3 +56,6 @@ triage report calls expected.
   found; dropping a release on an estimate is a judgement, not automatic.
 - The check trusts the layout of `releases.yml`. If it changes, the weekly
   job fails loudly on an empty index and does not go quiet.
+- The check is a yq and jq script, not Go: it is glue around two YAML
+  files. The two tools are pinned in the root `mise.toml`, which is where
+  tools needed by workflows and maintenance scripts go.

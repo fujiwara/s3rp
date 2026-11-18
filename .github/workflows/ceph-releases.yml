@@ -23,17 +23,15 @@ jobs:
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: '1.27'
+      # yq and jq, pinned in mise.toml
+      - name: Set up mise
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
 
       - name: Compare with the Ceph release index
+        # explicit bash so pipefail is on, or tee's status masks a failure
+        shell: bash
         run: |
-          curl -fsSL --retry 3 -o "$RUNNER_TEMP/releases.yml" "$RELEASES_URL"
-          go run ./internal/cephreleases -releases "$RUNNER_TEMP/releases.yml" | tee "$RUNNER_TEMP/findings.json"
-        env:
-          RELEASES_URL: https://raw.githubusercontent.com/ceph/ceph/main/doc/releases/releases.yml
+          .github/scripts/ceph-releases.sh | tee "$RUNNER_TEMP/findings.json"
 
       # The title names the release, not a version or a date, so a finding
       # that is still true next week finds its own issue, open or closed.

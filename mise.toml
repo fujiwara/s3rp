@@ -1,0 +1,5 @@
+# Tools the workflows and maintenance scripts need (.github/scripts/).
+# The s3-tests toolchain is separate, in s3tests/mise.toml.
+[tools]
+yq = "4.54.3"
+jq = "1.8.2"
