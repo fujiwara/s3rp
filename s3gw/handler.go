@@ -132,6 +132,9 @@ func (g *Gateway) wrapHandler(h handlerFunc) http.HandlerFunc {
 					// only description we have
 					s3e = s3err.Internal(err, "We encountered an internal error. Please try again.")
 				}
+				if _, panicked := errors.AsType[*PanicError](err); !panicked {
+					s3e = clientClosed(r, s3e, body.failed)
+				}
 				// the cause never reaches the client, so handing it to the
 				// observer is the only way it can be seen
 				cause = errors.Unwrap(s3e)

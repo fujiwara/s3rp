@@ -434,7 +434,10 @@ func (c *opCtx) setBandwidthLimiters(ctx context.Context, in, out BandwidthLimit
 // serving the request reads it, so a plain counter is enough.
 type countingBody struct {
 	io.ReadCloser
-	n       int64
+	n int64
+	// failed records that reading the client's body failed, which is the
+	// client's doing (clientClosed)
+	failed  bool
 	limiter BandwidthLimiter
 	ctx     context.Context // the request's context, set with limiter
 }
@@ -442,6 +445,9 @@ type countingBody struct {
 func (b *countingBody) Read(p []byte) (int, error) {
 	n, err := b.ReadCloser.Read(p)
 	b.n += int64(n)
+	if err != nil && err != io.EOF {
+		b.failed = true
+	}
 	if n > 0 && b.limiter != nil {
 		// a pacing failure outranks io.EOF: the request must abort rather
 		// than pass the already-consumed bytes unpaced
