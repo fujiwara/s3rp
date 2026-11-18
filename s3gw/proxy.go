@@ -10,7 +10,6 @@ import (
 	"errors"
 	"hash"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"sort"
@@ -119,9 +118,15 @@ func (g *Gateway) getObject(c *opCtx) error {
 		status = http.StatusPartialContent
 	}
 	w.WriteHeader(status)
-	if _, err := io.Copy(w, out.Body); err != nil {
-		// response is already in flight; the client sees a broken body
-		slog.WarnContext(r.Context(), "failed to copy object body", "error", err)
+	src := &sourceReader{Reader: out.Body}
+	if _, err := io.Copy(w, src); err != nil {
+		// the status is sent and the client sees a broken body; returned
+		// so that the observer at least is told
+		// a read can hand over bytes together with its error, and the
+		// write of those bytes can fail too: io.Copy then returns the
+		// write's error, so the read is to blame only when it is the one
+		// returned
+		return bodyCopyError(r, err, err == src.err)
 	}
 	return nil
 }

@@ -6,9 +6,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fujiwara/s3rp/s3gw"
 )
@@ -128,4 +131,107 @@ func TestClientClosedKeepsRefusal(t *testing.T) {
 	if got == nil || got.Status != http.StatusNotImplemented || got.Code != "NotImplemented" {
 		t.Errorf("expect the 501 to stand, got %+v", got)
 	}
+}
+
+// brokenBody yields the beginning of an object and then fails, as a backend
+// connection reset midway does.
+type brokenBody struct{ sent bool }
+
+func (b *brokenBody) Read(p []byte) (int, error) {
+	if b.sent {
+		return 0, errors.New("connection reset by peer")
+	}
+	b.sent = true
+	return copy(p, "hel"), nil
+}
+
+func (b *brokenBody) Close() error { return nil }
+
+// stubGetBody answers GetObject with the given body.
+type stubGetBody struct {
+	s3gw.BackendClient
+	body io.Reader
+}
+
+func (s stubGetBody) GetObject(context.Context, *s3.GetObjectInput, ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+	return &s3.GetObjectOutput{Body: io.NopCloser(s.body)}, nil
+}
+
+type stubBrokenGet struct{ s3gw.BackendClient }
+
+func (stubBrokenGet) GetObject(context.Context, *s3.GetObjectInput, ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+	return &s3.GetObjectOutput{Body: &brokenBody{}, ContentLength: aws.Int64(5)}, nil
+}
+
+// failingWriter is a client connection that breaks on the first body
+// write; net/http cancels the request's context when that happens.
+type failingWriter struct {
+	*httptest.ResponseRecorder
+	cancel context.CancelFunc
+}
+
+func (w failingWriter) Write([]byte) (int, error) {
+	w.cancel()
+	return 0, errors.New("write: broken pipe")
+}
+
+// A download that stops midway has its 200 already: the observer is the
+// only place that can say it was not complete, and which side broke it.
+func TestTruncatedDownloadIsObserved(t *testing.T) {
+	t.Run("backend read fails", func(t *testing.T) {
+		gw := newTestGateway(t)
+		var got *s3gw.RequestInfo
+		gw.SetObserver(func(_ context.Context, info *s3gw.RequestInfo) { got = info })
+		res := serve(t, gw, stubBrokenGet{})
+		if res.Code != http.StatusOK || res.Body.String() != "hel" {
+			t.Fatalf("expect a started, truncated response, got %d %q", res.Code, res.Body.String())
+		}
+		if got == nil || got.Status != http.StatusOK || got.Code != "" {
+			t.Fatalf("expect the status the client was sent and no code, got %+v", got)
+		}
+		if got.Err == nil || !strings.Contains(got.Err.Error(), "from the backend") {
+			t.Errorf("expect a backend read failure, got %v", got.Err)
+		}
+		if errors.Is(got.Err, s3gw.ErrClientClosed) {
+			t.Errorf("a backend failure must not read as the client leaving: %v", got.Err)
+		}
+	})
+	t.Run("write fails while the read fails too", func(t *testing.T) {
+		// the read hands over bytes with its error and writing them fails:
+		// io.Copy reports the write, and so must the cause
+		gw := newTestGateway(t)
+		var got *s3gw.RequestInfo
+		gw.SetObserver(func(_ context.Context, info *s3gw.RequestInfo) { got = info })
+		if err := gw.SetBackend("testbucket", stubGetBody{body: iotest.DataErrReader(iotest.TimeoutReader(strings.NewReader("hello")))}); err != nil {
+			t.Fatal(err)
+		}
+		req := signedRequest(t, "GET", "http://s3.example.com/testbucket/a.txt",
+			nil, emptyPayloadHash, time.Now(), testCreds(), nil)
+		gw.Handler().ServeHTTP(failingWriter{httptest.NewRecorder(), func() {}}, req)
+		if got == nil || got.Err == nil {
+			t.Fatalf("expect a cause, got %+v", got)
+		}
+		if msg := got.Err.Error(); strings.Contains(msg, "from the backend") || !strings.Contains(msg, "broken pipe") {
+			t.Errorf("expect the write failure, got %v", got.Err)
+		}
+	})
+	t.Run("client leaves", func(t *testing.T) {
+		gw := newTestGateway(t)
+		var got *s3gw.RequestInfo
+		gw.SetObserver(func(_ context.Context, info *s3gw.RequestInfo) { got = info })
+		if err := gw.SetBackend("testbucket", stubGet{body: "hello"}); err != nil {
+			t.Fatal(err)
+		}
+		req := signedRequest(t, "GET", "http://s3.example.com/testbucket/a.txt",
+			nil, emptyPayloadHash, time.Now(), testCreds(), nil)
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		gw.Handler().ServeHTTP(failingWriter{httptest.NewRecorder(), cancel}, req.WithContext(ctx))
+		if got == nil || got.Status != http.StatusOK || got.Code != "" {
+			t.Fatalf("expect the status the client was sent and no code, got %+v", got)
+		}
+		if !errors.Is(got.Err, s3gw.ErrClientClosed) {
+			t.Errorf("expect ErrClientClosed, got %v", got.Err)
+		}
+	})
 }
