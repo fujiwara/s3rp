@@ -1,0 +1,56 @@
+# Weekly check of the Ceph releases under test against upstream (AGENTS.md,
+# "Following Ceph releases"): a release that reached GA but is not the
+# default backend yet, and a tested release that reached its end of life.
+# Dependabot ignores Ceph majors, so nothing else would notice either.
+# Each finding becomes an issue, once: the job itself stays green.
+name: ceph-releases
+on:
+  schedule:
+    - cron: '23 18 * * 0' # Monday 03:23 JST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check Ceph releases
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # yq and jq, pinned in mise.toml
+      - name: Set up mise
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+
+      - name: Compare with the Ceph release index
+        # explicit bash so pipefail is on, or tee's status masks a failure
+        shell: bash
+        run: |
+          .github/scripts/ceph-releases.sh | tee "$RUNNER_TEMP/findings.json"
+
+      # The title names the release, not a version or a date, so a finding
+      # that is still true next week finds its own issue, open or closed.
+      - name: Open an issue per new finding
+        shell: bash
+        run: |
+          {
+            echo "### Ceph releases"
+            echo
+            jq -r 'if length == 0 then "Nothing to do." else .[] | "- \(.title)" end' "$RUNNER_TEMP/findings.json"
+          } >> "$GITHUB_STEP_SUMMARY"
+          jq -c '.[]' "$RUNNER_TEMP/findings.json" | while read -r finding; do
+            title=$(jq -r .title <<<"$finding")
+            existing=$(gh issue list --state all --search "in:title \"$title\"" --json title --jq '.[].title')
+            if grep -qxF "$title" <<<"$existing"; then
+              echo "already reported: $title"
+              continue
+            fi
+            gh issue create --title "$title" --body "$(jq -r .body <<<"$finding")"
+          done
+        env:
+          GH_TOKEN: ${{ github.token }}

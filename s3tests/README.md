@@ -74,13 +74,13 @@ PYTEST_ARGS='-k test_bucket_list_empty' ./s3tests/run.sh
 
 ## Choosing the Ceph release
 
-The compose `ceph` service runs `quay.io/ceph/ceph:v20` (tentacle) by
+The compose `ceph` service runs `quay.io/ceph/ceph:v21` (umbrella) by
 default; `CEPH_IMAGE` selects another release image, which is also the
 s3-tests workflow's input:
 
 ```sh
+CEPH_IMAGE=quay.io/ceph/ceph:v20 ./s3tests/run.sh   # tentacle
 CEPH_IMAGE=quay.io/ceph/ceph:v19 ./s3tests/run.sh   # squid
-CEPH_IMAGE=quay.io/ceph/ceph:v21 ./s3tests/run.sh   # umbrella
 ```
 
 ## Testing against the bench MicroCeph

@@ -197,8 +197,8 @@ $ docker compose up -d --wait versitygw
 $ S3RP_TEST_BACKEND_ENDPOINT=http://localhost:7070 go test -race -run TestIntegration ./...
 
 # Ceph RGW (heavyweight, compatibility check)
-# (`ceph` is the tentacle release, `ceph-umbrella` the umbrella one; they
-# share ports, so run one at a time)
+# (`ceph` is the newest release, umbrella; `ceph-tentacle` the previous
+# one. They share ports, so run one at a time)
 $ docker compose up -d --wait ceph
 $ S3RP_TEST_BACKEND_ENDPOINT=http://127.0.0.1:7480 go test -race -run TestIntegration ./...
 

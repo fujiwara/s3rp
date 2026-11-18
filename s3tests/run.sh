@@ -64,6 +64,8 @@ git -C "$WORK/s3-tests" checkout --quiet "$S3TESTS_REF"
 
 if [ ! -x "$WORK/venv/bin/pytest" ]; then
     echo "==> creating venv (mise + uv, tools pinned in s3tests/mise.toml)"
+    # the root mise.toml applies under s3tests/ too, so it needs trusting as well
+    mise trust --quiet 2>/dev/null || true
     mise --cd s3tests trust --quiet 2>/dev/null || true
     mise --cd s3tests install
     mise --cd s3tests exec -- uv venv --quiet "$ROOT/$WORK/venv"
