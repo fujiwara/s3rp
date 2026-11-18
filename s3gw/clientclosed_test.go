@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -146,6 +147,16 @@ func (b *brokenBody) Read(p []byte) (int, error) {
 
 func (b *brokenBody) Close() error { return nil }
 
+// stubGetBody answers GetObject with the given body.
+type stubGetBody struct {
+	s3gw.BackendClient
+	body io.Reader
+}
+
+func (s stubGetBody) GetObject(context.Context, *s3.GetObjectInput, ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+	return &s3.GetObjectOutput{Body: io.NopCloser(s.body)}, nil
+}
+
 type stubBrokenGet struct{ s3gw.BackendClient }
 
 func (stubBrokenGet) GetObject(context.Context, *s3.GetObjectInput, ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
@@ -183,6 +194,25 @@ func TestTruncatedDownloadIsObserved(t *testing.T) {
 		}
 		if errors.Is(got.Err, s3gw.ErrClientClosed) {
 			t.Errorf("a backend failure must not read as the client leaving: %v", got.Err)
+		}
+	})
+	t.Run("write fails while the read fails too", func(t *testing.T) {
+		// the read hands over bytes with its error and writing them fails:
+		// io.Copy reports the write, and so must the cause
+		gw := newTestGateway(t)
+		var got *s3gw.RequestInfo
+		gw.SetObserver(func(_ context.Context, info *s3gw.RequestInfo) { got = info })
+		if err := gw.SetBackend("testbucket", stubGetBody{body: iotest.DataErrReader(iotest.TimeoutReader(strings.NewReader("hello")))}); err != nil {
+			t.Fatal(err)
+		}
+		req := signedRequest(t, "GET", "http://s3.example.com/testbucket/a.txt",
+			nil, emptyPayloadHash, time.Now(), testCreds(), nil)
+		gw.Handler().ServeHTTP(failingWriter{httptest.NewRecorder(), func() {}}, req)
+		if got == nil || got.Err == nil {
+			t.Fatalf("expect a cause, got %+v", got)
+		}
+		if msg := got.Err.Error(); strings.Contains(msg, "from the backend") || !strings.Contains(msg, "broken pipe") {
+			t.Errorf("expect the write failure, got %v", got.Err)
 		}
 	})
 	t.Run("client leaves", func(t *testing.T) {
