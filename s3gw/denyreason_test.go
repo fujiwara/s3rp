@@ -240,6 +240,14 @@ func TestDenyReasonDeleteObjects(t *testing.T) {
 		if diff := cmp.Diff(want, denials(t), cmp.AllowUnexported(s3gw.DenyReason{})); diff != "" {
 			t.Errorf("denials mismatch (-want +got):\n%s", diff)
 		}
+		// every key refused: nothing reached the backend, and the summary
+		// still accounts for each
+		wantSummary := &s3gw.DeleteSummary{Requested: 3, Failed: 3, Objects: []s3gw.DeletedObject{
+			{Key: "a", Code: "AccessDenied"}, {Key: "b", Code: "AccessDenied"}, {Key: "c", Code: "AccessDenied"},
+		}}
+		if diff := cmp.Diff(wantSummary, p.last.Op.Deleted); diff != "" {
+			t.Errorf("summary mismatch (-want +got):\n%s", diff)
+		}
 	})
 	t.Run("cross-tenant mixed keys", func(t *testing.T) {
 		out, err := p.clients["bob"].DeleteObjects(ctx, &s3.DeleteObjectsInput{
@@ -258,6 +266,12 @@ func TestDenyReasonDeleteObjects(t *testing.T) {
 		}}
 		if diff := cmp.Diff(want, denials(t), cmp.AllowUnexported(s3gw.DenyReason{})); diff != "" {
 			t.Errorf("denials mismatch (-want +got):\n%s", diff)
+		}
+		wantSummary := &s3gw.DeleteSummary{Requested: 3, Deleted: 1, Failed: 2, Objects: []s3gw.DeletedObject{
+			{Key: "tmp/a"}, {Key: "x", Code: "AccessDenied"}, {Key: "secret/y", Code: "AccessDenied"},
+		}}
+		if diff := cmp.Diff(wantSummary, p.last.Op.Deleted); diff != "" {
+			t.Errorf("summary mismatch (-want +got):\n%s", diff)
 		}
 	})
 	t.Run("nothing denied", func(t *testing.T) {
