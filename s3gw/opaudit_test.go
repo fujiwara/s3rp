@@ -140,3 +140,74 @@ func TestOpDeleteSummary(t *testing.T) {
 		})
 	}
 }
+
+// A backend error is matched to the entry it names. One without a version
+// id is taken to cover every entry for its key, since recording a delete
+// that did not happen is the worse mistake in an audit trail.
+func TestOpDeleteSummaryVersions(t *testing.T) {
+	objects := []types.ObjectIdentifier{
+		{Key: aws.String("k"), VersionId: aws.String("v1")},
+		{Key: aws.String("k"), VersionId: aws.String("v2")},
+		{Key: aws.String("other")},
+	}
+	tests := []struct {
+		name string
+		errs []types.Error
+		want *s3gw.DeleteSummary
+	}{
+		{
+			name: "error naming one version",
+			errs: []types.Error{{Key: aws.String("k"), VersionId: aws.String("v2"), Code: aws.String("AccessDenied")}},
+			want: &s3gw.DeleteSummary{
+				Requested: 3, Deleted: 2, Failed: 1,
+				Objects: []s3gw.DeletedObject{
+					{Key: "k", VersionID: "v1"},
+					{Key: "k", VersionID: "v2", Code: "AccessDenied"},
+					{Key: "other"},
+				},
+			},
+		},
+		{
+			name: "error without a version",
+			errs: []types.Error{{Key: aws.String("k"), Code: aws.String("InternalError")}},
+			want: &s3gw.DeleteSummary{
+				Requested: 3, Deleted: 1, Failed: 2,
+				Objects: []s3gw.DeletedObject{
+					{Key: "k", VersionID: "v1", Code: "InternalError"},
+					{Key: "k", VersionID: "v2", Code: "InternalError"},
+					{Key: "other"},
+				},
+			},
+		},
+		{
+			// the exact entry wins over the fallback
+			name: "both kinds for one key",
+			errs: []types.Error{
+				{Key: aws.String("k"), Code: aws.String("InternalError")},
+				{Key: aws.String("k"), VersionId: aws.String("v1"), Code: aws.String("AccessDenied")},
+			},
+			want: &s3gw.DeleteSummary{
+				Requested: 3, Deleted: 1, Failed: 2,
+				Objects: []s3gw.DeletedObject{
+					{Key: "k", VersionID: "v1", Code: "AccessDenied"},
+					{Key: "k", VersionID: "v2", Code: "InternalError"},
+					{Key: "other"},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			op := observedOp(t, &stubBackend{delObjsOut: &s3.DeleteObjectsOutput{Errors: tt.errs}}, func(client *s3.Client) {
+				if _, err := client.DeleteObjects(t.Context(), &s3.DeleteObjectsInput{
+					Bucket: aws.String("testbucket"), Delete: &types.Delete{Objects: objects},
+				}); err != nil {
+					t.Fatal(err)
+				}
+			})
+			if diff := cmp.Diff(tt.want, op.Deleted); diff != "" {
+				t.Errorf("unexpected summary (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
