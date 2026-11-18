@@ -43,6 +43,7 @@ retroactively").
 | [0029](0029-build-sigv4-canonical-request-in-verifier.md) | Build the SigV4 canonical request in the verifier | 2026-10-14 | Accepted |
 | [0030](0030-verify-with-derived-signing-key.md) | Verify SigV4 with a derived signing key | 2026-10-19 | Accepted |
 | [0031](0031-follow-ceph-releases.md) | The default Ceph backend is the newest GA release; EOL releases are dropped | 2026-11-18 | Accepted |
+| [0032](0032-accept-headers-ignorable-by-protocol.md) | Accept and ignore a header only when its protocol makes ignoring safe | 2026-11-18 | Accepted |
 
 ## Writing a record
 

@@ -59,6 +59,8 @@ var BackendName = backendName
 // TestKnownAmzHeadersCoverSource.
 var KnownAmzHeaders = knownAmzHeaders
 
+var IgnoredAmzHeaders = ignoredAmzHeaders
+
 // RouteOperations lists the operation names the route tables dispatch to,
 // copy variants included.
 func RouteOperations() []string {
