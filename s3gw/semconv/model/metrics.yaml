@@ -28,9 +28,11 @@ groups:
           Set when the request failed: the S3 error code (`AccessDenied`,
           `NoSuchKey`, `SlowDown`, ...), or `_OTHER` for a failure discovered
           after the response had started, which has a cause (`RequestInfo.Err`)
-          but no code. The cause itself is never an attribute value: it may name
-          backend endpoints and buckets.
-        examples: [AccessDenied, NoSuchKey, InternalError, _OTHER]
+          but no code. `ClientClosedRequest` is a request the client abandoned
+          (status 499), and is used as well when it left after the response had
+          started, so that it is not counted as `_OTHER`. The cause itself is
+          never an attribute value: it may name backend endpoints and buckets.
+        examples: [AccessDenied, NoSuchKey, InternalError, ClientClosedRequest, _OTHER]
         requirement_level:
           conditionally_required: when the request failed
       - ref: s3gw.tenant

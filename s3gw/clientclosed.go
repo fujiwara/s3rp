@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/fujiwara/s3rp/s3err"
@@ -41,4 +42,37 @@ func clientClosed(r *http.Request, s3e *s3err.Error, bodyFailed bool) *s3err.Err
 	return s3err.New(StatusClientClosedRequest, "ClientClosedRequest",
 		"The client closed the connection before the request completed.").
 		WithCause(fmt.Errorf("%w: %w", ErrClientClosed, cause))
+}
+
+// sourceReader remembers whether a read failed, so that a failed io.Copy
+// can be put down to its source or its destination.
+type sourceReader struct {
+	io.Reader
+	err error
+}
+
+func (s *sourceReader) Read(p []byte) (int, error) {
+	n, err := s.Reader.Read(p)
+	if err != nil && err != io.EOF {
+		s.err = err
+	}
+	return n, err
+}
+
+// bodyCopyError is the failure of a response body that stopped midway. The
+// client has its status already, so only the observer sees this: without
+// it a truncated download is recorded as a clean 200. A canceled inbound
+// context means the client left — net/http cancels it when a write to the
+// connection fails — and anything else is told apart by which side of the
+// copy failed.
+func bodyCopyError(r *http.Request, err error, readFailed bool) *s3err.Error {
+	const msg = "We encountered an internal error. Please try again."
+	switch {
+	case errors.Is(r.Context().Err(), context.Canceled):
+		return s3err.Internal(fmt.Errorf("%w: sending the object body: %w", ErrClientClosed, err), msg)
+	case readFailed:
+		return s3err.Internal(fmt.Errorf("reading the object body from the backend: %w", err), msg)
+	default:
+		return s3err.Internal(fmt.Errorf("sending the object body: %w", err), msg)
+	}
 }

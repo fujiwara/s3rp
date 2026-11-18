@@ -2,6 +2,7 @@ package otelmetric_test
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"regexp"
 	"strconv"
@@ -109,6 +110,21 @@ func TestObserve(t *testing.T) {
 				"http.response.status_code": int64(200),
 				"s3gw.operation":            "GetObject",
 				"error.type":                "_OTHER",
+			},
+			wantOut: 3,
+		},
+		{
+			name: "client left during the response",
+			info: s3gw.RequestInfo{
+				Method: "GET", Status: 200, BytesOut: 3,
+				Err: fmt.Errorf("%w: sending the object body: broken pipe", s3gw.ErrClientClosed),
+				Op:  &s3gw.Op{Operation: "GetObject"},
+			},
+			want: map[string]any{
+				"http.request.method":       "GET",
+				"http.response.status_code": int64(200),
+				"s3gw.operation":            "GetObject",
+				"error.type":                "ClientClosedRequest",
 			},
 			wantOut: 3,
 		},

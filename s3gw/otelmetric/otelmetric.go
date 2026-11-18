@@ -6,6 +6,7 @@ package otelmetric
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/fujiwara/s3rp/s3gw"
@@ -29,6 +30,11 @@ var DurationBuckets = []float64{
 // errorTypeOther is error.type for a failure the client was given no code
 // for: one discovered after the response had started.
 const errorTypeOther = "_OTHER"
+
+// errorTypeClientClosed is the code of a request the client abandoned
+// before it was answered, used as well when it left after the response had
+// started, where there is no code.
+const errorTypeClientClosed = "ClientClosedRequest"
 
 // Recorder turns the RequestInfo the gateway reports into the per-request
 // metrics. Its Observe method has the shape of s3gw.Observer.
@@ -99,6 +105,10 @@ func (r *Recorder) attributes(info *s3gw.RequestInfo) []attribute.KeyValue {
 	switch {
 	case info.Code != "":
 		attrs = append(attrs, attribute.String(semconv.AttrErrorType, info.Code))
+	case errors.Is(info.Err, s3gw.ErrClientClosed):
+		// the client left midway through a response: not the code it was
+		// given, but not a failure of the service to count as _OTHER
+		attrs = append(attrs, attribute.String(semconv.AttrErrorType, errorTypeClientClosed))
 	case info.Err != nil:
 		attrs = append(attrs, attribute.String(semconv.AttrErrorType, errorTypeOther))
 	}
