@@ -19,7 +19,7 @@ script via the manually-triggered
   `not lifecycle_expiration/transition, cloud_*, s3website, sns,
   storage_class, fails_on_rgw, auth_aws2`.
 - Backend: the compose `ceph` service, locally and in CI
-  (the image pinned in `compose.yml`, tentacle, by default; `CEPH_IMAGE` — the
+  (the image pinned in `compose.yml`, umbrella, by default; `CEPH_IMAGE` — the
   workflow's input — selects another release image, and the job summary
   states the exact Ceph version). On a squid (`v19`) image `run.sh`
   deselects `test_upload_part_copy_percent_encoded_key`: it crashes that
@@ -68,9 +68,10 @@ The expected-failure categories, and why each failure is expected:
   directly (bypassing the proxy), never assumed; the mix shifts with
   the backend version. The frozen demo RGW (19.2.0) lacks SSE-S3
   configuration, does not store checksums, and enforces write
-  preconditions only partially; current Ceph keeps its own semantics
-  for part ETags on `partNumber` reads and COMPOSITE-only multipart
-  checksum types, and refuses some SSE copy combinations.
+  preconditions only partially; Ceph up to tentacle keeps its own
+  semantics for part ETags on `partNumber` reads and COMPOSITE-only
+  multipart checksum types (umbrella follows S3 on both), and every
+  release refuses some SSE copy combinations.
 - **RGW extension APIs** — usage/account APIs, `x-rgw-*` headers,
   `allow-unordered` listing, `x-amz-tagging-count` on HEAD: not in the
   S3 API model; matching RGW here is a non-goal.
