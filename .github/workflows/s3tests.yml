@@ -15,6 +15,7 @@ on:
         default: compose default
         options:
           - compose default
+          - quay.io/ceph/ceph:v21
           - quay.io/ceph/ceph:v19
 
 permissions:

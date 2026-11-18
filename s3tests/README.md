@@ -79,7 +79,8 @@ default; `CEPH_IMAGE` selects another release image, which is also the
 s3-tests workflow's input:
 
 ```sh
-CEPH_IMAGE=quay.io/ceph/ceph:v19 ./s3tests/run.sh
+CEPH_IMAGE=quay.io/ceph/ceph:v19 ./s3tests/run.sh   # squid
+CEPH_IMAGE=quay.io/ceph/ceph:v21 ./s3tests/run.sh   # umbrella
 ```
 
 ## Testing against the bench MicroCeph

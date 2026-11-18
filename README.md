@@ -189,7 +189,7 @@ $ go test ./policy -bench . -benchmem     # policy evaluation, incl. the worst c
 $ go test ./s3gw -bench VerifyKeyDiversity -benchmem   # SigV4 verification across many access keys
 ```
 
-The integration test suite runs against a real S3-compatible backend, selected by environment variables. Three backends are provided in `compose.yml`:
+The integration test suite runs against a real S3-compatible backend, selected by environment variables. Three backends are provided in `compose.yml` (Ceph RGW on two releases):
 
 ```console
 # versitygw (lightweight, default)
@@ -197,6 +197,8 @@ $ docker compose up -d --wait versitygw
 $ S3RP_TEST_BACKEND_ENDPOINT=http://localhost:7070 go test -race -run TestIntegration ./...
 
 # Ceph RGW (heavyweight, compatibility check)
+# (`ceph` is the tentacle release, `ceph-umbrella` the umbrella one; they
+# share ports, so run one at a time)
 $ docker compose up -d --wait ceph
 $ S3RP_TEST_BACKEND_ENDPOINT=http://127.0.0.1:7480 go test -race -run TestIntegration ./...
 

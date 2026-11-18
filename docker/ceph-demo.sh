@@ -132,6 +132,10 @@ start_mgr() {
 }
 
 bootstrap_osd() {
+  # Register the OSD before it starts. An OSD the mon does not know registers
+  # itself, but on umbrella (21.2.0) it then fails to place itself in the
+  # crush map ("unparseable JSON") and exits.
+  ceph "${CLI_OPTS[@]}" osd create >/dev/null
   mkdir -p "$OSD_PATH"
   ceph "${CLI_OPTS[@]}" auth get-or-create osd."$OSD_ID" \
     mon 'allow profile osd' osd 'allow *' mgr 'allow profile osd' -o "$OSD_PATH"/keyring
