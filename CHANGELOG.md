@@ -1,5 +1,24 @@
 # Changelog
 
+## [v0.0.21](https://github.com/fujiwara/s3rp/compare/v0.0.20...v0.0.21) - 2026-11-18
+
+- Verify SigV4 with a derived signing key by @fujiwara in https://github.com/fujiwara/s3rp/pull/195
+- Cross-check against the latest curl release by @fujiwara in https://github.com/fujiwara/s3rp/pull/210
+- Bump dependencies by @fujiwara in https://github.com/fujiwara/s3rp/pull/211
+- Add Ceph umbrella (v21.2.0) to the integration matrix by @fujiwara in https://github.com/fujiwara/s3rp/pull/217
+- Follow Ceph releases: newest GA as the default, EOL dropped by @fujiwara in https://github.com/fujiwara/s3rp/pull/219
+- Bump rustfs/rustfs from 1.0.4 to 1.0.5 by @dependabot[bot] in https://github.com/fujiwara/s3rp/pull/214
+- Bump versity/versitygw from v1.10.0 to v1.11.0 by @dependabot[bot] in https://github.com/fujiwara/s3rp/pull/213
+- Bump Go dependencies by @fujiwara in https://github.com/fujiwara/s3rp/pull/220
+- Bump jdx/mise-action from 5.2.6 to 5.2.8 by @dependabot[bot] in https://github.com/fujiwara/s3rp/pull/218
+- Accept and ignore x-amz-te by @fujiwara in https://github.com/fujiwara/s3rp/pull/221
+- Accept CloudFront's X-Amz-Cf-Id unsigned by @fujiwara in https://github.com/fujiwara/s3rp/pull/223
+- Report the client's error message on RequestInfo by @fujiwara in https://github.com/fujiwara/s3rp/pull/222
+- Record a request the client abandoned as 499 by @fujiwara in https://github.com/fujiwara/s3rp/pull/224
+- Report a download that stops midway to the observer by @fujiwara in https://github.com/fujiwara/s3rp/pull/225
+- Report copy sources and bulk-delete outcomes on Op by @fujiwara in https://github.com/fujiwara/s3rp/pull/226
+- Report the Host and User-Agent on RequestInfo by @fujiwara in https://github.com/fujiwara/s3rp/pull/227
+
 ## [v0.0.20](https://github.com/fujiwara/s3rp/compare/v0.0.19...v0.0.20) - 2026-10-14
 
 - Build the SigV4 canonical request in the verifier by @fujiwara in https://github.com/fujiwara/s3rp/pull/186
