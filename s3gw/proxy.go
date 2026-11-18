@@ -539,7 +539,9 @@ func (g *Gateway) deleteObjects(c *opCtx) error {
 	}
 	result := &s3xml.DeleteResult{XMLNS: s3xml.Namespace}
 	objects := make([]types.ObjectIdentifier, 0, len(req.Objects))
-	for _, o := range req.Objects {
+	summary := &DeleteSummary{Requested: len(req.Objects), Objects: make([]DeletedObject, len(req.Objects))}
+	for i, o := range req.Objects {
+		summary.Objects[i] = DeletedObject{Key: o.Key, VersionID: o.VersionID}
 		if checkPerObject {
 			resource := rt.cfg.Name + "/" + o.Key
 			auth := delAuth
@@ -558,6 +560,7 @@ func (g *Gateway) deleteObjects(c *opCtx) error {
 				// the request itself succeeds, so the observer learns of
 				// the refusals through the op, one entry per statement
 				c.op.addDenial(auth.denyReason(resource))
+				summary.Objects[i].Code = s3e.Code
 				continue
 			}
 		}
@@ -582,6 +585,7 @@ func (g *Gateway) deleteObjects(c *opCtx) error {
 		objects = append(objects, oi)
 	}
 	if len(objects) == 0 {
+		c.setDeleted(summary, nil)
 		return s3xml.Write(w, result)
 	}
 	in := &s3.DeleteObjectsInput{
@@ -616,7 +620,42 @@ func (g *Gateway) deleteObjects(c *opCtx) error {
 		}
 		result.Errors = append(result.Errors, derr)
 	}
+	c.setDeleted(summary, out.Errors)
 	return s3xml.Write(w, result)
+}
+
+// setDeleted completes the summary of a DeleteObjects request with the
+// backend's per-key errors and puts it on the op. The outcome is derived
+// from the errors rather than from the backend's Deleted list, which a
+// Quiet request leaves empty.
+func (c *opCtx) setDeleted(summary *DeleteSummary, errs []types.Error) {
+	if c.op == nil {
+		return
+	}
+	// an error the backend reports without a version id is taken to cover
+	// every entry for that key: recording a delete that did not happen is
+	// the worse mistake in an audit trail
+	type entry struct{ key, versionID string }
+	failed := make(map[entry]string, len(errs))
+	for _, e := range errs {
+		failed[entry{aws.ToString(e.Key), aws.ToString(e.VersionId)}] = aws.ToString(e.Code)
+	}
+	for i := range summary.Objects {
+		o := &summary.Objects[i]
+		if o.Code == "" {
+			if code, ok := failed[entry{o.Key, o.VersionID}]; ok {
+				o.Code = code
+			} else if code, ok := failed[entry{o.Key, ""}]; ok {
+				o.Code = code
+			}
+		}
+		if o.Code == "" {
+			summary.Deleted++
+		} else {
+			summary.Failed++
+		}
+	}
+	c.op.Deleted = summary
 }
 
 func (g *Gateway) headBucket(c *opCtx) error {

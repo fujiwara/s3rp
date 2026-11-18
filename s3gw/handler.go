@@ -614,13 +614,14 @@ func (c *opCtx) dispatch(routes []route) error {
 			return s3e
 		}
 		name := rt.name
+		var copySource *CopySource
 		if rt.copy != "" && c.signed(hdrCopySource) != "" {
 			name = rt.copy
-			src, action, s3e := c.g.resolveCopySource(c, &rt)
+			src, front, action, s3e := c.g.resolveCopySource(c, &rt)
 			if s3e != nil {
 				return s3e
 			}
-			c.copySource = src
+			c.copySource, copySource = src, front
 			actions = append(actions, action)
 		}
 		op := &Op{
@@ -632,6 +633,7 @@ func (c *opCtx) dispatch(routes []route) error {
 			Bucket:         c.rt.cfg.Name,
 			BucketOwner:    c.rt.cfg.Tenant,
 			Key:            c.key,
+			CopySource:     copySource,
 			Request:        c.objectRequest(rt.attrs),
 			BucketMetadata: c.rt.cfg.Metadata,
 			KeyMetadata:    c.vr.KeyMetadata,

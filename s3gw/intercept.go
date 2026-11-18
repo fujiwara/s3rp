@@ -68,6 +68,11 @@ type Op struct {
 	// rest — keys on this.
 	BucketOwner string `json:"bucket_owner"`
 	Key         string `json:"key,omitempty"`
+	// CopySource is the object a copy (CopyObject, UploadPartCopy) reads,
+	// nil for every other operation. It is resolved and authorized before
+	// the hooks run, so an Authorizer can refuse on it; Bucket and Key
+	// above are the destination.
+	CopySource *CopySource `json:"copy_source,omitempty"`
 
 	// Request is what the client asked for about the object itself, set
 	// before the Authorizer runs so it can refuse on it. Nil when the
@@ -95,6 +100,12 @@ type Op struct {
 	// returns, like Response. A refusal of the whole request is not here —
 	// it is the *DenyReason cause of the AccessDenied the observer gets.
 	Denials []Denial `json:"denials,omitempty"`
+
+	// Deleted is the outcome of a DeleteObjects request, nil for every
+	// other operation and when the request failed as a whole. Key is empty
+	// for that operation — the keys are in the request body — so this is
+	// the only record of what it removed. Set by the time next returns.
+	Deleted *DeleteSummary `json:"deleted,omitempty"`
 
 	// BucketMetadata and KeyMetadata carry the store.Bucket.Metadata and
 	// store.Key.Metadata the Store attached to the definitions this request
@@ -442,3 +453,39 @@ func (b *countingBody) Read(p []byte) (int, error) {
 }
 
 var _ http.ResponseWriter = (*statusWriter)(nil)
+
+// CopySource names the object a copy reads, in the front namespace.
+type CopySource struct {
+	Bucket    string `json:"bucket"`
+	Key       string `json:"key"`
+	VersionID string `json:"version_id,omitempty"`
+}
+
+// DeleteSummary is what a DeleteObjects request did, per key.
+type DeleteSummary struct {
+	// Requested is the number of entries in the request; Deleted and
+	// Failed add up to it.
+	Requested int `json:"requested"`
+	// Deleted counts the entries the backend did not report an error for.
+	// A delete of a key that does not exist succeeds on S3, so this is not
+	// a count of objects that existed.
+	Deleted int `json:"deleted"`
+	// Failed counts the entries a policy refused (see Op.Denials for why)
+	// or the backend reported an error for.
+	Failed int `json:"failed"`
+	// Objects is the outcome of each entry, in request order. It is
+	// excluded from JSON because Op is emitted as-is by observers and a
+	// request names up to 1000 keys: a service that needs the keys in its
+	// audit log reads them here.
+	Objects []DeletedObject `json:"-"`
+}
+
+// DeletedObject is one entry of a DeleteObjects request and what became of
+// it.
+type DeletedObject struct {
+	Key       string `json:"key"`
+	VersionID string `json:"version_id,omitempty"`
+	// Code is the S3 error code the client was given for this entry, empty
+	// when it was deleted.
+	Code string `json:"code,omitempty"`
+}

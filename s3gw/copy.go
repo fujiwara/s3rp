@@ -22,25 +22,25 @@ import (
 // or its versioned form for a source naming a version). Copying between
 // different backends is not supported. The copy source names another object
 // to read, so it is only ever taken from a signed header.
-func (g *Gateway) resolveCopySource(c *opCtx, rt *route) (string, string, *s3err.Error) {
+func (g *Gateway) resolveCopySource(c *opCtx, rt *route) (string, *CopySource, string, *s3err.Error) {
 	raw := strings.TrimPrefix(c.signed(hdrCopySource), "/")
 	rawPath, versionID, _ := strings.Cut(raw, "?")
 	rawBucket, rawKey, ok := strings.Cut(rawPath, "/")
 	if !ok || rawKey == "" {
-		return "", "", s3err.New(http.StatusBadRequest, "InvalidArgument",
+		return "", nil, "", s3err.New(http.StatusBadRequest, "InvalidArgument",
 			"Copy Source must mention the source bucket and key: sourcebucket/sourcekey")
 	}
 	srcBucket, err := url.PathUnescape(rawBucket)
 	if err != nil {
-		return "", "", s3err.New(http.StatusBadRequest, "InvalidArgument", "Invalid copy source").WithCause(err)
+		return "", nil, "", s3err.New(http.StatusBadRequest, "InvalidArgument", "Invalid copy source").WithCause(err)
 	}
 	srcKey, err := unescapeKey(rawKey)
 	if err != nil {
-		return "", "", s3err.New(http.StatusBadRequest, "InvalidArgument", "Invalid copy source").WithCause(err)
+		return "", nil, "", s3err.New(http.StatusBadRequest, "InvalidArgument", "Invalid copy source").WithCause(err)
 	}
 	query, err := url.ParseQuery(versionID)
 	if err != nil {
-		return "", "", s3err.New(http.StatusBadRequest, "InvalidArgument", "Invalid copy source").WithCause(err)
+		return "", nil, "", s3err.New(http.StatusBadRequest, "InvalidArgument", "Invalid copy source").WithCause(err)
 	}
 	action := versioned(rt.copyAction, rt.copyVersionAction, query.Get(qpVersionID) != "")
 	// the source is resolved within the requesting key's tenant — deliberately
@@ -51,24 +51,24 @@ func (g *Gateway) resolveCopySource(c *opCtx, rt *route) (string, string, *s3err
 		if errors.Is(err, store.ErrNotFound) {
 			// the cause tells the observer this denial is an unresolved
 			// source bucket, not a policy decision; the client sees neither
-			return "", "", s3err.AccessDenied().WithCause(copySourceReason(c.vr.principal(), action, srcBucket+"/"+srcKey, err))
+			return "", nil, "", s3err.AccessDenied().WithCause(copySourceReason(c.vr.principal(), action, srcBucket+"/"+srcKey, err))
 		}
-		return "", "", s3err.Internal(err, "bucket lookup failed")
+		return "", nil, "", s3err.Internal(err, "bucket lookup failed")
 	}
 	// reading the copy source needs s3:GetObject (s3:GetObjectVersion for a
 	// version) on the source bucket
 	if s3e := g.authorize(c.vr, src, action, src.Name+"/"+srcKey); s3e != nil {
-		return "", "", s3e
+		return "", nil, "", s3e
 	}
 	sb, db := src.Backend, c.rt.cfg.Backend
 	if sb.Endpoint != db.Endpoint || sb.Region != db.Region || sb.AccessKeyID != db.AccessKeyID {
-		return "", "", s3err.NotImplemented("copying between different backends")
+		return "", nil, "", s3err.NotImplemented("copying between different backends")
 	}
 	copySource := (&url.URL{Path: "/" + sb.Bucket + "/" + srcKey}).EscapedPath()[1:]
 	if versionID != "" {
 		copySource += "?" + versionID
 	}
-	return copySource, action, nil
+	return copySource, &CopySource{Bucket: src.Name, Key: srcKey, VersionID: query.Get(qpVersionID)}, action, nil
 }
 
 func (g *Gateway) copyObject(c *opCtx) error {
