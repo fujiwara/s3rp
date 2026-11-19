@@ -16,9 +16,11 @@ and the canonical query string can be built two ways:
   URL, split into pairs, sort the pairs as raw strings, join. No decoding,
   no re-encoding.
 - **Normalize** (aws-sdk-go-v2, and s3rp, which follows it): parse the query
-  (decoding `%XX` and `+`), sort keys, sort each key's values by decoded
-  form, re-encode canonically (unreserved characters literal, everything
-  else `%XX` upper-case).
+  (decoding `%XX` and `+`), re-encode canonically (unreserved characters
+  literal, everything else `%XX` upper-case), then sort the pairs by
+  encoded key and encoded value. Until aws-sdk-go-v2 v1.47.6 the SDK
+  sorted by the *decoded* forms, and so did s3rp when the measurements
+  below were taken; see [Sort order](#sort-order-2026-11-19).
 
 The two agree exactly when the wire query is already canonically encoded —
 which is what every mainstream client serializer produces. They disagree on
@@ -32,7 +34,9 @@ wire forms only a hand-rolled client can emit:
 3. **Duplicate keys whose value ordering differs raw vs decoded**:
    `?a=%E3%81%82&a=~`. `~` (0x7E) sorts after `%` (0x25) as a raw string
    but before 0xE3 by decoded bytes, so the two schools order the pairs
-   differently inside the canonical string.
+   differently inside the canonical string. (This separated the schools
+   while normalize sorted decoded forms; sorting encoded forms, they agree
+   on it.)
 
 The AWS documentation describes canonicalization for *signers* and says
 nothing about which interpretation a *verifier* must apply to
@@ -74,8 +78,37 @@ Readings:
   AWS must be verifying against multiple candidate canonicalizations, which
   reads as a deliberate leniency added because implementations never
   converged here. versitygw rejects all five variants tested. RGW accepts a
-  wire-order-dependent subset. s3rp accepts exactly one ordering (sorted by
-  decoded value — what aws-sdk-go-v2's signer computes).
+  wire-order-dependent subset. s3rp accepts exactly one ordering — what
+  aws-sdk-go-v2's signer computes: sorted by decoded value at the time
+  (dup D), sorted by encoded value since (dup A).
+
+## Sort order (2026-11-19)
+
+aws-sdk-go-v2 v1.47.6 changed its signer to sort the canonical query by the
+*encoded* key and value
+([aws/aws-sdk-go-v2#3617](https://github.com/aws/aws-sdk-go-v2/pull/3617),
+fixing [#2969](https://github.com/aws/aws-sdk-go-v2/issues/2969)). That is
+what the SigV4 specification asks for ("the sorting occurs after
+encoding"), what AWS's own test suite asserts in
+`get-vanilla-query-order-encoded`, and what botocore's sign-as-sent
+produces for canonically encoded wire. The
+nightly differential fuzz target caught the change one day after the
+dependency bump: a presigned URL with the query key `%CD` was signed with
+that key first (`%` is 0x25) and verified with it last (0xCD), so the
+verifier refused what the SDK had signed.
+
+s3rp follows the SDK, as before. The two orders differ only where an
+escaped byte decides a comparison: a key or a duplicated key's value
+holding a byte above `~`, or one of the few ASCII characters that are
+escaped and sort above an unreserved one the other side holds at the same
+position. S3's own query parameters are ASCII names that never meet that
+case, so the keys of a real request sort the same either way; what moved is
+the measured duplicate-key row — s3rp now accepts dup A and refuses dup D —
+and a request signed by an SDK older than v1.47.6 with such a key or
+duplicate value, which no longer verifies. Amazon S3 was measured to accept
+both orders of a duplicated key's values, by the multi-candidate
+verification noted above, which s3rp still does not do; the upstream fix
+reports other AWS services refusing the decoded order.
 
 ## aws4's own divergences (2026-08-15)
 

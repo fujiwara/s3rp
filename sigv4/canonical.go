@@ -118,18 +118,38 @@ func canonicalURI(u *url.URL) string {
 	return p
 }
 
-// canonicalQuery decodes the query and re-encodes it sorted by key, then by
-// value, with spaces as %20. Pairs that fail to decode are dropped, as
-// url.URL.Query drops them.
+// canonicalQuery decodes the query and re-encodes it with spaces as %20,
+// sorted by encoded key, then by encoded value. The order is that of the
+// encoded forms, as SigV4 specifies and aws-sdk-go-v2 signs since v1.47.6:
+// a byte that is escaped sorts as '%', not as itself. Pairs that fail to
+// decode are dropped, as url.URL.Query drops them.
 func canonicalQuery(u *url.URL, drop string) string {
 	q := u.Query()
 	if drop != "" {
 		q.Del(drop)
 	}
-	for k := range q {
-		sort.Strings(q[k])
+	var pairs []string
+	for k, values := range q {
+		ek := encodeQueryComponent(k)
+		for _, v := range values {
+			pairs = append(pairs, ek+"="+encodeQueryComponent(v))
+		}
 	}
-	return strings.ReplaceAll(q.Encode(), "+", "%20")
+	// '=' sorts below every byte an encoded component can hold except
+	// '-' and '.', so the pair cannot be compared as one string
+	sort.Slice(pairs, func(i, j int) bool {
+		ki, vi, _ := strings.Cut(pairs[i], "=")
+		kj, vj, _ := strings.Cut(pairs[j], "=")
+		if ki != kj {
+			return ki < kj
+		}
+		return vi < vj
+	})
+	return strings.Join(pairs, "&")
+}
+
+func encodeQueryComponent(s string) string {
+	return strings.ReplaceAll(url.QueryEscape(s), "+", "%20")
 }
 
 // canonicalHeaderValue is a signed header's canonical value: its values

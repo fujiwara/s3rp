@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -38,6 +39,8 @@ func TestCanonicalRequestAWSSuite(t *testing.T) {
 			"host;my-header1;x-amz-date", "08c7e5a9acfcfeb3ab6b2185e75ce8b1deb5e634ec47601a50643f830c755c01"},
 		{"get-vanilla-query-order-key-case", "GET", "/?Param2=value2&Param1=value1", nil, "",
 			"host;x-amz-date", "b97d918cfa904a5beff61c982a1b6f458b799221646efd99d3219ec94cdf2500"},
+		{"get-vanilla-query-order-encoded", "GET", "/?Param-3=Value3&Param=Value2&%E1%88%B4=Value1", nil, "",
+			"host;x-amz-date", "371d3713e185cc334048618a97f809c9ffe339c62934c032af5a0e595648fcac"},
 		{"get-vanilla-query-unreserved", "GET", "/?-._~0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz=-._~0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", nil, "",
 			"host;x-amz-date", "9c3e54bfcdf0b19771a7f523ee5669cdf59bc7cc0884027167c21bb143a40197"},
 		{"post-header-key-sort", "POST", "/", [][2]string{{"My-Header1", "value1"}}, "",
@@ -111,5 +114,27 @@ func TestCollapseWhitespace(t *testing.T) {
 		if got := collapseWhitespace(in); got != want {
 			t.Errorf("collapseWhitespace(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// TestCanonicalQueryOrder pins the sort to the encoded forms: an escaped
+// byte orders as '%', whatever it decodes to.
+func TestCanonicalQueryOrder(t *testing.T) {
+	cases := []struct{ name, query, want string }{
+		{"escaped key before a letter", "X-Amz-Expires=8&%CD=0", "%CD=0&X-Amz-Expires=8"},
+		{"escaped value before tilde", "a=~&a=%E3%81%82", "a=%E3%81%82&a=~"},
+		{"key before its own prefix extension", "a-=1&a=2", "a=2&a-=1"},
+		{"space as %20, signature dropped", "b=x+y&X-Amz-Signature=s&a=1", "a=1&b=x%20y"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			u, err := url.Parse("/k?" + c.query)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := canonicalQuery(u, "X-Amz-Signature"); got != c.want {
+				t.Errorf("canonicalQuery(%q) = %q, want %q", c.query, got, c.want)
+			}
+		})
 	}
 }
