@@ -302,6 +302,9 @@ func (g *Gateway) postPutObject(c *opCtx, fields map[string]string, file *multip
 			in.Expires = aws.Time(t)
 		}
 	}
+	if s3e := checkTaggingValue(fields[hdrTagging]); s3e != nil {
+		return s3e
+	}
 	in.StorageClass = c.backendStorageClass(fields[hdrStorageClass], SizeUnknown)
 	if v := fields[hdrTagging]; v != "" {
 		in.Tagging = aws.String(v)

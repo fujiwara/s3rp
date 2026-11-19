@@ -600,6 +600,9 @@ func (c *opCtx) dispatch(routes []route) error {
 	if err := checkSSE(c.hdr); err != nil {
 		return err
 	}
+	if err := checkTaggingValue(c.signed(hdrTagging)); err != nil {
+		return err
+	}
 	for _, rt := range routes {
 		if rt.match != nil && !rt.match(c.query) {
 			continue

@@ -130,6 +130,17 @@ SSE-S3 (`x-amz-server-side-encryption: AES256`) and SSE-KMS (`aws:kms` + `x-amz-
 
 Backend notes for Ceph RGW: SSE requests require TLS toward RGW by default (`rgw_crypt_require_ssl`) — terminate or disable it deliberately; the compose file's ceph service configures the built-in `testing` KMS backend with a static key (`testkey-1`) so the integration suite can exercise SSE-KMS without a real KMS.
 
+### Request validation
+
+A few request values are checked by the gateway itself, before the backend sees them, and refused with Amazon S3's own code and message. Backends answer each of these differently — some accept what S3 refuses — and a backend's wording is never relayed, so without the check a client would learn only `Invalid Argument`.
+
+- **Object tags** (`x-amz-tagging`, the POST field, PutObjectTagging): more than 10 tags is `400 BadRequest` "Object tags cannot be greater than 10"; a key longer than 128 or a value longer than 256 characters, or a character outside letters, numbers, spaces and `+ - = . _ : / @`, is `400 InvalidTag`; a key given twice is `400 InvalidTag` in PutObjectTagging and `400 InvalidArgument` inline.
+- **`x-amz-tagging-directive`, `x-amz-metadata-directive`**: anything but `COPY` and `REPLACE` is `400 InvalidArgument`.
+- **`x-amz-object-attributes`**: a name S3 does not define is `400 InvalidArgument`.
+- **CompleteMultipartUpload**: a part number lower than the one before it is `400 InvalidPartOrder`.
+
+Storage class names are deliberately not checked: which classes exist is the backend's and the service's to define ([Storage class](#storage-class)).
+
 ### Bucket policies
 
 A bucket may carry an AWS-style policy document, written as JSON text in the store (in the bundled YAML config, `buckets[].policy`). GetBucketPolicy returns it; PutBucketPolicy / DeleteBucketPolicy are not supported (policies are defined in the store, not via the S3 API).

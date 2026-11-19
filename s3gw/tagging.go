@@ -43,6 +43,9 @@ func (g *Gateway) putObjectTagging(c *opCtx) error {
 	if s3e := readXMLBody(c, &req); s3e != nil {
 		return s3e
 	}
+	if s3e := checkTagSet(req.TagSet.Tags); s3e != nil {
+		return s3e
+	}
 	tags := make([]types.Tag, 0, len(req.TagSet.Tags))
 	for _, tag := range req.TagSet.Tags {
 		tags = append(tags, types.Tag{

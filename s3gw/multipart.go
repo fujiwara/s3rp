@@ -145,7 +145,12 @@ func (g *Gateway) completeMultipartUpload(c *opCtx) error {
 			"You must specify at least one part")
 	}
 	parts := make([]types.CompletedPart, 0, len(req.Parts))
-	for _, p := range req.Parts {
+	for i, p := range req.Parts {
+		// S3 refuses a list that goes backwards; RGW assembles it
+		if i > 0 && p.PartNumber < req.Parts[i-1].PartNumber {
+			return s3err.New(http.StatusBadRequest, "InvalidPartOrder",
+				"The list of parts was not in ascending order. Parts must be ordered by part number.")
+		}
 		cp := types.CompletedPart{
 			PartNumber: aws.Int32(p.PartNumber),
 			ETag:       aws.String(p.ETag),

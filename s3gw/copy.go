@@ -79,6 +79,9 @@ func (g *Gateway) copyObject(c *opCtx) error {
 		CopySource: aws.String(c.copySource),
 	}
 	if v := c.signed("x-amz-metadata-directive"); v != "" {
+		if s3e := checkDirective("metadata", v); s3e != nil {
+			return s3e
+		}
 		in.MetadataDirective = types.MetadataDirective(v)
 	}
 	if v := c.attr("Content-Type"); v != "" {
@@ -91,6 +94,9 @@ func (g *Gateway) copyObject(c *opCtx) error {
 	}
 	in.ChecksumAlgorithm = alg
 	if v := c.signed("x-amz-tagging-directive"); v != "" {
+		if s3e := checkDirective("tagging", v); s3e != nil {
+			return s3e
+		}
 		in.TaggingDirective = types.TaggingDirective(v)
 	}
 	if v := c.signed(hdrTagging); v != "" {
