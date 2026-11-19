@@ -424,6 +424,8 @@ type ListAllMyBucketsResult struct {
 	// ContinuationToken is the token for the next page, present only when
 	// the listing is truncated.
 	ContinuationToken string `xml:"ContinuationToken,omitempty"`
+	// Prefix echoes the request's prefix filter.
+	Prefix string `xml:"Prefix,omitempty"`
 }
 
 type BucketEntry struct {

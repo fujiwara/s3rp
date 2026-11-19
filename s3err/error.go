@@ -18,9 +18,13 @@ import (
 // Error is an S3 API error response, as specified in "Error responses" in
 // the S3 API reference.
 type Error struct {
-	XMLName   xml.Name `xml:"Error"`
-	Code      string   `xml:"Code"`
-	Message   string   `xml:"Message"`
+	XMLName xml.Name `xml:"Error"`
+	Code    string   `xml:"Code"`
+	Message string   `xml:"Message"`
+	// Details are the extra elements S3 adds to some errors, such as the
+	// times of a RequestTimeTooSkewed refusal. They are rendered to the
+	// client, so they hold only what the client may know.
+	Details   []Detail `xml:",omitempty"`
 	Resource  string   `xml:"Resource,omitempty"`
 	RequestID string   `xml:"RequestId,omitempty"`
 
@@ -50,6 +54,18 @@ func (e *Error) Status() int {
 
 func New(status int, code, message string) *Error {
 	return &Error{status: status, Code: code, Message: message}
+}
+
+// Detail is one extra element of an error response.
+type Detail struct {
+	XMLName xml.Name
+	Value   string `xml:",chardata"`
+}
+
+// WithDetail adds an element to the error response, after Message.
+func (e *Error) WithDetail(name, value string) *Error {
+	e.Details = append(e.Details, Detail{XMLName: xml.Name{Local: name}, Value: value})
+	return e
 }
 
 // WithCause records what went wrong behind this error. The cause is never

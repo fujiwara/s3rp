@@ -91,11 +91,45 @@ func TestListBucketsPagination(t *testing.T) {
 	}
 }
 
+func TestListBucketsPrefix(t *testing.T) {
+	client := listBucketsGateway(t, "logs-a", "data-1", "logs-b", "logs-c", "other")
+	names := func(out *s3.ListBucketsOutput) []string {
+		var ns []string
+		for _, b := range out.Buckets {
+			ns = append(ns, aws.ToString(b.Name))
+		}
+		return ns
+	}
+	out, err := client.ListBuckets(t.Context(), &s3.ListBucketsInput{Prefix: aws.String("logs-"), MaxBuckets: aws.Int32(2)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff([]string{"logs-a", "logs-b"}, names(out)); diff != "" {
+		t.Errorf("first page (-want +got):\n%s", diff)
+	}
+	if aws.ToString(out.Prefix) != "logs-" {
+		t.Errorf("Prefix %q, want it echoed", aws.ToString(out.Prefix))
+	}
+	// the token pages within the prefix
+	out, err = client.ListBuckets(t.Context(), &s3.ListBucketsInput{
+		Prefix: aws.String("logs-"), MaxBuckets: aws.Int32(2), ContinuationToken: out.ContinuationToken,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff([]string{"logs-c"}, names(out)); diff != "" {
+		t.Errorf("second page (-want +got):\n%s", diff)
+	}
+	if out.ContinuationToken != nil {
+		t.Errorf("final page must carry no token, got %q", *out.ContinuationToken)
+	}
+}
+
 func TestListBucketsRejectsUnknownParams(t *testing.T) {
 	client := listBucketsGateway(t, "b1")
-	// prefix is not supported; like every unknown query parameter it is
-	// refused loudly rather than silently ignored
-	_, err := client.ListBuckets(t.Context(), &s3.ListBucketsInput{Prefix: aws.String("b")})
+	// bucket-region is not supported; like every unknown query parameter it
+	// is refused loudly rather than silently ignored
+	_, err := client.ListBuckets(t.Context(), &s3.ListBucketsInput{BucketRegion: aws.String("us-east-1")})
 	var apiErr smithy.APIError
 	if !errors.As(err, &apiErr) || apiErr.ErrorCode() != "NotImplemented" {
 		t.Errorf("expected NotImplemented, got %v", err)
