@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -410,6 +412,13 @@ func TestProxyCopyObject(t *testing.T) {
 		Metadata:          map[string]string{"copied": "yes"},
 		MetadataDirective: types.MetadataDirectiveReplace,
 		ChecksumAlgorithm: types.ChecksumAlgorithmCrc64nvme,
+		// restated with REPLACE, so they must reach the backend
+		ContentType:        aws.String("application/json"),
+		CacheControl:       aws.String("no-store"),
+		ContentDisposition: aws.String(`attachment; filename="a.json"`),
+		ContentEncoding:    aws.String("gzip"),
+		ContentLanguage:    aws.String("ja"),
+		Expires:            aws.Time(time.Date(2030, 1, 2, 3, 4, 5, 0, time.UTC)),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -441,6 +450,14 @@ func TestProxyCopyObject(t *testing.T) {
 	}
 	if in.ChecksumAlgorithm != types.ChecksumAlgorithmCrc64nvme {
 		t.Errorf("unexpected checksum algorithm %q", in.ChecksumAlgorithm)
+	}
+	got := []string{
+		aws.ToString(in.ContentType), aws.ToString(in.CacheControl), aws.ToString(in.ContentDisposition),
+		aws.ToString(in.ContentEncoding), aws.ToString(in.ContentLanguage), aws.ToTime(in.Expires).UTC().Format(time.RFC3339),
+	}
+	want := []string{"application/json", "no-store", `attachment; filename="a.json"`, "gzip", "ja", "2030-01-02T03:04:05Z"}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("object headers sent to the backend (-want +got):\n%s", diff)
 	}
 }
 

@@ -74,7 +74,7 @@ Every other `x-amz-*` header is `501 NotImplemented`. The ones real SDK options 
 |---|---|---|
 | `Host` | all | bucket addressing (path-style, or virtual-hosted-style under the configured suffix) |
 | `Content-Length`, `Content-MD5` | PutObject, UploadPart, POST upload | length required (`411 MissingContentLength` otherwise); an invalid `Content-MD5` is `400 InvalidDigest` |
-| `Content-Type`, `Cache-Control`, `Content-Disposition`, `Content-Encoding`, `Content-Language`, `Expires` | PutObject, CreateMultipartUpload, POST upload; `Content-Type` also CopyObject | stored as the object's attributes; `aws-chunked` is stripped from `Content-Encoding` |
+| `Content-Type`, `Cache-Control`, `Content-Disposition`, `Content-Encoding`, `Content-Language`, `Expires` | PutObject, CreateMultipartUpload, POST upload, CopyObject (applied by the backend with `x-amz-metadata-directive: REPLACE`) | stored as the object's attributes; `aws-chunked` is stripped from `Content-Encoding` |
 | `If-Match`, `If-None-Match`, `If-Modified-Since`, `If-Unmodified-Since` | GetObject, HeadObject | conditional reads, forwarded |
 | `If-Match`, `If-None-Match` | PutObject, CompleteMultipartUpload; `If-Match` on DeleteObject | conditional writes, forwarded; enforcement is the backend's |
 | `Range` | GetObject, HeadObject | forwarded |

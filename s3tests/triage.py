@@ -52,11 +52,9 @@ CONF_ARTIFACT = re.compile(r"bucket_recreate|get_location|list_buckets_paginated
 
 
 # Individually-documented cases (docs/s3-tests.md) that no general rule
-# covers: x-amz-tagging-count on HEAD is an RGW extension absent from the
-# S3 API model, and this test's "expired" presign is a negative
-# X-Amz-Expires, refused with 400 like AWS where RGW answers 403.
+# covers: this test's "expired" presign is a negative X-Amz-Expires,
+# refused with 400 like AWS where RGW answers 403.
 KNOWN = {
-    "test_get_obj_head_tagging": "rgw_extension",
     "test_object_raw_put_authenticated_expired": "header_edge",
 }
 

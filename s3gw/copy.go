@@ -84,6 +84,25 @@ func (g *Gateway) copyObject(c *opCtx) error {
 	if v := c.attr("Content-Type"); v != "" {
 		in.ContentType = aws.String(v)
 	}
+	// with x-amz-metadata-directive: REPLACE these replace the source's;
+	// dropping them would leave the copy without what the client restated
+	if v := c.attr("Cache-Control"); v != "" {
+		in.CacheControl = aws.String(v)
+	}
+	if v := c.attr("Content-Disposition"); v != "" {
+		in.ContentDisposition = aws.String(v)
+	}
+	if v := contentEncodingWithoutAWSChunked(c.attr("Content-Encoding")); v != "" {
+		in.ContentEncoding = aws.String(v)
+	}
+	if v := c.attr("Content-Language"); v != "" {
+		in.ContentLanguage = aws.String(v)
+	}
+	if v := c.attr("Expires"); v != "" {
+		if t, err := http.ParseTime(v); err == nil {
+			in.Expires = aws.Time(t)
+		}
+	}
 	in.StorageClass = c.backendStorageClass(c.signed(hdrStorageClass), SizeUnknown)
 	alg, s3e := c.checksumAlgorithm()
 	if s3e != nil {
