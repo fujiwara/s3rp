@@ -59,9 +59,8 @@ root AGENTS.md and README; several are "do not regress" decisions):
 - **ACL writes and real ACL reads** (fixed-stub by design), **SSE-C**
   (silent drop would fail open), **anonymous access**, **SigV2** (the
   `test_post_object_*` family signs with V2).
-- **RGW extensions**: `allow-unordered`, `usage`, `x-rgw-*` headers,
-  `x-amz-tagging-count` on HEAD — not in the S3 API model; matching RGW
-  here is a non-goal.
+- **RGW extensions**: `allow-unordered`, `usage`, `x-rgw-*` headers — not
+  in the S3 API model; matching RGW here is a non-goal.
 
 A 501 is an *implementation candidate* when all of these hold:
 

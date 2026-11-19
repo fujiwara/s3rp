@@ -73,8 +73,8 @@ The expected-failure categories, and why each failure is expected:
   multipart checksum types (umbrella follows S3 on both), and every
   release refuses some SSE copy combinations.
 - **RGW extension APIs** — usage/account APIs, `x-rgw-*` headers,
-  `allow-unordered` listing, `x-amz-tagging-count` on HEAD: not in the
-  S3 API model; matching RGW here is a non-goal.
+  `allow-unordered` listing: not in the S3 API model; matching RGW here
+  is a non-goal.
 - **Harness/conf artifacts** — CreateBucket-conflict semantics are
   answered by the harness (409 `BucketAlreadyOwnedByYou`, RGW-style);
   `GetBucketLocation` returns the gateway region while the conf's

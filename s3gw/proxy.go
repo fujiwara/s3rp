@@ -182,6 +182,9 @@ func (g *Gateway) headObject(c *opCtx) error {
 	if out.AcceptRanges != nil {
 		w.Header().Set("Accept-Ranges", *out.AcceptRanges)
 	}
+	if out.TagCount != nil {
+		w.Header().Set("x-amz-tagging-count", strconv.FormatInt(int64(*out.TagCount), 10))
+	}
 	if out.PartsCount != nil {
 		w.Header().Set("x-amz-mp-parts-count", strconv.FormatInt(int64(*out.PartsCount), 10))
 	}
@@ -507,7 +510,7 @@ func (g *Gateway) deleteObjects(c *opCtx) error {
 	}
 	if len(req.Objects) == 0 || len(req.Objects) > 1000 {
 		return s3err.New(http.StatusBadRequest, "MalformedXML",
-			"The XML you provided was not well-formed or did not validate against our published schema.")
+			"The XML you provided was not well-formed or did not validate against our published schema")
 	}
 	// the policy is evaluated per object, like AWS: denied keys are reported
 	// as errors and only the permitted ones reach the backend. The
@@ -582,7 +585,7 @@ func (g *Gateway) deleteObjects(c *opCtx) error {
 			t, err := http.ParseTime(o.LastModifiedTime)
 			if err != nil {
 				return s3err.New(http.StatusBadRequest, "MalformedXML",
-					"The XML you provided was not well-formed or did not validate against our published schema.").WithCause(err)
+					"The XML you provided was not well-formed or did not validate against our published schema").WithCause(err)
 			}
 			oi.LastModifiedTime = aws.Time(t)
 		}
@@ -815,7 +818,7 @@ func readXMLBody(c *opCtx, v any) *s3err.Error {
 	}
 	if err := xml.Unmarshal(data, v); err != nil {
 		return s3err.New(http.StatusBadRequest, "MalformedXML",
-			"The XML you provided was not well-formed or did not validate against our published schema.").WithCause(err)
+			"The XML you provided was not well-formed or did not validate against our published schema").WithCause(err)
 	}
 	return nil
 }

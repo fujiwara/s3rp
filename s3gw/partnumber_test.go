@@ -83,3 +83,33 @@ func TestGetObjectPartNumberOutOfRange(t *testing.T) {
 		t.Error("an out-of-range part number must not reach the backend")
 	}
 }
+
+// The tag count is reported on both reads: a client learns from
+// x-amz-tagging-count that an object is tagged without s3:GetObjectTagging.
+func TestObjectTagCount(t *testing.T) {
+	stub := &stubBackend{
+		getOut: &s3.GetObjectOutput{
+			Body:          io.NopCloser(strings.NewReader("x")),
+			ContentLength: aws.Int64(1),
+			TagCount:      aws.Int32(3),
+		},
+		headOut: &s3.HeadObjectOutput{ContentLength: aws.Int64(1), TagCount: aws.Int32(3)},
+	}
+	client, _ := newTestProxy(t, stub)
+
+	out, err := client.GetObject(t.Context(), &s3.GetObjectInput{Bucket: aws.String("testbucket"), Key: aws.String("k")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer out.Body.Close()
+	if aws.ToInt32(out.TagCount) != 3 {
+		t.Errorf("GetObject TagCount %v, want 3", out.TagCount)
+	}
+	hout, err := client.HeadObject(t.Context(), &s3.HeadObjectInput{Bucket: aws.String("testbucket"), Key: aws.String("k")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if aws.ToInt32(hout.TagCount) != 3 {
+		t.Errorf("HeadObject TagCount %v, want 3", hout.TagCount)
+	}
+}
