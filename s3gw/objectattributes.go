@@ -2,6 +2,7 @@ package s3gw
 
 import (
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -22,6 +23,11 @@ func (g *Gateway) getObjectAttributes(c *opCtx) error {
 	if len(attrs) == 0 {
 		return s3err.New(http.StatusBadRequest, "InvalidArgument",
 			"The x-amz-object-attributes header specifying the attributes to be retrieved is required.")
+	}
+	for _, a := range attrs {
+		if !slices.Contains(types.ObjectAttributes("").Values(), a) {
+			return s3err.New(http.StatusBadRequest, "InvalidArgument", "Invalid attribute name specified.")
+		}
 	}
 	in := &s3.GetObjectAttributesInput{
 		Bucket:           aws.String(rt.cfg.Backend.Bucket),

@@ -16,8 +16,8 @@ Which request headers the gateway honors, which it refuses by name, and what hap
 | `x-amz-date`, `x-amz-content-sha256`, `x-amz-security-token`, `x-amz-decoded-content-length`, `x-amz-trailer` | all | consumed by SigV4 verification and `aws-chunked` decoding; `x-amz-trailer` must name one supported checksum (`501` otherwise) |
 | `x-amz-meta-*` | PutObject, CopyObject, CreateMultipartUpload, POST upload | user metadata, stored and returned on reads |
 | `x-amz-storage-class` | PutObject, CopyObject, CreateMultipartUpload, POST upload | forwarded, unless a service installs a `StorageClassMapper` ([Storage class](s3-api.md#storage-class)) |
-| `x-amz-tagging` | PutObject, CopyObject, CreateMultipartUpload, POST upload | requires `s3:PutObjectTagging` in addition to the operation's action |
-| `x-amz-tagging-directive`, `x-amz-metadata-directive` | CopyObject | |
+| `x-amz-tagging` | PutObject, CopyObject, CreateMultipartUpload, POST upload | requires `s3:PutObjectTagging` in addition to the operation's action; validated by the gateway ([Request validation](s3-api.md#request-validation)) |
+| `x-amz-tagging-directive`, `x-amz-metadata-directive` | CopyObject | `COPY` or `REPLACE`; anything else is `InvalidArgument` |
 | `x-amz-copy-source` | PutObject → CopyObject, UploadPart → UploadPartCopy | source resolved within the requester's tenant; same backend only |
 | `x-amz-copy-source-if-match`, `-if-none-match`, `-if-modified-since`, `-if-unmodified-since` | CopyObject | |
 | `x-amz-copy-source-range` | UploadPartCopy | |
@@ -31,7 +31,7 @@ Which request headers the gateway honors, which it refuses by name, and what hap
 | `x-amz-checksum-mode` | GetObject, HeadObject | `ENABLED` returns the stored checksum headers |
 | `x-amz-mp-object-size` | CompleteMultipartUpload | |
 | `x-amz-if-match-size`, `x-amz-if-match-last-modified-time` | DeleteObject | conditional delete, with `If-Match` |
-| `x-amz-object-attributes`, `x-amz-max-parts`, `x-amz-part-number-marker` | GetObjectAttributes | |
+| `x-amz-object-attributes`, `x-amz-max-parts`, `x-amz-part-number-marker` | GetObjectAttributes | an attribute name S3 does not define is `InvalidArgument` |
 | `x-amz-acl` | PutObject, CreateMultipartUpload, POST upload (`acl` field) | only `private` and `bucket-owner-full-control` are accepted — see below |
 
 ## Accepted and ignored
