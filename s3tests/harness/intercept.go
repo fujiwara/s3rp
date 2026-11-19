@@ -124,7 +124,7 @@ func (i *bucketInterceptor) createBucket(w http.ResponseWriter, r *http.Request,
 	if !claimed {
 		if owner == key.Tenant {
 			i.finish(w, r, bucket, key.Tenant, requestID,
-				s3err.New(http.StatusConflict, "BucketAlreadyOwnedByYou", "The bucket that you tried to create already exists, and you own it."))
+				s3err.New(http.StatusConflict, "BucketAlreadyOwnedByYou", "Your previous request to create the named bucket succeeded and you already own it."))
 		} else {
 			i.finish(w, r, bucket, key.Tenant, requestID,
 				s3err.New(http.StatusConflict, "BucketAlreadyExists", "The requested bucket name is not available."))
@@ -155,7 +155,7 @@ func (i *bucketInterceptor) deleteBucket(w http.ResponseWriter, r *http.Request,
 	owner, exists := i.store.owner(bucket)
 	if !exists {
 		i.finish(w, r, bucket, key.Tenant, requestID,
-			s3err.New(http.StatusNotFound, "NoSuchBucket", "The specified bucket does not exist."))
+			s3err.New(http.StatusNotFound, "NoSuchBucket", "The specified bucket does not exist"))
 		return
 	}
 	if owner != key.Tenant {

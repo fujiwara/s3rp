@@ -110,40 +110,49 @@ var wellKnownErrorStatus = map[string]int{
 // operator's log and only there. Canonical messages also make the surface
 // uniform: for one missing key, versitygw says "The specified key does not
 // exist." and Ceph RGW says "NoSuchKey".
+//
+// The wording is what Amazon S3 sends on the wire, which is not always what
+// its documentation's error table says (trailing periods and "pre-conditions"
+// among the differences); clients and test suites compare it literally. The
+// entries TestCanonicalMessagesVerified lists were checked against tests
+// that assert real S3's responses. Several codes have more than one message
+// on S3 (BadDigest names the algorithm, InvalidRequest and InvalidArgument
+// the reason, AccessDenied an Object Lock refusal); a table keyed by code
+// can hold only the general one.
 var canonicalMessage = map[string]string{
 	"AccessDenied":                    "Access Denied",
 	"AccountProblem":                  "There is a problem with your account that prevents the operation from completing successfully.",
 	"BadDigest":                       "The Content-MD5 or checksum value that you specified did not match what the server received.",
 	"BucketAlreadyExists":             "The requested bucket name is not available.",
-	"BucketAlreadyOwnedByYou":         "The bucket that you tried to create already exists, and you own it.",
-	"BucketNotEmpty":                  "The bucket that you tried to delete is not empty.",
+	"BucketAlreadyOwnedByYou":         "Your previous request to create the named bucket succeeded and you already own it.",
+	"BucketNotEmpty":                  "The bucket you tried to delete is not empty",
 	"EntityTooLarge":                  "Your proposed upload exceeds the maximum allowed size.",
-	"EntityTooSmall":                  "Your proposed upload is smaller than the minimum allowed size.",
+	"EntityTooSmall":                  "Your proposed upload is smaller than the minimum allowed size",
 	"InternalError":                   "We encountered an internal error. Please try again.",
 	"InvalidArgument":                 "Invalid Argument",
 	"InvalidBucketName":               "The specified bucket is not valid.",
 	"InvalidDigest":                   "The Content-MD5 or checksum value that you specified is not valid.",
-	"InvalidObjectState":              "The operation is not valid for the current state of the object.",
-	"InvalidPart":                     "One or more of the specified parts could not be found.",
-	"InvalidPartOrder":                "The list of parts was not in ascending order. Parts list must be specified in order by part number.",
-	"InvalidRange":                    "The requested range is not satisfiable.",
+	"InvalidObjectState":              "The operation is not valid for the object's storage class",
+	"InvalidPart":                     "One or more of the specified parts could not be found.  The part may not have been uploaded, or the specified entity tag may not match the part's entity tag.",
+	"InvalidPartOrder":                "The list of parts was not in ascending order. Parts must be ordered by part number.",
+	"InvalidRange":                    "The requested range is not satisfiable",
 	"InvalidRequest":                  "Invalid Request",
 	"InvalidToken":                    "The provided token is malformed or otherwise invalid.",
-	"MalformedXML":                    "The XML that you provided was not well formed or did not validate against our published schema.",
+	"MalformedXML":                    "The XML you provided was not well-formed or did not validate against our published schema",
 	"MethodNotAllowed":                "The specified method is not allowed against this resource.",
 	"MissingContentLength":            "You must provide the Content-Length HTTP header.",
-	"NoSuchBucket":                    "The specified bucket does not exist.",
-	"NoSuchBucketPolicy":              "The bucket policy does not exist.",
-	"NoSuchCORSConfiguration":         "The CORS configuration does not exist.",
+	"NoSuchBucket":                    "The specified bucket does not exist",
+	"NoSuchBucketPolicy":              "The bucket policy does not exist",
+	"NoSuchCORSConfiguration":         "The CORS configuration does not exist",
 	"NoSuchKey":                       "The specified key does not exist.",
-	"NoSuchLifecycleConfiguration":    "The lifecycle configuration does not exist.",
-	"NoSuchUpload":                    "The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed.",
-	"NoSuchVersion":                   "The version ID specified in the request does not match an existing version.",
+	"NoSuchLifecycleConfiguration":    "The lifecycle configuration does not exist",
+	"NoSuchUpload":                    "The specified upload does not exist. The upload ID may be invalid, or the upload may have been aborted or completed.",
+	"NoSuchVersion":                   "The specified version does not exist.",
 	"NotFound":                        "Not Found",
 	"NotImplemented":                  "A header that you provided implies functionality that is not implemented.",
-	"ObjectLockConfigurationNotFound": "Object Lock configuration does not exist for this bucket.",
+	"ObjectLockConfigurationNotFound": "Object Lock configuration does not exist for this bucket",
 	"ServerSideEncryptionConfigurationNotFoundError": "The server side encryption configuration was not found",
-	"PreconditionFailed":                             "At least one of the preconditions that you specified did not hold.",
+	"PreconditionFailed":                             "At least one of the pre-conditions you specified did not hold",
 	"RequestTimeout":                                 "Your socket connection to the server was not read from or written to within the timeout period.",
 	"ServiceUnavailable":                             "Service is unable to handle request.",
 	"SlowDown":                                       "Please reduce your request rate.",
