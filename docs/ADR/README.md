@@ -47,6 +47,7 @@ retroactively").
 | [0033](0033-intermediary-headers-pass-unsigned.md) | Headers an intermediary adds pass the signed-header gate unsigned | 2026-11-18 | Accepted |
 | [0034](0034-client-closed-request-is-499.md) | A request the client abandoned is recorded as 499 | 2026-11-18 | Accepted |
 | [0035](0035-sort-canonical-query-by-encoded-form.md) | The canonical query is sorted by its encoded form | 2026-11-19 | Accepted |
+| [0036](0036-error-messages-follow-s3-wire-wording.md) | Canonical error messages follow S3's wire wording | 2026-11-19 | Accepted |
 
 ## Writing a record
 
