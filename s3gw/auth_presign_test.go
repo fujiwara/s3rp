@@ -150,6 +150,12 @@ func TestPresignedErrors(t *testing.T) {
 		if status != http.StatusForbidden || !strings.Contains(body, "Request has expired") {
 			t.Errorf("expect 403 expired, got %d: %s", status, body)
 		}
+		// like S3, the refusal names the window that was signed and when it ended
+		for _, want := range []string{"<X-Amz-Expires>60</X-Amz-Expires>", "<Expires>20", "<ServerTime>20"} {
+			if !strings.Contains(body, want) {
+				t.Errorf("expired refusal lacks %s: %s", want, body)
+			}
+		}
 	})
 	t.Run("tampered signature", func(t *testing.T) {
 		_, u := newProxyAndURL(t, testAccessKeyID, testSecretAccessKey, time.Minute)

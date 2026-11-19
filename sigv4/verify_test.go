@@ -12,7 +12,9 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/sigv4"
+	"github.com/google/go-cmp/cmp"
 )
 
 // These exercise the package on its own — with a stub secret lookup rather
@@ -361,5 +363,31 @@ func TestVerifyPresignedLeadingSlashKey(t *testing.T) {
 	}
 	if got.AccessKeyID != testAccessKeyID {
 		t.Errorf("unexpected access key %q", got.AccessKeyID)
+	}
+}
+
+// A skew refusal carries what S3's does: the request time as sent, the
+// server's time and the tolerance, so a client can tell which clock is off.
+func TestVerifyClockSkewDetails(t *testing.T) {
+	req := signedRequest(t, testSecret)
+	v := sigv4.NewVerifier()
+	now := testTime.Add(time.Hour)
+	v.Now = func() time.Time { return now }
+	_, err := v.Verify(req, lookup)
+	s3e, ok := errors.AsType[*s3err.Error](err)
+	if !ok || s3e.Code != "RequestTimeTooSkewed" {
+		t.Fatalf("expect RequestTimeTooSkewed, got %v", err)
+	}
+	got := map[string]string{}
+	for _, d := range s3e.Details {
+		got[d.XMLName.Local] = d.Value
+	}
+	want := map[string]string{
+		"RequestTime":                req.Header.Get("X-Amz-Date"),
+		"ServerTime":                 "2026-08-01T13:00:00Z",
+		"MaxAllowedSkewMilliseconds": "900000",
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("details (-want +got):\n%s", diff)
 	}
 }

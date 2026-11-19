@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -22,6 +23,7 @@ import (
 	"github.com/fujiwara/s3rp/s3op"
 	"github.com/fujiwara/s3rp/s3xml"
 	"github.com/fujiwara/s3rp/sigv4"
+	"github.com/fujiwara/s3rp/store"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
@@ -698,6 +700,10 @@ func (g *Gateway) listBuckets(w http.ResponseWriter, r *http.Request, vr *verifi
 	if err != nil {
 		return s3err.Internal(err, "bucket lookup failed")
 	}
+	prefix := query.Get("prefix")
+	if prefix != "" {
+		entries = slices.DeleteFunc(entries, func(e store.BucketEntry) bool { return !strings.HasPrefix(e.Name, prefix) })
+	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
 	// the continuation token is the last bucket name of the previous page
 	if token != "" {
@@ -705,8 +711,9 @@ func (g *Gateway) listBuckets(w http.ResponseWriter, r *http.Request, vr *verifi
 		entries = entries[i:]
 	}
 	result := &s3xml.ListAllMyBucketsResult{
-		XMLNS: s3xml.Namespace,
-		Owner: s3xml.Owner{ID: vr.Tenant, DisplayName: vr.Tenant},
+		XMLNS:  s3xml.Namespace,
+		Owner:  s3xml.Owner{ID: vr.Tenant, DisplayName: vr.Tenant},
+		Prefix: prefix,
 	}
 	if len(entries) > maxBuckets {
 		entries = entries[:maxBuckets]

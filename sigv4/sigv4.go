@@ -408,6 +408,9 @@ func (v *Verifier) verifyHeaderRequest(r *http.Request, lookup SecretLookup) (*V
 	if d := now.Sub(t); d > maxClockSkew || d < -maxClockSkew {
 		return nil, s3err.New(http.StatusForbidden, "RequestTimeTooSkewed",
 			"The difference between the request time and the current time is too large.").
+			WithDetail("RequestTime", amzDate).
+			WithDetail("ServerTime", now.UTC().Format(time.RFC3339)).
+			WithDetail("MaxAllowedSkewMilliseconds", strconv.FormatInt(maxClockSkew.Milliseconds(), 10)).
 			WithCause(authFailure(ReasonTimeSkewed, auth.AccessKeyID, fmt.Sprintf("signed at %s, now %s", t.Format(time.RFC3339), now.Format(time.RFC3339))))
 	}
 
@@ -501,6 +504,9 @@ func (v *Verifier) verifyPresignedRequest(r *http.Request, lookup SecretLookup) 
 	now := v.now()
 	if now.After(t.Add(time.Duration(expires) * time.Second)) {
 		return nil, s3err.New(http.StatusForbidden, "AccessDenied", "Request has expired").
+			WithDetail("X-Amz-Expires", strconv.FormatInt(expires, 10)).
+			WithDetail("Expires", t.Add(time.Duration(expires)*time.Second).UTC().Format(time.RFC3339)).
+			WithDetail("ServerTime", now.UTC().Format(time.RFC3339)).
 			WithCause(authFailure(ReasonExpired, akid, fmt.Sprintf("signed at %s for %ds", t.Format(time.RFC3339), expires)))
 	}
 	if t.After(now.Add(maxClockSkew)) {
