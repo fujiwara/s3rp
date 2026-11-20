@@ -88,6 +88,9 @@ var ignoredAmzHeaders = map[string]bool{
 	"x-amz-user-agent": true, // sent by the browser SDKs
 	"x-amz-te":         true,
 	"x-amz-cf-id":      true,
+	// the AWS SDK for .NET names the API version on CompleteMultipartUpload;
+	// S3 has had one, 2006-03-01
+	"x-amz-api-version": true,
 }
 
 // checkKnownAmzHeaders refuses a request carrying an x-amz-* header no
