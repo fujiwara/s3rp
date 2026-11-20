@@ -117,6 +117,7 @@ var postObjectRoute = func() route {
 
 func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, t target) error {
 	bucket := t.bucket
+	recordOperation(r.Context(), s3op.OpPostObject)
 	if err := (paramSet{}).check(r.URL.Query()); err != nil {
 		return err
 	}

@@ -6,12 +6,13 @@ groups:
       - id: s3gw.operation
         type: string
         stability: development
-        brief: The S3 API operation the request resolved to (`Op.Operation`).
+        brief: The S3 API operation the request was routed to (`RequestInfo.Route`).
         note: |
-          Absent when the request was refused before it reached an operation —
-          an unverifiable signature, an invisible bucket, a denied action —
-          since `RequestInfo.Op` is nil then. `Unknown` for a request that
-          matched no known S3 operation.
+          Set from the moment the signature verifies, so a request refused
+          afterwards — an unknown header or query parameter, an invisible
+          bucket, a denied action — carries the operation it was refused.
+          Absent when the signature did not verify. `Unknown` for a request
+          that matched no known S3 operation.
         examples: [GetObject, PutObject, DeleteObjects, Unknown]
       - id: s3gw.tenant
         type: string

@@ -60,7 +60,8 @@ func TestObserve(t *testing.T) {
 			name: "success",
 			info: s3gw.RequestInfo{
 				Method: "GET", Status: 200, Tenant: "acme", BytesOut: 5,
-				Op: &s3gw.Op{Operation: "GetObject", Bucket: "photos", Key: "a.txt"},
+				Route: "GetObject",
+				Op:    &s3gw.Op{Operation: "GetObject", Bucket: "photos", Key: "a.txt"},
 			},
 			want: map[string]any{
 				"http.request.method":       "GET",
@@ -74,7 +75,8 @@ func TestObserve(t *testing.T) {
 			opts: []otelmetric.Option{otelmetric.WithTenant(), otelmetric.WithBucket()},
 			info: s3gw.RequestInfo{
 				Method: "PUT", Status: 200, Tenant: "acme", BytesIn: 7,
-				Op: &s3gw.Op{Operation: "PutObject", Bucket: "photos", Key: "a.txt"},
+				Route: "PutObject",
+				Op:    &s3gw.Op{Operation: "PutObject", Bucket: "photos", Key: "a.txt"},
 			},
 			want: map[string]any{
 				"http.request.method":       "PUT",
@@ -86,9 +88,9 @@ func TestObserve(t *testing.T) {
 			wantIn: 7,
 		},
 		{
-			// refused before routing: no Op, so no operation; the S3 code is
-			// the error type
-			name: "refused before an operation",
+			// the signature did not verify: no operation; the S3 code is the
+			// error type
+			name: "refused before routing",
 			opts: []otelmetric.Option{otelmetric.WithTenant(), otelmetric.WithBucket()},
 			info: s3gw.RequestInfo{Method: "GET", Status: 403, Code: "AccessDenied", BytesOut: 200},
 			want: map[string]any{
@@ -99,11 +101,28 @@ func TestObserve(t *testing.T) {
 			wantOut: 200,
 		},
 		{
+			// routed, then refused: the operation without an Op, so no bucket
+			name: "refused after routing",
+			opts: []otelmetric.Option{otelmetric.WithBucket()},
+			info: s3gw.RequestInfo{
+				Method: "GET", Status: 501, Code: "NotImplemented", BytesOut: 200,
+				Route: "ListObjectsV2",
+			},
+			want: map[string]any{
+				"http.request.method":       "GET",
+				"http.response.status_code": int64(501),
+				"s3gw.operation":            "ListObjectsV2",
+				"error.type":                "NotImplemented",
+			},
+			wantOut: 200,
+		},
+		{
 			// the response had started: no code to report, only a cause
 			name: "failure after the response started",
 			info: s3gw.RequestInfo{
 				Method: "GET", Status: 200, Err: errors.New("backend reset"), BytesOut: 3,
-				Op: &s3gw.Op{Operation: "GetObject"},
+				Route: "GetObject",
+				Op:    &s3gw.Op{Operation: "GetObject"},
 			},
 			want: map[string]any{
 				"http.request.method":       "GET",
@@ -117,8 +136,9 @@ func TestObserve(t *testing.T) {
 			name: "client left during the response",
 			info: s3gw.RequestInfo{
 				Method: "GET", Status: 200, BytesOut: 3,
-				Err: fmt.Errorf("%w: sending the object body: broken pipe", s3gw.ErrClientClosed),
-				Op:  &s3gw.Op{Operation: "GetObject"},
+				Err:   fmt.Errorf("%w: sending the object body: broken pipe", s3gw.ErrClientClosed),
+				Route: "GetObject",
+				Op:    &s3gw.Op{Operation: "GetObject"},
 			},
 			want: map[string]any{
 				"http.request.method":       "GET",
