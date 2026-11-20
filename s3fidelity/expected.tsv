@@ -1,9 +1,10 @@
 # Fidelity tests expected to fail, and why (check id <TAB> category).
 # Exact for the pinned suite commit in run.sh and the compose ceph image:
 # triage.py reports any failure missing here, and any entry that passed.
-# The categories are explained in docs/s3-fidelity.md.
+# The categories are explained in docs/s3-fidelity.md. A third column
+# "flaky" marks a failure that depends on timing: the test may pass.
 s3.abort-multipart-nosuchupload-after-complete	backend
-s3.conc-s3-conditional-writes-optimistic-counter-loses-no-increment	backend
+s3.conc-s3-conditional-writes-optimistic-counter-loses-no-increment	backend	flaky
 s3.copy-object-defaults-to-the-composite-sources-sha256-as-a-full-object-digest	backend
 s3.copy-object-glacier-not-in-active-tier-error	backend
 s3.copy-object-glacier-source-error	backend

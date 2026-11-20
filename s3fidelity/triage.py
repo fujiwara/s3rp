@@ -6,7 +6,8 @@ usage: triage.py REPORTS_DIR EXPECTED_TSV SELECTED_TXT > report.md
 expected.tsv lists every test known to fail and why (check id, category),
 so the report has two lists that need a person: failures the file does not
 expect, and expected failures that passed. Exits 1 when either is
-non-empty or a selected test produced no report.
+non-empty or a selected test produced no report. An entry whose third
+column is "flaky" depends on timing and may pass.
 """
 
 import json
@@ -34,10 +35,14 @@ def detail_tail(check):
 def main():
     reports_dir, expected_path, selected_path = sys.argv[1:4]
     expected = {}
+    flaky = set()
     for line in pathlib.Path(expected_path).read_text().splitlines():
         if line.strip() and not line.startswith("#"):
-            check_id, category = line.split("\t")[:2]
+            fields = line.split("\t")
+            check_id, category = fields[:2]
             expected[check_id] = category
+            if fields[2:3] == ["flaky"]:
+                flaky.add(check_id)
     known = {name for name, _ in CATEGORIES}
     unknown = sorted(set(expected.values()) - known)
     if unknown:
@@ -52,7 +57,7 @@ def main():
     passed = {cid for cid, check in checks.items() if check["verdict"] == "passed"}
     failed = set(checks) - passed
     unmatched = sorted(failed - set(expected))
-    fixed = sorted(passed & set(expected))
+    fixed = sorted(passed & set(expected) - flaky)
     stale = sorted(set(expected) - set(checks))
     missing = len(selected) - len(checks)
 

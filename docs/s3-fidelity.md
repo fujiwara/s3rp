@@ -45,6 +45,10 @@ run needs a person only for two lists in the report:
   gateway, a backend change, or a new deliberate difference. Fix it, or
   add it to `expected.tsv` under the category that explains it.
 - **Expected failures that passed** — remove them from `expected.tsv`.
+  An entry marked `flaky` in the third column is exempt: its failure
+  depends on timing (RGW answers `InternalError` to some concurrent
+  conditional writes, and a slower machine does not hit it), so either
+  result is accepted.
 
 To tell the gateway from the backend, run the failing test against RGW
 directly (`fidelity-tests-runner run <test> --endpoint
