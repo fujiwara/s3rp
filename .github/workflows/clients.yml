@@ -38,8 +38,12 @@ jobs:
         with:
           install: false # run.sh installs the tools pinned in mise.toml and clients/mise.toml
 
-      - name: Install FUSE (s3fs)
-        run: sudo apt-get update && sudo apt-get install -y fuse3
+      # WinSCP is a 32-bit program
+      - name: Install FUSE (s3fs) and Wine (WinSCP)
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y fuse3 wine wine32:i386 xvfb
 
       - name: Run the clients
         run: ./clients/run.sh

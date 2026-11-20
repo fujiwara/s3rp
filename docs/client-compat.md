@@ -36,6 +36,8 @@ other.
 | Bun `S3Client` | Zig, own implementation | recent, and built into a runtime |
 | s5cmd | aws-sdk-go v1 | a signer no other suite exercises (WAL-G, the Docker registry) |
 | rclone | aws-sdk-go-v2 | the signer is covered elsewhere; its request patterns are not |
+| Cyberduck (`duck`) | Java, own implementation | a desktop client on Windows and macOS, and the engine of Mountain Duck; probes folders and bucket configuration around every transfer |
+| WinSCP | C++, a fork of libs3 | the common Windows file-transfer client; run under Wine |
 
 MinIO is not used as a backend ([ADR 0006](ADR/0006-test-backends-without-minio.md));
 its client and client library are here because deployments use them

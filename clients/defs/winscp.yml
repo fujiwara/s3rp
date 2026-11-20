@@ -1,0 +1,21 @@
+# WinSCP: a Windows client with an S3 implementation of its own (a fork of
+# libs3, in C++), run under Wine through its scripting interface.
+name: winscp
+setup: |
+  fetch https://sourceforge.net/projects/winscp/files/WinSCP/6.7.1/WinSCP-6.7.1-Portable.zip/download \
+      e6d2f8e1249e41f3bf8638319bb9bd15a541a64720df0805cb0bebdedb5eda83 "$TOOLS/WinSCP-6.7.1-Portable.zip"
+  [ -f "$TOOLS/winscp/WinSCP.com" ] || unzip -q -o "$TOOLS/WinSCP-6.7.1-Portable.zip" -d "$TOOLS/winscp"
+  # creates the prefix, which the first Wine command would otherwise do
+  # in the middle of a scenario
+  wineboot --init
+env:
+  WINEPREFIX: ${TOOLS}/wineprefix
+  WINEDEBUG: -all
+  WINSCP: ${LIB}/winscp.sh
+verbs:
+  put:      $WINSCP put "$FILE" "$KEY"
+  get:      $WINSCP get "$KEY" "$OUT"
+  list:     $WINSCP list "$PREFIX"
+  delete:   $WINSCP delete "$KEY"
+  copy:     $WINSCP copy "$SRC" "$DST"
+  put_tree: $WINSCP put_tree "$DIR" "$PREFIX"

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# fetch URL SHA256 FILE: downloads a client mise has no package for, once,
+# and refuses one that is not the pinned file.
+set -euo pipefail
+url=$1 sum=$2 file=$3
+if [ ! -f "$file" ]; then
+    mkdir -p "$(dirname "$file")"
+    curl -fsSL -o "$file.part" "$url"
+    mv "$file.part" "$file"
+fi
+echo "$sum  $file" | sha256sum --check --quiet
