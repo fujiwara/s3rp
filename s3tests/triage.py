@@ -3,6 +3,9 @@
 
 Usage: triage.py results.xml [harness.log] > report.md
 
+Exits 1 when the run needs a person: it is contaminated, or a failure
+matched no rule.
+
 Failures are bucketed by the first matching rule. The rules encode the
 hand-verified findings of docs/s3-tests.md (see s3tests/AGENTS.md for the
 verification method): categories named "Deliberate" are the documented
@@ -33,6 +36,7 @@ CATEGORIES = [
     ("access_denied", "AccessDenied — cross-tenant/policy semantics (name-heuristic)"),
     ("naming", "Deliberate: stricter bucket-name charset"),
     ("header_edge", "Deliberate/platform: request edge cases (Expect 417, chunked TE, negative presign expiry)"),
+    ("s3_answer", "Deliberate: Amazon S3's answer where the suite expects RGW's"),
     ("backend_sse", "Backend: SSE/encrypted-copy behavior"),
     ("backend_checksum", "Backend: checksum/part-ETag semantics"),
     ("backend_conditional", "Backend: partial conditional-write enforcement"),
@@ -53,9 +57,12 @@ CONF_ARTIFACT = re.compile(r"bucket_recreate|get_location|list_buckets_paginated
 
 # Individually-documented cases (docs/s3-tests.md) that no general rule
 # covers: this test's "expired" presign is a negative X-Amz-Expires,
-# refused with 400 like AWS where RGW answers 403.
+# refused with 400 like AWS where RGW answers 403; and more than ten
+# object tags are refused by the gateway with S3's BadRequest, where the
+# suite expects RGW's InvalidTag.
 KNOWN = {
     "test_object_raw_put_authenticated_expired": "header_edge",
+    "test_put_excess_tags": "s3_answer",
 }
 
 
@@ -213,6 +220,9 @@ def main():
     if logfile:
         print(f"\nHarness/gateway request log: `{logfile}` "
               "(JSON lines; correlate by bucket name / x-amz-request-id).")
+
+    # a run that needs a person fails, so a scheduled run says so
+    sys.exit(1 if contaminated or unmatched else 0)
 
 
 if __name__ == "__main__":

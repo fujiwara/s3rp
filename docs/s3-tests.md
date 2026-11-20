@@ -5,8 +5,9 @@ compatibility suite is run continuously against s3rp, and how to read a
 run. The suite needs a harness because s3rp deliberately has no
 CreateBucket/DeleteBucket — [s3tests/README.md](../s3tests/README.md)
 describes it and the local run (`./s3tests/run.sh`); CI runs the same
-script via the manually-triggered
-[`s3-tests` workflow](../.github/workflows/s3tests.yml).
+script weekly, and on demand, via the
+[`s3-tests` workflow](../.github/workflows/s3tests.yml), which fails when
+the report has something to triage by hand.
 
 ## Setup
 
@@ -59,6 +60,10 @@ The expected-failure categories, and why each failure is expected:
   the root AGENTS.md; these are do-not-regress decisions, so a test
   that starts *passing* here means a deliberate refusal disappeared —
   investigate, don't celebrate.
+- **Amazon S3's answer** — where the gateway validates a request itself
+  ([ADR 0037](ADR/0037-validate-request-values-in-the-gateway.md)) it
+  answers as S3 does, and the suite expects RGW: more than ten object
+  tags are `BadRequest` on S3 and `InvalidTag` on RGW.
 - **Platform edge cases** — Go's `net/http` answers a malformed
   `Expect` header with 417 before the proxy runs; plain
   `Transfer-Encoding: chunked` without Content-Length is not accepted;
