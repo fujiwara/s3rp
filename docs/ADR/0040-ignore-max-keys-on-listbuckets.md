@@ -12,10 +12,12 @@ A query parameter no operation reads is refused with `501 NotImplemented`
 
 WinSCP opens every S3 session with `GET /?max-keys=1`: a ListBuckets
 carrying the page-size parameter of an object listing. Amazon S3 does not
-define `max-keys` there and answers with the full bucket list. The gateway
-refused the request, so WinSCP could not connect at all, whatever the
-session went on to do. The client compatibility run found it
-([0039](0039-run-real-clients-against-the-gateway.md)).
+define `max-keys` there; the AWS Emulator, asked the same, answers with the
+full bucket list and no continuation token, as it does for any parameter it
+does not know (the fidelity suite has no test of it). The gateway refused
+the request, so WinSCP could not connect at all, whatever the session went
+on to do. The client compatibility run found it ([0039](0039-run-real-
+clients-against-the-gateway.md)).
 
 ## Decision
 
