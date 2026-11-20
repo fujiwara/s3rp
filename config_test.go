@@ -74,6 +74,18 @@ var validateTestCases = []struct {
 		errStr: "no tenants",
 	},
 	{
+		name: "tls without key",
+		yaml: `
+tls: {cert_file: cert.pem}
+tenants:
+  - name: foo
+    users: [{name: user1, keys: [{access_key_id: k1, secret_access_key: s}]}]
+    buckets:
+      - name: bucket1
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}`,
+		errStr: "tls.cert_file and tls.key_file",
+	},
+	{
 		name: "circuit breaker without failures",
 		yaml: `
 circuit_breaker: {cooldown: 10s}

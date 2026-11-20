@@ -31,6 +31,9 @@ type (
 
 type Config struct {
 	Listen string `yaml:"listen" json:"listen"`
+	// TLS, when set, serves HTTPS on Listen with this certificate; unset,
+	// the server speaks plain HTTP (TLS is then terminated in front).
+	TLS *TLSConfig `yaml:"tls,omitempty" json:"tls,omitempty"`
 	// VirtualHostSuffix enables virtual-hosted-style addressing under this
 	// host name ("s3.example.com": bucket "photos" is photos.s3.example.com)
 	// alongside the path style; empty = path style only.
@@ -46,6 +49,20 @@ type Config struct {
 	// gateway never authorizes; unset, LoadConfig only warns about them.
 	StrictActions bool            `yaml:"strict_actions,omitempty" json:"strict_actions,omitempty"`
 	Tenants       []*TenantConfig `yaml:"tenants,omitempty" json:"tenants,omitempty"`
+}
+
+// TLSConfig names the PEM files of the server certificate (leaf first,
+// then any intermediates) and its private key.
+type TLSConfig struct {
+	CertFile string `yaml:"cert_file" json:"cert_file"`
+	KeyFile  string `yaml:"key_file" json:"key_file"`
+}
+
+func (c *TLSConfig) validate() error {
+	if c.CertFile == "" || c.KeyFile == "" {
+		return fmt.Errorf("tls.cert_file and tls.key_file are both required")
+	}
+	return nil
 }
 
 // CircuitBreakerConfig sizes the per-backend breaker (see s3gw.NewConsecutiveFailures).
@@ -144,6 +161,11 @@ func (c *Config) SetDefaults() {
 func (c *Config) Validate() error {
 	if len(c.Tenants) == 0 {
 		return fmt.Errorf("no tenants defined")
+	}
+	if c.TLS != nil {
+		if err := c.TLS.validate(); err != nil {
+			return err
+		}
 	}
 	if c.CircuitBreaker != nil {
 		if err := c.CircuitBreaker.validate(); err != nil {

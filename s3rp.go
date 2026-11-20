@@ -180,8 +180,14 @@ func (app *S3RP) Serve(ctx context.Context) error {
 		defer cancel()
 		srv.Shutdown(shutdownCtx)
 	}()
-	slog.InfoContext(ctx, "s3rp starting", "version", Version, "listen", app.cfg.Listen)
-	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	slog.InfoContext(ctx, "s3rp starting", "version", Version, "listen", app.cfg.Listen, "tls", app.cfg.TLS != nil)
+	var err error
+	if t := app.cfg.TLS; t != nil {
+		err = srv.ListenAndServeTLS(t.CertFile, t.KeyFile)
+	} else {
+		err = srv.ListenAndServe()
+	}
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	slog.InfoContext(ctx, "s3rp shutdown")
