@@ -902,7 +902,9 @@ var (
 		qpVersionID, qpPartNumber, "response-content-type", "response-content-disposition",
 		"response-cache-control", "response-content-encoding",
 		"response-content-language", "response-expires")
-	headObjectParams  = newParamSet(qpVersionID, qpPartNumber)
-	listBucketsParams = newParamSet("max-buckets", "continuation-token", "prefix")
+	headObjectParams = newParamSet(qpVersionID, qpPartNumber)
+	// max-keys is accepted and not read: WinSCP sends it to ListBuckets when
+	// it connects, and S3 answers with every bucket regardless
+	listBucketsParams = newParamSet("max-buckets", "continuation-token", "prefix", "max-keys")
 	attributesParams  = newParamSet(subAttributes, qpVersionID)
 )

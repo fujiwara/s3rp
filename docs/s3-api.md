@@ -69,7 +69,7 @@ ListBuckets answers from the store without calling any backend: the bucket names
 
 The `versionId` query parameter is passed through on GetObject, HeadObject, DeleteObject, GetObjectAcl and the object tagging operations. GetObject and HeadObject also accept `partNumber` to read a single part of a multipart object, returning `x-amz-mp-parts-count`. Versioning requires a backend that supports it. The versioning **state** is bucket configuration: PutBucketVersioning is not proxied (see [Limitations](#limitations)), so it is set on the backend bucket by whoever created it; GetBucketVersioning reports it.
 
-ListBuckets supports pagination (`max-buckets` / `continuation-token`) and the `prefix` filter, served from the store's listing; `bucket-region` is not supported.
+ListBuckets supports pagination (`max-buckets` / `continuation-token`) and the `prefix` filter, served from the store's listing; `bucket-region` is not supported. `max-keys`, which is not a ListBuckets parameter but which WinSCP sends when it connects, is accepted and ignored, as on S3.
 
 Conditional requests are forwarded to the backend: `If-Match` / `If-None-Match` / `If-Modified-Since` / `If-Unmodified-Since` on reads, and the write preconditions — `If-Match` / `If-None-Match` on PutObject and CompleteMultipartUpload, `If-Match` plus `x-amz-if-match-last-modified-time` / `x-amz-if-match-size` on DeleteObject, and the per-object `ETag` / `LastModifiedTime` / `Size` members of DeleteObjects. Whether a precondition is enforced is the backend's business; the gateway's job is to never drop one silently.
 
