@@ -23,20 +23,17 @@ import (
 // different backends is not supported. The copy source names another object
 // to read, so it is only ever taken from a signed header.
 func (g *Gateway) resolveCopySource(c *opCtx, rt *route) (string, *CopySource, string, *s3err.Error) {
-	raw := strings.TrimPrefix(c.signed(hdrCopySource), "/")
-	rawPath, versionID, _ := strings.Cut(raw, "?")
-	rawBucket, rawKey, ok := strings.Cut(rawPath, "/")
-	if !ok || rawKey == "" {
+	raw, versionID, _ := strings.Cut(c.signed(hdrCopySource), "?")
+	// unescaped before it is split, as S3 does: the AWS SDK for .NET
+	// escapes the slash between bucket and key as well
+	path, err := url.PathUnescape(raw)
+	if err != nil {
+		return "", nil, "", s3err.New(http.StatusBadRequest, "InvalidArgument", "Invalid copy source").WithCause(err)
+	}
+	srcBucket, srcKey, ok := strings.Cut(strings.TrimPrefix(path, "/"), "/")
+	if !ok || srcKey == "" {
 		return "", nil, "", s3err.New(http.StatusBadRequest, "InvalidArgument",
 			"Copy Source must mention the source bucket and key: sourcebucket/sourcekey")
-	}
-	srcBucket, err := url.PathUnescape(rawBucket)
-	if err != nil {
-		return "", nil, "", s3err.New(http.StatusBadRequest, "InvalidArgument", "Invalid copy source").WithCause(err)
-	}
-	srcKey, err := unescapeKey(rawKey)
-	if err != nil {
-		return "", nil, "", s3err.New(http.StatusBadRequest, "InvalidArgument", "Invalid copy source").WithCause(err)
 	}
 	query, err := url.ParseQuery(versionID)
 	if err != nil {

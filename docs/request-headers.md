@@ -42,6 +42,7 @@ Accepted on every operation and not acted on. A header is here only when the cli
 |---|---|---|
 | `x-amz-user-agent` | the browser SDKs | carries no instruction |
 | `x-amz-te` | the AWS SDK for Java v2, as `append-md5` on every GetObject | the SDK validates the appended MD5 only when the response carries `x-amz-transfer-encoding: append-md5`, which the gateway never sends |
+| `x-amz-api-version` | the AWS SDK for .NET, as `2006-03-01` on CompleteMultipartUpload | names the only version the S3 API has; nothing depends on it |
 | `x-amz-cf-id` | CloudFront, on every request it forwards to its origin | a request id, carries no instruction; accepted unsigned as well, since it is added after the client signed |
 
 ## Refused by name

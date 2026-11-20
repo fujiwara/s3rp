@@ -43,6 +43,15 @@ func TestOpCopySource(t *testing.T) {
 			name: "version and escaped key", source: "testbucket/a%20b.txt?versionId=v1",
 			want: &s3gw.CopySource{Bucket: "testbucket", Key: "a b.txt", VersionID: "v1"},
 		},
+		{
+			// what the AWS SDK for .NET sends
+			name: "slash between bucket and key escaped", source: "testbucket%2Fdir%2Fa%20b.txt",
+			want: &s3gw.CopySource{Bucket: "testbucket", Key: "dir/a b.txt"},
+		},
+		{
+			name: "escaped leading slash", source: "%2Ftestbucket%2Fsrc.txt?versionId=v1",
+			want: &s3gw.CopySource{Bucket: "testbucket", Key: "src.txt", VersionID: "v1"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

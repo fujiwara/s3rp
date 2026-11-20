@@ -86,6 +86,11 @@ func TestUnknownAmzHeaderRefused(t *testing.T) {
 			headers: map[string]string{"x-amz-te": "append-md5"},
 		},
 		{
+			// what the AWS SDK for .NET sends on CompleteMultipartUpload
+			name: "x-amz-api-version", method: "GET",
+			headers: map[string]string{"x-amz-api-version": "2006-03-01"},
+		},
+		{
 			name: "known headers on a route that ignores them", method: "GET",
 			headers: map[string]string{"x-amz-tagging": "a=b", "x-amz-storage-class": "STANDARD"},
 		},
