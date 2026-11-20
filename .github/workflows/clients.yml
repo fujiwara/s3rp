@@ -1,5 +1,5 @@
 # Runs real S3 clients (clients/run.sh) against s3rp on the compose
-# versitygw service, over http and https: weekly, on demand, and on a pull
+# Ceph RGW service (ceph-tls), https on both sides: weekly, on demand, and on a pull
 # request that touches the run itself. Clients and backend are pinned, so
 # a run changes only when the gateway does; it is not part of the
 # pull-request checks because it needs FUSE and the clients' package
@@ -21,9 +21,9 @@ permissions:
 
 jobs:
   clients:
-    name: clients (versitygw)
+    name: clients (ceph)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

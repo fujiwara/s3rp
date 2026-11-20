@@ -12,6 +12,9 @@
 #   MON_IP, CEPH_PUBLIC_NETWORK   mon address and public network
 #   CEPH_DEMO_UID/ACCESS_KEY/SECRET_KEY   RGW admin user (caps buckets/users/usage/metadata)
 #   RGW_FRONTEND_PORT             beast port (default 7480)
+#   RGW_FRONTEND_SSL_PORT, RGW_FRONTEND_SSL_CERT, RGW_FRONTEND_SSL_KEY
+#                                 a TLS port beside it (default none); the
+#                                 files must be readable by the ceph user
 #
 # State lives under /var/lib/ceph and /etc/ceph. A restart with the same
 # volumes skips bootstrapping and only starts the daemons.
@@ -29,6 +32,7 @@ set -euo pipefail
 : "${CEPH_DEMO_SECRET_KEY:?CEPH_DEMO_SECRET_KEY must be set}"
 : "${RGW_FRONTEND_IP:=0.0.0.0}"
 : "${RGW_FRONTEND_PORT:=7480}"
+: "${RGW_FRONTEND_SSL_PORT:=}"
 : "${RGW_ENABLE_USAGE_LOG:=true}"
 : "${RGW_USAGE_MAX_USER_SHARDS:=1}"
 : "${RGW_USAGE_MAX_SHARDS:=32}"
@@ -89,7 +93,7 @@ rgw usage log tick interval = ${RGW_USAGE_LOG_TICK_INTERVAL}
 rgw usage log flush threshold = ${RGW_USAGE_LOG_FLUSH_THRESHOLD}
 rgw usage max shards = ${RGW_USAGE_MAX_SHARDS}
 rgw usage max user shards = ${RGW_USAGE_MAX_USER_SHARDS}
-rgw frontends = beast endpoint=${RGW_FRONTEND_IP}:${RGW_FRONTEND_PORT}
+rgw frontends = beast endpoint=${RGW_FRONTEND_IP}:${RGW_FRONTEND_PORT}${RGW_FRONTEND_SSL_PORT:+ ssl_endpoint=${RGW_FRONTEND_IP}:${RGW_FRONTEND_SSL_PORT} ssl_certificate=${RGW_FRONTEND_SSL_CERT} ssl_private_key=${RGW_FRONTEND_SSL_KEY}}
 EOF
 }
 

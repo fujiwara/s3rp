@@ -1,0 +1,19 @@
+# AWS SDK for JavaScript v3 on Node.js, uploading through lib-storage.
+name: sdk-js
+setup: |
+  mkdir -p "$TOOLS/sdk-js"
+  cp "$LIB/sdk/js/package.json" "$LIB/sdk/js/package-lock.json" "$TOOLS/sdk-js/"
+  npm ci --prefix "$TOOLS/sdk-js" --no-audit --no-fund
+env:
+  # the script is outside the directory the packages are installed in
+  NODE_PATH: ${TOOLS}/sdk-js/node_modules
+  NODE_EXTRA_CA_CERTS: ${CA_FILE}
+  SDK: node ${LIB}/sdk/js/client.js
+verbs:
+  put:      $SDK put "$FILE" "$KEY"
+  get:      $SDK get "$KEY" "$OUT"
+  list:     $SDK list "$PREFIX"
+  delete:   $SDK delete "$KEY"
+  copy:     $SDK copy "$SRC" "$DST"
+  presign:  $SDK presign "$KEY"
+  put_tree: $SDK put_tree "$DIR" "$PREFIX"

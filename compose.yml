@@ -94,3 +94,40 @@ services:
       service: ceph
     image: ${CEPH_TENTACLE_IMAGE:-quay.io/ceph/ceph:v20.2.5}
     profiles: [ceph-tentacle]
+
+  # Ceph RGW over TLS for the client compatibility run (clients/run.sh),
+  # which issues the certificate before starting it. On a network of its
+  # own, not the host's, so it runs beside the ceph service above.
+  ceph-tls:
+    image: ${CEPH_IMAGE:-quay.io/ceph/ceph:v21.2.0}
+    profiles: [clients]
+    entrypoint: ["/ceph-demo.sh"]
+    volumes:
+      - ./docker/ceph-demo.sh:/ceph-demo.sh:ro
+      - ./clients/work/tls:/tls:ro
+    networks:
+      ceph-tls:
+        ipv4_address: 172.31.99.2
+    ports:
+      - "127.0.0.1:7443:7443"
+    environment:
+      MON_IP: 172.31.99.2
+      CEPH_PUBLIC_NETWORK: 172.31.99.0/24
+      CEPH_DEMO_UID: demo
+      CEPH_DEMO_ACCESS_KEY: backendkey
+      CEPH_DEMO_SECRET_KEY: backendsecret
+      RGW_FRONTEND_SSL_PORT: 7443
+      RGW_FRONTEND_SSL_CERT: /tls/cert.pem
+      RGW_FRONTEND_SSL_KEY: /tls/key.pem
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:7480/"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+      start_period: 20s
+
+networks:
+  ceph-tls:
+    ipam:
+      config:
+        - subnet: 172.31.99.0/24

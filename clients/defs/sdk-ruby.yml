@@ -1,0 +1,16 @@
+# AWS SDK for Ruby, through its transfer manager.
+name: sdk-ruby
+setup: |
+  # installs the gems the script pins, which the first verb would
+  # otherwise do in the middle of a scenario
+  ruby -e 'ARGV.replace(["none"]); begin; load ENV["LIB"] + "/sdk/ruby.rb"; rescue SystemExit; end' 2>/dev/null
+env:
+  SDK: ruby ${LIB}/sdk/ruby.rb
+verbs:
+  put:      $SDK put "$FILE" "$KEY"
+  get:      $SDK get "$KEY" "$OUT"
+  list:     $SDK list "$PREFIX"
+  delete:   $SDK delete "$KEY"
+  copy:     $SDK copy "$SRC" "$DST"
+  presign:  $SDK presign "$KEY"
+  put_tree: $SDK put_tree "$DIR" "$PREFIX"

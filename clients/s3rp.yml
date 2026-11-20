@@ -1,4 +1,4 @@
-# The gateway under test: one tenant, one bucket on the compose versitygw.
+# The gateway under test: one tenant, one bucket on the compose Ceph RGW.
 listen: "127.0.0.1:${PORT}"
 tenants:
   - name: main

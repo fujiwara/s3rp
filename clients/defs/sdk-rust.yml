@@ -1,0 +1,15 @@
+# AWS SDK for Rust. It has no transfer manager of its own; a large file is
+# uploaded in parts by the script, as the SDK's documentation shows.
+name: sdk-rust
+setup: |
+  cargo build --release --locked --quiet --manifest-path "$LIB/sdk/rust/Cargo.toml" --target-dir "$TOOLS/sdk-rust"
+env:
+  SDK: ${TOOLS}/sdk-rust/release/client
+verbs:
+  put:      $SDK put "$FILE" "$KEY"
+  get:      $SDK get "$KEY" "$OUT"
+  list:     $SDK list "$PREFIX"
+  delete:   $SDK delete "$KEY"
+  copy:     $SDK copy "$SRC" "$DST"
+  presign:  $SDK presign "$KEY"
+  put_tree: $SDK put_tree "$DIR" "$PREFIX"

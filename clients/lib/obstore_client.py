@@ -20,7 +20,7 @@ store = S3Store(
     region="us-east-1",
     virtual_hosted_style_request=False,
     # object_store bundles its roots and reads no CA from the environment;
-    # the run's certificate is self-signed
+    # the run's certificate is issued by a CA of its own
     client_options={"allow_http": True, "allow_invalid_certificates": True},
 )
 

@@ -1,0 +1,17 @@
+# AWS SDK for Go v2, through its transfer manager. The gateway's own tests
+# use this SDK too, pinned by the root go.mod; this one has its own module
+# so it can run a different release.
+name: sdk-go
+setup: |
+  mkdir -p "$TOOLS/sdk-go"
+  (cd "$LIB/sdk/go" && go build -o "$TOOLS/sdk-go/client" .)
+env:
+  SDK: ${TOOLS}/sdk-go/client
+verbs:
+  put:      $SDK put "$FILE" "$KEY"
+  get:      $SDK get "$KEY" "$OUT"
+  list:     $SDK list "$PREFIX"
+  delete:   $SDK delete "$KEY"
+  copy:     $SDK copy "$SRC" "$DST"
+  presign:  $SDK presign "$KEY"
+  put_tree: $SDK put_tree "$DIR" "$PREFIX"

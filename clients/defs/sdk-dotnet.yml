@@ -1,0 +1,16 @@
+# AWS SDK for .NET, through its transfer utility.
+name: sdk-dotnet
+setup: |
+  dotnet build "$LIB/sdk/dotnet/client.cs" --output "$TOOLS/sdk-dotnet" --nologo --verbosity quiet
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  SDK: dotnet ${TOOLS}/sdk-dotnet/client.dll
+verbs:
+  put:      $SDK put "$FILE" "$KEY"
+  get:      $SDK get "$KEY" "$OUT"
+  list:     $SDK list "$PREFIX"
+  delete:   $SDK delete "$KEY"
+  copy:     $SDK copy "$SRC" "$DST"
+  presign:  $SDK presign "$KEY"
+  put_tree: $SDK put_tree "$DIR" "$PREFIX"

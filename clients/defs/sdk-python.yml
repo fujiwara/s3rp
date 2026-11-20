@@ -1,0 +1,12 @@
+# AWS SDK for Python (boto3), through its transfer manager.
+name: sdk-python
+env:
+  SDK: uv run --quiet --script ${LIB}/sdk/python.py
+verbs:
+  put:      $SDK put "$FILE" "$KEY"
+  get:      $SDK get "$KEY" "$OUT"
+  list:     $SDK list "$PREFIX"
+  delete:   $SDK delete "$KEY"
+  copy:     $SDK copy "$SRC" "$DST"
+  presign:  $SDK presign "$KEY"
+  put_tree: $SDK put_tree "$DIR" "$PREFIX"

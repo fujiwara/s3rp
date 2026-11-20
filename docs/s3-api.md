@@ -116,6 +116,8 @@ Whether a checksum is actually stored and returned depends on the backend (versi
 
 The hop between the gateway and an http backend is itself **not integrity-checked**: the body goes out as `UNSIGNED-PAYLOAD` with no checksum and no TLS, so corruption on that hop, or in the backend before the data is written, goes undetected, and with no stored checksum it cannot be detected later either. What the gateway does guarantee on either scheme is that it never completes a body it has not verified: the trailer is checked before the final bytes are handed to the backend, and a mismatch aborts the backend request short of its `Content-Length`, so nothing is stored. A checksum sent precomputed in a header is forwarded to the backend, which verifies and stores it over either scheme, so that form is checked end to end even over http.
 
+A multipart upload is where this is more than a missing checksum. CreateMultipartUpload forwards the checksum algorithm the client names, and the parts' trailing checksums are not forwarded to an http backend, so a backend that holds the upload to its declared algorithm refuses the parts (versitygw: `400 InvalidRequest`). The transfer managers of the AWS SDKs for Python, Go and Java upload this way by default, so through a gateway on an http backend their multipart uploads fail.
+
 **Reach backends over https in production.** Over https, TLS protects the hop and the backend verifies and stores the checksum the gateway's SDK recomputes, so every client's checksum is checked end to end and returned on later reads. Plain http backends are for development and tests.
 
 ### Server-side encryption
