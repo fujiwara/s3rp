@@ -1,0 +1,17 @@
+# s5cmd: aws-sdk-go v1, whose signer the other suites never exercise
+# (the same lineage as WAL-G and the Docker registry).
+name: s5cmd
+env:
+  AWS_ACCESS_KEY_ID: ${ACCESS_KEY}
+  AWS_SECRET_ACCESS_KEY: ${SECRET_KEY}
+  AWS_REGION: us-east-1
+  S3_ENDPOINT_URL: ${ENDPOINT}
+verbs:
+  # --raw: no wildcard expansion, the awkward keys are literal
+  put:      s5cmd cp --raw "$FILE" "s3://$BUCKET/$KEY"
+  get:      s5cmd cp --raw "s3://$BUCKET/$KEY" "$OUT"
+  list:     s5cmd ls "s3://$BUCKET/$PREFIX/*"
+  delete:   s5cmd rm --raw "s3://$BUCKET/$KEY"
+  copy:     s5cmd cp --raw "s3://$BUCKET/$SRC" "s3://$BUCKET/$DST"
+  presign:  s5cmd presign "s3://$BUCKET/$KEY"
+  put_tree: s5cmd cp "$DIR/" "s3://$BUCKET/$PREFIX/"

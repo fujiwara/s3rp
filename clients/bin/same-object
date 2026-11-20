@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# same-object KEY FILE: the object the gateway serves for KEY has FILE's
+# bytes, read with curl so the check does not rest on the client under test.
+set -euo pipefail
+key=$1 file=$2
+path=$(jq -rn --arg k "$key" '$k | split("/") | map(@uri) | join("/")')
+curl -fsS --aws-sigv4 "aws:amz:us-east-1:s3" --user "$ACCESS_KEY:$SECRET_KEY" \
+    "$ENDPOINT/$BUCKET/$path" | cmp - "$file"

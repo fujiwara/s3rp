@@ -1,0 +1,14 @@
+# mc: minio-go, with a signer and streaming-signature code of its own.
+name: mc
+env:
+  MC_HOST_s3rp: ${SCHEME}://${ACCESS_KEY}:${SECRET_KEY}@127.0.0.1:${PORT}
+  MC_CONFIG_DIR: ${STATE_DIR}
+  MC_QUIET: "true"
+verbs:
+  put:      mc cp "$FILE" "s3rp/$BUCKET/$KEY"
+  get:      mc cp "s3rp/$BUCKET/$KEY" "$OUT"
+  list:     mc find "s3rp/$BUCKET/$PREFIX"
+  delete:   mc rm "s3rp/$BUCKET/$KEY"
+  copy:     mc cp "s3rp/$BUCKET/$SRC" "s3rp/$BUCKET/$DST"
+  presign:  mc share download --json "s3rp/$BUCKET/$KEY" | jq -r .share
+  put_tree: mc cp --recursive "$DIR/" "s3rp/$BUCKET/$PREFIX/"

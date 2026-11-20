@@ -1,0 +1,25 @@
+desc: Put a small object and read it back
+vars:
+  client: yaml://${CLIENT_FILE}
+steps:
+  put:
+    exec:
+      command: |
+        FILE=$FIXTURES/1k.bin KEY=small/1k.bin
+        {{ vars.client.verbs.put }}
+    test: current.exit_code == 0
+  stored:
+    desc: an independent reader sees the same bytes
+    exec:
+      command: same-object small/1k.bin $FIXTURES/1k.bin
+    test: current.exit_code == 0
+  get:
+    exec:
+      command: |
+        KEY=small/1k.bin OUT=$OUT_DIR/1k.bin
+        {{ vars.client.verbs.get }}
+    test: current.exit_code == 0
+  same:
+    exec:
+      command: cmp $FIXTURES/1k.bin $OUT_DIR/1k.bin
+    test: current.exit_code == 0

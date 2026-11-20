@@ -1,0 +1,12 @@
+# Bun's built-in S3 client: a recent implementation in Zig.
+name: bun
+env:
+  BUN_S3: bun run ${LIB}/bun_s3.ts
+  NODE_EXTRA_CA_CERTS: ${CA_FILE}
+verbs:
+  put:      $BUN_S3 put "$FILE" "$KEY"
+  get:      $BUN_S3 get "$KEY" "$OUT"
+  list:     $BUN_S3 list "$PREFIX"
+  delete:   $BUN_S3 delete "$KEY"
+  presign:  $BUN_S3 presign "$KEY"
+  put_tree: $BUN_S3 put_tree "$DIR" "$PREFIX"

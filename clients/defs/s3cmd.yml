@@ -1,0 +1,27 @@
+# s3cmd: a Python implementation of its own, signer and XML handling included.
+name: s3cmd
+setup: |
+  cat > "$STATE_DIR/s3cfg" <<CFG
+  [default]
+  access_key = $ACCESS_KEY
+  secret_key = $SECRET_KEY
+  host_base = 127.0.0.1:$PORT
+  host_bucket = 127.0.0.1:$PORT
+  use_https = $([ "$SCHEME" = https ] && echo True || echo False)
+  ca_certs_file = $CA_FILE
+  # unset, cp copies the source's ACL with PutObjectAcl, which an
+  # ACL-disabled bucket refuses
+  acl_public = False
+  CFG
+env:
+  S3CMD: s3cmd --config=${STATE_DIR}/s3cfg
+  # s3cmd 2.4.0 trips SyntaxWarnings on current Python
+  PYTHONWARNINGS: ignore
+verbs:
+  put:      $S3CMD put "$FILE" "s3://$BUCKET/$KEY"
+  get:      $S3CMD get --force "s3://$BUCKET/$KEY" "$OUT"
+  list:     $S3CMD ls --recursive "s3://$BUCKET/$PREFIX/"
+  delete:   $S3CMD del "s3://$BUCKET/$KEY"
+  copy:     $S3CMD cp "s3://$BUCKET/$SRC" "s3://$BUCKET/$DST"
+  presign:  $S3CMD signurl "s3://$BUCKET/$KEY" +3600
+  put_tree: $S3CMD put --recursive "$DIR/" "s3://$BUCKET/$PREFIX/"

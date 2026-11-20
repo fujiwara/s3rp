@@ -1,0 +1,13 @@
+# obstore: the Rust object_store crate (Polars, delta-rs, DataFusion),
+# through its Python binding.
+name: obstore
+env:
+  OBSTORE: uv run --quiet --script ${LIB}/obstore_client.py
+verbs:
+  put:      $OBSTORE put "$FILE" "$KEY"
+  get:      $OBSTORE get "$KEY" "$OUT"
+  list:     $OBSTORE list "$PREFIX"
+  delete:   $OBSTORE delete "$KEY"
+  copy:     $OBSTORE copy "$SRC" "$DST"
+  presign:  $OBSTORE presign "$KEY"
+  put_tree: $OBSTORE put_tree "$DIR" "$PREFIX"

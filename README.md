@@ -225,6 +225,8 @@ Note: access Ceph RGW via `127.0.0.1`, not `localhost` — RGW resolves Host nam
 
 The [ceph/s3-tests](https://github.com/ceph/s3-tests) compatibility suite can be run against s3rp with `./s3tests/run.sh`, which wraps the gateway in a test-only harness providing the CreateBucket/DeleteBucket the suite needs (see [s3tests/README.md](s3tests/README.md)). How to read a run's classified results is covered in [docs/s3-tests.md](docs/s3-tests.md).
 
+S3 clients other than the AWS SDKs — `mc`, restic, s3cmd, s3fs, rclone, s5cmd, DuckDB, Bun, and the Rust `object_store` and OpenDAL libraries — are run against s3rp over http and https with `./clients/run.sh` (see [clients/README.md](clients/README.md) and [docs/client-compat.md](docs/client-compat.md)).
+
 ## LICENSE
 
 MIT

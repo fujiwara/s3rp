@@ -1,0 +1,42 @@
+desc: Keys whose encoding clients disagree on
+vars:
+  client: yaml://${CLIENT_FILE}
+  keys:
+    - "awkward/a b.txt"
+    - "awkward/a+b.txt"
+    - "awkward/100%.txt"
+    - "awkward/a&b=c.txt"
+    - "awkward/日本語.txt"
+steps:
+  put:
+    loop: len(vars.keys)
+    exec:
+      command: |
+        FILE=$FIXTURES/1k.bin KEY='{{ vars.keys[i] }}'
+        {{ vars.client.verbs.put }}
+    test: current.exit_code == 0
+  stored:
+    loop: len(vars.keys)
+    exec:
+      command: same-object '{{ vars.keys[i] }}' $FIXTURES/1k.bin
+    test: current.exit_code == 0
+  get:
+    loop: len(vars.keys)
+    exec:
+      command: |
+        KEY='{{ vars.keys[i] }}' OUT=$OUT_DIR/awkward-{{ i }}.bin
+        {{ vars.client.verbs.get }}
+        cmp $FIXTURES/1k.bin $OUT
+    test: current.exit_code == 0
+  delete:
+    loop: len(vars.keys)
+    exec:
+      command: |
+        KEY='{{ vars.keys[i] }}'
+        {{ vars.client.verbs.delete }}
+    test: current.exit_code == 0
+  gone:
+    loop: len(vars.keys)
+    exec:
+      command: no-object '{{ vars.keys[i] }}'
+    test: current.exit_code == 0

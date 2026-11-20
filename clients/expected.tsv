@@ -1,0 +1,9 @@
+# client	scheme	scenario	category: reason
+# Every scenario expected to fail, with why. A run fails on a failure not
+# listed here and on a listed scenario that passes. Categories:
+#   client   the client's own behavior; nothing for the gateway to do
+#   gateway  a deliberate refusal or a known gap of the gateway
+obstore	http	double-slash-key	client: object_store refuses a path with an empty segment
+obstore	https	double-slash-key	client: object_store refuses a path with an empty segment
+s3cmd	http	presigned-get	gateway: signurl signs with SigV2, which the gateway does not verify
+s3cmd	https	presigned-get	gateway: signurl signs with SigV2, which the gateway does not verify

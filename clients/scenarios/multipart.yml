@@ -1,0 +1,24 @@
+desc: Put an object large enough that the client uploads it in parts
+vars:
+  client: yaml://${CLIENT_FILE}
+steps:
+  put:
+    exec:
+      command: |
+        FILE=$FIXTURES/big.bin KEY=big/big.bin
+        {{ vars.client.verbs.put }}
+    test: current.exit_code == 0
+  stored:
+    exec:
+      command: same-object big/big.bin $FIXTURES/big.bin
+    test: current.exit_code == 0
+  get:
+    exec:
+      command: |
+        KEY=big/big.bin OUT=$OUT_DIR/big.bin
+        {{ vars.client.verbs.get }}
+    test: current.exit_code == 0
+  same:
+    exec:
+      command: cmp $FIXTURES/big.bin $OUT_DIR/big.bin
+    test: current.exit_code == 0

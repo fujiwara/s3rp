@@ -1,0 +1,18 @@
+desc: List more keys than one page holds
+vars:
+  client: yaml://${CLIENT_FILE}
+steps:
+  put:
+    exec:
+      command: |
+        DIR=$FIXTURES/tree PREFIX=many
+        {{ vars.client.verbs.put_tree }}
+    test: current.exit_code == 0
+  list:
+    exec:
+      command: |
+        PREFIX=many
+        {{ vars.client.verbs.list }}
+    test: |
+      current.exit_code == 0
+      && len(split(trim(current.stdout), "\n")) == 1100

@@ -1,0 +1,19 @@
+desc: Write Parquet files and query them back with range reads
+steps:
+  write:
+    exec:
+      command: |
+        $DUCKDB -c "COPY (SELECT range AS id, range % 7 AS part, repeat('x', 100) AS pad FROM range(2000000))
+            TO 's3://$BUCKET/parquet' (FORMAT parquet, PARTITION_BY (part))"
+    test: current.exit_code == 0
+  count:
+    exec:
+      command: |
+        $DUCKDB -c "SELECT count(*), sum(id) FROM read_parquet('s3://$BUCKET/parquet/*/*.parquet')"
+    test: current.exit_code == 0 && trim(current.stdout) == "2000000|1999999000000"
+  pushdown:
+    desc: one column of one partition, read by byte ranges
+    exec:
+      command: |
+        $DUCKDB -c "SELECT max(id) FROM read_parquet('s3://$BUCKET/parquet/*/*.parquet', hive_partitioning = true) WHERE part = 3"
+    test: current.exit_code == 0 && trim(current.stdout) == "1999994"

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# no-object KEY: the gateway answers 404 for KEY, asked with curl so the
+# check does not rest on the client under test.
+set -euo pipefail
+path=$(jq -rn --arg k "$1" '$k | split("/") | map(@uri) | join("/")')
+status=$(curl -sS -o /dev/null -w '%{http_code}' --aws-sigv4 "aws:amz:us-east-1:s3" \
+    --user "$ACCESS_KEY:$SECRET_KEY" "$ENDPOINT/$BUCKET/$path")
+[ "$status" = 404 ] || { echo "$1: status $status, want 404" >&2; exit 1; }

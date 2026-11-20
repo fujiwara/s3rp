@@ -1,0 +1,17 @@
+# s3fs-fuse: C++ on libcurl with a signer of its own; every file operation
+# becomes its own mix of HEAD, ranged GET, multipart and copy requests.
+name: s3fs
+setup: |
+  mkdir -p "$STATE_DIR/mnt"
+  (umask 077; echo "$ACCESS_KEY:$SECRET_KEY" > "$STATE_DIR/passwd")
+  s3fs "$BUCKET" "$STATE_DIR/mnt" -o url="$ENDPOINT" -o use_path_request_style \
+      -o passwd_file="$STATE_DIR/passwd" -o use_cache="" -o stat_cache_expire=1
+teardown: fusermount -u "$STATE_DIR/mnt"
+env:
+  MNT: ${STATE_DIR}/mnt
+verbs:
+  put:      mkdir -p "$(dirname "$MNT/$KEY")" && cp "$FILE" "$MNT/$KEY"
+  get:      cp "$MNT/$KEY" "$OUT"
+  list:     find "$MNT/$PREFIX" -type f
+  delete:   rm "$MNT/$KEY"
+  put_tree: mkdir -p "$MNT/$PREFIX" && cp -r "$DIR/." "$MNT/$PREFIX/"
