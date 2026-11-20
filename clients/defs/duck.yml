@@ -1,0 +1,38 @@
+# duck: the command line of Cyberduck (and the engine of Mountain Duck), a
+# Java implementation of its own. The Linux build is the same code the
+# Windows and macOS applications run.
+name: duck
+setup: |
+  fetch https://s3.amazonaws.com/repo.deb.cyberduck.io/pool/stable/d/du/duck_9.6.0.46406_amd64.deb \
+      b76f3fefdd0756b08e7e3015f46273a73f5cf78bc9f0d83c7d0d6e7e90ea6ca6 "$TOOLS/duck_9.6.0.deb"
+  [ -x "$TOOLS/duck/opt/duck/bin/duck" ] || dpkg-deb -x "$TOOLS/duck_9.6.0.deb" "$TOOLS/duck"
+  # a connection profile is what points duck at an endpoint that is not AWS
+  mkdir -p "$STATE_DIR/.duck/profiles"
+  cat > "$STATE_DIR/.duck/profiles/s3rp.cyberduckprofile" <<PROFILE
+  <?xml version="1.0" encoding="UTF-8"?>
+  <plist version="1.0">
+  <dict>
+    <key>Protocol</key><string>s3</string>
+    <key>Vendor</key><string>s3rp</string>
+    <key>Scheme</key><string>$SCHEME</string>
+    <key>Description</key><string>s3rp</string>
+    <key>Default Hostname</key><string>127.0.0.1</string>
+    <key>Default Port</key><string>$PORT</string>
+    <key>Properties</key>
+    <array>
+      <string>s3.bucket.virtualhost.disable=true</string>
+      <string>s3.upload.multipart.threshold=16777216</string>
+    </array>
+  </dict>
+  </plist>
+  PROFILE
+env:
+  # duck keeps its profiles and preferences under the home directory
+  HOME: ${STATE_DIR}
+  DUCK: ${LIB}/duck.sh
+verbs:
+  put:      $DUCK put "$FILE" "$KEY"
+  get:      $DUCK get "$KEY" "$OUT"
+  list:     $DUCK list "$PREFIX"
+  delete:   $DUCK delete "$KEY"
+  put_tree: $DUCK put_tree "$DIR" "$PREFIX"

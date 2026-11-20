@@ -14,13 +14,15 @@ $ ./clients/run.sh rclone mc       # the named ones
 $ SCHEMES=https ./clients/run.sh   # default: http https
 ```
 
-It needs docker (the compose versitygw backend), mise, Go, curl, openssl,
-and FUSE for s3fs. For every client and scheme it starts an s3rp serving a
-bucket of its own (removed afterwards) and runs every scenario against it. Both schemes are run
-because clients frame and sign bodies differently over TLS; the https
-gateway uses a self-signed certificate the clients are made to trust. The
-report is `clients/work/results/report.md`: a client × scenario table, the
-expected failures, and the operations each client sent.
+It needs docker (the compose versitygw backend), mise, Go, curl,
+openssl, FUSE for s3fs, and Wine (32-bit, with xvfb) for WinSCP. For
+every client and scheme it starts an s3rp serving a bucket of its own
+(removed afterwards) and runs every scenario against it. Both schemes
+are run because clients frame and sign bodies differently over TLS; the
+https gateway uses a self-signed certificate the clients are made to
+trust. The report is `clients/work/results/report.md`: a client ×
+scenario table, the expected failures, and the operations each client
+sent.
 
 ## Layout
 
@@ -40,7 +42,9 @@ expected failures, and the operations each client sent.
   scenario), with a category and the reason. A run fails on an unlisted
   failure and on a listed scenario that passes.
 - `mise.toml` — runn and the clients, pinned. Dependabot does not read it:
-  bump the versions by hand, and re-run.
+  bump the versions by hand, and re-run. A client mise has no package for
+  (`duck`, WinSCP) is downloaded by its definition's `setup` through
+  `bin/fetch`, pinned there by URL and SHA-256.
 
 ## What fails a scenario
 
@@ -68,8 +72,9 @@ command with its output (`<scenario>.log`).
 The arguments are shell variables, not environment: a verb that runs a
 script passes them on its command line. `BUCKET`, `ENDPOINT`, `ACCESS_KEY`
 and `SECRET_KEY` are in the environment, and a definition's `env` and
-`setup` may also use `SCHEME`, `PORT`, `CA_FILE`, `LIB` and `STATE_DIR` (a
-directory for the client's own configuration).
+`setup` may also use `SCHEME`, `PORT`, `CA_FILE`, `LIB`, `TOOLS` (where `setup` keeps a
+downloaded client) and `STATE_DIR` (a directory for the client's own
+configuration).
 
 ## Adding a client
 

@@ -35,6 +35,8 @@ export BACKEND_SECRET_KEY=${S3RP_TEST_BACKEND_SECRET_ACCESS_KEY:-backendsecret}
 export FIXTURES=$WORK/fixtures
 export LIB=$ROOT/clients/lib
 export OUT_DIR=$WORK/out
+# where a definition's setup keeps a client mise has no package for
+export TOOLS=$WORK/tools
 RUN_ID=$(date +%s)
 
 echo "==> installing tools (mise, pinned in clients/mise.toml)"
