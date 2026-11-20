@@ -1,0 +1,76 @@
+# Fidelity tests expected to fail, and why (check id <TAB> category).
+# Exact for the pinned suite commit in run.sh and the compose ceph image:
+# triage.py reports any failure missing here, and any entry that passed.
+# The categories are explained in docs/s3-fidelity.md. A third column
+# "flaky" marks a failure that depends on timing: the test may pass.
+s3.abort-multipart-nosuchupload-after-complete	backend
+s3.conc-s3-conditional-writes-optimistic-counter-loses-no-increment	backend	flaky
+s3.copy-object-defaults-to-the-composite-sources-sha256-as-a-full-object-digest	backend
+s3.copy-object-glacier-not-in-active-tier-error	backend
+s3.copy-object-glacier-source-error	backend
+s3.copy-object-not-in-active-tier-rejected	backend
+s3.copy-object-to-itself-no-change-rejected	message
+s3.copy-object-unrecognized-checksum-algorithm-rejected	message
+s3.crc32-multipart-default-composite-vs-full-object-checksum	backend
+s3.deep-s3-immutability-compliance-lock-extends-and-overwrites-but-weakening-rejected	message
+s3.deep-s3-immutability-composite-sha256-checksum-reports-parts	backend
+s3.deep-s3-immutability-legal-hold-blocks-bypass-independent-of-retention-rejected	message
+s3.deep-s3-immutability-upload-part-wrong-sha256-rejected-slot-stays-empty	message
+s3.deep-s3-storage-class-copy-in-place-to-deep-archive-closes-reads	backend
+s3.deep-s3-storage-class-deep-archive-get-rejected	backend
+s3.deep-s3-storage-class-express-onezone-class-put-rejected	deliberate
+s3.deep-s3-storage-class-multipart-class-complete-after-abort-rejected	backend
+s3.deep-s3-storage-class-onezone-ia-intelligent-tiering-direct-put	backend
+s3.deep-s3-storage-class-outposts-class-put-rejected	deliberate
+s3.delete-nonempty-bucket-rejected-across-20-bucket-fanout	deliberate
+s3.delete-object-under-legal-hold-rejected	message
+s3.delete-object-under-retention-rejected	message
+s3.error-bucket-already-owned	deliberate
+s3.error-bucket-not-empty	deliberate
+s3.error-no-such-bucket	deliberate
+s3.get-glacier-object-without-restore-rejected	backend
+s3.get-object-part-number-reads-single-part	backend
+s3.list-objects-nosuchbucket	deliberate
+s3.list-objects-v1-basic-listing	deliberate
+s3.multipart-abort-no-such-upload-rejected	backend
+s3.multipart-complete-checksum-type-mismatched-from-create-rejected	backend
+s3.multipart-complete-full-object-against-default-composite-upload-rejected	backend
+s3.multipart-complete-invalid-part-etag-rejected	backend
+s3.multipart-list-parts-after-abort-rejected	backend
+s3.multipart-list-uploads-then-abort-nonexistent	backend
+s3.multipart-upload-and-presigned-get-round-trip	deliberate
+s3.multipart-upload-complete	backend
+s3.object-legal-hold-blocks-delete	message
+s3.object-legal-hold-requires-object-lock-rejected	message
+s3.object-lock-ops-require-lock-enabled-bucket	message
+s3.object-retention-compliance-cannot-shorten	message
+s3.object-retention-governance-blocks-delete	backend
+s3.object-retention-governance-bypass-delete	backend
+s3.object-retention-until-date-enforces-window	message
+s3.object-storage-class-reflected	backend
+s3.op-contract-delete-bucket	deliberate
+s3.op-contract-delete-objects	message
+s3.op-contract-get-bucket-location	deliberate
+s3.op-contract-headBucket	deliberate
+s3.op-contract-listObjectsV2	deliberate
+s3.op-contract-uploadPartCopy	backend
+s3.presigned-get	deliberate
+s3.put-object-append-write-offset-rejected	out-of-scope
+s3.put-object-bad-content-md5-rejected	message
+s3.put-object-invalid-request-rejected	message
+s3.put-object-invalid-write-offset-rejected	out-of-scope
+s3.range-read-unsatisfiable-rejected	backend
+s3.s3-complete-multipart-with-a-wrong-full-object-checksum-is-rejected-and-no-object-exists	backend
+s3.s3-conditional-precedence-and-lifecycle-headers-copy	backend
+s3.s3-conditional-precedence-and-lifecycle-headers-mpu-parts	backend
+s3.s3-full-object-crc64nvme-over-multipart-equals-the-whole-object-checksum	backend
+s3.s3-object-lock-compliance-cannot-be-bypassed-while-governance-can	message
+s3.s3unicode-a-nul-byte-in-an-object-key-is-rejected	deliberate
+s3.s3unicode-carriage-return-in-a-key-survives-the-list-xml-byte-exact	backend
+s3.s3unicode-list-objects-url-encoding-is-form-encoded-not-rfc3986	backend
+s3.s3unicode-list-objects-with-an-unsupported-encoding-type-is-rejected	backend
+s3.s3x-s3express-session-and-listing-inflight-mpu-prefix-listed	out-of-scope
+s3.s3x-s3express-session-and-listing-non-slash-delimiter-rejected	out-of-scope
+s3.s3x-s3express-session-and-listing-start-after-rejected	out-of-scope
+s3.s3x-s3express-session-and-listing-unterminated-prefix-rejected	out-of-scope
+s3.virtual-hosted-and-path-style-clients-refuse-a-nonexistent-bucket-identically	deliberate

@@ -40,6 +40,13 @@ mkdir -p "$RESULTS"
 if [ "$BACKEND_ENDPOINT" = "http://127.0.0.1:7480" ]; then
     echo "==> starting ceph backend"
     docker compose up -d --wait ceph
+    # the service uses the host network, and its healthcheck is satisfied by
+    # anything answering on the port: another Ceph already bound there lets
+    # --wait succeed while this one fails to start
+    if ! docker compose ps --status running --services | grep -qx ceph; then
+        echo "the compose ceph service is not running; is another Ceph using its ports?" >&2
+        exit 2
+    fi
 else
     echo "==> using external backend $BACKEND_ENDPOINT"
 fi
@@ -93,5 +100,8 @@ OUT=$(pwd)/$RESULTS/pytest.out
 ) || true
 
 echo "==> triaging"
-"$VENV/bin/python" s3tests/triage.py "$XML" "$RESULTS/harness.log" > "$RESULTS/report.md"
+status=0
+"$VENV/bin/python" s3tests/triage.py "$XML" "$RESULTS/harness.log" > "$RESULTS/report.md" || status=$?
 echo "report: $RESULTS/report.md"
+# 1 when the report asks for a person: a contaminated run or an unmatched failure
+exit "$status"

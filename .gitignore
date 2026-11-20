@@ -18,3 +18,4 @@ dist/
 /bench/out/
 __pycache__/
 /live-check/
+/s3fidelity/work/

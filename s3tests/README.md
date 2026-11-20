@@ -39,11 +39,12 @@ mirrored in `s3tests.conf.in`.
 ./s3tests/run.sh
 ```
 
-Or in CI: the manually-triggered [`s3-tests` workflow](../.github/workflows/s3tests.yml)
-runs the same script against a MicroCeph RGW (the Ceph release is chosen
-by the snap-channel input, default `tentacle/stable`) and puts the triage
-report in the job summary, with the full results (junit XML, pytest
-output, request log) as artifacts.
+Or in CI: the [`s3-tests` workflow](../.github/workflows/s3tests.yml) runs
+the same script weekly, and on demand (where the Ceph image can be chosen),
+and puts the triage report in the job summary, with the full results
+(junit XML, pytest output, request log) as artifacts. Script and job fail
+when the report asks for a person: a contaminated run, or a failure no
+category explains.
 
 Prerequisite: [mise](https://mise.jdx.dev/) — the Python toolchain and
 [uv](https://docs.astral.sh/uv/) are pinned in `s3tests/mise.toml` and

@@ -1,11 +1,14 @@
 # Runs the ceph/s3-tests compatibility suite (s3tests/run.sh) against the
-# compose ceph service, the same backend as a local run. Manually
-# triggered: the run takes tens of
-# minutes and its outcome is a classified report, not a pass/fail — the
-# job succeeds when the suite ran, and the triage report lands in the job
-# summary (full results as artifacts).
+# compose ceph service, the same backend as a local run, weekly and on
+# demand: the run takes tens of minutes, too long for every pull request.
+# Its outcome is a classified report; the job fails only when the report
+# asks for a person — the run is contaminated or a failure matches no
+# known category — and the report lands in the job summary (full results
+# as artifacts).
 name: s3-tests
 on:
+  schedule:
+    - cron: '53 18 * * 0' # Monday 03:53 JST
   workflow_dispatch:
     inputs:
       image:
