@@ -99,8 +99,8 @@ func (r *Recorder) attributes(info *s3gw.RequestInfo) []attribute.KeyValue {
 	attrs = append(attrs,
 		attribute.String(semconv.AttrHTTPRequestMethod, method(info.Method)),
 		attribute.Int(semconv.AttrHTTPResponseStatusCode, info.Status))
-	if info.Op != nil {
-		attrs = append(attrs, attribute.String(semconv.AttrS3GWOperation, info.Op.Operation))
+	if info.Route != "" {
+		attrs = append(attrs, attribute.String(semconv.AttrS3GWOperation, info.Route))
 	}
 	switch {
 	case info.Code != "":

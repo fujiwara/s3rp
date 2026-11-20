@@ -121,8 +121,11 @@ func main() {
 			"status", info.Status, "bytes_out", info.BytesOut,
 			"duration", info.Duration, "request_id", info.RequestID,
 		}
-		if info.Op != nil { // nil when the request never reached an operation
-			attrs = append(attrs, "operation", info.Op.Operation, "bucket", info.Op.Bucket)
+		if info.Route != "" { // known from routing on, refused or not
+			attrs = append(attrs, "operation", info.Route)
+		}
+		if info.Op != nil { // nil when the request was refused before the hooks
+			attrs = append(attrs, "bucket", info.Op.Bucket)
 		}
 		slog.InfoContext(ctx, "request", attrs...)
 	})
@@ -280,7 +283,7 @@ Your `store.Store` implementation — and the control plane's write path that fe
 `SetObserver`: the one place every request — served or refused — is reported, and the only place a failure's cause exists.
 
 - **Nothing is logged unless you install an observer**, including failures. The cause of a failure is not recoverable anywhere else: it never reaches the client, by design. An observer is called once per request, after the response has been written, whether or not the request ever reached an operation — a signature that did not verify or a bucket that does not exist never reaches an interceptor, but is still observed.
-- `RequestInfo` keeps the identity apart from the operation: `Tenant`, `User` and `AccessKeyID` are set as soon as the signature verifies, `Op` only once routing and the policies pass. So a request refused for an unknown bucket or a denied action still records **who** asked, which is usually the point of looking. `AccessKeyID` is there for key-level accounting — a user holds several keys during rotation, so a last-used timestamp that answers "is the old key still in use?" must be kept per key, and the observer is the one place that sees every request the key actually signed (the store's `GetKey` runs *before* verification, so it would record presentation, not use — and a store cache skips it entirely). Aggregate in memory and flush coarsely; do not write per request.
+- `RequestInfo` keeps the identity apart from the operation: `Tenant`, `User` and `AccessKeyID` are set as soon as the signature verifies, `Op` only once routing and the policies pass. So a request refused for an unknown bucket or a denied action still records **who** asked, which is usually the point of looking. It records **what** they asked for as well: `Route` names the operation the request was routed to, from the moment the signature verifies, so a `501` for an unknown header or query parameter says which operation the client was calling — a copy included, which the method, path and query do not tell apart from a plain upload. It is the route that matched, not necessarily what the client meant: a bucket `GET` with a subresource the gateway does not know is recorded as the listing it fell through to, and the message names the parameter. When `Op` is set, `Op.Operation` is the same name. `AccessKeyID` is there for key-level accounting — a user holds several keys during rotation, so a last-used timestamp that answers "is the old key still in use?" must be kept per key, and the observer is the one place that sees every request the key actually signed (the store's `GetKey` runs *before* verification, so it would record presentation, not use — and a store cache skips it entirely). Aggregate in memory and flush coarsely; do not write per request.
 - `RequestInfo` stands on its own, `Start` included, so it can be handed to a metering queue or a batch and still say when it happened — an observer that defers the work must not have to stamp the time itself. It carries snake_case JSON tags and can be emitted as it stands; the failure reason is rendered as its message, since an `error` marshals to an empty object on its own. `Op` is tagged the same way.
 - `Host` and `UserAgent` describe a request that never reached an operation. `Host` is where a virtual-hosted-style request names its bucket, which `Path` then does not. `UserAgent` says which SDK and version sent a request the gateway refused — usually the fastest way to learn why a client behaves differently — and is cut to 512 bytes. No signature covers the user agent: log it, never decide on it, and keep it off metrics.
 - `Code` and `Message` are what the client was told. A refusal the gateway words itself — an unknown `x-amz-*` header or query parameter, SSE-C — has no cause, so `Message` is where the log says which header it was; `Err` is the part the client was not told.

@@ -111,8 +111,14 @@ func logRequest(ctx context.Context, info *s3gw.RequestInfo) {
 		attrs = append(attrs, "tenant", info.Tenant, "user", info.User,
 			"access_key_id", info.AccessKeyID)
 	}
+	// the operation is known from routing on, so a request refused for a
+	// query parameter or a denied action is logged with it; the rest only
+	// once the policies passed
+	if info.Route != "" {
+		attrs = append(attrs, "operation", info.Route)
+	}
 	if info.Op != nil {
-		attrs = append(attrs, "operation", info.Op.Operation, "actions", info.Op.Actions, "bucket", info.Op.Bucket)
+		attrs = append(attrs, "actions", info.Op.Actions, "bucket", info.Op.Bucket)
 	}
 	slog.InfoContext(ctx, "request", attrs...)
 }

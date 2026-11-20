@@ -18,7 +18,7 @@ const (
 	AttrS3GWCacheName = "s3gw.cache.name"
 	// AttrS3GWCacheResult is s3gw.cache.result: Whether a cache lookup found its entry.
 	AttrS3GWCacheResult = "s3gw.cache.result"
-	// AttrS3GWOperation is s3gw.operation: The S3 API operation the request resolved to (`Op.Operation`).
+	// AttrS3GWOperation is s3gw.operation: The S3 API operation the request was routed to (`RequestInfo.Route`).
 	AttrS3GWOperation = "s3gw.operation"
 	// AttrS3GWTenant is s3gw.tenant: The tenant whose signature the request carried (`RequestInfo.Tenant`).
 	AttrS3GWTenant = "s3gw.tenant"

@@ -21,7 +21,7 @@ groups:
         requirement_level: required
       - ref: s3gw.operation
         requirement_level:
-          conditionally_required: when the request reached an operation (`RequestInfo.Op` is set)
+          conditionally_required: when the request was routed to an operation (`RequestInfo.Route` is set)
       - ref: error.type
         brief: The S3 error code the client was given (`RequestInfo.Code`).
         note: |
@@ -62,7 +62,7 @@ groups:
         requirement_level: required
       - ref: s3gw.operation
         requirement_level:
-          conditionally_required: when the request reached an operation (`RequestInfo.Op` is set)
+          conditionally_required: when the request was routed to an operation (`RequestInfo.Route` is set)
       - ref: error.type
         brief: The S3 error code the client was given, `_OTHER` for a failure without one.
         requirement_level:

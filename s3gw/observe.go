@@ -63,10 +63,18 @@ type RequestInfo struct {
 	// tells whether an old key is still in use — needs the key, not just the
 	// user. Key ids are identifiers, not secrets.
 	AccessKeyID string `json:"access_key_id,omitempty"`
-	// Op is the operation the request resolved to, present only once routing
-	// and the policies have passed. A request refused before that — an
-	// unverifiable signature, an unknown bucket, a denied action — has none,
-	// which is why the identity above is kept separately.
+	// Route is the S3 operation the request was routed to, set as soon
+	// as the signature verifies and before anything else is checked — so a
+	// request refused for a header, a query parameter, an unknown bucket or
+	// a denied action still says what was refused. It is the route that
+	// matched, not what the client meant: an unsupported subresource on a
+	// bucket GET is recorded as the listing it fell through to. Empty when
+	// the signature did not verify; a browser POST upload is told by its
+	// shape and is named before its policy is verified.
+	Route string `json:"route,omitempty"`
+	// Op is the operation as the hooks saw it, present only once routing and
+	// the policies have passed. A request refused before that has none,
+	// which is why Route and the identity above are kept separately.
 	Op *Op `json:"op,omitempty"`
 	// Err is what actually went wrong, when anything did. It is never sent to
 	// the client — it may name backend endpoints and buckets — so this is the
@@ -122,6 +130,13 @@ type infoKey struct{}
 func recordOf(ctx context.Context) *RequestInfo {
 	info, _ := ctx.Value(infoKey{}).(*RequestInfo)
 	return info
+}
+
+// recordOperation records the operation a request was routed to.
+func recordOperation(ctx context.Context, name string) {
+	if info := recordOf(ctx); info != nil {
+		info.Route = name
+	}
 }
 
 // recordPresentedKey records, for a request whose authentication failed,

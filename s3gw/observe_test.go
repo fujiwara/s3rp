@@ -321,3 +321,101 @@ func TestObserverIdentityAndOp(t *testing.T) {
 		}
 	})
 }
+
+// A refusal is recorded with the operation it refused, which the method,
+// path and query alone do not always say: a copy is told by a header.
+func TestObserverNamesTheRefusedOperation(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		url    string
+		header map[string]string
+		creds  aws.Credentials
+		want   string
+		code   string
+	}{
+		{
+			name: "unknown query parameter", method: "GET",
+			url:  "http://s3.example.com/testbucket?list-type=2&bogus=1",
+			want: "ListObjectsV2", code: "NotImplemented",
+		},
+		{
+			name: "unknown query parameter on the bucket listing", method: "GET",
+			url:  "http://s3.example.com/?bogus=1",
+			want: "ListBuckets", code: "NotImplemented",
+		},
+		{
+			name: "unknown header", method: "GET",
+			url:    "http://s3.example.com/testbucket/a.txt",
+			header: map[string]string{"x-amz-request-payer": "requester"},
+			want:   "GetObject", code: "NotImplemented",
+		},
+		{
+			name: "copy with an unknown query parameter", method: "PUT",
+			url:    "http://s3.example.com/testbucket/b.txt?bogus=1",
+			header: map[string]string{"x-amz-copy-source": "/testbucket/a.txt"},
+			want:   "CopyObject", code: "NotImplemented",
+		},
+		{
+			// the bucket need not exist for the request to name an operation
+			name: "unknown bucket", method: "DELETE",
+			url:  "http://s3.example.com/nosuchbucket/a.txt",
+			want: "DeleteObject", code: "AccessDenied",
+		},
+		{
+			name: "no operation for the method", method: "PATCH",
+			url:  "http://s3.example.com/testbucket/a.txt",
+			want: s3gw.OpUnknown, code: "MethodNotAllowed",
+		},
+		{
+			name: "no operation for the method without a bucket", method: "POST",
+			url:  "http://s3.example.com/",
+			want: s3gw.OpUnknown, code: "MethodNotAllowed",
+		},
+		{
+			name: "signature that did not verify", method: "GET",
+			url:   "http://s3.example.com/testbucket/a.txt",
+			creds: aws.Credentials{AccessKeyID: testAccessKeyID, SecretAccessKey: "wrong"},
+			code:  "SignatureDoesNotMatch",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gw := newTestGateway(t)
+			var got *s3gw.RequestInfo
+			gw.SetObserver(func(_ context.Context, info *s3gw.RequestInfo) { got = info })
+			if err := gw.SetBackend("testbucket", stubGet{body: "hello"}); err != nil {
+				t.Fatal(err)
+			}
+			creds := tt.creds
+			if creds.AccessKeyID == "" {
+				creds = testCreds()
+			}
+			req := signedRequest(t, tt.method, tt.url, nil, emptyPayloadHash, time.Now(), creds, func(r *http.Request) {
+				for k, v := range tt.header {
+					r.Header.Set(k, v)
+				}
+			})
+			gw.Handler().ServeHTTP(httptest.NewRecorder(), req)
+			if got == nil {
+				t.Fatal("expect an observation")
+			}
+			if got.Code != tt.code || got.Op != nil {
+				t.Fatalf("expect %s without an op, got %+v", tt.code, got)
+			}
+			if got.Route != tt.want {
+				t.Errorf("expect operation %q, got %q", tt.want, got.Route)
+			}
+		})
+	}
+
+	t.Run("the same name as the op of a request that ran", func(t *testing.T) {
+		gw := newTestGateway(t)
+		var got *s3gw.RequestInfo
+		gw.SetObserver(func(_ context.Context, info *s3gw.RequestInfo) { got = info })
+		serve(t, gw, stubGet{body: "hello"})
+		if got.Op == nil || got.Route != "GetObject" || got.Op.Operation != got.Route {
+			t.Errorf("expect GetObject on both, got %+v", got)
+		}
+	})
+}

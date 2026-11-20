@@ -253,14 +253,18 @@ func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) error {
 		info.Tenant, info.User = vr.Tenant, vr.User
 		info.AccessKeyID = vr.AccessKeyID
 	}
-	// a header no operation reads is refused, not ignored (headers.go);
-	// here, so ListBuckets is covered along with every dispatched operation
-	if s3e := newSignedHeader(r, vr.SignedHeaders).checkKnownAmzHeaders(g.checksums); s3e != nil {
-		return s3e
-	}
 	t, err := g.requestTarget(r)
 	if err != nil {
 		return s3err.New(http.StatusBadRequest, "InvalidURI", "Couldn't parse the specified URI.").WithCause(err)
+	}
+	hdr := newSignedHeader(r, vr.SignedHeaders)
+	// before any check, so that a refusal below is recorded with the
+	// operation it refused
+	recordOperation(r.Context(), routedOperation(r.Method, t, r.URL.Query(), hdr))
+	// a header no operation reads is refused, not ignored (headers.go);
+	// here, so ListBuckets is covered along with every dispatched operation
+	if s3e := hdr.checkKnownAmzHeaders(g.checksums); s3e != nil {
+		return s3e
 	}
 	bucket, key := t.bucket, t.key
 
@@ -589,6 +593,11 @@ func (c *opCtx) authorizeRoute(rt *route, hdr signedHeader, version bool) ([]str
 // order: parameter check, canned-ACL header, action authorization, header
 // actions, copy source, handler.
 func (c *opCtx) dispatch(routes []route) error {
+	rt, ok := matchRoute(routes, c.query)
+	if !ok {
+		return s3err.NotImplemented("this operation")
+	}
+	name, isCopy := rt.operation(c.hdr)
 	// SSE-C would be silently dropped by every operation, which is a
 	// security expectation violated without a word — refuse it up front.
 	// SSE values are validated here too, before the hooks, so Op.SSE only
@@ -602,58 +611,89 @@ func (c *opCtx) dispatch(routes []route) error {
 	if err := checkTaggingValue(c.signed(hdrTagging)); err != nil {
 		return err
 	}
-	for _, rt := range routes {
-		if rt.match != nil && !rt.match(c.query) {
-			continue
+	if rt.params != nil {
+		if err := rt.params.check(c.query); err != nil {
+			return err
 		}
-		if rt.params != nil {
-			if err := rt.params.check(c.query); err != nil {
-				return err
-			}
+	}
+	if rt.aclHdr {
+		if err := checkACLHeader(c.hdr); err != nil {
+			return err
 		}
-		if rt.aclHdr {
-			if err := checkACLHeader(c.hdr); err != nil {
-				return err
-			}
-		}
-		actions, s3e := c.authorizeRoute(&rt, c.hdr, c.query.Get(qpVersionID) != "")
+	}
+	actions, s3e := c.authorizeRoute(&rt, c.hdr, c.query.Get(qpVersionID) != "")
+	if s3e != nil {
+		return s3e
+	}
+	var copySource *CopySource
+	if isCopy {
+		src, front, action, s3e := c.g.resolveCopySource(c, &rt)
 		if s3e != nil {
 			return s3e
 		}
-		name := rt.name
-		var copySource *CopySource
-		if rt.copy != "" && c.signed(hdrCopySource) != "" {
-			name = rt.copy
-			src, front, action, s3e := c.g.resolveCopySource(c, &rt)
-			if s3e != nil {
-				return s3e
-			}
-			c.copySource, copySource = src, front
-			actions = append(actions, action)
-		}
-		op := &Op{
-			Method:         c.r.Method,
-			Operation:      name,
-			Actions:        actions,
-			Tenant:         c.vr.Tenant,
-			User:           c.vr.User,
-			Bucket:         c.rt.cfg.Name,
-			BucketOwner:    c.rt.cfg.Tenant,
-			Key:            c.key,
-			CopySource:     copySource,
-			Request:        c.objectRequest(rt.attrs),
-			BucketMetadata: c.rt.cfg.Metadata,
-			KeyMetadata:    c.vr.KeyMetadata,
-		}
-		c.op = op
-		if info := recordOf(c.r.Context()); info != nil {
-			info.Op = op
-		}
-		return c.g.runOp(c.r.Context(), op, c, func() error {
-			return rt.handle(c.g, c)
-		})
+		c.copySource, copySource = src, front
+		actions = append(actions, action)
 	}
-	return s3err.NotImplemented("this operation")
+	op := &Op{
+		Method:         c.r.Method,
+		Operation:      name,
+		Actions:        actions,
+		Tenant:         c.vr.Tenant,
+		User:           c.vr.User,
+		Bucket:         c.rt.cfg.Name,
+		BucketOwner:    c.rt.cfg.Tenant,
+		Key:            c.key,
+		CopySource:     copySource,
+		Request:        c.objectRequest(rt.attrs),
+		BucketMetadata: c.rt.cfg.Metadata,
+		KeyMetadata:    c.vr.KeyMetadata,
+	}
+	c.op = op
+	if info := recordOf(c.r.Context()); info != nil {
+		info.Op = op
+	}
+	return c.g.runOp(c.r.Context(), op, c, func() error {
+		return rt.handle(c.g, c)
+	})
+}
+
+// matchRoute returns the first route the query selects.
+func matchRoute(routes []route, query url.Values) (route, bool) {
+	i := slices.IndexFunc(routes, func(rt route) bool { return rt.match == nil || rt.match(query) })
+	if i < 0 {
+		return route{}, false
+	}
+	return routes[i], true
+}
+
+// operation returns the name of the operation the route serves for these
+// headers, and whether it is the route's copy variant.
+func (rt *route) operation(hdr signedHeader) (string, bool) {
+	if rt.copy != "" && hdr.Signed(hdrCopySource) != "" {
+		return rt.copy, true
+	}
+	return rt.name, false
+}
+
+// routedOperation names the operation dispatch will take a request to, from
+// the request alone: the bucket need not exist for it.
+func routedOperation(method string, t target, query url.Values, hdr signedHeader) string {
+	if t.bucket == "" {
+		if method != http.MethodGet {
+			return OpUnknown
+		}
+		return s3op.OpListBuckets
+	}
+	table := bucketRoutes
+	if t.key != "" {
+		table = objectRoutes
+	}
+	rt, ok := matchRoute(table[method], query)
+	if !ok {
+		return OpUnknown
+	}
+	name, _ := rt.operation(hdr)
+	return name
 }
 
 func (g *Gateway) handleBucketRequest(w http.ResponseWriter, r *http.Request, rt *bucketRT, vr *verifiedRequest, query url.Values) error {
