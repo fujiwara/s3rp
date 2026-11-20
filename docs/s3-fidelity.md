@@ -36,6 +36,38 @@ IAM need operations the gateway does not have and are not selected.
   (`us-west-2`) would fail the tests that read the bucket region.
 - The emulator the suite was written for is not part of the setup.
 
+## Asking the emulator
+
+When a question is what S3 does with a request — a parameter it does not
+define, a combination the documentation leaves open — and the suite has no
+test of it, ask the [AWS Emulator](https://github.com/aws/aws-emulator)
+the suite was written for: send it the request and read the answer.
+
+- Look in the suite first (`s3fidelity/work/suite`, `manifest.jsonl` lists
+  each test's operations). A test there was verified against AWS; the
+  emulator's answer is the emulator's.
+- Use the latest release where possible. It is released several times a
+  day and its fidelity moves with it, so an answer from an old build may
+  no longer be its answer. The Debian package runs unpacked, without
+  installing:
+
+  ```console
+  $ curl -fsSLo aws-emulator.deb https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/latest/aws-emulator_amd64.deb
+  $ dpkg-deb -x aws-emulator.deb emulator
+  $ home=$(mktemp -d); HOME=$home emulator/opt/aws-emulator/bin/aws-emulator -p 4566 --telemetry off &
+  ```
+
+  It serves https on loopback and writes its access keys and CA
+  certificate under `$home/.aws/emulator/4566/` (`emulator_credentials`,
+  `ca.pem`); `curl --aws-sigv4 "aws:amz:us-east-1:s3" --cacert ...` is
+  enough to send a request.
+- Write down what was asked and of which version (`aws-emulator -v`) where
+  the answer is used — the ADR or the pull request — and say that it was
+  the emulator, not S3.
+- It answers for S3, not for the gateway's rules: it ignores every query
+  parameter it does not know, and the gateway refuses them
+  ([ADR 0002](ADR/0002-refuse-what-cannot-be-honored.md)).
+
 ## Reading a run
 
 `expected.tsv` lists every test expected to fail, with a category, so a
