@@ -36,13 +36,12 @@ func redactQuery(q url.Values) string {
 
 // Handler returns the http.Handler of the proxy.
 //
-// A single catch-all route is used instead of ServeMux patterns because the
-// mux cleans paths (collapsing // and resolving dot segments) and redirects,
-// which breaks S3 keys and signature verification.
+// It is the handler itself, never a ServeMux: a mux cleans paths (collapsing
+// // and resolving dot segments) and answers with a redirect to the cleaned
+// one even under a catch-all pattern, which is another key and a path the
+// client never signed.
 func (g *Gateway) Handler() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", g.wrapHandler(g.handleRequest))
-	return mux
+	return g.wrapHandler(g.handleRequest)
 }
 
 type statusWriter struct {
