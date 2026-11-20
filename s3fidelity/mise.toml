@@ -1,0 +1,5 @@
+# Tools for running the AWS fidelity tests (see run.sh). Scoped to
+# s3fidelity/ so it does not affect the rest of the repository. The suite
+# pins its own Python (.python-version), which uv installs.
+[tools]
+uv = "0.12.3"

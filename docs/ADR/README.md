@@ -49,6 +49,7 @@ retroactively").
 | [0035](0035-sort-canonical-query-by-encoded-form.md) | The canonical query is sorted by its encoded form | 2026-11-19 | Accepted |
 | [0036](0036-error-messages-follow-s3-wire-wording.md) | Canonical error messages follow S3's wire wording | 2026-11-19 | Accepted |
 | [0037](0037-validate-request-values-in-the-gateway.md) | Request values S3 refuses are refused by the gateway | 2026-11-19 | Accepted |
+| [0038](0038-run-aws-fidelity-tests.md) | AWS's fidelity tests are run against the gateway | 2026-11-20 | Accepted |
 
 ## Writing a record
 
