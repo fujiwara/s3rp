@@ -32,7 +32,11 @@ Ruby, PHP and Rust as clients `sdk-*`, each a small script under
   http only.
 - **Versions are pinned** in the form each language uses — a lock file,
   or the dependency line of a single-file script — and the runtimes in
-  `clients/mise.toml`. PHP runs in its official container image, having
+  `clients/mise.toml`. An SDK is pinned to its latest release and a
+  runtime to the latest stable release of its language, except Java and
+  .NET, pinned to the newest LTS line, and Node.js, pinned to the newest
+  even-numbered line: that is what their users deploy on, and the lines
+  in between are supported for months. PHP runs in its official container image, having
   no prebuilt runtime in mise.
 - **The run is https on both sides**, client to gateway and gateway to
   backend, and no longer repeats every client over http. An SDK sends a

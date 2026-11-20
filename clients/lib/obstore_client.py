@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.11"
+# requires-python = "==3.15.*"
 # dependencies = ["obstore==0.12.1"]
 # ///
 """The verbs of defs/obstore.yml, on the Rust object_store crate."""

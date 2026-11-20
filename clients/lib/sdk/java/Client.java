@@ -1,6 +1,6 @@
-//JAVA 21
-//DEPS software.amazon.awssdk:s3:2.46.7
-//DEPS software.amazon.awssdk:s3-transfer-manager:2.46.7
+//JAVA 25
+//DEPS software.amazon.awssdk:s3:2.59.5
+//DEPS software.amazon.awssdk:s3-transfer-manager:2.59.5
 //DEPS org.slf4j:slf4j-nop:1.7.36
 
 // The verbs of defs/sdk-java.yml, on the AWS SDK for Java v2.

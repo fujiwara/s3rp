@@ -54,6 +54,25 @@ sent.
   (`duck`, WinSCP) is downloaded by its definition's `setup` through
   `bin/fetch`, pinned there by URL and SHA-256.
 
+## Versions
+
+Everything is pinned to an exact version and bumped by hand, all at once,
+followed by a run. What a pin is bumped to:
+
+| | pinned to | |
+|---|---|---|
+| a client, an AWS SDK | the latest release | |
+| Go, Python, Ruby, Rust, PHP, Bun | the latest stable release | the language has one supported line, or its users follow the newest |
+| Java, .NET | the latest release of the newest LTS line | the lines between two LTS are short-lived and deployments stay on LTS |
+| Node.js | the latest release of the newest even-numbered line | an odd-numbered line is supported for months and never becomes LTS |
+
+`mise outdated --bump` (in `clients/`) lists what is behind, within what
+mise can install; it does not see the pins outside `mise.toml` — an SDK's
+version beside its script, the Python line in a script's header, the
+`composer` image of `lib/sdk/php.sh` (which brings PHP), the Java line of
+`lib/sdk/java/Client.java`, and the downloads in `defs/duck.yml` and
+`defs/winscp.yml` — nor a newer Java, .NET or Node.js line.
+
 ## What fails a scenario
 
 - a step's `test:`, or

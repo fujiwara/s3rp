@@ -12,7 +12,8 @@ setup: |
   .output
   SQL
 env:
-  DUCKDB: duckdb -init ${STATE_DIR}/init.sql -batch -noheader -list
+  # -no-agent: under an AI agent's environment it prints for the agent otherwise
+  DUCKDB: duckdb -no-agent -init ${STATE_DIR}/init.sql -batch -noheader -list
 verbs:
   put:  $DUCKDB -c "COPY (SELECT content FROM read_blob('$FILE')) TO 's3://$BUCKET/$KEY' (FORMAT blob)"
   get:  $DUCKDB -c "COPY (SELECT content FROM read_blob('s3://$BUCKET/$KEY')) TO '$OUT' (FORMAT blob)"
