@@ -680,7 +680,7 @@ func (rt *route) operation(hdr signedHeader) (string, bool) {
 func routedOperation(method string, t target, query url.Values, hdr signedHeader) string {
 	if t.bucket == "" {
 		if method != http.MethodGet {
-			return ""
+			return OpUnknown
 		}
 		return s3op.OpListBuckets
 	}

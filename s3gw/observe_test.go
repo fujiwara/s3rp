@@ -368,6 +368,11 @@ func TestObserverNamesTheRefusedOperation(t *testing.T) {
 			want: s3gw.OpUnknown, code: "MethodNotAllowed",
 		},
 		{
+			name: "no operation for the method without a bucket", method: "POST",
+			url:  "http://s3.example.com/",
+			want: s3gw.OpUnknown, code: "MethodNotAllowed",
+		},
+		{
 			name: "signature that did not verify", method: "GET",
 			url:   "http://s3.example.com/testbucket/a.txt",
 			creds: aws.Credentials{AccessKeyID: testAccessKeyID, SecretAccessKey: "wrong"},
