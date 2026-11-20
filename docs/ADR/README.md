@@ -51,6 +51,7 @@ retroactively").
 | [0037](0037-validate-request-values-in-the-gateway.md) | Request values S3 refuses are refused by the gateway | 2026-11-19 | Accepted |
 | [0038](0038-run-aws-fidelity-tests.md) | AWS's fidelity tests are run against the gateway | 2026-11-20 | Accepted |
 | [0039](0039-run-real-clients-against-the-gateway.md) | Real S3 clients are run against the gateway | 2026-11-20 | Accepted |
+| [0040](0040-ignore-max-keys-on-listbuckets.md) | ListBuckets accepts and ignores `max-keys` | 2026-11-20 | Accepted |
 
 ## Writing a record
 

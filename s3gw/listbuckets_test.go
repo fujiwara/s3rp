@@ -1,12 +1,15 @@
 package s3gw_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
+	"github.com/aws/smithy-go/middleware"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"github.com/fujiwara/s3rp/s3gw"
 	"github.com/fujiwara/s3rp/store"
 	"github.com/google/go-cmp/cmp"
@@ -142,5 +145,31 @@ func TestListBucketsInvalidMaxBuckets(t *testing.T) {
 	var apiErr smithy.APIError
 	if !errors.As(err, &apiErr) || apiErr.ErrorCode() != "InvalidArgument" {
 		t.Errorf("expected InvalidArgument, got %v", err)
+	}
+}
+
+// WinSCP opens a session with GET /?max-keys=1; S3 answers with every
+// bucket, max-keys not being a ListBuckets parameter.
+func TestListBucketsIgnoresMaxKeys(t *testing.T) {
+	client := listBucketsGateway(t, "b1", "b2", "b3")
+
+	out, err := client.ListBuckets(t.Context(), &s3.ListBucketsInput{}, func(o *s3.Options) {
+		o.APIOptions = append(o.APIOptions, func(stack *middleware.Stack) error {
+			return stack.Build.Add(middleware.BuildMiddlewareFunc("maxKeys", func(
+				ctx context.Context, in middleware.BuildInput, next middleware.BuildHandler,
+			) (middleware.BuildOutput, middleware.Metadata, error) {
+				req := in.Request.(*smithyhttp.Request)
+				q := req.URL.Query()
+				q.Set("max-keys", "1")
+				req.URL.RawQuery = q.Encode()
+				return next.HandleBuild(ctx, in)
+			}), middleware.After)
+		})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Buckets) != 3 || out.ContinuationToken != nil {
+		t.Errorf("got %d buckets, token %v; want all 3 and no token", len(out.Buckets), out.ContinuationToken)
 	}
 }
