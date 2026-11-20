@@ -2,9 +2,11 @@
 # uploaded in parts by the script, as the SDK's documentation shows.
 name: sdk-rust
 setup: |
-  cargo build --release --locked --quiet --manifest-path "$LIB/sdk/rust/Cargo.toml" --target-dir "$TOOLS/sdk-rust"
+  # a debug build without debug information: the SDK compiles in half the
+  # time of a release build, and the scenarios take seconds either way
+  CARGO_PROFILE_DEV_DEBUG=0 cargo build --locked --quiet --manifest-path "$LIB/sdk/rust/Cargo.toml" --target-dir "$TOOLS/sdk-rust"
 env:
-  SDK: ${TOOLS}/sdk-rust/release/client
+  SDK: ${TOOLS}/sdk-rust/debug/client
 verbs:
   put:      $SDK put "$FILE" "$KEY"
   get:      $SDK get "$KEY" "$OUT"
