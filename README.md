@@ -68,6 +68,9 @@ A tenant owns one or more buckets and users. Bucket names (`[a-z0-9-]`, 3–63 c
 
 ```yaml
 listen: ":8080"
+tls:                                 # optional: serve HTTPS on listen (default: plain HTTP)
+  cert_file: /etc/s3rp/cert.pem      #   PEM certificate, leaf first, then intermediates
+  key_file: /etc/s3rp/key.pem        #   PEM private key
 virtual_host_suffix: s3.example.com  # optional: also serve photos.s3.example.com (see Client usage)
 circuit_breaker:                     # optional: fail fast toward a backend that keeps failing
   failures: 5                        #   consecutive failed attempts that open it (size above the SDK's 3 retries)
@@ -149,7 +152,7 @@ The API surface — the supported operations, bucket and user policies, CORS, AC
 
 ## Behind a TLS terminator
 
-s3rp serves plain HTTP, and as a PoC it is not meant to face the internet at all. TLS termination and everything else that belongs in front of the gateway — proxy rules that keep SigV4 verifiable, `RemoteAddr` for IP conditions, the PROXY protocol — are covered in [Building a service on the gateway](docs/building-a-service.md#behind-a-tls-terminator).
+s3rp serves plain HTTP unless `tls` is configured, and as a PoC it is not meant to face the internet at all. TLS termination and everything else that belongs in front of the gateway — proxy rules that keep SigV4 verifiable, `RemoteAddr` for IP conditions, the PROXY protocol — are covered in [Building a service on the gateway](docs/building-a-service.md#behind-a-tls-terminator).
 
 ## Building a service on the gateway
 
