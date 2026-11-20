@@ -1,0 +1,10 @@
+# restic: minio-go as a backup tool drives it. No verbs: a repository is
+# its own layout, exercised by own/restic.
+name: restic
+env:
+  RESTIC_REPOSITORY: s3:${ENDPOINT}/${BUCKET}/restic
+  RESTIC_PASSWORD: compat
+  RESTIC_CACHE_DIR: ${STATE_DIR}/cache
+  AWS_ACCESS_KEY_ID: ${ACCESS_KEY}
+  AWS_SECRET_ACCESS_KEY: ${SECRET_KEY}
+verbs: {}

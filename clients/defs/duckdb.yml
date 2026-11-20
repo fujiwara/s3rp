@@ -1,0 +1,19 @@
+# DuckDB httpfs: a C++ S3 client of its own, as analytics engines use one.
+name: duckdb
+setup: |
+  cat > "$STATE_DIR/init.sql" <<SQL
+  .output /dev/null
+  INSTALL httpfs;
+  LOAD httpfs;
+  SET ca_cert_file = '$CA_FILE';
+  CREATE SECRET (TYPE s3, KEY_ID '$ACCESS_KEY', SECRET '$SECRET_KEY',
+      ENDPOINT '127.0.0.1:$PORT', URL_STYLE 'path', REGION 'us-east-1',
+      USE_SSL $([ "$SCHEME" = https ] && echo true || echo false));
+  .output
+  SQL
+env:
+  DUCKDB: duckdb -init ${STATE_DIR}/init.sql -batch -noheader -list
+verbs:
+  put:  $DUCKDB -c "COPY (SELECT content FROM read_blob('$FILE')) TO 's3://$BUCKET/$KEY' (FORMAT blob)"
+  get:  $DUCKDB -c "COPY (SELECT content FROM read_blob('s3://$BUCKET/$KEY')) TO '$OUT' (FORMAT blob)"
+  list: $DUCKDB -c "SELECT file FROM glob('s3://$BUCKET/$PREFIX/**')"

@@ -1,0 +1,21 @@
+# rclone: aws-sdk-go-v2 underneath, but with request patterns of its own.
+name: rclone
+env:
+  RCLONE_CONFIG_S3RP_TYPE: s3
+  RCLONE_CONFIG_S3RP_PROVIDER: Other
+  RCLONE_CONFIG_S3RP_ENDPOINT: ${ENDPOINT}
+  RCLONE_CONFIG_S3RP_ACCESS_KEY_ID: ${ACCESS_KEY}
+  RCLONE_CONFIG_S3RP_SECRET_ACCESS_KEY: ${SECRET_KEY}
+  # the bucket exists; without this rclone sends CreateBucket before a write
+  RCLONE_CONFIG_S3RP_NO_CHECK_BUCKET: "true"
+  # small enough that the multipart scenario's file is uploaded in parts
+  RCLONE_CONFIG_S3RP_UPLOAD_CUTOFF: 5Mi
+  RCLONE_CONFIG_S3RP_CHUNK_SIZE: 5Mi
+verbs:
+  put:      rclone copyto "$FILE" "s3rp:$BUCKET/$KEY"
+  get:      rclone copyto "s3rp:$BUCKET/$KEY" "$OUT"
+  list:     rclone lsf -R "s3rp:$BUCKET/$PREFIX"
+  delete:   rclone deletefile "s3rp:$BUCKET/$KEY"
+  copy:     rclone copyto "s3rp:$BUCKET/$SRC" "s3rp:$BUCKET/$DST"
+  presign:  rclone link "s3rp:$BUCKET/$KEY"
+  put_tree: rclone copy "$DIR" "s3rp:$BUCKET/$PREFIX"

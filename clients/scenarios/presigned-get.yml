@@ -1,0 +1,20 @@
+desc: Have the client presign a URL and fetch it without credentials
+vars:
+  client: yaml://${CLIENT_FILE}
+steps:
+  put:
+    exec:
+      command: |
+        FILE=$FIXTURES/1k.bin KEY=presigned/1k.bin
+        {{ vars.client.verbs.put }}
+    test: current.exit_code == 0
+  presign:
+    exec:
+      command: |
+        KEY=presigned/1k.bin
+        {{ vars.client.verbs.presign }}
+    test: current.exit_code == 0
+  fetch:
+    exec:
+      command: curl -fsS '{{ trim(steps.presign.stdout) }}' | cmp - $FIXTURES/1k.bin
+    test: current.exit_code == 0

@@ -1,0 +1,16 @@
+# The gateway under test: one tenant, one bucket on the compose versitygw.
+listen: "127.0.0.1:${PORT}"
+tenants:
+  - name: main
+    users:
+      - name: client
+        keys:
+          - access_key_id: ${ACCESS_KEY}
+            secret_access_key: ${SECRET_KEY}
+    buckets:
+      - name: ${BUCKET}
+        backend:
+          endpoint: ${BACKEND_ENDPOINT}
+          bucket: ${BACKEND_BUCKET}
+          access_key_id: ${BACKEND_ACCESS_KEY}
+          secret_access_key: ${BACKEND_SECRET_KEY}

@@ -1,0 +1,28 @@
+desc: Back up a tree into a new repository, verify it and restore it
+steps:
+  init:
+    exec:
+      command: restic init
+    test: current.exit_code == 0
+  backup:
+    exec:
+      command: cd $FIXTURES && restic backup tree big.bin
+    test: current.exit_code == 0
+  check:
+    exec:
+      command: restic check --read-data
+    test: current.exit_code == 0
+  restore:
+    exec:
+      command: restic restore latest --target $OUT_DIR/restore
+    test: current.exit_code == 0
+  same:
+    exec:
+      command: |
+        cmp $FIXTURES/big.bin $OUT_DIR/restore/big.bin
+        diff -r $FIXTURES/tree $OUT_DIR/restore/tree
+    test: current.exit_code == 0
+  prune:
+    exec:
+      command: restic forget --keep-last 1 --prune
+    test: current.exit_code == 0

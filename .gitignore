@@ -19,3 +19,4 @@ dist/
 __pycache__/
 /live-check/
 /s3fidelity/work/
+/clients/work/

@@ -1,0 +1,20 @@
+desc: Copy an object within the bucket
+vars:
+  client: yaml://${CLIENT_FILE}
+steps:
+  put:
+    exec:
+      command: |
+        FILE=$FIXTURES/1k.bin KEY=copy/src.bin
+        {{ vars.client.verbs.put }}
+    test: current.exit_code == 0
+  copy:
+    exec:
+      command: |
+        SRC=copy/src.bin DST=copy/dst.bin
+        {{ vars.client.verbs.copy }}
+    test: current.exit_code == 0
+  stored:
+    exec:
+      command: same-object copy/dst.bin $FIXTURES/1k.bin
+    test: current.exit_code == 0

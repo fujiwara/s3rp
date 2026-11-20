@@ -1,0 +1,14 @@
+desc: A key with an empty path segment
+vars:
+  client: yaml://${CLIENT_FILE}
+steps:
+  put:
+    exec:
+      command: |
+        FILE=$FIXTURES/1k.bin KEY=slash/dir//x.txt
+        {{ vars.client.verbs.put }}
+    test: current.exit_code == 0
+  stored:
+    exec:
+      command: same-object slash/dir//x.txt $FIXTURES/1k.bin
+    test: current.exit_code == 0
