@@ -16,7 +16,7 @@ $ SCHEMES=https ./clients/run.sh   # default: http https
 
 It needs docker (the compose versitygw backend), mise, Go, curl, openssl,
 and FUSE for s3fs. For every client and scheme it starts an s3rp serving a
-bucket of its own and runs every scenario against it. Both schemes are run
+bucket of its own (removed afterwards) and runs every scenario against it. Both schemes are run
 because clients frame and sign bodies differently over TLS; the https
 gateway uses a self-signed certificate the clients are made to trust. The
 report is `clients/work/results/report.md`: a client × scenario table, the

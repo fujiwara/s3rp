@@ -102,18 +102,33 @@ scenario_name() {
     esac
 }
 
+# What a client's run leaves: its mount or the like, the gateway, and the
+# backend bucket. Without the last, runs pile up in the backend, and the
+# compose versitygw keeps its data in memory.
+cleanup() {
+    if [ -n "${teardown:-}" ]; then
+        (eval "$teardown") >> "$dir/setup.log" 2>&1 || true
+    fi
+    [ -z "${gateway_pid:-}" ] || kill "$gateway_pid" 2>/dev/null || true
+    rclone purge ":s3,provider=Other,endpoint='$BACKEND_ENDPOINT',access_key_id='$BACKEND_ACCESS_KEY',secret_access_key='$BACKEND_SECRET_KEY':$BACKEND_BUCKET" \
+        > "$dir/cleanup.log" 2>&1 || echo "    could not remove backend bucket $BACKEND_BUCKET (see $dir/cleanup.log)" >&2
+}
+
 # One gateway and one backend bucket per scheme and client, so a client
 # never finds objects another run left: rclone skips an upload whose
 # destination already matches.
 run_client() {
     local scheme=$1 client=$2
-    local def=$ROOT/clients/defs/$client.yml dir=$RESULTS/$scheme/$client
+    local def=$ROOT/clients/defs/$client.yml
+    # not local: cleanup reads them when the subshell exits
+    dir=$RESULTS/$scheme/$client teardown="" gateway_pid=""
     mkdir -p "$dir" "$OUT_DIR/$scheme/$client"
     export SCHEME=$scheme ENDPOINT=$scheme://127.0.0.1:$PORT
     export BACKEND_BUCKET=compat-$RUN_ID-$scheme-$client
     export STATE_DIR=$WORK/state/$client OUT_DIR=$WORK/out/$scheme/$client
     curl -fsS -o /dev/null -X PUT --aws-sigv4 "aws:amz:us-east-1:s3" \
         --user "$BACKEND_ACCESS_KEY:$BACKEND_SECRET_KEY" "$BACKEND_ENDPOINT/$BACKEND_BUCKET"
+    trap cleanup EXIT
 
     local config=clients/s3rp.yml
     [ "$scheme" = https ] && config=$WORK/s3rp-https.yml
@@ -123,15 +138,15 @@ run_client() {
         echo "port $PORT is already in use" >&2
         exit 2
     fi
-    "$WORK/s3rp" --config "$config" 2> "$log" &
-    local pid=$!
-    # run_client runs in a subshell: this fires when it ends, however
-    trap "kill $pid 2>/dev/null || true" EXIT
+    # the verdict reads the info-level request lines, whatever the caller's
+    # S3RP_LOG_LEVEL
+    "$WORK/s3rp" --config "$config" --log-level info 2> "$log" &
+    gateway_pid=$!
     for _ in $(seq 1 50); do
         curl -s -o /dev/null "$ENDPOINT/" && break
         sleep 0.2
     done
-    kill -0 "$pid" 2>/dev/null || { echo "s3rp did not start (see $log)" >&2; exit 2; }
+    kill -0 "$gateway_pid" 2>/dev/null || { echo "s3rp did not start (see $log)" >&2; exit 2; }
 
     # the client's own configuration, with this run's endpoint and key
     eval "$(yq -r '.env // {} | to_entries | .[]
@@ -143,9 +158,7 @@ run_client() {
         echo "    $client $scheme: setup FAILED (see $dir/setup.log)"
         return
     fi
-    local teardown
     teardown=$(yq -r '.teardown // ""' "$def")
-    trap "${teardown:-:}; kill $pid 2>/dev/null || true" EXIT
 
     # the common scenarios, then the client's own
     local scenario name out missing verb offset result detail
@@ -168,7 +181,8 @@ run_client() {
         if ! runn run --debug --scopes run:exec,read:parent "$scenario" > "$out.log" 2>&1 < /dev/null; then
             result=FAIL detail="scenario failed"
         fi
-        tail -c +"$((offset + 1))" "$log" | jq -c 'select(.msg == "request")' > "$out.requests.jsonl"
+        # a line that is not JSON (a Go runtime message) must not end the read
+        tail -c +"$((offset + 1))" "$log" | jq -cR 'fromjson? | select(.msg == "request")' > "$out.requests.jsonl"
         refused "$out.requests.jsonl" > "$out.refused.jsonl"
         if [ -s "$out.refused.jsonl" ]; then
             result=FAIL
@@ -186,7 +200,13 @@ for client in "${CLIENTS[@]}"; do
         yq -e ".schemes // [\"$scheme\"] | contains([\"$scheme\"])" "clients/defs/$client.yml" > /dev/null || continue
         COLUMNS+=("$client/$scheme")
         # a subshell, so one client's environment does not reach the next
-        (run_client "$scheme" "$client") || { echo "aborted at $client/$scheme" >&2; exit 2; }
+        # and not as the left side of ||, where bash ignores errexit in the
+        # whole of run_client: a failed step there must abort the run
+        set +e
+        (set -e; run_client "$scheme" "$client")
+        rc=$?
+        set -e
+        [ "$rc" -eq 0 ] || { echo "aborted at $client/$scheme" >&2; exit 2; }
     done
 done
 
