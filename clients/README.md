@@ -73,12 +73,15 @@ of `lib/sdk/php.sh` (which brings PHP), and the downloads in
 `defs/duck.yml` and `defs/winscp.yml`. The weekly `clients-bump` workflow
 runs it and opens a pull request, on which it starts the `clients` run.
 
-What mise installs is held back a week (`minimum_release_age` in
-`mise.toml`): those are third-party releases, and one that is withdrawn or
-tampered with is usually found within days. An AWS SDK is bumped the day
-it is released. The script leaves two pins alone: `slf4j-nop`, which stays
-on the 1.x line the SDK for Java binds to, and the Go of
-`lib/sdk/go/go.mod`, which follows the repository's.
+What is not AWS's own is held back a week (`minimum_release_age` in
+`mise.toml`, which the script applies to the pins outside it too): a
+release that is withdrawn or tampered with is usually found within days.
+That covers the clients, the runtimes and the third-party libraries a
+script names; an AWS SDK is bumped the day it is released, and what an SDK
+depends on comes with it, as its lock file resolves. The script leaves two
+pins alone: `slf4j-nop`, which stays on the 1.x line the SDK for Java
+binds to, and the Go of `lib/sdk/go/go.mod`, which follows the
+repository's.
 
 ## What fails a scenario
 

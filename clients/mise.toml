@@ -1,8 +1,9 @@
 # Tools for the client compatibility run (see run.sh). Scoped to clients/
 # so it does not affect the rest of the repository.
 [settings]
-# these are third-party releases: one withdrawn or tampered with is usually
-# found within days. clients/bump.sh bumps to what this leaves visible.
+# what is not AWS's own is held back: a release withdrawn or tampered with
+# is usually found within days. bump.sh applies this to every such pin,
+# those outside this file included.
 minimum_release_age = "7d"
 
 [tools]
