@@ -71,7 +71,9 @@ beside its script (and its lock file), the Python line in a script's
 header, the Java line of `lib/sdk/java/Client.java`, the `composer` image
 of `lib/sdk/php.sh` (which brings PHP), and the downloads in
 `defs/duck.yml` and `defs/winscp.yml`. The weekly `clients-bump` workflow
-runs it and opens a pull request, on which it starts the `clients` run.
+runs it and opens a pull request. The checks of a pull request a workflow
+opened wait for a person: approve them there, and merge once the
+`clients` run has passed.
 
 What is not AWS's own is held back a week (`minimum_release_age` in
 `mise.toml`, which the script applies to the pins outside it too): a
