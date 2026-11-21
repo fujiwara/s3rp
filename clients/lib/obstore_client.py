@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.11"
+# requires-python = "==3.15.*"
 # dependencies = ["obstore==0.12.1"]
 # ///
 """The verbs of defs/obstore.yml, on the Rust object_store crate."""
@@ -20,7 +20,7 @@ store = S3Store(
     region="us-east-1",
     virtual_hosted_style_request=False,
     # object_store bundles its roots and reads no CA from the environment;
-    # the run's certificate is self-signed
+    # the run's certificate is issued by a CA of its own
     client_options={"allow_http": True, "allow_invalid_certificates": True},
 )
 

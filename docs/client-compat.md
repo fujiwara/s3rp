@@ -10,7 +10,8 @@ the clients and the backend are pinned — so triage it as below.
 ## What it adds
 
 A client program is run as its users run it, against the `s3rp` binary
-and a real backend, over http and https. That finds what the other suites
+and a real backend, with https on both sides as in production
+([ADR 0041](ADR/0041-run-the-aws-sdks-as-clients.md)). That finds what the other suites
 cannot:
 
 - [ceph/s3-tests](s3-tests.md) and the [fidelity tests](s3-fidelity.md)
@@ -39,6 +40,26 @@ other.
 | Cyberduck (`duck`) | Java, own implementation | a desktop client on Windows and macOS, and the engine of Mountain Duck; probes folders and bucket configuration around every transfer |
 | WinSCP | C++, a fork of libs3 | the common Windows file-transfer client; run under Wine |
 
+The AWS SDKs are run as well, one per language
+([ADR 0041](ADR/0041-run-the-aws-sdks-as-clients.md)). They share a
+specification, not an implementation: each has its own signer, HTTP stack
+and transfer manager, and they differ in the headers they add, in how
+they send a checksum (a header, or an `aws-chunked` trailer) and in how
+they encode `x-amz-copy-source`. Each is used the way its documentation
+leads a user to — the default configuration plus endpoint, path style and
+credentials, uploads through the SDK's transfer manager where it has one.
+
+| client | SDK | uploads through |
+|---|---|---|
+| `sdk-python` | boto3 | `upload_file` (s3transfer) |
+| `sdk-js` | AWS SDK for JavaScript v3, on Node.js | `@aws-sdk/lib-storage` |
+| `sdk-go` | AWS SDK for Go v2 | `feature/s3/manager` |
+| `sdk-java` | AWS SDK for Java v2, asynchronous client on Netty | `S3TransferManager`, multipart enabled |
+| `sdk-dotnet` | AWS SDK for .NET | `TransferUtility` |
+| `sdk-ruby` | AWS SDK for Ruby | `TransferManager` |
+| `sdk-php` | AWS SDK for PHP | `ObjectUploader` |
+| `sdk-rust` | AWS SDK for Rust | none in the SDK: parts sent by the script, as its documentation shows |
+
 MinIO is not used as a backend ([ADR 0006](ADR/0006-test-backends-without-minio.md));
 its client and client library are here because deployments use them
 against any S3 endpoint.
@@ -53,11 +74,12 @@ the scenario must hold no 5xx (a 501 for something unhandled included),
 client that swallows a refusal; the first is what catches a wrong result
 the gateway never logged.
 
-The backend is versitygw. What is under test is the gateway's front, and
-a backend's own behavior belongs to the integration matrix. One
-consequence: versitygw's posix backend treats `dir//x` and `dir/x` as one
-object, so `double-slash-key` shows that such a key is served, not that
-the two are kept apart.
+The backend is Ceph RGW, reached over https
+([ADR 0041](ADR/0041-run-the-aws-sdks-as-clients.md)). A client's result
+depends on the backend where the backend departs from S3, so the run uses
+the one that departs least: versitygw's posix backend treats `dir//x` and
+`dir/x` as one object, which let `double-slash-key` pass for clients that
+drop the empty segment themselves.
 
 ## Reading a run
 
@@ -75,6 +97,9 @@ whose it is:
 - **gateway** — the gateway refused or mishandled what the client sent.
   Either fix it, or, when the refusal is deliberate, list it with the
   reason and say here why it stays.
+- **backend** — RGW answers differently from S3 and the gateway relays
+  the answer. Run the client against RGW directly to tell: it fails there
+  too.
 
 Below the table the report lists the operations each client sent. It is
 not checked; it is there to show what a client really uses — `mc` asks
@@ -87,6 +112,16 @@ Why each entry of `clients/expected.tsv` is expected.
 
 - **obstore, `double-slash-key`** (client). `object_store` validates paths
   and refuses one with an empty segment before sending anything.
+- **duck, OpenDAL, rclone, s3fs, `double-slash-key`** (client). Each
+  removes the empty segment and stores `dir/x.txt`. On S3, as on RGW,
+  that is another key (AWS Emulator 1.0.533), so the object is not where
+  it was put.
+- **sdk-java, sdk-ruby, `multipart`** (backend). The upload succeeds. The
+  transfer manager then downloads the object part by part (`GetObject`
+  with `partNumber`) and requires `Content-Range` on each response; RGW
+  sends none, where S3 does (AWS Emulator 1.0.552; reported as
+  [Ceph #83398](https://tracker.ceph.com/issues/83398)). The gateway
+  cannot supply it: the part's offset is not in RGW's answer.
 - **s3cmd, `presigned-get`** (gateway, deliberate). `s3cmd signurl` signs
   with Signature Version 2. The gateway verifies SigV4 only; SigV2 is
   HMAC-SHA1 over a canonical form of its own and Amazon S3 itself no
@@ -94,10 +129,8 @@ Why each entry of `clients/expected.tsv` is expected.
 
 ## Client settings the gateway requires
 
-- **s3cmd: `acl_public = False`.** Left unset, `s3cmd cp` reads the
-  source's ACL and writes it to the copy with PutObjectAcl, tolerating
-  only a 501 in answer. The gateway refuses every ACL write with
-  `AccessControlListNotSupported`
-  ([ADR 0004](ADR/0004-acl-disabled-buckets.md)), so the copy is made and
-  the command still fails. With the setting s3cmd sends neither request;
-  the run uses it.
+What a user of a client has to set, and what does not work, is in
+[Using S3 clients with the gateway](clients.md), which is written from
+this run's findings: a finding that changes what a user must do changes
+that page in the same commit. The run itself uses those settings —
+`acl_public = False` for s3cmd, `signature_version="s3v4"` for boto3.

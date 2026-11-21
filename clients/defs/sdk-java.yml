@@ -1,0 +1,17 @@
+# AWS SDK for Java v2: the asynchronous client on Netty with multipart
+# enabled, through the S3 transfer manager.
+name: sdk-java
+setup: |
+  # resolves the dependencies and compiles, which the first verb would
+  # otherwise do in the middle of a scenario
+  jbang build "$LIB/sdk/java/Client.java"
+env:
+  SDK: jbang run --quiet ${LIB}/sdk/java/Client.java
+verbs:
+  put:      $SDK put "$FILE" "$KEY"
+  get:      $SDK get "$KEY" "$OUT"
+  list:     $SDK list "$PREFIX"
+  delete:   $SDK delete "$KEY"
+  copy:     $SDK copy "$SRC" "$DST"
+  presign:  $SDK presign "$KEY"
+  put_tree: $SDK put_tree "$DIR" "$PREFIX"

@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.11"
+# requires-python = "==3.15.*"
 # dependencies = ["opendal==0.47.12"]
 # ///
 """The verbs of defs/opendal.yml, on Apache OpenDAL (signer: reqsign)."""

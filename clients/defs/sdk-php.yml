@@ -1,0 +1,14 @@
+# AWS SDK for PHP, through ObjectUploader, in the composer image.
+name: sdk-php
+setup: |
+  "$LIB/sdk/php.sh" install
+env:
+  SDK: ${LIB}/sdk/php.sh
+verbs:
+  put:      $SDK put "$FILE" "$KEY"
+  get:      $SDK get "$KEY" "$OUT"
+  list:     $SDK list "$PREFIX"
+  delete:   $SDK delete "$KEY"
+  copy:     $SDK copy "$SRC" "$DST"
+  presign:  $SDK presign "$KEY"
+  put_tree: $SDK put_tree "$DIR" "$PREFIX"

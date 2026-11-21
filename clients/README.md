@@ -11,16 +11,20 @@ read a run, and why each expected failure is expected, is in
 ```console
 $ ./clients/run.sh                 # every client in clients/defs
 $ ./clients/run.sh rclone mc       # the named ones
-$ SCHEMES=https ./clients/run.sh   # default: http https
+$ SCHEMES=http ./clients/run.sh    # default: https
 ```
 
-It needs docker (the compose versitygw backend), mise, Go, curl,
-openssl, FUSE for s3fs, and Wine (32-bit, with xvfb) for WinSCP. For
+It needs docker (the compose Ceph RGW backend, `ceph-tls`), mise, Go, curl,
+openssl, FUSE for s3fs, and Wine (32-bit, with xvfb) for WinSCP; the
+AWS SDK for PHP runs in a container. For
 every client and scheme it starts an s3rp serving a bucket of its own
-(removed afterwards) and runs every scenario against it. Both schemes
-are run because clients frame and sign bodies differently over TLS; the
-https gateway uses a self-signed certificate the clients are made to
-trust. The report is `clients/work/results/report.md`: a client ×
+(removed afterwards) and runs every scenario against it. The gateway is
+served over https and reaches its backend over https, as a deployment
+does: clients frame and sign bodies differently without TLS, and so does
+the gateway toward its backend. Both certificates are issued by a CA made
+for the run, which the clients and the gateway are made to trust. A
+client that cannot be made to trust it names `schemes: [http]` in its
+definition and is run over http. The report is `clients/work/results/report.md`: a client ×
 scenario table, the expected failures, and the operations each client
 sent.
 
@@ -35,16 +39,49 @@ sent.
   scenario using a verb the client lacks is skipped and reported as such.
 - `own/<client>/*.yml` — scenarios for one client only, for what verbs do
   not express (a restic repository, DuckDB reading Parquet).
-- `lib/` — the verbs of clients that are libraries, as small scripts.
+- `lib/` — the verbs of clients that are libraries, as small scripts;
+  `lib/sdk/` holds one per AWS SDK (`defs/sdk-*.yml`), with the SDK's
+  version pinned beside it in the form its language uses (a lock file, or
+  the dependency line of a single-file script).
 - `bin/` — checks that do not rest on the client under test (`same-object`,
   `no-object` read through curl).
 - `expected.tsv` — every scenario expected to fail (client, scheme,
   scenario), with a category and the reason. A run fails on an unlisted
   failure and on a listed scenario that passes.
-- `mise.toml` — runn and the clients, pinned. Dependabot does not read it:
-  bump the versions by hand, and re-run. A client mise has no package for
-  (`duck`, WinSCP) is downloaded by its definition's `setup` through
-  `bin/fetch`, pinned there by URL and SHA-256.
+- `mise.toml` — runn, the clients and the language runtimes of the SDKs,
+  pinned. A client mise has no package for (`duck`, WinSCP) is downloaded
+  by its definition's `setup` through `bin/fetch`, pinned there by URL and
+  SHA-256.
+- `bump.sh` — bumps every pin (see Versions).
+
+## Versions
+
+Everything is pinned to an exact version and bumped all at once, followed
+by a run. What a pin is bumped to:
+
+| | pinned to | |
+|---|---|---|
+| a client, an AWS SDK | the latest release | |
+| Go, Python, Ruby, Rust, PHP, Bun | the latest stable release | the language has one supported line, or its users follow the newest |
+| Java, .NET | the latest release of the newest LTS line | the lines between two LTS are short-lived and deployments stay on LTS |
+| Node.js | the latest release of the newest even-numbered line | an odd-numbered line is supported for months and never becomes LTS |
+
+`./clients/bump.sh` does that to every pin: `mise.toml`, an SDK's version
+beside its script (and its lock file), the Python line in a script's
+header, the Java line of `lib/sdk/java/Client.java`, the `composer` image
+of `lib/sdk/php.sh` (which brings PHP), and the downloads in
+`defs/duck.yml` and `defs/winscp.yml`. The weekly `clients-bump` workflow
+runs it and opens a pull request, on which it starts the `clients` run.
+
+What is not AWS's own is held back a week (`minimum_release_age` in
+`mise.toml`, which the script applies to the pins outside it too): a
+release that is withdrawn or tampered with is usually found within days.
+That covers the clients, the runtimes and the third-party libraries a
+script names; an AWS SDK is bumped the day it is released, and what an SDK
+depends on comes with it, as its lock file resolves. The script leaves two
+pins alone: `slf4j-nop`, which stays on the 1.x line the SDK for Java
+binds to, and the Go of `lib/sdk/go/go.mod`, which follows the
+repository's.
 
 ## What fails a scenario
 

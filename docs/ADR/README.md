@@ -52,6 +52,7 @@ retroactively").
 | [0038](0038-run-aws-fidelity-tests.md) | AWS's fidelity tests are run against the gateway | 2026-11-20 | Accepted |
 | [0039](0039-run-real-clients-against-the-gateway.md) | Real S3 clients are run against the gateway | 2026-11-20 | Accepted |
 | [0040](0040-ignore-max-keys-on-listbuckets.md) | ListBuckets accepts and ignores `max-keys` | 2026-11-20 | Accepted |
+| [0041](0041-run-the-aws-sdks-as-clients.md) | The AWS SDKs are run as clients, one per language | 2026-11-20 | Accepted |
 
 ## Writing a record
 

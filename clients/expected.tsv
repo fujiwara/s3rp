@@ -3,7 +3,12 @@
 # listed here and on a listed scenario that passes. Categories:
 #   client   the client's own behavior; nothing for the gateway to do
 #   gateway  a deliberate refusal or a known gap of the gateway
-obstore	http	double-slash-key	client: object_store refuses a path with an empty segment
+#   backend  what Ceph RGW answers; the gateway relays it as it is
+duck	https	double-slash-key	client: sends the key with the empty segment removed
 obstore	https	double-slash-key	client: object_store refuses a path with an empty segment
-s3cmd	http	presigned-get	gateway: signurl signs with SigV2, which the gateway does not verify
+opendal	http	double-slash-key	client: sends the key with the empty segment removed
+rclone	https	double-slash-key	client: sends the key with the empty segment removed
+s3fs	https	double-slash-key	client: sends the key with the empty segment removed
 s3cmd	https	presigned-get	gateway: signurl signs with SigV2, which the gateway does not verify
+sdk-java	https	multipart	backend: RGW answers GetObject partNumber without Content-Range, which the SDK's parallel download requires (https://tracker.ceph.com/issues/83398)
+sdk-ruby	https	multipart	backend: RGW answers GetObject partNumber without Content-Range, which the SDK's parallel download requires (https://tracker.ceph.com/issues/83398)

@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # Runs S3 clients that real deployments use against s3rp proxying to the
-# versitygw backend from compose.yml. See clients/README.md.
+# Ceph RGW backend (ceph-tls) from compose.yml, https on both sides. See
+# clients/README.md.
 #
 #   ./clients/run.sh [client...]     default: every client in clients/defs
-#   SCHEMES=https ./clients/run.sh   default: http https
+#   SCHEMES=http ./clients/run.sh    default: https, or what a definition names
 set -euo pipefail
 
 PORT=${PORT:-7483}
-SCHEMES=${SCHEMES:-http https}
-BACKEND_ENDPOINT=${S3RP_TEST_BACKEND_ENDPOINT:-http://localhost:7070}
+SCHEMES=${SCHEMES:-}
+BACKEND_ENDPOINT=${S3RP_TEST_BACKEND_ENDPOINT:-https://127.0.0.1:7443}
 
 cd "$(dirname "$0")/.."   # repo root
 ROOT=$(pwd)
@@ -48,36 +49,49 @@ mise --cd clients install --quiet
 eval "$(mise --cd clients env --shell bash)"
 export PATH=$ROOT/clients/bin:$PATH
 
-if [ "$BACKEND_ENDPOINT" = "http://localhost:7070" ]; then
-    echo "==> starting versitygw backend"
-    docker compose up -d --wait versitygw
-else
-    echo "==> using external backend $BACKEND_ENDPOINT"
-fi
 echo "==> generating fixtures"
 [ -f "$FIXTURES/1k.bin" ] || head -c 1024 /dev/urandom > "$FIXTURES/1k.bin"
-# above the largest multipart threshold among the clients (mc: 64 MiB)
-[ -f "$FIXTURES/big.bin" ] || head -c $((80 * 1024 * 1024)) /dev/urandom > "$FIXTURES/big.bin"
+# above the largest multipart threshold among the clients (the AWS SDK for
+# Ruby: 100 MiB)
+BIG=$((128 * 1024 * 1024))
+[ "$(wc -c < "$FIXTURES/big.bin" 2>/dev/null)" = "$BIG" ] || head -c "$BIG" /dev/urandom > "$FIXTURES/big.bin"
 if [ ! -d "$FIXTURES/tree" ]; then
     mkdir "$FIXTURES/tree"
     for i in $(seq 1 1100); do echo "$i" > "$FIXTURES/tree/f$i.txt"; done
 fi
 
-# A self-signed certificate for the https runs, trusted through the
-# environment: SSL_CERT_FILE by Go, Rust and OpenSSL clients, CURL_CA_BUNDLE
-# by libcurl ones. The bundle keeps the system roots, since a variable that
-# replaces them would also stop a client's package manager reaching its
-# registry.
+# A certificate for the gateway and the backend, issued by a CA of the run's own and
+# trusted through the environment: SSL_CERT_FILE by Go, Rust and OpenSSL
+# clients, CURL_CA_BUNDLE by libcurl ones. Not one self-signed certificate
+# for both roles: rustls refuses a CA certificate presented by a server.
+# The bundle keeps the system roots, since a variable that replaces them
+# would also stop a client's package manager reaching its registry.
 CERT=$WORK/tls/cert.pem
 export CA_FILE=$WORK/tls/bundle.pem
-if [ ! -f "$CA_FILE" ]; then
+if [ ! -f "$WORK/tls/ca.pem" ]; then
+    rm -rf "$WORK/tls"
     mkdir -p "$WORK/tls"
     openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 3650 \
+        -subj "/CN=s3rp client compatibility CA" \
+        -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" \
+        -keyout "$WORK/tls/ca-key.pem" -out "$WORK/tls/ca.pem" 2>/dev/null
+    openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 3650 \
+        -CA "$WORK/tls/ca.pem" -CAkey "$WORK/tls/ca-key.pem" \
         -subj "/CN=s3rp client compatibility" -addext "subjectAltName=IP:127.0.0.1" \
+        -addext "basicConstraints=critical,CA:FALSE" -addext "extendedKeyUsage=serverAuth" \
         -keyout "$WORK/tls/key.pem" -out "$CERT" 2>/dev/null
-    cat "$(openssl version -d | cut -d'"' -f2)/cert.pem" "$CERT" > "$CA_FILE"
+    # RGW reads the key as its own user, not the one that owns the file
+    chmod 644 "$WORK/tls/key.pem"
+    cat "$(openssl version -d | cut -d'"' -f2)/cert.pem" "$WORK/tls/ca.pem" > "$CA_FILE"
 fi
 export SSL_CERT_FILE=$CA_FILE CURL_CA_BUNDLE=$CA_FILE
+if [ "$BACKEND_ENDPOINT" = "https://127.0.0.1:7443" ]; then
+    echo "==> starting Ceph RGW backend"
+    # recreated, since it reads the certificate only when it starts
+    docker compose up -d --wait --force-recreate ceph-tls
+else
+    echo "==> using external backend $BACKEND_ENDPOINT"
+fi
 {
     cat clients/s3rp.yml
     printf 'tls:\n  cert_file: %s\n  key_file: %s\n' "$CERT" "$WORK/tls/key.pem"
@@ -105,8 +119,7 @@ scenario_name() {
 }
 
 # What a client's run leaves: its mount or the like, the gateway, and the
-# backend bucket. Without the last, runs pile up in the backend, and the
-# compose versitygw keeps its data in memory.
+# backend bucket. Without the last, runs pile up in the backend.
 cleanup() {
     if [ -n "${teardown:-}" ]; then
         (eval "$teardown") >> "$dir/setup.log" 2>&1 || true
@@ -190,6 +203,11 @@ run_client() {
             result=FAIL
             detail="${detail:+$detail; }$(jq -r '"\(.status) \(.code)"' "$out.refused.jsonl" | sort | uniq -c | xargs)"
         fi
+        # a client that sent the file in one request did not run this one
+        if [ "$name" = multipart ] && ! grep -q '"operation":"CreateMultipartUpload"' "$out.requests.jsonl"; then
+            result=FAIL
+            detail="${detail:+$detail; }no multipart upload"
+        fi
         printf '%s\t%s\t%s\t%s\t%s\n' "$client" "$scheme" "$name" "$result" "$detail" >> "$RESULTS/results.tsv"
         echo "    $client $scheme $name: $result${detail:+ ($detail)}"
     done
@@ -197,9 +215,10 @@ run_client() {
 
 COLUMNS=()
 for client in "${CLIENTS[@]}"; do
-    for scheme in $SCHEMES; do
-        # a definition may name the schemes its client can be run over
-        yq -e ".schemes // [\"$scheme\"] | contains([\"$scheme\"])" "clients/defs/$client.yml" > /dev/null || continue
+    # https unless the definition names the schemes its client can be run
+    # over; SCHEMES asks for others, within what the definition names
+    for scheme in ${SCHEMES:-$(yq '.schemes // ["https"] | .[]' "clients/defs/$client.yml")}; do
+        [ "$(SCHEME=$scheme yq '.schemes // [strenv(SCHEME)] | contains([strenv(SCHEME)])' "clients/defs/$client.yml")" = true ] || continue
         COLUMNS+=("$client/$scheme")
         # a subshell, so one client's environment does not reach the next
         # and not as the left side of ||, where bash ignores errexit in the

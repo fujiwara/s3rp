@@ -1,6 +1,6 @@
 # OpenDAL: a second Rust lineage (signer: reqsign), through its Python binding.
 name: opendal
-# its bundled roots cannot be extended, so the self-signed https run is out
+# its bundled roots cannot be extended to the run's own CA, so it is run over http
 schemes: [http]
 env:
   OPENDAL: uv run --quiet --script ${LIB}/opendal_client.py
