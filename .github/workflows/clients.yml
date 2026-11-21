@@ -24,6 +24,8 @@ jobs:
     name: clients (ceph)
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      APT_PACKAGES: fuse3 wine wine32:i386 xvfb
     steps:
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -38,12 +40,42 @@ jobs:
         with:
           install: false # run.sh installs the tools pinned in mise.toml and clients/mise.toml
 
-      # WinSCP is a 32-bit program
-      - name: Install FUSE (s3fs) and Wine (WinSCP)
+      # WinSCP is a 32-bit program, and Wine for it is some 250 MB of packages
+      # whose download from the runner's mirror took from one minute to eight.
+      # They are kept in a cache keyed by the exact files apt would fetch.
+      - name: Resolve the packages for FUSE (s3fs) and Wine (WinSCP)
+        id: apt
         run: |
           sudo dpkg --add-architecture i386
           sudo apt-get update
-          sudo apt-get install -y fuse3 wine wine32:i386 xvfb
+          set -o pipefail
+          mkdir -p "$HOME/apt-archives"
+          key=$(apt-get install --print-uris -y -o Dir::Cache::archives="$HOME/apt-archives" $APT_PACKAGES |
+            grep '\.deb ' | awk '{print $2, $4}' | sort | sha256sum | cut -d' ' -f1)
+          echo "key=clients-apt-$key" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the packages
+        id: apt-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/apt-archives
+          key: ${{ steps.apt.outputs.key }}
+          restore-keys: clients-apt-
+
+      - name: Install FUSE (s3fs) and Wine (WinSCP)
+        run: |
+          apt_get() { sudo apt-get -o Dir::Cache::archives="$HOME/apt-archives" -o APT::Keep-Downloaded-Packages=true "$@"; }
+          apt_get install -y $APT_PACKAGES
+          # drop what a restored older cache held and the mirror no longer serves
+          apt_get autoclean
+          sudo chown -R "$(id -u)" "$HOME/apt-archives"
+
+      - name: Save the packages
+        if: steps.apt-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/apt-archives
+          key: ${{ steps.apt.outputs.key }}
 
       - name: Run the clients
         run: ./clients/run.sh
