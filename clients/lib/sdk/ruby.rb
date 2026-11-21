@@ -35,7 +35,7 @@ when "list"
 when "delete"
   s3.delete_object(bucket: bucket, key: args[0])
 when "copy"
-  source = args[0].split("/").map { |s| ERB::Util.url_encode(s) }.join("/")
+  source = args[0].split("/", -1).map { |s| ERB::Util.url_encode(s) }.join("/")
   s3.copy_object(bucket: bucket, key: args[1], copy_source: "#{bucket}/#{source}")
 when "presign"
   puts Aws::S3::Presigner.new(client: s3).presigned_url(:get_object, bucket: bucket, key: args[0], expires_in: 3600)

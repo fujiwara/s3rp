@@ -11,3 +11,4 @@ rclone	https	double-slash-key	client: sends the key with the empty segment remov
 s3fs	https	double-slash-key	client: sends the key with the empty segment removed
 s3cmd	https	presigned-get	gateway: signurl signs with SigV2, which the gateway does not verify
 sdk-java	https	multipart	backend: RGW answers GetObject partNumber without Content-Range, which the SDK's parallel download requires
+sdk-ruby	https	multipart	backend: RGW answers GetObject partNumber without Content-Range, which the SDK's parallel download requires

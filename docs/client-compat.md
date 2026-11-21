@@ -116,10 +116,10 @@ Why each entry of `clients/expected.tsv` is expected.
   removes the empty segment and stores `dir/x.txt`. On S3, as on RGW,
   that is another key (AWS Emulator 1.0.533), so the object is not where
   it was put.
-- **sdk-java, `multipart`** (backend). The upload succeeds. The transfer
-  manager then downloads the object part by part (`GetObject` with
-  `partNumber`) and requires `Content-Range` on each response; RGW sends
-  none, where S3 does. The gateway cannot supply it: the part's offset is
+- **sdk-java, sdk-ruby, `multipart`** (backend). The upload succeeds. The
+  transfer manager then downloads the object part by part (`GetObject`
+  with `partNumber`) and requires `Content-Range` on each response; RGW
+  sends none, where S3 does. The gateway cannot supply it: the part's offset is
   not in RGW's answer.
 - **s3cmd, `presigned-get`** (gateway, deliberate). `s3cmd signurl` signs
   with Signature Version 2. The gateway verifies SigV4 only; SigV2 is

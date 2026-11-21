@@ -114,7 +114,7 @@ async fn main() -> Result<()> {
             s3.copy_object()
                 .bucket(&bucket)
                 .key(&args[2])
-                .copy_source(format!("{}/{}", bucket, args[1]))
+                .copy_source(format!("{}/{}", bucket, encode_key(&args[1])))
                 .send()
                 .await?;
         }
@@ -141,4 +141,16 @@ async fn main() -> Result<()> {
         verb => return Err(format!("unknown verb {verb}").into()),
     }
     Ok(())
+}
+
+// x-amz-copy-source is URL-encoded, and the SDK sends what it is given.
+fn encode_key(key: &str) -> String {
+    let mut encoded = String::new();
+    for b in key.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b'/' => encoded.push(b as char),
+            _ => encoded.push_str(&format!("%{:02X}", b)),
+        }
+    }
+    encoded
 }

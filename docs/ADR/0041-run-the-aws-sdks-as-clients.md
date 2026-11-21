@@ -91,8 +91,9 @@ Ruby, PHP and Rust as clients `sdk-*`, each a small script under
   its duration about where it was.
 - Multipart uploads with trailing checksums through an http backend stay
   broken, and documented as such.
-- Found by the change of backend: the SDK for Java's parallel download
-  needs `Content-Range` on a `partNumber` read, which RGW does not send.
+- Found by the change of backend: the parallel download of the SDKs for
+  Java and Ruby needs `Content-Range` on a `partNumber` read, which RGW
+  does not send.
 - The run starts a Ceph cluster, which takes longer to come up than
   versitygw did.
 - The lock files are read by Dependabot's security alerts.

@@ -51,8 +51,10 @@ export PATH=$ROOT/clients/bin:$PATH
 
 echo "==> generating fixtures"
 [ -f "$FIXTURES/1k.bin" ] || head -c 1024 /dev/urandom > "$FIXTURES/1k.bin"
-# above the largest multipart threshold among the clients (mc: 64 MiB)
-[ -f "$FIXTURES/big.bin" ] || head -c $((80 * 1024 * 1024)) /dev/urandom > "$FIXTURES/big.bin"
+# above the largest multipart threshold among the clients (the AWS SDK for
+# Ruby: 100 MiB)
+BIG=$((128 * 1024 * 1024))
+[ "$(wc -c < "$FIXTURES/big.bin" 2>/dev/null)" = "$BIG" ] || head -c "$BIG" /dev/urandom > "$FIXTURES/big.bin"
 if [ ! -d "$FIXTURES/tree" ]; then
     mkdir "$FIXTURES/tree"
     for i in $(seq 1 1100); do echo "$i" > "$FIXTURES/tree/f$i.txt"; done
@@ -201,6 +203,11 @@ run_client() {
             result=FAIL
             detail="${detail:+$detail; }$(jq -r '"\(.status) \(.code)"' "$out.refused.jsonl" | sort | uniq -c | xargs)"
         fi
+        # a client that sent the file in one request did not run this one
+        if [ "$name" = multipart ] && ! grep -q '"operation":"CreateMultipartUpload"' "$out.requests.jsonl"; then
+            result=FAIL
+            detail="${detail:+$detail; }no multipart upload"
+        fi
         printf '%s\t%s\t%s\t%s\t%s\n' "$client" "$scheme" "$name" "$result" "$detail" >> "$RESULTS/results.tsv"
         echo "    $client $scheme $name: $result${detail:+ ($detail)}"
     done
@@ -208,9 +215,10 @@ run_client() {
 
 COLUMNS=()
 for client in "${CLIENTS[@]}"; do
-    # https unless the definition names the schemes its client can be run over
-    for scheme in $(yq '.schemes // ["https"] | .[]' "clients/defs/$client.yml"); do
-        case " ${SCHEMES:-$scheme} " in *" $scheme "*) ;; *) continue ;; esac
+    # https unless the definition names the schemes its client can be run
+    # over; SCHEMES asks for others, within what the definition names
+    for scheme in ${SCHEMES:-$(yq '.schemes // ["https"] | .[]' "clients/defs/$client.yml")}; do
+        [ "$(SCHEME=$scheme yq '.schemes // [strenv(SCHEME)] | contains([strenv(SCHEME)])' "clients/defs/$client.yml")" = true ] || continue
         COLUMNS+=("$client/$scheme")
         # a subshell, so one client's environment does not reach the next
         # and not as the left side of ||, where bash ignores errexit in the
