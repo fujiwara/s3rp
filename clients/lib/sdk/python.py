@@ -1,6 +1,6 @@
 # /// script
 # requires-python = "==3.15.*"
-# dependencies = ["boto3==1.44.7"]
+# dependencies = ["boto3==1.44.9"]
 # ///
 """The verbs of defs/sdk-python.yml, on boto3."""
 import os
