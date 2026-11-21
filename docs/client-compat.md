@@ -120,8 +120,8 @@ Why each entry of `clients/expected.tsv` is expected.
   transfer manager then downloads the object part by part (`GetObject`
   with `partNumber`) and requires `Content-Range` on each response; RGW
   sends none, where S3 does (AWS Emulator 1.0.552; reported as
-  [Ceph #83398](https://tracker.ceph.com/issues/83398)). The gateway cannot supply it: the part's offset is
-  not in RGW's answer.
+  [Ceph #83398](https://tracker.ceph.com/issues/83398)). The gateway
+  cannot supply it: the part's offset is not in RGW's answer.
 - **s3cmd, `presigned-get`** (gateway, deliberate). `s3cmd signurl` signs
   with Signature Version 2. The gateway verifies SigV4 only; SigV2 is
   HMAC-SHA1 over a canonical form of its own and Amazon S3 itself no
