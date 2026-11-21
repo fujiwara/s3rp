@@ -129,14 +129,8 @@ Why each entry of `clients/expected.tsv` is expected.
 
 ## Client settings the gateway requires
 
-- **s3cmd: `acl_public = False`.** Left unset, `s3cmd cp` reads the
-  source's ACL and writes it to the copy with PutObjectAcl, tolerating
-  only a 501 in answer. The gateway refuses every ACL write with
-  `AccessControlListNotSupported`
-  ([ADR 0004](ADR/0004-acl-disabled-buckets.md)), so the copy is made and
-  the command still fails. With the setting s3cmd sends neither request;
-  the run uses it.
-- **boto3: `signature_version="s3v4"`.** Against an endpoint that is not
-  Amazon's, `generate_presigned_url` signs with Signature Version 2
-  unless the client is configured for SigV4. The gateway verifies SigV4
-  only, as above; the run sets it.
+What a user of a client has to set, and what does not work, is in
+[Using S3 clients with the gateway](clients.md), which is written from
+this run's findings: a finding that changes what a user must do changes
+that page in the same commit. The run itself uses those settings —
+`acl_public = False` for s3cmd, `signature_version="s3v4"` for boto3.
