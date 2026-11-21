@@ -2,7 +2,8 @@
 # clients, AWS SDKs and their runtimes, each to what clients/README.md
 # ("Versions") says. The bump becomes one pull request on a fixed branch,
 # rewritten each week until it is merged. A pull request this workflow's
-# token opens starts no workflow, so the clients run is started here.
+# token opens starts no workflow by itself: its checks wait for a person
+# to approve them on the pull request, which the body says.
 name: clients-bump
 on:
   schedule:
@@ -20,7 +21,6 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      actions: write
     env:
       BRANCH: clients-bump
     steps:
@@ -53,6 +53,8 @@ jobs:
           {
             echo "Bumps the pins of the client compatibility run (\`clients/bump.sh\`)."
             echo
+            echo "The checks wait for approval: start them with the button on this pull request, and merge once the \`clients\` run has passed."
+            echo
             echo '```'
             cat "$RUNNER_TEMP/bump.log"
             echo '```'
@@ -71,6 +73,5 @@ jobs:
           else
             gh pr create --head "$BRANCH" --title "Bump the client run's pins" --body-file "$RUNNER_TEMP/body.md"
           fi
-          gh workflow run clients.yml --ref "$BRANCH"
         env:
           GH_TOKEN: ${{ github.token }}
