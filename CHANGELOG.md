@@ -1,5 +1,28 @@
 # Changelog
 
+## [v0.0.22](https://github.com/fujiwara/s3rp/compare/v0.0.21...v0.0.22) - 2026-11-21
+
+- Sort the canonical query by its encoded form by @fujiwara in https://github.com/fujiwara/s3rp/pull/228
+- Replay the whole AWS SigV4 test suite by @fujiwara in https://github.com/fujiwara/s3rp/pull/230
+- Word canonical error messages as S3 sends them by @fujiwara in https://github.com/fujiwara/s3rp/pull/231
+- Forward object headers on CopyObject, report the tag count on HEAD by @fujiwara in https://github.com/fujiwara/s3rp/pull/232
+- Add S3's detail elements to time refusals, support ListBuckets prefix by @fujiwara in https://github.com/fujiwara/s3rp/pull/233
+- Validate tags, copy directives, attributes and part order in the gateway by @fujiwara in https://github.com/fujiwara/s3rp/pull/234
+- Run AWS's S3 fidelity tests weekly, and s3-tests too by @fujiwara in https://github.com/fujiwara/s3rp/pull/235
+- Serve HTTPS when the config names a certificate by @fujiwara in https://github.com/fujiwara/s3rp/pull/237
+- Serve keys with empty or dot segments instead of redirecting by @fujiwara in https://github.com/fujiwara/s3rp/pull/236
+- Run real S3 clients against the gateway by @fujiwara in https://github.com/fujiwara/s3rp/pull/238
+- Accept max-keys on ListBuckets by @fujiwara in https://github.com/fujiwara/s3rp/pull/240
+- Record the routed operation of a refused request by @fujiwara in https://github.com/fujiwara/s3rp/pull/241
+- Run Cyberduck and WinSCP in the client compatibility run by @fujiwara in https://github.com/fujiwara/s3rp/pull/239
+- Serve what the AWS SDK for .NET sends by @fujiwara in https://github.com/fujiwara/s3rp/pull/242
+- Run the AWS SDKs as clients, over https on Ceph RGW by @fujiwara in https://github.com/fujiwara/s3rp/pull/243
+- Bump the client run's pins by @github-actions[bot] in https://github.com/fujiwara/s3rp/pull/247
+- Leave the bump pull request's checks to its approval by @fujiwara in https://github.com/fujiwara/s3rp/pull/248
+- Bump actions/setup-go from 7.0.0 to 7.1.0 by @dependabot[bot] in https://github.com/fujiwara/s3rp/pull/244
+- Bump jdx/mise-action from 5.2.8 to 5.2.9 by @dependabot[bot] in https://github.com/fujiwara/s3rp/pull/245
+- Bump rustfs/rustfs from 1.0.5 to 1.0.6 by @dependabot[bot] in https://github.com/fujiwara/s3rp/pull/246
+
 ## [v0.0.21](https://github.com/fujiwara/s3rp/compare/v0.0.20...v0.0.21) - 2026-11-18
 
 - Verify SigV4 with a derived signing key by @fujiwara in https://github.com/fujiwara/s3rp/pull/195
