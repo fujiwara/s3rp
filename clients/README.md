@@ -49,15 +49,15 @@ sent.
   scenario), with a category and the reason. A run fails on an unlisted
   failure and on a listed scenario that passes.
 - `mise.toml` — runn, the clients and the language runtimes of the SDKs,
-  pinned. Dependabot does not read it:
-  bump the versions by hand, and re-run. A client mise has no package for
-  (`duck`, WinSCP) is downloaded by its definition's `setup` through
-  `bin/fetch`, pinned there by URL and SHA-256.
+  pinned. A client mise has no package for (`duck`, WinSCP) is downloaded
+  by its definition's `setup` through `bin/fetch`, pinned there by URL and
+  SHA-256.
+- `bump.sh` — bumps every pin (see Versions).
 
 ## Versions
 
-Everything is pinned to an exact version and bumped by hand, all at once,
-followed by a run. What a pin is bumped to:
+Everything is pinned to an exact version and bumped all at once, followed
+by a run. What a pin is bumped to:
 
 | | pinned to | |
 |---|---|---|
@@ -66,12 +66,19 @@ followed by a run. What a pin is bumped to:
 | Java, .NET | the latest release of the newest LTS line | the lines between two LTS are short-lived and deployments stay on LTS |
 | Node.js | the latest release of the newest even-numbered line | an odd-numbered line is supported for months and never becomes LTS |
 
-`mise outdated --bump` (in `clients/`) lists what is behind, within what
-mise can install; it does not see the pins outside `mise.toml` — an SDK's
-version beside its script, the Python line in a script's header, the
-`composer` image of `lib/sdk/php.sh` (which brings PHP), the Java line of
-`lib/sdk/java/Client.java`, and the downloads in `defs/duck.yml` and
-`defs/winscp.yml` — nor a newer Java, .NET or Node.js line.
+`./clients/bump.sh` does that to every pin: `mise.toml`, an SDK's version
+beside its script (and its lock file), the Python line in a script's
+header, the Java line of `lib/sdk/java/Client.java`, the `composer` image
+of `lib/sdk/php.sh` (which brings PHP), and the downloads in
+`defs/duck.yml` and `defs/winscp.yml`. The weekly `clients-bump` workflow
+runs it and opens a pull request, on which it starts the `clients` run.
+
+What mise installs is held back a week (`minimum_release_age` in
+`mise.toml`): those are third-party releases, and one that is withdrawn or
+tampered with is usually found within days. An AWS SDK is bumped the day
+it is released. The script leaves two pins alone: `slf4j-nop`, which stays
+on the 1.x line the SDK for Java binds to, and the Go of
+`lib/sdk/go/go.mod`, which follows the repository's.
 
 ## What fails a scenario
 

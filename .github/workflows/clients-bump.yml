@@ -1,0 +1,76 @@
+# Weekly bump of the client compatibility run's pins (clients/bump.sh):
+# clients, AWS SDKs and their runtimes, each to what clients/README.md
+# ("Versions") says. The bump becomes one pull request on a fixed branch,
+# rewritten each week until it is merged. A pull request this workflow's
+# token opens starts no workflow, so the clients run is started here.
+name: clients-bump
+on:
+  schedule:
+    - cron: '17 18 * * 3' # Thursday 03:17 JST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bump:
+    name: Bump the clients
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    env:
+      BRANCH: clients-bump
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27'
+
+      - name: Set up mise
+        uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
+        with:
+          install: false # bump.sh installs the tools pinned in mise.toml and clients/mise.toml
+
+      - name: Bump the pins
+        # explicit bash so pipefail is on, or tee's status masks a failure
+        shell: bash
+        run: ./clients/bump.sh | tee "$RUNNER_TEMP/bump.log"
+        env:
+          MISE_GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Open or update the pull request
+        run: |
+          if git diff --quiet; then
+            echo "Nothing to bump." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo "Bumps the pins of the client compatibility run (\`clients/bump.sh\`)."
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/bump.log"
+            echo '```'
+          } > "$RUNNER_TEMP/body.md"
+          cat "$RUNNER_TEMP/body.md" >> "$GITHUB_STEP_SUMMARY"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$BRANCH"
+          git add clients
+          git commit -s -m "Bump the client run's pins"
+          git push --force origin "$BRANCH"
+
+          if [ -n "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
+            gh pr edit "$BRANCH" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh pr create --head "$BRANCH" --title "Bump the client run's pins" --body-file "$RUNNER_TEMP/body.md"
+          fi
+          gh workflow run clients.yml --ref "$BRANCH"
+        env:
+          GH_TOKEN: ${{ github.token }}

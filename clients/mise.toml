@@ -1,5 +1,10 @@
 # Tools for the client compatibility run (see run.sh). Scoped to clients/
 # so it does not affect the rest of the repository.
+[settings]
+# these are third-party releases: one withdrawn or tampered with is usually
+# found within days. clients/bump.sh bumps to what this leaves visible.
+minimum_release_age = "7d"
+
 [tools]
 "aqua:k1LoW/runn" = "1.11.2"
 # the Python clients (s3cmd, and obstore/opendal through lib/*.py)
