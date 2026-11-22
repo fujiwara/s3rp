@@ -24,4 +24,5 @@ verbs:
   delete:   aws s3 rm "s3://$BUCKET/$KEY"
   copy:     aws s3 cp --no-progress "s3://$BUCKET/$SRC" "s3://$BUCKET/$DST"
   presign:  aws s3 presign "s3://$BUCKET/$KEY"
+  lifecycle: aws s3api get-bucket-lifecycle-configuration --bucket "$BUCKET"
   put_tree: aws s3 sync --no-progress "$DIR" "s3://$BUCKET/$PREFIX/"

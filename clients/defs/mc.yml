@@ -11,4 +11,5 @@ verbs:
   delete:   mc rm "s3rp/$BUCKET/$KEY"
   copy:     mc cp "s3rp/$BUCKET/$SRC" "s3rp/$BUCKET/$DST"
   presign:  mc share download --json "s3rp/$BUCKET/$KEY" | jq -r .share
+  lifecycle: mc ilm rule ls --json "s3rp/$BUCKET"
   put_tree: mc cp --recursive "$DIR/" "s3rp/$BUCKET/$PREFIX/"

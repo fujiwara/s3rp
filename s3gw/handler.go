@@ -912,11 +912,14 @@ const (
 )
 
 var (
-	noParams               = newParamSet()
-	aclOnlyParams          = newParamSet(subACL)
-	policyOnlyParams       = newParamSet(subPolicy)
-	corsOnlyParams         = newParamSet(subCORS)
-	lifecycleOnlyParams    = newParamSet(subLifecycle)
+	noParams         = newParamSet()
+	aclOnlyParams    = newParamSet(subACL)
+	policyOnlyParams = newParamSet(subPolicy)
+	corsOnlyParams   = newParamSet(subCORS)
+	// withUpdatedAt is accepted and not read: minio-go sends it on every
+	// lifecycle read, asking MinIO for a response header no other server
+	// has, and reads the configuration the same without it
+	lifecycleOnlyParams    = newParamSet(subLifecycle, "withUpdatedAt")
 	objectLockOnlyParams   = newParamSet(subObjectLock)
 	retentionParams        = newParamSet(subRetention, qpVersionID)
 	legalHoldParams        = newParamSet(subLegalHold, qpVersionID)

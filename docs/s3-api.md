@@ -296,7 +296,7 @@ GetBucketCors returns the configuration (`NoSuchCORSConfiguration` when absent);
 
 ### Lifecycle configuration
 
-GetBucketLifecycleConfiguration returns the lifecycle configuration recorded in the bucket's definition, as it is (`NoSuchLifecycleConfiguration` when there is none). It is answered from the store, like the bucket policy; the backend is not asked.
+GetBucketLifecycleConfiguration returns the lifecycle configuration recorded in the bucket's definition, as it is (`NoSuchLifecycleConfiguration` when there is none). It is answered from the store, like the bucket policy; the backend is not asked. `withUpdatedAt`, which minio-go (and so `mc ilm rule ls`) adds to the request to ask MinIO for the time of the last change, is accepted and ignored: the time is not reported.
 
 ```yaml
 buckets:

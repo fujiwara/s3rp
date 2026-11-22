@@ -114,6 +114,7 @@ command with its output (`<scenario>.log`).
 | `copy` | `SRC`, `DST` | server-side |
 | `presign` | `KEY` | prints a URL for GET |
 | `put_tree` | `DIR`, `PREFIX` | |
+| `lifecycle` | | prints the bucket's lifecycle rules |
 
 The arguments are shell variables, not environment: a verb that runs a
 script passes them on its command line. `BUCKET`, `ENDPOINT`, `ACCESS_KEY`

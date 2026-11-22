@@ -9,6 +9,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
+	"github.com/aws/smithy-go/middleware"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"github.com/fujiwara/s3rp/policy"
 	"github.com/fujiwara/s3rp/s3gw"
 	"github.com/fujiwara/s3rp/s3op"
@@ -77,6 +79,33 @@ func TestGetBucketLifecycleConfiguration(t *testing.T) {
 	if !errors.As(err, &apiErr) || apiErr.ErrorCode() != "NoSuchLifecycleConfiguration" ||
 		apiErr.ErrorMessage() != "The lifecycle configuration does not exist" {
 		t.Errorf("a bucket without a configuration: got %v", err)
+	}
+}
+
+// minio-go reads a lifecycle configuration with ?lifecycle&withUpdatedAt=true.
+// The parameter asks MinIO for an X-Minio-LifecycleConfig-UpdatedAt header;
+// without the header the client reports no update time.
+func TestGetBucketLifecycleConfigurationIgnoresWithUpdatedAt(t *testing.T) {
+	clients, _ := newLifecycleProxy(t)
+	out, err := clients["alice"].GetBucketLifecycleConfiguration(t.Context(), &s3.GetBucketLifecycleConfigurationInput{Bucket: aws.String("ruled")},
+		func(o *s3.Options) {
+			o.APIOptions = append(o.APIOptions, func(stack *middleware.Stack) error {
+				return stack.Build.Add(middleware.BuildMiddlewareFunc("withUpdatedAt", func(
+					ctx context.Context, in middleware.BuildInput, next middleware.BuildHandler,
+				) (middleware.BuildOutput, middleware.Metadata, error) {
+					req := in.Request.(*smithyhttp.Request)
+					q := req.URL.Query()
+					q.Set("withUpdatedAt", "true")
+					req.URL.RawQuery = q.Encode()
+					return next.HandleBuild(ctx, in)
+				}), middleware.After)
+			})
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Rules) != 1 {
+		t.Errorf("got %d rules, want 1", len(out.Rules))
 	}
 }
 

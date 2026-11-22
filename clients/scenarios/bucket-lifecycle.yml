@@ -1,0 +1,16 @@
+desc: Read the bucket's lifecycle configuration, which the gateway serves as its store holds it
+vars:
+  client: yaml://${CLIENT_FILE}
+steps:
+  read:
+    exec:
+      # on one line: a block holding the expression alone keeps its line
+      # break as the two characters \n, which the shell appends to the
+      # last argument
+      command: "{{ vars.client.verbs.lifecycle }}"
+    # both rules of clients/s3rp.yml, as the client's own parser read them
+    test: |
+      current.exit_code == 0
+      && current.stdout contains "expire-tmp"
+      && current.stdout contains "tmp/"
+      && current.stdout contains "abort-uploads"

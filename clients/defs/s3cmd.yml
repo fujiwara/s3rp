@@ -24,4 +24,5 @@ verbs:
   delete:   $S3CMD del "s3://$BUCKET/$KEY"
   copy:     $S3CMD cp "s3://$BUCKET/$SRC" "s3://$BUCKET/$DST"
   presign:  $S3CMD signurl "s3://$BUCKET/$KEY" +3600
+  lifecycle: $S3CMD getlifecycle "s3://$BUCKET"
   put_tree: $S3CMD put --recursive "$DIR/" "s3://$BUCKET/$PREFIX/"
