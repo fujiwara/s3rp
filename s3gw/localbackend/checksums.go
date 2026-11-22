@@ -1,13 +1,9 @@
 package localbackend
 
 import (
-	"crypto/md5"
-	"encoding/base64"
-	"encoding/hex"
 	"fmt"
 	"net/http"
 	"reflect"
-	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -49,15 +45,6 @@ func setChecksums(dst any, v checksum.Values) {
 	}
 }
 
-func computeChecksum(name string, data []byte) (string, bool) {
-	h := checksum.NewHash(name)
-	if h == nil {
-		return "", false
-	}
-	h.Write(data)
-	return checksum.Base64(h), true
-}
-
 // unsupportedChecksum refuses an algorithm this package cannot compute: a
 // value stored unverified, or a named algorithm silently not applied, would
 // report an integrity check that never happened.
@@ -66,56 +53,9 @@ func unsupportedChecksum(name string) *failure {
 		fmt.Sprintf("The %s checksum algorithm is not supported.", name))
 }
 
-// writeChecksums settles the checksums stored with data: each value the
-// client supplied is verified, and the algorithm a write names without a
-// value is computed.
-func writeChecksums(data []byte, supplied checksum.Values, algorithm types.ChecksumAlgorithm) (checksum.Values, *failure) {
-	var v checksum.Values
-	set := func(name, value string) {
-		if v == nil {
-			v = checksum.Values{}
-		}
-		v[name] = value
-	}
-	for name, want := range supplied {
-		got, ok := computeChecksum(name, data)
-		if !ok {
-			return nil, unsupportedChecksum(name)
-		}
-		if got != want {
-			return nil, fail(http.StatusBadRequest, "BadDigest",
-				fmt.Sprintf("The %s you specified did not match the calculated checksum.", name))
-		}
-		set(name, want)
-	}
-	if name := strings.ToUpper(string(algorithm)); name != "" && v[name] == "" {
-		got, ok := computeChecksum(name, data)
-		if !ok {
-			return nil, unsupportedChecksum(name)
-		}
-		set(name, got)
-	}
-	return v, nil
-}
-
-// checkContentMD5 verifies a Content-MD5 the write carries.
-func checkContentMD5(data []byte, contentMD5 *string) *failure {
-	if contentMD5 == nil {
-		return nil
-	}
-	want, err := base64.StdEncoding.DecodeString(*contentMD5)
-	if err != nil || len(want) != md5.Size {
-		return fail(http.StatusBadRequest, "InvalidDigest", "The Content-MD5 you specified was invalid.")
-	}
-	if got := md5.Sum(data); string(got[:]) != string(want) {
-		return fail(http.StatusBadRequest, "BadDigest", "The Content-MD5 you specified did not match what we received.")
-	}
-	return nil
-}
-
-func md5ETag(data []byte) string {
-	sum := md5.Sum(data)
-	return `"` + hex.EncodeToString(sum[:]) + `"`
+func badChecksum(name string) *failure {
+	return fail(http.StatusBadRequest, "BadDigest",
+		fmt.Sprintf("The %s you specified did not match the calculated checksum.", name))
 }
 
 // checksumAlgorithms is the listing form of an object's checksums.

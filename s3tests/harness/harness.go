@@ -56,6 +56,9 @@ type Config struct {
 	// (s3gw/localbackend) instead of an S3 backend: nothing to start, nothing
 	// kept. The backend endpoint and credentials are then unused.
 	InProcess bool
+	// InProcessDir, with InProcess, keeps the in-process backend's state in
+	// this directory (localbackend.Open) instead of in memory.
+	InProcessDir string
 	// BackendEndpoint is the S3 backend buckets are created on
 	// (e.g. http://127.0.0.1:7480 — use 127.0.0.1, never localhost, for
 	// Ceph RGW). Required unless InProcess.
@@ -80,6 +83,14 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	var inProcess *localbackend.Backend
 	if cfg.InProcess {
 		inProcess = localbackend.New()
+		if cfg.InProcessDir != "" {
+			var err error
+			if inProcess, err = localbackend.Open(cfg.InProcessDir); err != nil {
+				return nil, fmt.Errorf("failed to open %s: %w", cfg.InProcessDir, err)
+			}
+			// the harness lives as long as ctx
+			context.AfterFunc(ctx, func() { inProcess.Close() })
+		}
 		backend = inProcess
 		// never dialed: the definitions only have to name one backend
 		cfg.BackendEndpoint = "http://localbackend.invalid"

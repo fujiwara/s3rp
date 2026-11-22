@@ -67,6 +67,7 @@ With `S3RP_TEST_BACKEND_ENDPOINT=memory` the harness serves every bucket
 from the in-memory backend (`s3gw/localbackend`) and no Ceph is started. The
 triage rules describe the Ceph run, so such a run is a measurement of that
 backend — its report lists what differs — not a check that passes.
+`directory:PATH` is the same backend keeping its state in `PATH`.
 
 Environment overrides: `PORT`, `S3RP_TEST_BACKEND_ENDPOINT` (default
 `http://127.0.0.1:7480` — use 127.0.0.1, never localhost, for RGW),

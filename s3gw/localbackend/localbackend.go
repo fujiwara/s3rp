@@ -1,5 +1,5 @@
-// Package localbackend is an S3 object store held in memory, shaped as the
-// client the gateway calls a backend through. With it a service built on
+// Package localbackend is an S3 object store in the gateway's own process,
+// shaped as the client the gateway calls a backend through. With it a service built on
 // s3gw runs without any backend at all: the gateway, the service's own hooks
 // and store, and this package in one process — a local stand-in for the
 // service (an emulator, a test fixture), not a place to keep data.
@@ -8,6 +8,9 @@
 //	gw.SetBackendFactory(func(context.Context, *store.Backend) (s3gw.BackendClient, error) {
 //		return be, nil
 //	})
+//
+// New holds everything in memory; Open keeps it in a directory, so that it
+// is there again when the process is started the next time.
 //
 // One Backend holds every bucket, whatever backend definition a bucket
 // names, so the definitions need only agree on what the gateway compares
@@ -51,9 +54,28 @@ type Backend struct {
 	mu      sync.RWMutex
 	buckets map[string]*bucket
 	now     func() time.Time
+
+	// The rest is set by Open and unused by a Backend held in memory
+	// (persist.go). dir is where the state is kept.
+	dir string
+	// dirty reports a change not yet written; guarded by mu
+	dirty bool
+	// wake tells the flusher of a change; stop ends it, stopped says it has
+	wake, stop, stopped chan struct{}
+	closeOnce           sync.Once
+	closeErr            error
+	// flushMu serializes flushes and guards garbage: blob files nothing
+	// refers to any more, kept until the last response reading them is done
+	flushMu sync.Mutex
+	garbage map[string]*blob
+	// blobMu guards the blob files' books. known is every blob file;
+	// pending are those of writes in progress, which nothing refers to yet
+	blobMu  sync.Mutex
+	pending map[string]*blob
+	known   map[string]*blob
 }
 
-// New returns an empty Backend.
+// New returns an empty Backend that holds everything in memory.
 func New() *Backend {
 	return &Backend{buckets: map[string]*bucket{}, now: time.Now}
 }
@@ -96,14 +118,15 @@ type bucket struct {
 const nullVersion = "null"
 
 // object is one version of a key. Everything but the tags and the lock
-// state is immutable once stored, so data may be read without the lock.
+// state is immutable once stored, and so are the blobs its body is made of.
 type object struct {
 	versionID    string
 	deleteMarker bool
 	modified     time.Time
-	data         []byte
+	body         content
+	size         int64
 	etag         string // quoted, as S3 sends it
-	content      contentAttrs
+	attrs        contentAttrs
 	metadata     map[string]string
 	storageClass string
 	sse          types.ServerSideEncryption
@@ -169,8 +192,7 @@ func (b *Backend) CreateBucket(ctx context.Context, in *s3.CreateBucketInput, _ 
 	if name == "" {
 		return nil, fail(http.StatusBadRequest, "InvalidBucketName", "The specified bucket is not valid.").err()
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	defer b.mutate()()
 	if _, ok := b.buckets[name]; ok {
 		return nil, fail(http.StatusConflict, "BucketAlreadyOwnedByYou",
 			"Your previous request to create the named bucket succeeded and you already own it.").err()
@@ -190,8 +212,7 @@ func (b *Backend) DeleteBucket(ctx context.Context, in *s3.DeleteBucketInput, _ 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	defer b.mutate()()
 	bkt, f := b.getBucket(in.Bucket)
 	if f != nil {
 		return nil, f.err()
@@ -209,8 +230,7 @@ func (b *Backend) PutBucketVersioning(ctx context.Context, in *s3.PutBucketVersi
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	defer b.mutate()()
 	bkt, f := b.getBucket(in.Bucket)
 	if f != nil {
 		return nil, f.err()
@@ -240,8 +260,7 @@ func (b *Backend) PutObjectLockConfiguration(ctx context.Context, in *s3.PutObje
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	defer b.mutate()()
 	bkt, f := b.getBucket(in.Bucket)
 	if f != nil {
 		return nil, f.err()
@@ -275,8 +294,7 @@ func (b *Backend) PutBucketEncryption(ctx context.Context, in *s3.PutBucketEncry
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	defer b.mutate()()
 	bkt, f := b.getBucket(in.Bucket)
 	if f != nil {
 		return nil, f.err()
@@ -295,8 +313,7 @@ func (b *Backend) DeleteBucketEncryption(ctx context.Context, in *s3.DeleteBucke
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	defer b.mutate()()
 	bkt, f := b.getBucket(in.Bucket)
 	if f != nil {
 		return nil, f.err()

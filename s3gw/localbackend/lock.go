@@ -91,8 +91,7 @@ func (b *Backend) PutObjectRetention(ctx context.Context, in *s3.PutObjectRetent
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	defer b.mutate()()
 	bkt, f := b.getBucket(in.Bucket)
 	if f != nil {
 		return nil, f.err()
@@ -157,8 +156,7 @@ func (b *Backend) PutObjectLegalHold(ctx context.Context, in *s3.PutObjectLegalH
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	defer b.mutate()()
 	bkt, f := b.getBucket(in.Bucket)
 	if f != nil {
 		return nil, f.err()

@@ -21,8 +21,9 @@ import (
 
 // The methods a control plane calls, as it would call them on the SDK
 // client: failures are the SDK's modeled errors where it has them.
-func TestBucketAdministration(t *testing.T) {
-	be := localbackend.New()
+func TestBucketAdministration(t *testing.T) { eachBackend(t, testBucketAdministration) }
+
+func testBucketAdministration(t *testing.T, be *localbackend.Backend) {
 	ctx := t.Context()
 	create := func(name string, lock bool) error {
 		_, err := be.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String(name), ObjectLockEnabledForBucket: aws.Bool(lock)})
@@ -70,8 +71,10 @@ func TestBucketAdministration(t *testing.T) {
 	wantError(t, err, http.StatusConflict, "InvalidBucketState")
 }
 
-func TestDefaultEncryption(t *testing.T) {
-	f := newFixture(t)
+func TestDefaultEncryption(t *testing.T) { eachBackend(t, testDefaultEncryption) }
+
+func testDefaultEncryption(t *testing.T, be *localbackend.Backend) {
+	f := newFixture(t, be)
 	f.createBucket("docs", false)
 	_, err := f.client.GetBucketEncryption(t.Context(), &s3.GetBucketEncryptionInput{Bucket: aws.String("docs")})
 	wantError(t, err, http.StatusNotFound, "ServerSideEncryptionConfigurationNotFoundError")
@@ -105,8 +108,9 @@ func TestDefaultEncryption(t *testing.T) {
 // The gateway's body readers fail with the S3 error the client is owed, and
 // finds it in what the backend returns: the write must fail with that error
 // in the chain and store nothing.
-func TestBodyReadErrorFailsTheWrite(t *testing.T) {
-	be := localbackend.New()
+func TestBodyReadErrorFailsTheWrite(t *testing.T) { eachBackend(t, testBodyReadErrorFailsTheWrite) }
+
+func testBodyReadErrorFailsTheWrite(t *testing.T, be *localbackend.Backend) {
 	ctx := t.Context()
 	if _, err := be.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String("b")}); err != nil {
 		t.Fatal(err)
@@ -127,8 +131,9 @@ func TestBodyReadErrorFailsTheWrite(t *testing.T) {
 	wantError(t, err, http.StatusBadRequest, "IncompleteBody")
 }
 
-func TestChecksumMismatchRefused(t *testing.T) {
-	be := localbackend.New()
+func TestChecksumMismatchRefused(t *testing.T) { eachBackend(t, testChecksumMismatchRefused) }
+
+func testChecksumMismatchRefused(t *testing.T, be *localbackend.Backend) {
 	ctx := t.Context()
 	if _, err := be.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String("b")}); err != nil {
 		t.Fatal(err)
@@ -147,8 +152,9 @@ func TestChecksumMismatchRefused(t *testing.T) {
 
 // An algorithm the package cannot compute is refused, never stored
 // unverified or silently left out.
-func TestUncomputableChecksumRefused(t *testing.T) {
-	be := localbackend.New()
+func TestUncomputableChecksumRefused(t *testing.T) { eachBackend(t, testUncomputableChecksumRefused) }
+
+func testUncomputableChecksumRefused(t *testing.T, be *localbackend.Backend) {
 	ctx := t.Context()
 	if _, err := be.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String("b")}); err != nil {
 		t.Fatal(err)
@@ -175,7 +181,10 @@ func TestUncomputableChecksumRefused(t *testing.T) {
 // A whole-object checksum stated at completion is verified even when the
 // upload was started without a checksum algorithm.
 func TestCompleteVerifiesStatedChecksum(t *testing.T) {
-	be := localbackend.New()
+	eachBackend(t, testCompleteVerifiesStatedChecksum)
+}
+
+func testCompleteVerifiesStatedChecksum(t *testing.T, be *localbackend.Backend) {
 	ctx := t.Context()
 	if _, err := be.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String("b")}); err != nil {
 		t.Fatal(err)
@@ -203,8 +212,9 @@ func TestCompleteVerifiesStatedChecksum(t *testing.T) {
 	}
 }
 
-func TestCanceledContext(t *testing.T) {
-	be := localbackend.New()
+func TestCanceledContext(t *testing.T) { eachBackend(t, testCanceledContext) }
+
+func testCanceledContext(t *testing.T, be *localbackend.Backend) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	if _, err := be.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String("b")}); !errors.Is(err, context.Canceled) {
@@ -213,8 +223,9 @@ func TestCanceledContext(t *testing.T) {
 }
 
 // One Backend serves every request of a gateway at once.
-func TestConcurrentUse(t *testing.T) {
-	be := localbackend.New()
+func TestConcurrentUse(t *testing.T) { eachBackend(t, testConcurrentUse) }
+
+func testConcurrentUse(t *testing.T, be *localbackend.Backend) {
 	ctx := t.Context()
 	if _, err := be.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String("b")}); err != nil {
 		t.Fatal(err)

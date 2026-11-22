@@ -76,19 +76,39 @@ func TestIntegration(t *testing.T) {
 }
 
 // The same suite with no backend to start: every bucket is served by the
-// in-process backend, so this run is part of plain go test.
+// in-process backend, once held in memory and once kept in a directory, so
+// these runs are part of plain go test.
 func TestIntegrationInProcess(t *testing.T) {
-	be := localbackend.New()
-	runIntegration(t, integrationBackend{
-		// never dialed; the scheme is what config validation asks for
-		endpoint: "http://localbackend.invalid", key: "backendkey", secret: "backendsecret",
-		admin: be,
-		attach: func(app *s3rp.S3RP) {
-			app.SetBackendFactory(func(context.Context, *store.Backend) (s3gw.BackendClient, error) {
-				return be, nil
+	backends := map[string]func(t *testing.T) *localbackend.Backend{
+		"memory": func(*testing.T) *localbackend.Backend { return localbackend.New() },
+		"directory": func(t *testing.T) *localbackend.Backend {
+			be, err := localbackend.Open(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if err := be.Close(); err != nil {
+					t.Errorf("Close: %v", err)
+				}
 			})
+			return be
 		},
-	})
+	}
+	for name, newBackend := range backends {
+		t.Run(name, func(t *testing.T) {
+			be := newBackend(t)
+			runIntegration(t, integrationBackend{
+				// never dialed; the scheme is what config validation asks for
+				endpoint: "http://localbackend.invalid", key: "backendkey", secret: "backendsecret",
+				admin: be,
+				attach: func(app *s3rp.S3RP) {
+					app.SetBackendFactory(func(context.Context, *store.Backend) (s3gw.BackendClient, error) {
+						return be, nil
+					})
+				},
+			})
+		})
+	}
 }
 
 func runIntegration(t *testing.T, backend integrationBackend) {

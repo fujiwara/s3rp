@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -19,6 +20,10 @@ import (
 // inProcessEndpoint is the backend endpoint value that selects the
 // in-memory backend instead of an S3 backend.
 const inProcessEndpoint = "memory"
+
+// inProcessDirPrefix, before a path, selects the in-process backend keeping
+// its state in that directory.
+const inProcessDirPrefix = "directory:"
 
 func envOr(name, def string) string {
 	if v := os.Getenv(name); v != "" {
@@ -30,16 +35,23 @@ func envOr(name, def string) string {
 func main() {
 	var listen, endpoint, key, secret string
 	flag.StringVar(&listen, "listen", envOr("S3TESTS_HARNESS_LISTEN", "127.0.0.1:7481"), "listen address")
-	flag.StringVar(&endpoint, "backend-endpoint", envOr("S3RP_TEST_BACKEND_ENDPOINT", "http://127.0.0.1:7480"), "backend S3 endpoint, or \"memory\" for the in-process backend")
+	flag.StringVar(&endpoint, "backend-endpoint", envOr("S3RP_TEST_BACKEND_ENDPOINT", "http://127.0.0.1:7480"), "backend S3 endpoint, \"memory\" for the in-process backend, or \"directory:PATH\" for the same kept in PATH")
 	flag.StringVar(&key, "backend-access-key-id", envOr("S3RP_TEST_BACKEND_ACCESS_KEY_ID", "backendkey"), "backend access key id")
 	flag.StringVar(&secret, "backend-secret-access-key", envOr("S3RP_TEST_BACKEND_SECRET_ACCESS_KEY", "backendsecret"), "backend secret access key")
 	flag.Parse()
+
+	inProcess := endpoint == inProcessEndpoint
+	inProcessDir, isDir := strings.CutPrefix(endpoint, inProcessDirPrefix)
+	if isDir {
+		inProcess = true
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	h, err := harness.New(ctx, harness.Config{
-		InProcess:              endpoint == inProcessEndpoint,
+		InProcess:              inProcess,
+		InProcessDir:           inProcessDir,
 		BackendEndpoint:        endpoint,
 		BackendAccessKeyID:     key,
 		BackendSecretAccessKey: secret,

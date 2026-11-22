@@ -949,7 +949,7 @@ The gateway's outbound side: `SetClientOptions` for tuning the clients it builds
 
 ## Running without a backend
 
-A service built on the gateway can run with no backend at all: the gateway, your hooks, a store of your own and an object store held in memory, in one process. That is how you ship a local stand-in for the service — an emulator its users develop and test against — that answers with the service's own code: signature verification, policies, your Authorizer and mappers, the error wording and every refusal are the ones production runs.
+A service built on the gateway can run with no backend at all: the gateway, your hooks, a store of your own and an object store of its own, in one process. That is how you ship a local stand-in for the service — an emulator its users develop and test against — that answers with the service's own code: signature verification, policies, your Authorizer and mappers, the error wording and every refusal are the ones production runs.
 
 - **`SetBackendFactory` is where a backend that is not an S3 endpoint comes in.** It is given the backend definition and returns the client that serves it; a nil client leaves that backend to the gateway's own SDK client, so one process can mix the two. Its client is cached like any other — by backend identity (endpoint, region, credentials, path style), not by bucket — so the function must be deterministic over those fields, and `SetClientOptions` and `SetBreaker` do not apply to it.
 
@@ -960,6 +960,7 @@ A service built on the gateway can run with no backend at all: the gateway, your
   })
   ```
 - **`s3gw/localbackend` is the object store.** One `Backend` holds every bucket, whatever backend a definition names, so your store's definitions only have to agree with each other on endpoint, region and access key (the copy operations require one backend). It implements what the gateway calls — objects, versions and delete markers, listings and their paging, multipart uploads, copies, tags, Object Lock, checksums — and reports failures with S3's codes and statuses, which the gateway words as it does for any backend.
+- **`New` holds everything in memory; `Open(dir)` keeps it in a directory**, so that buckets and objects are there again when the emulator is started the next time. Call `Close` on shutdown. The two are one backend and answer alike; a body is written to a file as it is read, so an upload is not bounded by memory, and a multipart completion or a copy shares the bytes already stored instead of copying them. Changes reach the directory a moment after the request that made them is answered and nothing is synced to the device: the state survives the process ending, by `Close` or by a crash, and is not promised to survive a power loss. One directory serves one `Backend` at a time, which nothing enforces. Your own store's definitions are a separate matter — keep them where they survive too, and reconcile at startup a bucket one side has and the other lacks.
 - **Your control plane provisions it as it provisions a real backend.** Besides the gateway's methods, a `Backend` has `CreateBucket`, `DeleteBucket`, `PutBucketVersioning`, `PutObjectLockConfiguration` and `PutBucketEncryption`, with the signatures of the SDK's `*s3.Client`. A control plane written against an interface over the SDK client takes either, so the emulator's control plane is the production one with two things replaced: the definition store it writes and the backend it provisions.
 
   ```go
@@ -971,7 +972,7 @@ A service built on the gateway can run with no backend at all: the gateway, your
   }
   ```
 - **Credentials are your store's, as always.** An emulator's store can return a key it generated at startup (or one it was started with) for a default tenant, and issue more through the emulated control plane. Signatures are verified as in production, so a client that signs wrongly finds out locally.
-- **What it does not do** is what a backend does on its own schedule or beyond the API: lifecycle expiration and replication do not happen, nothing is encrypted (the mode and key id are recorded and reported), and a storage class is a label with no tier behind it. Data lives in memory and is gone with the process; it is not a place to keep objects.
+- **What it does not do** is what a backend does on its own schedule or beyond the API: lifecycle expiration and replication do not happen, nothing is encrypted (the mode and key id are recorded and reported), and a storage class is a label with no tier behind it. It is a stand-in either way: with `New` the data is gone with the process, and with `Open` it is kept without the care storage takes (no sync to the device, no redundancy, one file of metadata rewritten whole).
 - **Where it differs from your backend is measurable.** Where S3 and a backend disagree, `localbackend` follows S3. The suites in this repository run against it — `S3RP_TEST_BACKEND_ENDPOINT=memory ./s3fidelity/run.sh` and the same for `./s3tests/run.sh` — and so can your own, against both compositions of your service: what passes on one and fails on the other is the list of differences to document for the emulator's users.
 
 A backend client of your own goes through the same hook, and has three habits of the SDK client to keep (they are on `s3gw.BackendClient`): read a write's body to its end and fail the write with the read's error in the chain, since the gateway verifies the payload as it is read; report failures as the SDK does, a `smithy.APIError` for the code inside an `*awshttp.ResponseError` for the status; and compute the checksum a write names in `ChecksumAlgorithm`. Implement `s3gw.StreamChecksummer` to say it can do the last over a body it reads once — otherwise the gateway assumes the SDK client's limit and forwards a trailing checksum's algorithm only when the definition's endpoint is https.
@@ -983,7 +984,7 @@ A backend client of your own goes through the same hook, and has three habits of
 
 **Don't**
 
-- Don't use `localbackend` to hold data: it is bounded by memory and keeps nothing.
+- Don't use `localbackend` to hold data you cannot lose: `New` keeps nothing, and `Open` keeps it as a development tool does.
 - Don't make the factory depend on the bucket: its client is cached per backend and serves every bucket of it.
 
 ## The other packages

@@ -9,10 +9,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+
+	"github.com/fujiwara/s3rp/s3gw/localbackend"
 )
 
-func TestObjectLock(t *testing.T) {
-	f := newFixture(t)
+func TestObjectLock(t *testing.T) { eachBackend(t, testObjectLock) }
+
+func testObjectLock(t *testing.T, be *localbackend.Backend) {
+	f := newFixture(t, be)
 	f.createBucket("vault", true)
 	f.createBucket("plain", false)
 	now := time.Now()

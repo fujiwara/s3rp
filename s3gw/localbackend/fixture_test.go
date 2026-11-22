@@ -84,9 +84,34 @@ type fixture struct {
 	store   *testStore
 }
 
-func newFixture(t *testing.T) *fixture {
+// eachBackend runs a test against a Backend held in memory and one kept in
+// a directory: they are the same backend and must behave the same.
+func eachBackend(t *testing.T, test func(*testing.T, *localbackend.Backend)) {
+	t.Run("memory", func(t *testing.T) { test(t, localbackend.New()) })
+	t.Run("directory", func(t *testing.T) {
+		dir := t.TempDir()
+		be, err := localbackend.Open(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if err := be.Close(); err != nil {
+				t.Errorf("Close: %v", err)
+			}
+			// whatever the test left must load again
+			again, err := localbackend.Open(dir)
+			if err != nil {
+				t.Errorf("reopening what the test left: %v", err)
+				return
+			}
+			again.Close()
+		})
+		test(t, be)
+	})
+}
+
+func newFixture(t *testing.T, be *localbackend.Backend) *fixture {
 	t.Helper()
-	be := localbackend.New()
 	st := &testStore{buckets: map[string]bool{}}
 	gw := s3gw.New(st)
 	gw.SetBackendFactory(func(context.Context, *store.Backend) (s3gw.BackendClient, error) {
