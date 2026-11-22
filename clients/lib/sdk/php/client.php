@@ -65,6 +65,11 @@ switch ($verb) {
             echo "{$tag['Key']}={$tag['Value']}\n";
         }
         break;
+    case 'notification':
+        foreach ($s3->getBucketNotificationConfiguration(['Bucket' => $bucket])['TopicConfigurations'] ?? [] as $topic) {
+            echo "{$topic['Id']} topic={$topic['TopicArn']} events=", implode(',', $topic['Events']), "\n";
+        }
+        break;
     case 'put_tree':
         $names = array_values(array_diff(scandir($args[0]), ['.', '..']));
         sort($names);

@@ -355,6 +355,19 @@ tenants:
 		errStr: "prefix is reserved",
 	},
 	{
+		name: "notification with another root element",
+		yaml: `
+tenants:
+  - name: foo
+    users: [{name: user1, keys: [{access_key_id: k, secret_access_key: s}]}]
+    buckets:
+      - name: bucket1
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
+        notification: "<LifecycleConfiguration></LifecycleConfiguration>"
+`,
+		errStr: "notification: invalid NotificationConfiguration document",
+	},
+	{
 		name: "cors unsupported method",
 		yaml: `
 tenants:

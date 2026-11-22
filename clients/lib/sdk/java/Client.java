@@ -91,6 +91,9 @@ public class Client {
                     });
                 case "tags" -> s3.getBucketTagging(g -> g.bucket(bucket)).join().tagSet()
                     .forEach(tag -> System.out.println(tag.key() + "=" + tag.value()));
+                case "notification" -> s3.getBucketNotificationConfiguration(g -> g.bucket(bucket)).join()
+                    .topicConfigurations().forEach(topic -> System.out.println(topic.id()
+                        + " topic=" + topic.topicArn() + " events=" + String.join(",", topic.eventsAsStrings())));
                 case "put_tree" -> {
                     List<Path> files;
                     try (var entries = Files.list(Path.of(args[1]))) {

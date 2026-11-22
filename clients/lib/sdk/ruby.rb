@@ -51,6 +51,10 @@ when "replication"
   end
 when "tags"
   s3.get_bucket_tagging(bucket: bucket).tag_set.each { |tag| puts "#{tag.key}=#{tag.value}" }
+when "notification"
+  s3.get_bucket_notification_configuration(bucket: bucket).topic_configurations.each do |topic|
+    puts "#{topic.id} topic=#{topic.topic_arn} events=#{topic.events.join(',')}"
+  end
 when "put_tree"
   Dir.children(args[0]).sort.each do |name|
     transfer.upload_file(File.join(args[0], name), bucket: bucket, key: "#{args[1]}/#{name}")

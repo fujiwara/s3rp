@@ -189,3 +189,18 @@ func TestValidTag(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateNotificationText(t *testing.T) {
+	if err := store.ValidateNotificationText(`<NotificationConfiguration><EventBridgeConfiguration/></NotificationConfiguration>`); err != nil {
+		t.Errorf("must be valid: %v", err)
+	}
+	for name, text := range map[string]string{
+		"empty":        ``,
+		"another root": `<ReplicationConfiguration/>`,
+		"unclosed":     `<NotificationConfiguration><TopicConfiguration>`,
+	} {
+		if err := store.ValidateNotificationText(text); err == nil {
+			t.Errorf("%s: %q must be rejected", name, text)
+		}
+	}
+}

@@ -4,7 +4,7 @@ const { pipeline } = require("node:stream/promises");
 const {
   S3Client, GetObjectCommand, DeleteObjectCommand, CopyObjectCommand, paginateListObjectsV2,
   GetBucketLifecycleConfigurationCommand, GetBucketReplicationCommand,
-  GetBucketTaggingCommand,
+  GetBucketTaggingCommand, GetBucketNotificationConfigurationCommand,
 } = require("@aws-sdk/client-s3");
 const { Upload } = require("@aws-sdk/lib-storage");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
@@ -65,6 +65,13 @@ async function main([verb, ...args]) {
     case "tags": {
       const { TagSet } = await s3.send(new GetBucketTaggingCommand({ Bucket }));
       for (const tag of TagSet ?? []) console.log(`${tag.Key}=${tag.Value}`);
+      break;
+    }
+    case "notification": {
+      const { TopicConfigurations } = await s3.send(new GetBucketNotificationConfigurationCommand({ Bucket }));
+      for (const topic of TopicConfigurations ?? []) {
+        console.log(`${topic.Id} topic=${topic.TopicArn} events=${(topic.Events ?? []).join(",")}`);
+      }
       break;
     }
     case "put_tree":

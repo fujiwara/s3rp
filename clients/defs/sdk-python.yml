@@ -12,4 +12,5 @@ verbs:
   lifecycle: $SDK lifecycle
   replication: $SDK replication
   tags:     $SDK tags
+  notification: $SDK notification
   put_tree: $SDK put_tree "$DIR" "$PREFIX"

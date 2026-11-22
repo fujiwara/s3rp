@@ -29,7 +29,7 @@ const expireLogsLifecycle = `<?xml version="1.0" encoding="UTF-8"?>
 // a foreign tenant may read a configuration only when the policy says so
 const configurationReadableByTenantB = `{
   "Statement": [
-    {"Effect": "Allow", "Principal": {"S3RP": ["tenant-b/bob"]}, "Action": ["s3:GetLifecycleConfiguration", "s3:GetReplicationConfiguration", "s3:GetBucketTagging"], "Resource": "shared"}
+    {"Effect": "Allow", "Principal": {"S3RP": ["tenant-b/bob"]}, "Action": ["s3:GetLifecycleConfiguration", "s3:GetReplicationConfiguration", "s3:GetBucketTagging", "s3:GetBucketNotification"], "Resource": "shared"}
   ]
 }`
 
@@ -49,8 +49,8 @@ func newBucketConfigProxy(t *testing.T) (map[string]*s3.Client, *s3gw.Gateway) {
 		{name: "carol", keyID: "CAROLKEY", secret: "carolsecret"},
 	}
 	m := buildStore(t, "tenant-a", owners, []bucketSpec{
-		{name: "ruled", lifecycle: expireLogsLifecycle, replication: replicateToBackup, tags: bucketTags},
-		{name: "shared", lifecycle: expireLogsLifecycle, replication: replicateToBackup, tags: bucketTags, policyText: configurationReadableByTenantB},
+		{name: "ruled", lifecycle: expireLogsLifecycle, replication: replicateToBackup, tags: bucketTags, notification: notifyOnCreate},
+		{name: "shared", lifecycle: expireLogsLifecycle, replication: replicateToBackup, tags: bucketTags, notification: notifyOnCreate, policyText: configurationReadableByTenantB},
 		{name: "plain"},
 	})
 	m.addTenant(t, "tenant-b", foreign, nil)

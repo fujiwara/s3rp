@@ -137,6 +137,19 @@ func run(ctx context.Context, verb string, args []string) error {
 			fmt.Printf("%s=%s\n", aws.ToString(tag.Key), aws.ToString(tag.Value))
 		}
 		return nil
+	case "notification":
+		out, err := client.GetBucketNotificationConfiguration(ctx, &s3.GetBucketNotificationConfigurationInput{Bucket: bucket})
+		if err != nil {
+			return err
+		}
+		for _, topic := range out.TopicConfigurations {
+			events := make([]string, len(topic.Events))
+			for i, event := range topic.Events {
+				events[i] = string(event)
+			}
+			fmt.Printf("%s topic=%s events=%s\n", aws.ToString(topic.Id), aws.ToString(topic.TopicArn), strings.Join(events, ","))
+		}
+		return nil
 	case "put_tree":
 		entries, err := os.ReadDir(args[0])
 		if err != nil {

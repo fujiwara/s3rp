@@ -158,6 +158,13 @@ async fn main() -> Result<()> {
                 println!("{}={}", tag.key(), tag.value());
             }
         }
+        "notification" => {
+            let out = s3.get_bucket_notification_configuration().bucket(&bucket).send().await?;
+            for topic in out.topic_configurations() {
+                let events: Vec<&str> = topic.events().iter().map(|e| e.as_str()).collect();
+                println!("{} topic={} events={}", topic.id().unwrap_or_default(), topic.topic_arn(), events.join(","));
+            }
+        }
         "put_tree" => {
             let mut names = Vec::new();
             let mut entries = tokio::fs::read_dir(&args[1]).await?;

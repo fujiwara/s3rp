@@ -159,6 +159,15 @@ type Bucket struct {
 	// where it is written.
 	ReplicationText string
 
+	// NotificationText is the notification configuration a tenant is shown
+	// (empty if none): the XML document GetBucketNotificationConfiguration
+	// returns, verbatim. Like the documents above it is served and never
+	// read; the gateway emits no event because of it. What it names — a
+	// topic, a queue — is shown as written, so it must be the service's
+	// name for the destination, never a backend's. Check it with
+	// ValidateNotificationText where it is written.
+	NotificationText string
+
 	// Tags are the bucket's tags (nil if none), which GetBucketTagging
 	// returns. Unlike the configuration documents above they are typed: a
 	// tag set has one small shape, which the gateway renders. They are

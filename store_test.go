@@ -69,6 +69,12 @@ func storeContract(t *testing.T, st store.Store) {
 		if len(b.Tags) != 0 || logs.Tags["env"] != "prod" || logs.Tags["team"] != "storage" {
 			t.Errorf("bucket tags: photos %v, logs %v", b.Tags, logs.Tags)
 		}
+		if b.NotificationText != "" {
+			t.Errorf("photos has no notification configuration, got %q", b.NotificationText)
+		}
+		if err := store.ValidateNotificationText(logs.NotificationText); err != nil {
+			t.Errorf("logs notification configuration: %v", err)
+		}
 		if b.ReplicationText != "" {
 			t.Errorf("photos has no replication configuration, got %q", b.ReplicationText)
 		}

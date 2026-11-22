@@ -54,6 +54,9 @@ match verb:
     case "tags":
         for tag in s3.get_bucket_tagging(Bucket=bucket)["TagSet"]:
             print(f"{tag['Key']}={tag['Value']}")
+    case "notification":
+        for topic in s3.get_bucket_notification_configuration(Bucket=bucket).get("TopicConfigurations", []):
+            print(f"{topic['Id']} topic={topic['TopicArn']} events={','.join(topic['Events'])}")
     case "put_tree":
         for path in sorted(Path(args[0]).iterdir()):
             s3.upload_file(str(path), bucket, f"{args[1]}/{path.name}")
