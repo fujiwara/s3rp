@@ -45,6 +45,10 @@ when "lifecycle"
     abort_days = rule.abort_incomplete_multipart_upload&.days_after_initiation || "-"
     puts "#{rule.id} prefix=#{rule.filter&.prefix} expire=#{expire} abort=#{abort_days}"
   end
+when "replication"
+  s3.get_bucket_replication(bucket: bucket).replication_configuration.rules.each do |rule|
+    puts "#{rule.id} prefix=#{rule.filter&.prefix} status=#{rule.status} destination=#{rule.destination.bucket}"
+  end
 when "put_tree"
   Dir.children(args[0]).sort.each do |name|
     transfer.upload_file(File.join(args[0], name), bucket: bucket, key: "#{args[1]}/#{name}")

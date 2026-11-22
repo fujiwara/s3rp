@@ -150,6 +150,15 @@ type Bucket struct {
 	// ValidateLifecycleText where it is written.
 	LifecycleText string
 
+	// ReplicationText is the replication configuration a tenant is shown
+	// (empty if none): the XML document GetBucketReplication returns,
+	// verbatim. Like LifecycleText it is served and never read, and
+	// replicates nothing. Whatever it names — a destination bucket, a
+	// role — is shown to the tenant as written, so it must name front
+	// buckets, never a backend's. Check it with ValidateReplicationText
+	// where it is written.
+	ReplicationText string
+
 	// Metadata is an opaque value a Store implementation may attach when it
 	// builds the bucket — data it already had in hand, such as quota or
 	// plan information loaded with the same query. The gateway never

@@ -42,6 +42,15 @@ tenants:
               <Expiration><Days>30</Days></Expiration>
             </Rule>
           </LifecycleConfiguration>
+        replication: |
+          <ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+            <Role>replication</Role>
+            <Rule>
+              <ID>to-photos</ID>
+              <Status>Enabled</Status>
+              <Destination><Bucket>arn:aws:s3:::photos</Bucket></Destination>
+            </Rule>
+          </ReplicationConfiguration>
   - name: umbrella
     users:
       - name: research1

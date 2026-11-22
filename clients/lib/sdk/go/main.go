@@ -112,6 +112,22 @@ func run(ctx context.Context, verb string, args []string) error {
 			fmt.Printf("%s prefix=%s expire=%s abort=%s\n", aws.ToString(rule.ID), prefix, expire, abort)
 		}
 		return nil
+	case "replication":
+		out, err := client.GetBucketReplication(ctx, &s3.GetBucketReplicationInput{Bucket: bucket})
+		if err != nil {
+			return err
+		}
+		for _, rule := range out.ReplicationConfiguration.Rules {
+			prefix, destination := "", ""
+			if rule.Filter != nil {
+				prefix = aws.ToString(rule.Filter.Prefix)
+			}
+			if rule.Destination != nil {
+				destination = aws.ToString(rule.Destination.Bucket)
+			}
+			fmt.Printf("%s prefix=%s status=%s destination=%s\n", aws.ToString(rule.ID), prefix, rule.Status, destination)
+		}
+		return nil
 	case "put_tree":
 		entries, err := os.ReadDir(args[0])
 		if err != nil {

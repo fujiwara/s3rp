@@ -54,6 +54,12 @@ switch ($verb) {
             echo "{$rule['ID']} prefix={$prefix} expire={$expire} abort={$abort}\n";
         }
         break;
+    case 'replication':
+        foreach ($s3->getBucketReplication(['Bucket' => $bucket])['ReplicationConfiguration']['Rules'] as $rule) {
+            $prefix = $rule['Filter']['Prefix'] ?? '';
+            echo "{$rule['ID']} prefix={$prefix} status={$rule['Status']} destination={$rule['Destination']['Bucket']}\n";
+        }
+        break;
     case 'put_tree':
         $names = array_values(array_diff(scandir($args[0]), ['.', '..']));
         sort($names);

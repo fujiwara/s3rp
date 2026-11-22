@@ -110,3 +110,18 @@ func TestValidateLifecycleText(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateReplicationText(t *testing.T) {
+	if err := store.ValidateReplicationText(`<ReplicationConfiguration><Role>r</Role></ReplicationConfiguration>`); err != nil {
+		t.Errorf("must be valid: %v", err)
+	}
+	for name, text := range map[string]string{
+		"empty":        ``,
+		"another root": `<LifecycleConfiguration/>`,
+		"unclosed":     `<ReplicationConfiguration><Rule>`,
+	} {
+		if err := store.ValidateReplicationText(text); err == nil {
+			t.Errorf("%s: %q must be rejected", name, text)
+		}
+	}
+}

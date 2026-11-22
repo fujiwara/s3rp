@@ -46,6 +46,10 @@ switch (args[0])
             Console.WriteLine($"{rule.Id} prefix={prefix} expire={rule.Expiration?.Days} abort={rule.AbortIncompleteMultipartUpload?.DaysAfterInitiation}");
         }
         break;
+    case "replication":
+        foreach (var rule in (await s3.GetBucketReplicationAsync(new GetBucketReplicationRequest { BucketName = bucket })).Configuration.Rules)
+            Console.WriteLine($"{rule.Id} prefix={rule.Filter?.Prefix} status={rule.Status} destination={rule.Destination?.BucketArn}");
+        break;
     case "put_tree":
         foreach (var file in Directory.GetFiles(args[1]).Order())
             await transfer.UploadAsync(file, bucket, args[2] + "/" + Path.GetFileName(file));

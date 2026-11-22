@@ -3,7 +3,7 @@ const { createReadStream, createWriteStream, readdirSync } = require("node:fs");
 const { pipeline } = require("node:stream/promises");
 const {
   S3Client, GetObjectCommand, DeleteObjectCommand, CopyObjectCommand, paginateListObjectsV2,
-  GetBucketLifecycleConfigurationCommand,
+  GetBucketLifecycleConfigurationCommand, GetBucketReplicationCommand,
 } = require("@aws-sdk/client-s3");
 const { Upload } = require("@aws-sdk/lib-storage");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
@@ -51,6 +51,13 @@ async function main([verb, ...args]) {
         const expire = rule.Expiration?.Days ?? "-";
         const abort = rule.AbortIncompleteMultipartUpload?.DaysAfterInitiation ?? "-";
         console.log(`${rule.ID} prefix=${rule.Filter?.Prefix ?? ""} expire=${expire} abort=${abort}`);
+      }
+      break;
+    }
+    case "replication": {
+      const { ReplicationConfiguration } = await s3.send(new GetBucketReplicationCommand({ Bucket }));
+      for (const rule of ReplicationConfiguration?.Rules ?? []) {
+        console.log(`${rule.ID} prefix=${rule.Filter?.Prefix ?? ""} status=${rule.Status} destination=${rule.Destination?.Bucket}`);
       }
       break;
     }

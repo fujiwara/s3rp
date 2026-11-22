@@ -1,0 +1,14 @@
+desc: Read the bucket's replication configuration, which the gateway serves as its store holds it
+vars:
+  client: yaml://${CLIENT_FILE}
+steps:
+  read:
+    exec:
+      # on one line, as in bucket-lifecycle
+      command: "{{ vars.client.verbs.replication }}"
+    # the rule of clients/s3rp.yml, as the client's own parser read it
+    test: |
+      current.exit_code == 0
+      && current.stdout contains "to-backup"
+      && current.stdout contains "docs/"
+      && current.stdout contains "arn:aws:s3:::compat-backup"

@@ -81,6 +81,14 @@ public class Client {
                         + " expire=" + (expiration == null || expiration.days() == null ? "-" : expiration.days())
                         + " abort=" + (abort == null ? "-" : abort.daysAfterInitiation()));
                 });
+                case "replication" -> s3.getBucketReplication(g -> g.bucket(bucket)).join()
+                    .replicationConfiguration().rules().forEach(rule -> {
+                        var filter = rule.filter();
+                        System.out.println(rule.id()
+                            + " prefix=" + (filter == null || filter.prefix() == null ? "" : filter.prefix())
+                            + " status=" + rule.statusAsString()
+                            + " destination=" + rule.destination().bucket());
+                    });
                 case "put_tree" -> {
                     List<Path> files;
                     try (var entries = Files.list(Path.of(args[1]))) {

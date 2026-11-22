@@ -4,8 +4,9 @@ What to set in a client, and what does not work, when its endpoint is the
 gateway. It is drawn from the [client compatibility run](client-compat.md),
 which runs each client below through the same scenarios: small and awkward
 keys, a server-side copy, a listing of more than a thousand keys, a
-multipart upload and its download, and a presigned GET; aws-cli, `mc`,
-s3cmd and the AWS SDKs also read the bucket's lifecycle configuration. What a client does
+multipart upload and its download, and a presigned GET; aws-cli, `mc`
+and the AWS SDKs also read the bucket's lifecycle and replication
+configurations (s3cmd the lifecycle only). What a client does
 outside those — versioning, tags, Object Lock, server-side encryption — is
 not covered here.
 
@@ -22,7 +23,7 @@ else:
 - the AWS SDKs for JavaScript, Go, .NET, PHP and Rust, and the AWS SDK for
   Python (boto3) apart from [presigned URLs](#boto3-presigned-urls)
 - aws-cli, with either transfer client (`preferred_transfer_client`)
-- `mc`, restic, kopia, s5cmd, DuckDB (httpfs), Bun's `S3Client`, WinSCP
+- `mc` (apart from [`mc replicate`](#mc-replication)), restic, kopia, s5cmd, DuckDB (httpfs), Bun's `S3Client`, WinSCP
 
 The other clients are below.
 
@@ -47,6 +48,13 @@ boto3.client("s3", endpoint_url=..., config=Config(signature_version="s3v4"))
   fails.
 - **`s3cmd signurl` does not work.** It signs with Signature Version 2 and
   has no setting for another; make presigned URLs with another client.
+
+### mc: replication
+
+`mc replicate ls` does not work: after reading the bucket's replication
+configuration it asks MinIO's admin API for the remote targets, which only
+MinIO has. `mc ilm rule ls` works, and so does a program that reads the
+configuration through minio-go.
 
 ### OpenDAL: a private certificate authority
 

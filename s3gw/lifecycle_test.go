@@ -26,14 +26,17 @@ const expireLogsLifecycle = `<?xml version="1.0" encoding="UTF-8"?>
   </Rule>
 </LifecycleConfiguration>`
 
-// a foreign tenant may read the configuration only when the policy says so
-const lifecycleReadableByTenantB = `{
+// a foreign tenant may read a configuration only when the policy says so
+const configurationReadableByTenantB = `{
   "Statement": [
-    {"Effect": "Allow", "Principal": {"S3RP": ["tenant-b/bob"]}, "Action": "s3:GetLifecycleConfiguration", "Resource": "shared"}
+    {"Effect": "Allow", "Principal": {"S3RP": ["tenant-b/bob"]}, "Action": ["s3:GetLifecycleConfiguration", "s3:GetReplicationConfiguration"], "Resource": "shared"}
   ]
 }`
 
-func newLifecycleProxy(t *testing.T) (map[string]*s3.Client, *s3gw.Gateway) {
+// newBucketConfigProxy serves the bucket configurations the store carries:
+// "ruled" and "shared" have them, "plain" has none, and only bob of
+// tenant-b is granted the reads on "shared".
+func newBucketConfigProxy(t *testing.T) (map[string]*s3.Client, *s3gw.Gateway) {
 	t.Helper()
 	owners := []userSpec{
 		{name: "alice", keyID: "ALICEKEY", secret: "alicesecret"},
@@ -46,8 +49,8 @@ func newLifecycleProxy(t *testing.T) (map[string]*s3.Client, *s3gw.Gateway) {
 		{name: "carol", keyID: "CAROLKEY", secret: "carolsecret"},
 	}
 	m := buildStore(t, "tenant-a", owners, []bucketSpec{
-		{name: "ruled", lifecycle: expireLogsLifecycle},
-		{name: "shared", lifecycle: expireLogsLifecycle, policyText: lifecycleReadableByTenantB},
+		{name: "ruled", lifecycle: expireLogsLifecycle, replication: replicateToBackup},
+		{name: "shared", lifecycle: expireLogsLifecycle, replication: replicateToBackup, policyText: configurationReadableByTenantB},
 		{name: "plain"},
 	})
 	m.addTenant(t, "tenant-b", foreign, nil)
@@ -57,7 +60,7 @@ func newLifecycleProxy(t *testing.T) (map[string]*s3.Client, *s3gw.Gateway) {
 }
 
 func TestGetBucketLifecycleConfiguration(t *testing.T) {
-	clients, _ := newLifecycleProxy(t)
+	clients, _ := newBucketConfigProxy(t)
 	ctx := t.Context()
 
 	out, err := clients["alice"].GetBucketLifecycleConfiguration(ctx, &s3.GetBucketLifecycleConfigurationInput{Bucket: aws.String("ruled")})
@@ -86,7 +89,7 @@ func TestGetBucketLifecycleConfiguration(t *testing.T) {
 // The parameter asks MinIO for an X-Minio-LifecycleConfig-UpdatedAt header;
 // without the header the client reports no update time.
 func TestGetBucketLifecycleConfigurationIgnoresWithUpdatedAt(t *testing.T) {
-	clients, _ := newLifecycleProxy(t)
+	clients, _ := newBucketConfigProxy(t)
 	out, err := clients["alice"].GetBucketLifecycleConfiguration(t.Context(), &s3.GetBucketLifecycleConfigurationInput{Bucket: aws.String("ruled")},
 		func(o *s3.Options) {
 			o.APIOptions = append(o.APIOptions, func(stack *middleware.Stack) error {
@@ -110,7 +113,7 @@ func TestGetBucketLifecycleConfigurationIgnoresWithUpdatedAt(t *testing.T) {
 }
 
 func TestGetBucketLifecycleConfigurationAuthorized(t *testing.T) {
-	clients, _ := newLifecycleProxy(t)
+	clients, _ := newBucketConfigProxy(t)
 	get := func(user, bucket string) error {
 		_, err := clients[user].GetBucketLifecycleConfiguration(t.Context(), &s3.GetBucketLifecycleConfigurationInput{Bucket: aws.String(bucket)})
 		return err
@@ -126,7 +129,7 @@ func TestGetBucketLifecycleConfigurationAuthorized(t *testing.T) {
 }
 
 func TestBucketLifecycleWritesRefused(t *testing.T) {
-	clients, gw := newLifecycleProxy(t)
+	clients, gw := newBucketConfigProxy(t)
 	// the observer runs after the response is written, on the server's
 	// goroutine: the call returning does not mean it has run
 	observed := make(chan *s3gw.RequestInfo, 1)

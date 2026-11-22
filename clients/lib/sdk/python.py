@@ -47,6 +47,10 @@ match verb:
             expire = rule.get("Expiration", {}).get("Days", "-")
             abort = rule.get("AbortIncompleteMultipartUpload", {}).get("DaysAfterInitiation", "-")
             print(f"{rule['ID']} prefix={prefix} expire={expire} abort={abort}")
+    case "replication":
+        for rule in s3.get_bucket_replication(Bucket=bucket)["ReplicationConfiguration"]["Rules"]:
+            prefix = rule.get("Filter", {}).get("Prefix", "")
+            print(f"{rule['ID']} prefix={prefix} status={rule['Status']} destination={rule['Destination']['Bucket']}")
     case "put_tree":
         for path in sorted(Path(args[0]).iterdir()):
             s3.upload_file(str(path), bucket, f"{args[1]}/{path.name}")
