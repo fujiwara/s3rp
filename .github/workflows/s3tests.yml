@@ -63,7 +63,8 @@ jobs:
         env:
           # unset, run.sh uses the compose ceph
           S3RP_TEST_BACKEND_ENDPOINT: ${{ matrix.backend == 'localbackend' && format('directory:{0}/localbackend', runner.temp) || '' }}
-          CEPH_IMAGE: ${{ inputs.image != 'compose default' && inputs.image || '' }}
+          # the image is Ceph's alone: run.sh deselects a test for a squid image
+          CEPH_IMAGE: ${{ matrix.backend == 'ceph' && inputs.image != 'compose default' && inputs.image || '' }}
           # mise-action v5 no longer exports its token; run.sh's mise install
           # needs one against GitHub API rate limits
           MISE_GITHUB_TOKEN: ${{ github.token }}
