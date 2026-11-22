@@ -29,6 +29,7 @@ other.
 |---|---|---|
 | `mc` | minio-go | the most used non-AWS client library; signer and streaming signatures of its own |
 | restic | minio-go | the same library driven as a backup tool: its own repository scenario |
+| kopia | minio-go | a second backup tool on it: ranged reads of pack blobs, and repository maintenance |
 | s3cmd | Python, own implementation | long-lived in operations; sends ACL and location requests others do not |
 | s3fs-fuse | C++ on libcurl, own signer | file operations become HEAD, ranged GET, multipart and copy requests |
 | obstore | Rust `object_store` | what Polars, delta-rs and DataFusion use |

@@ -1,0 +1,15 @@
+# kopia: minio-go as a backup tool drives it, as restic does, with a
+# repository layout and maintenance of its own. No verbs: exercised by
+# own/kopia.
+name: kopia
+env:
+  KOPIA_PASSWORD: compat
+  KOPIA_CONFIG_PATH: ${STATE_DIR}/repository.config
+  KOPIA_CACHE_DIRECTORY: ${STATE_DIR}/cache
+  KOPIA_LOG_DIR: ${STATE_DIR}/logs
+  KOPIA_CHECK_FOR_UPDATES: "false"
+  # the endpoint without its scheme, as kopia takes it
+  KOPIA_ENDPOINT: 127.0.0.1:${PORT}
+  AWS_ACCESS_KEY_ID: ${ACCESS_KEY}
+  AWS_SECRET_ACCESS_KEY: ${SECRET_KEY}
+verbs: {}
