@@ -38,11 +38,12 @@ func TestGeneratorRejects(t *testing.T) {
 		"upper-case header":              `{"operations":[{"name":"PutObject","scope":"object","support":"supported","authorizations":[{"action":"s3:PutObjectTagging","on":"target","header":"X-Amz-Tagging"}]}]}`,
 		"refused authorizes":             `{"operations":[{"name":"PutBucketPolicy","scope":"bucket","support":"refused","authorizations":[{"action":"s3:PutBucketPolicy","on":"target"}]}]}`,
 		"not an operation name":          `{"operations":[{"name":"get-object","scope":"object","support":"supported"}]}`,
-		"unsupported and in the catalog": `{"operations":[{"name":"GetObject","scope":"object","support":"supported"}],"unsupported":[{"feature":"Reads","operations":["GetObject"]}]}`,
-		"unsupported twice":              `{"unsupported":[{"feature":"A","operations":["RestoreObject"]},{"feature":"B","operations":["RestoreObject"]}]}`,
-		"duplicate feature":              `{"unsupported":[{"feature":"A","operations":["RestoreObject"]},{"feature":"A","operations":["SelectObjectContent"]}]}`,
-		"feature without operations":     `{"unsupported":[{"feature":"A"}]}`,
-		"feature without a name":         `{"unsupported":[{"operations":["RestoreObject"]}]}`,
+		"unsupported and in the catalog": `{"operations":[{"name":"GetObject","scope":"object","support":"supported"}],"unsupported":[{"feature":"Reads","kind":"object","operations":["GetObject"]}]}`,
+		"unsupported twice":              `{"unsupported":[{"feature":"A","kind":"object","operations":["RestoreObject"]},{"feature":"B","kind":"object","operations":["RestoreObject"]}]}`,
+		"duplicate feature":              `{"unsupported":[{"feature":"A","kind":"object","operations":["RestoreObject"]},{"feature":"A","kind":"object","operations":["SelectObjectContent"]}]}`,
+		"feature without operations":     `{"unsupported":[{"feature":"A","kind":"object"}]}`,
+		"feature without a name":         `{"unsupported":[{"kind":"object","operations":["RestoreObject"]}]}`,
+		"feature of an unknown kind":     `{"unsupported":[{"feature":"A","kind":"maybe","operations":["RestoreObject"]}]}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := s3opgen.File([]byte(src)); err == nil {
@@ -139,12 +140,25 @@ func TestCatalogDocumented(t *testing.T) {
 		t.Fatal("docs/s3-api.md: no Unsupported features section")
 	}
 	unsupportedDoc, _, _ := strings.Cut(rest, "\n## ")
+	// one table per kind, under its heading
+	kindHeading := map[string]s3op.FeatureKind{
+		"Object operations":           s3op.FeatureObject,
+		"Bucket configuration":        s3op.FeatureBucketConfiguration,
+		"Outside the gateway's model": s3op.FeatureOutside,
+	}
 	var wantFeatures, features []string
 	for _, f := range s3op.Unsupported() {
-		wantFeatures = append(wantFeatures, f.Name+" | "+strings.Join(f.Operations, ", ")+" | "+f.Note)
+		wantFeatures = append(wantFeatures, string(f.Kind)+" | "+f.Name+" | "+strings.Join(f.Operations, ", ")+" | "+f.Note)
 	}
-	for _, m := range regexp.MustCompile(`(?m)^\| ([^|]+) \| ([A-Z][A-Za-z, ]+) \| ([^|]*)\|$`).FindAllStringSubmatch(unsupportedDoc, -1) {
-		features = append(features, m[1]+" | "+m[2]+" | "+strings.TrimSpace(m[3]))
+	for _, section := range strings.Split(unsupportedDoc, "\n### ")[1:] {
+		heading, body, _ := strings.Cut(section, "\n")
+		kind, ok := kindHeading[heading]
+		if !ok {
+			t.Errorf("docs/s3-api.md: unsupported features under an unknown heading %q", heading)
+		}
+		for _, m := range regexp.MustCompile(`(?m)^\| ([^|]+) \| ([A-Z][A-Za-z, ]+) \| ([^|]*)\|$`).FindAllStringSubmatch(body, -1) {
+			features = append(features, string(kind)+" | "+m[1]+" | "+m[2]+" | "+strings.TrimSpace(m[3]))
+		}
 	}
 	if diff := cmp.Diff(wantFeatures, features); diff != "" {
 		t.Errorf("docs/s3-api.md unsupported features table differs from the catalog (-catalog +docs):\n%s", diff)

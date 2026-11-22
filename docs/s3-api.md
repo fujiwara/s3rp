@@ -324,26 +324,46 @@ http://localhost:8080/photos/foo.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&...
 
 The parts of the S3 API the gateway does not implement, with the operations each consists of. A request for one of them is answered `501 NotImplemented` naming the query parameter or header the gateway does not know, as any request it does not recognize is, and unlike the refused operations above it is not recorded under its name. (ListDirectoryBuckets and WriteGetObjectResponse are addressed to endpoints of their own on Amazon S3, not to a bucket's.) Together with the operations above, the list accounts for every operation of the S3 API as the AWS SDK for Go defines it: a test fails when an SDK update brings one that is in neither.
 
+They are grouped by what they are, which is also what supporting one would take. Why a feature is absent is given only where it is the gateway's own reason: what Amazon or a backend does with a feature today is not recorded here.
+
+### Object operations
+
+Operations on objects. A backend that implements one would be passed the request, as for the operations supported now.
+
 | feature | operations | |
 |---|---|---|
 | Object annotations | GetObjectAnnotation, PutObjectAnnotation, DeleteObjectAnnotation, ListObjectAnnotations | CopyObject accepts x-amz-object-annotation-directive: EXCLUDE and nothing else |
-| Lifecycle configuration | GetBucketLifecycleConfiguration, PutBucketLifecycleConfiguration, DeleteBucketLifecycle | expiration is enforced by the backend, whose rules the control plane writes |
 | Restoring archived objects | RestoreObject |  |
-| Bucket tagging | GetBucketTagging, PutBucketTagging, DeleteBucketTagging |  |
-| Replication | GetBucketReplication, PutBucketReplication, DeleteBucketReplication |  |
-| Event notifications | GetBucketNotificationConfiguration, PutBucketNotificationConfiguration |  |
-| Server access logging | GetBucketLogging, PutBucketLogging |  |
-| Static website hosting | GetBucketWebsite, PutBucketWebsite, DeleteBucketWebsite |  |
-| Analytics, inventory, metrics and Intelligent-Tiering configurations | GetBucketAnalyticsConfiguration, PutBucketAnalyticsConfiguration, DeleteBucketAnalyticsConfiguration, ListBucketAnalyticsConfigurations, GetBucketInventoryConfiguration, PutBucketInventoryConfiguration, DeleteBucketInventoryConfiguration, ListBucketInventoryConfigurations, GetBucketMetricsConfiguration, PutBucketMetricsConfiguration, DeleteBucketMetricsConfiguration, ListBucketMetricsConfigurations, GetBucketIntelligentTieringConfiguration, PutBucketIntelligentTieringConfiguration, DeleteBucketIntelligentTieringConfiguration, ListBucketIntelligentTieringConfigurations |  |
-| S3 Metadata tables | CreateBucketMetadataConfiguration, GetBucketMetadataConfiguration, DeleteBucketMetadataConfiguration, CreateBucketMetadataTableConfiguration, GetBucketMetadataTableConfiguration, DeleteBucketMetadataTableConfiguration, UpdateBucketMetadataAnnotationTableConfiguration, UpdateBucketMetadataInventoryTableConfiguration, UpdateBucketMetadataJournalTableConfiguration |  |
-| Transfer Acceleration | GetBucketAccelerateConfiguration, PutBucketAccelerateConfiguration |  |
-| Requester Pays | GetBucketRequestPayment, PutBucketRequestPayment | the tenant is billed by the service |
-| Attribute-based access control | GetBucketAbac, PutBucketAbac |  |
-| Directory buckets | CreateSession, ListDirectoryBuckets, RenameObject |  |
 | Changing an object's encryption in place | UpdateObjectEncryption |  |
 | S3 Select | SelectObjectContent |  |
-| S3 Object Lambda | WriteGetObjectResponse |  |
 | BitTorrent | GetObjectTorrent |  |
+
+### Bucket configuration
+
+Configuration of a bucket, which the control plane writes and a data-plane key must not ([Limitations](#limitations)). A read would be answered from the store's definition of the bucket, and the function itself is the service's to provide.
+
+| feature | operations | |
+|---|---|---|
+| Lifecycle configuration | GetBucketLifecycleConfiguration, PutBucketLifecycleConfiguration, DeleteBucketLifecycle | expiration is enforced by the backend, whose rules the control plane writes |
+| Bucket tagging | GetBucketTagging, PutBucketTagging, DeleteBucketTagging |  |
+| Replication | GetBucketReplication, PutBucketReplication, DeleteBucketReplication |  |
+| Event notifications | GetBucketNotificationConfiguration, PutBucketNotificationConfiguration | a service can emit its own from the gateway's hooks |
+| Server access logging | GetBucketLogging, PutBucketLogging | the gateway reports every request to the service's observer |
+| Analytics, inventory, metrics and Intelligent-Tiering configurations | GetBucketAnalyticsConfiguration, PutBucketAnalyticsConfiguration, DeleteBucketAnalyticsConfiguration, ListBucketAnalyticsConfigurations, GetBucketInventoryConfiguration, PutBucketInventoryConfiguration, DeleteBucketInventoryConfiguration, ListBucketInventoryConfigurations, GetBucketMetricsConfiguration, PutBucketMetricsConfiguration, DeleteBucketMetricsConfiguration, ListBucketMetricsConfigurations, GetBucketIntelligentTieringConfiguration, PutBucketIntelligentTieringConfiguration, DeleteBucketIntelligentTieringConfiguration, ListBucketIntelligentTieringConfigurations |  |
+| Attribute-based access control | GetBucketAbac, PutBucketAbac | authorization is the gateway's own policy evaluation |
+
+### Outside the gateway's model
+
+Another bucket type, anonymous access, or a function of Amazon's own infrastructure.
+
+| feature | operations | |
+|---|---|---|
+| Static website hosting | GetBucketWebsite, PutBucketWebsite, DeleteBucketWebsite | needs anonymous access, which does not exist |
+| S3 Metadata tables | CreateBucketMetadataConfiguration, GetBucketMetadataConfiguration, DeleteBucketMetadataConfiguration, CreateBucketMetadataTableConfiguration, GetBucketMetadataTableConfiguration, DeleteBucketMetadataTableConfiguration, UpdateBucketMetadataAnnotationTableConfiguration, UpdateBucketMetadataInventoryTableConfiguration, UpdateBucketMetadataJournalTableConfiguration | tables Amazon maintains about a bucket's objects |
+| Transfer Acceleration | GetBucketAccelerateConfiguration, PutBucketAccelerateConfiguration | a function of Amazon's network, not of the API |
+| Requester Pays | GetBucketRequestPayment, PutBucketRequestPayment | the tenant is billed by the service |
+| Directory buckets | CreateSession, ListDirectoryBuckets, RenameObject | another bucket type, with session-based authentication of its own |
+| S3 Object Lambda | WriteGetObjectResponse | transforms responses with AWS Lambda functions |
 
 The list is in the same catalog (`unsupported` in [`s3op/operations.json`](../s3op/operations.json), `s3op.Unsupported` in Go). Request headers the gateway does not support are in [Request headers](request-headers.md#not-supported).
 

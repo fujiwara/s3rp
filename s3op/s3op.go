@@ -98,12 +98,31 @@ func Lookup(name string) (Operation, bool) {
 	return Operation{}, false
 }
 
+// FeatureKind is what an unsupported feature is, which is also what
+// supporting it would take.
+type FeatureKind string
+
+const (
+	// FeatureObject is an operation on objects: a backend that implements
+	// it would be passed the request, as for the operations supported now.
+	FeatureObject FeatureKind = "object"
+	// FeatureBucketConfiguration is configuration of a bucket, which the
+	// control plane writes and a data-plane key must not: a read would be
+	// answered from the store's definition, and the function itself is the
+	// service's to provide.
+	FeatureBucketConfiguration FeatureKind = "bucket-configuration"
+	// FeatureOutside is outside what the gateway models: another bucket
+	// type, anonymous access, or a function of Amazon's own infrastructure.
+	FeatureOutside FeatureKind = "outside"
+)
+
 // Feature is a part of the S3 API the gateway does not implement. Its
 // operations have no route: a request for one is answered NotImplemented
 // like any request the gateway does not recognize, and is not recorded
 // under its name.
 type Feature struct {
 	Name       string
+	Kind       FeatureKind
 	Operations []string
 	Note       string
 }

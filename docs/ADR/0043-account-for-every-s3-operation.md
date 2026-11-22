@@ -21,8 +21,15 @@ them when aws-cli, which sends that header by default, was run against it
 ## Decision
 
 - `operations.json` gains `unsupported`: the features the gateway does
-  not implement, each with the S3 operations it consists of and, where
-  there is one, the reason. `s3op.Unsupported` exposes it.
+  not implement, each with the S3 operations it consists of, its kind
+  and, where there is one, the reason. `s3op.Unsupported` exposes it.
+- The kind says what the feature is and so what supporting it would take:
+  an operation on objects, which a backend would be passed; configuration
+  of a bucket, which the control plane owns and the store would answer
+  for; or something outside the gateway's model.
+- A note records the gateway's own reason and nothing else. That Amazon
+  has closed a feature to new customers, or which backend implements it,
+  is true until it is not, and no test can tell.
 - `TestCatalogCoversSDK` (s3gw) requires every operation of the AWS SDK
   for Go's S3 client to be in the catalog or in that list, and everything
   in the list to be an SDK operation. An SDK update that brings an

@@ -30,6 +30,7 @@ type catalog struct {
 // operations that belong to it.
 type feature struct {
 	Feature    string   `json:"feature"`
+	Kind       string   `json:"kind"`
 	Operations []string `json:"operations"`
 	Note       string   `json:"note"`
 }
@@ -52,6 +53,7 @@ type authorization struct {
 var (
 	scopes    = map[string]string{"service": "ScopeService", "bucket": "ScopeBucket", "object": "ScopeObject"}
 	supports  = map[string]string{"supported": "Supported", "refused": "Refused"}
+	kinds     = map[string]string{"object": "FeatureObject", "bucket-configuration": "FeatureBucketConfiguration", "outside": "FeatureOutside"}
 	resources = map[string]string{"target": "OnTarget", "copy-source": "OnCopySource", "each-key": "OnEachKey"}
 
 	namePattern   = regexp.MustCompile(`^[A-Z][A-Za-z0-9]*$`)
@@ -67,6 +69,7 @@ type data struct {
 	Scopes      map[string]string
 	Supports    map[string]string
 	Resources   map[string]string
+	Kinds       map[string]string
 }
 
 // File returns the generated Go source for the catalog in src.
@@ -82,7 +85,7 @@ func File(src []byte) ([]byte, error) {
 		return nil, fmt.Errorf("%s: %w", SourceFile, err)
 	}
 	var buf bytes.Buffer
-	d := data{c.Operations, c.Unsupported, actions, scopes, supports, resources}
+	d := data{c.Operations, c.Unsupported, actions, scopes, supports, resources, kinds}
 	if err := tmpl.Execute(&buf, d); err != nil {
 		return nil, err
 	}
@@ -148,6 +151,9 @@ func validate(c catalog) ([]constant, error) {
 			return nil, fmt.Errorf("unsupported feature %q: empty or duplicate", f.Feature)
 		}
 		features[f.Feature] = true
+		if kinds[f.Kind] == "" {
+			return nil, fmt.Errorf("unsupported feature %q: unknown kind %q", f.Feature, f.Kind)
+		}
 		if len(f.Operations) == 0 {
 			return nil, fmt.Errorf("unsupported feature %q: no operations", f.Feature)
 		}
@@ -219,6 +225,7 @@ var unsupported = []Feature{
 {{- range .Unsupported}}
 	{
 		Name: {{printf "%q" .Feature}},
+		Kind: {{index $.Kinds .Kind}},
 		Operations: []string{ {{- range .Operations}}{{printf "%q" .}}, {{end -}} },
 {{- if .Note}}
 		Note: {{printf "%q" .Note}},
