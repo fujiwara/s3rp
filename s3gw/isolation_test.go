@@ -85,7 +85,7 @@ func isoStore(t *testing.T, w isoWorld) memStore {
 }
 
 // TestAuthorizationMatchesSpec enumerates every policy of up to two
-// statements over a small vocabulary and compares each way the gateway
+// statements, in either order, over a small vocabulary and compares each way the gateway
 // decides — bucket resolution, authorize, the per-object authorizer and its
 // skip — with the specification, for every user, action and resource.
 func TestAuthorizationMatchesSpec(t *testing.T) {
@@ -101,23 +101,16 @@ func TestAuthorizationMatchesSpec(t *testing.T) {
 			}
 		}
 	}
+	// no policy, each statement alone, and every ordered pair: two Denies
+	// combine as an Allow and a Deny do, and the answer must not depend on
+	// which comes first
+	statements := append(slices.Clone(allows), denies...)
 	policies := [][]isoStatement{nil}
-	for i, a := range allows {
-		policies = append(policies, []isoStatement{a})
-		for _, d := range denies {
-			// both orders: the answer must not depend on it
-			if i%2 == 0 {
-				policies = append(policies, []isoStatement{a, d})
-			} else {
-				policies = append(policies, []isoStatement{d, a})
-			}
+	for _, first := range statements {
+		policies = append(policies, []isoStatement{first})
+		for _, second := range statements {
+			policies = append(policies, []isoStatement{first, second})
 		}
-		for _, a2 := range allows[i+1:] {
-			policies = append(policies, []isoStatement{a, a2})
-		}
-	}
-	for _, d := range denies {
-		policies = append(policies, []isoStatement{d})
 	}
 
 	actions := []string{"s3:GetObject", "s3:GetObjectVersion", "s3:PutObject", "s3:ListBucket", "s3:DeleteObject"}
@@ -477,6 +470,9 @@ func isoWorldSets() (worlds, perAction [][]isoStatement) {
 		{allow("tb/*", "s3:*", "b/*"), {effect: "Deny", principal: "tb/bob", notPrincipal: true, action: "s3:*", resource: "b/*"}},
 		// a Deny naming tb grants it nothing and shows it nothing
 		{deny("tb/bob", "s3:*", "b/*")},
+		// deleting is one action and bypassing governance retention another
+		{allow("tb/bob", "s3:DeleteObject*", "b/*")},
+		{allow("tb/*", "s3:*", "b/*"), deny("*", "s3:BypassGovernanceRetention", "b/priv/*")},
 	}
 	seen := map[string]bool{}
 	for _, op := range s3op.Operations() {
@@ -619,8 +615,10 @@ func checkIsoOutcome(fail func(string, ...any), g *isoGateway, rec *httptest.Res
 }
 
 // TestDeleteObjectsEnforcesIsolationPerKey: DeleteObjects is authorized key
-// by key, after the hooks. Only the keys the specification permits reach
-// the backend, each of the others is answered AccessDenied.
+// by key, after the hooks, for the delete action of each entry and, when
+// the request carries the bypass header, for that action too. Only the keys
+// the specification permits reach the backend, each of the others is
+// answered AccessDenied.
 func TestDeleteObjectsEnforcesIsolationPerKey(t *testing.T) {
 	entries := []struct {
 		key, version string
@@ -646,42 +644,51 @@ func TestDeleteObjectsEnforcesIsolationPerKey(t *testing.T) {
 		g := newIsoGateway(t, world)
 		text := isoPolicyText(statements)
 		for _, u := range isoUsers {
-			req := signedRequest(t, "POST", "http://s3.example.com/b?delete", body, hex.EncodeToString(hash[:]), now,
-				aws.Credentials{AccessKeyID: u.keyID(), SecretAccessKey: u.secret()},
-				func(req *http.Request) { req.Header.Set("Content-MD5", base64.StdEncoding.EncodeToString(sum[:])) })
-			s := &isoSigned{method: "POST", target: "http://s3.example.com/b?delete", header: req.Header, body: body}
-			*g.stub = stubBackend{delObjsOut: &s3.DeleteObjectsOutput{}}
-			g.auth.op, g.auth.admit = nil, true
-			rec := httptest.NewRecorder()
-			g.gw.Handler().ServeHTTP(rec, s.request())
+			for _, bypass := range []bool{false, true} {
+				req := signedRequest(t, "POST", "http://s3.example.com/b?delete", body, hex.EncodeToString(hash[:]), now,
+					aws.Credentials{AccessKeyID: u.keyID(), SecretAccessKey: u.secret()},
+					func(req *http.Request) {
+						req.Header.Set("Content-MD5", base64.StdEncoding.EncodeToString(sum[:]))
+						if bypass {
+							req.Header.Set("x-amz-bypass-governance-retention", "true")
+						}
+					})
+				s := &isoSigned{method: "POST", target: "http://s3.example.com/b?delete", header: req.Header, body: body}
+				*g.stub = stubBackend{delObjsOut: &s3.DeleteObjectsOutput{}}
+				g.auth.op, g.auth.admit = nil, true
+				rec := httptest.NewRecorder()
+				g.gw.Handler().ServeHTTP(rec, s.request())
 
-			var want []string
-			for _, e := range entries {
-				action := s3op.ActionDeleteObject
-				if e.version != "" {
-					action = s3op.ActionDeleteObjectVersion
+				var want []string
+				for _, e := range entries {
+					action := s3op.ActionDeleteObject
+					if e.version != "" {
+						action = s3op.ActionDeleteObjectVersion
+					}
+					// the header asks for one more action on every key
+					if world.permits(u, "b", action, "b/"+e.key) &&
+						(!bypass || world.permits(u, "b", s3op.ActionBypassGovernanceRetention, "b/"+e.key)) {
+						want = append(want, e.key)
+					}
 				}
-				if world.permits(u, "b", action, "b/"+e.key) {
-					want = append(want, e.key)
+				var got []string
+				if in := g.stub.delObjsIn; in != nil {
+					for _, o := range in.Delete.Objects {
+						got = append(got, aws.ToString(o.Key))
+					}
 				}
-			}
-			var got []string
-			if in := g.stub.delObjsIn; in != nil {
-				for _, o := range in.Delete.Objects {
-					got = append(got, aws.ToString(o.Key))
+				if !slices.Equal(got, want) {
+					t.Fatalf("%s (bypass %v) under %q: the backend was asked to delete %v, the specification permits %v", u.principal(), bypass, text, got, want)
 				}
-			}
-			if !slices.Equal(got, want) {
-				t.Fatalf("%s under %q: the backend was asked to delete %v, the specification permits %v", u.principal(), text, got, want)
-			}
-			if !world.visible(u, "b") {
-				if rec.Code != http.StatusForbidden {
-					t.Fatalf("%s under %q: hidden bucket answered %d", u.principal(), text, rec.Code)
+				if !world.visible(u, "b") {
+					if rec.Code != http.StatusForbidden {
+						t.Fatalf("%s (bypass %v) under %q: hidden bucket answered %d", u.principal(), bypass, text, rec.Code)
+					}
+					continue
 				}
-				continue
-			}
-			if denied := strings.Count(rec.Body.String(), "<Code>AccessDenied</Code>"); rec.Code != http.StatusOK || denied != len(entries)-len(want) {
-				t.Fatalf("%s under %q: %d with %d keys denied, want %d: %s", u.principal(), text, rec.Code, denied, len(entries)-len(want), rec.Body)
+				if denied := strings.Count(rec.Body.String(), "<Code>AccessDenied</Code>"); rec.Code != http.StatusOK || denied != len(entries)-len(want) {
+					t.Fatalf("%s (bypass %v) under %q: %d with %d keys denied, want %d: %s", u.principal(), bypass, text, rec.Code, denied, len(entries)-len(want), rec.Body)
+				}
 			}
 		}
 	}

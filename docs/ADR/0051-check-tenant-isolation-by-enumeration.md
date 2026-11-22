@@ -29,8 +29,9 @@ followed by `*` — so that it needs no policy evaluator and can be checked
 by reading. Two tests enumerate worlds in that language and hold the
 gateway to it:
 
-- **Every decision.** Every policy of up to two statements over a small
-  vocabulary (about twelve thousand), for every user, action and resource:
+- **Every decision.** Every policy of up to two statements, in either
+  order, over a small vocabulary (38,221), for every user, action and
+  resource:
   bucket resolution, `authorize`, the per-object authorizer and its skip
   must each answer as the specification does.
 - **Every operation.** Every operation of the `s3op` catalog — with and
