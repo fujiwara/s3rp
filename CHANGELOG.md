@@ -1,5 +1,20 @@
 # Changelog
 
+## [v0.0.23](https://github.com/fujiwara/s3rp/compare/v0.0.22...v0.0.23) - 2026-11-22
+
+- Add kopia to the client compatibility run by @fujiwara in https://github.com/fujiwara/s3rp/pull/249
+- Add aws-cli to the client run; accept annotation directive EXCLUDE by @fujiwara in https://github.com/fujiwara/s3rp/pull/251
+- Run the clients four at a time by @fujiwara in https://github.com/fujiwara/s3rp/pull/252
+- Keep jobs that build nothing from saving the Go cache by @fujiwara in https://github.com/fujiwara/s3rp/pull/253
+- List the S3 features the gateway does not implement by @fujiwara in https://github.com/fujiwara/s3rp/pull/254
+- Serve GetBucketLifecycleConfiguration from the store by @fujiwara in https://github.com/fujiwara/s3rp/pull/261
+- Serve GetBucketReplication from the store by @fujiwara in https://github.com/fujiwara/s3rp/pull/262
+- Rename s3gw/bucketconfig.go to bucketinspect.go by @fujiwara in https://github.com/fujiwara/s3rp/pull/263
+- Serve GetBucketTagging from the store by @fujiwara in https://github.com/fujiwara/s3rp/pull/264
+- Serve GetBucketNotificationConfiguration from the store by @fujiwara in https://github.com/fujiwara/s3rp/pull/265
+- Serve GetBucketLogging from the store by @fujiwara in https://github.com/fujiwara/s3rp/pull/266
+- Run Mountpoint for Amazon S3 as a client; relay restore status in listings by @fujiwara in https://github.com/fujiwara/s3rp/pull/267
+
 ## [v0.0.22](https://github.com/fujiwara/s3rp/compare/v0.0.21...v0.0.22) - 2026-11-21
 
 - Sort the canonical query by its encoded form by @fujiwara in https://github.com/fujiwara/s3rp/pull/228
