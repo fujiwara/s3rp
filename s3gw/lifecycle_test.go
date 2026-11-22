@@ -98,8 +98,10 @@ func TestGetBucketLifecycleConfigurationAuthorized(t *testing.T) {
 
 func TestBucketLifecycleWritesRefused(t *testing.T) {
 	clients, gw := newLifecycleProxy(t)
-	var last *s3gw.RequestInfo
-	gw.SetObserver(func(_ context.Context, info *s3gw.RequestInfo) { last = info })
+	// the observer runs after the response is written, on the server's
+	// goroutine: the call returning does not mean it has run
+	observed := make(chan *s3gw.RequestInfo, 1)
+	gw.SetObserver(func(_ context.Context, info *s3gw.RequestInfo) { observed <- info })
 	bucket := aws.String("ruled")
 	for name, call := range map[string]func() error{
 		s3op.OpPutBucketLifecycleConfiguration: func() error {
@@ -123,8 +125,8 @@ func TestBucketLifecycleWritesRefused(t *testing.T) {
 			if !errors.As(err, &apiErr) || apiErr.ErrorCode() != "NotImplemented" {
 				t.Fatalf("expect NotImplemented, got %v", err)
 			}
-			if last == nil || last.Route != name {
-				t.Errorf("the attempt is recorded as %+v, want route %s", last, name)
+			if info := <-observed; info.Route != name {
+				t.Errorf("the attempt is recorded as route %q, want %s", info.Route, name)
 			}
 		})
 	}

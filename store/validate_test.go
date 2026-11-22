@@ -95,13 +95,15 @@ func TestValidateLifecycleText(t *testing.T) {
 		}
 	}
 	for name, text := range map[string]string{
-		"empty":           ``,
-		"not XML":         `{"Rules": []}`,
-		"unclosed":        `<LifecycleConfiguration><Rule>`,
-		"mismatched tags": `<LifecycleConfiguration><Rule></LifecycleConfiguration>`,
-		"another root":    `<CORSConfiguration/>`,
-		"two roots":       `<LifecycleConfiguration/><LifecycleConfiguration/>`,
-		"text after":      `<LifecycleConfiguration/>trailing`,
+		"empty":                ``,
+		"not XML":              `{"Rules": []}`,
+		"unclosed":             `<LifecycleConfiguration><Rule>`,
+		"mismatched tags":      `<LifecycleConfiguration><Rule></LifecycleConfiguration>`,
+		"another root":         `<CORSConfiguration/>`,
+		"two roots":            `<LifecycleConfiguration/><LifecycleConfiguration/>`,
+		"text after":           `<LifecycleConfiguration/>trailing`,
+		"no-break space after": "<LifecycleConfiguration/>\u00a0",
+		"repeated attribute":   `<LifecycleConfiguration><Rule ID="one" ID="two"/></LifecycleConfiguration>`,
 	} {
 		if err := store.ValidateLifecycleText(text); err == nil {
 			t.Errorf("%s: %q must be rejected", name, text)

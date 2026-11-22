@@ -113,11 +113,21 @@ func validateXMLDocument(text, root string) error {
 				}
 				seen = true
 			}
+			// the decoder lets a repeated attribute through, which no
+			// XML parser a client uses does
+			for i, a := range t.Attr {
+				for _, b := range t.Attr[:i] {
+					if a.Name == b.Name {
+						return fmt.Errorf("invalid %s document: attribute %s repeated on %s", root, a.Name.Local, t.Name.Local)
+					}
+				}
+			}
 			depth++
 		case xml.EndElement:
 			depth--
 		case xml.CharData:
-			if depth == 0 && strings.TrimSpace(string(t)) != "" {
+			// XML's own white space only: TrimSpace would also pass U+00A0
+			if depth == 0 && strings.Trim(string(t), " \t\r\n") != "" {
 				return fmt.Errorf("invalid %s document: text outside the root element", root)
 			}
 		}
