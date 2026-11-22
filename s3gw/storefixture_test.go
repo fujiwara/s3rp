@@ -29,6 +29,7 @@ type bucketSpec struct {
 	cors         []*cors.Rule
 	lifecycle    string
 	replication  string
+	logging      string
 	notification string
 	tags         map[string]string
 	// endpoint overrides the shared backend, for the copy tests: copying
@@ -77,7 +78,7 @@ func (m memStore) addTenant(t *testing.T, tenant string, users []userSpec, bucke
 		backend.SetDefaults(b.name)
 		bucket := &store.Bucket{
 			Tenant: tenant, Name: b.name, Backend: backend,
-			PolicyText: b.policyText, CORS: b.cors, LifecycleText: b.lifecycle, ReplicationText: b.replication, NotificationText: b.notification, Tags: b.tags,
+			PolicyText: b.policyText, CORS: b.cors, LifecycleText: b.lifecycle, ReplicationText: b.replication, LoggingText: b.logging, NotificationText: b.notification, Tags: b.tags,
 		}
 		if b.policyText != "" {
 			p, err := policy.Parse(b.name, b.policyText, nil)

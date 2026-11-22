@@ -15,4 +15,5 @@ verbs:
   replication: $SDK replication
   tags:     $SDK tags
   notification: $SDK notification
+  logging:  $SDK logging
   put_tree: $SDK put_tree "$DIR" "$PREFIX"

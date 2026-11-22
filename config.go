@@ -107,6 +107,9 @@ type BucketConfig struct {
 	// Replication is the replication configuration XML GetBucketReplication
 	// returns, a declaration like Lifecycle.
 	Replication string `yaml:"replication,omitempty" json:"replication,omitempty"`
+	// Logging is the server access logging status XML GetBucketLogging
+	// returns, a declaration like Lifecycle.
+	Logging string `yaml:"logging,omitempty" json:"logging,omitempty"`
 	// Notification is the notification configuration XML
 	// GetBucketNotificationConfiguration returns, a declaration like Lifecycle.
 	Notification string `yaml:"notification,omitempty" json:"notification,omitempty"`
@@ -346,6 +349,11 @@ func (n *configNames) validateBucket(tenant string, b *BucketConfig) error {
 	if b.Notification != "" {
 		if err := store.ValidateNotificationText(b.Notification); err != nil {
 			return fmt.Errorf("bucket %s: notification: %w", b.Name, err)
+		}
+	}
+	if b.Logging != "" {
+		if err := store.ValidateLoggingText(b.Logging); err != nil {
+			return fmt.Errorf("bucket %s: logging: %w", b.Name, err)
 		}
 	}
 	if b.Replication != "" {

@@ -94,6 +94,11 @@ public class Client {
                 case "notification" -> s3.getBucketNotificationConfiguration(g -> g.bucket(bucket)).join()
                     .topicConfigurations().forEach(topic -> System.out.println(topic.id()
                         + " topic=" + topic.topicArn() + " events=" + String.join(",", topic.eventsAsStrings())));
+                case "logging" -> {
+                    var enabled = s3.getBucketLogging(g -> g.bucket(bucket)).join().loggingEnabled();
+                    System.out.println("target=" + (enabled == null ? "" : enabled.targetBucket())
+                        + " prefix=" + (enabled == null ? "" : enabled.targetPrefix()));
+                }
                 case "put_tree" -> {
                     List<Path> files;
                     try (var entries = Files.list(Path.of(args[1]))) {

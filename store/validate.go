@@ -159,6 +159,13 @@ func ValidateNotificationText(text string) error {
 	return validateXMLDocument(text, "NotificationConfiguration")
 }
 
+// ValidateLoggingText is ValidateLifecycleText for a bucket's server access
+// logging status: a well-formed XML document whose root element is
+// BucketLoggingStatus.
+func ValidateLoggingText(text string) error {
+	return validateXMLDocument(text, "BucketLoggingStatus")
+}
+
 func validateXMLDocument(text, root string) error {
 	dec := xml.NewDecoder(strings.NewReader(text))
 	depth, seen := 0, false

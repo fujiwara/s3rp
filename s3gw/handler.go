@@ -766,6 +766,7 @@ var bucketRoutes = bindRoutes(map[string][]route{
 		{match: has(subLifecycle), params: lifecycleOnlyParams, name: s3op.OpGetBucketLifecycleConfiguration, handle: (*Gateway).getBucketLifecycleConfiguration},
 		{match: has(subReplication), params: replicationOnlyParams, name: s3op.OpGetBucketReplication, handle: (*Gateway).getBucketReplication},
 		{match: has(subTagging), params: bucketTaggingParams, name: s3op.OpGetBucketTagging, handle: (*Gateway).getBucketTagging},
+		{match: has(subLogging), params: loggingOnlyParams, name: s3op.OpGetBucketLogging, handle: (*Gateway).getBucketLogging},
 		{match: has(subNotification), params: notificationOnlyParams, name: s3op.OpGetBucketNotificationConfiguration, handle: (*Gateway).getBucketNotificationConfiguration},
 		{match: has(subObjectLock), params: objectLockOnlyParams, name: s3op.OpGetObjectLockConfiguration, handle: (*Gateway).getObjectLockConfiguration},
 		{match: has(subVersioning), params: versioningOnlyParams, name: s3op.OpGetBucketVersioning, handle: (*Gateway).getBucketVersioning},
@@ -797,6 +798,7 @@ var bucketRoutes = bindRoutes(map[string][]route{
 		notImplemented(has(subReplication), s3op.OpPutBucketReplication),
 		notImplemented(has(subTagging), s3op.OpPutBucketTagging),
 		notImplemented(has(subNotification), s3op.OpPutBucketNotificationConfiguration),
+		notImplemented(has(subLogging), s3op.OpPutBucketLogging),
 		notImplemented(has(subEncryption), s3op.OpPutBucketEncryption),
 		notImplemented(has(subOwnership), s3op.OpPutBucketOwnershipControls),
 		notImplemented(has(subPublicAccess), s3op.OpPutPublicAccessBlock),
@@ -901,6 +903,7 @@ const (
 	subLegalHold    = "legal-hold"
 	subLifecycle    = "lifecycle"
 	subLocation     = "location"
+	subLogging      = "logging"
 	subNotification = "notification"
 	subObjectLock   = "object-lock"
 	subOwnership    = "ownershipControls"
@@ -948,6 +951,7 @@ var (
 	taggingParams          = newParamSet(subTagging, qpVersionID)
 	bucketTaggingParams    = newParamSet(subTagging)
 	notificationOnlyParams = newParamSet(subNotification)
+	loggingOnlyParams      = newParamSet(subLogging)
 	uploadPartParams       = newParamSet(qpUploadID, qpPartNumber)
 	listPartsParams        = newParamSet(qpUploadID, "max-parts", "part-number-marker")
 	listObjectsV1Params    = newParamSet(

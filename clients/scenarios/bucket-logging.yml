@@ -1,0 +1,13 @@
+desc: Read the bucket's access logging status, which the gateway serves as its store holds it
+vars:
+  client: yaml://${CLIENT_FILE}
+steps:
+  read:
+    exec:
+      # on one line, as in bucket-lifecycle
+      command: "{{ vars.client.verbs.logging }}"
+    # the status of clients/s3rp.yml, as the client's own parser read it
+    test: |
+      current.exit_code == 0
+      && current.stdout contains "compat-audit"
+      && current.stdout contains "access/compat/"

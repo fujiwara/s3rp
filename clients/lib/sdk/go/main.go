@@ -150,6 +150,17 @@ func run(ctx context.Context, verb string, args []string) error {
 			fmt.Printf("%s topic=%s events=%s\n", aws.ToString(topic.Id), aws.ToString(topic.TopicArn), strings.Join(events, ","))
 		}
 		return nil
+	case "logging":
+		out, err := client.GetBucketLogging(ctx, &s3.GetBucketLoggingInput{Bucket: bucket})
+		if err != nil {
+			return err
+		}
+		target, prefix := "", ""
+		if enabled := out.LoggingEnabled; enabled != nil {
+			target, prefix = aws.ToString(enabled.TargetBucket), aws.ToString(enabled.TargetPrefix)
+		}
+		fmt.Printf("target=%s prefix=%s\n", target, prefix)
+		return nil
 	case "put_tree":
 		entries, err := os.ReadDir(args[0])
 		if err != nil {
