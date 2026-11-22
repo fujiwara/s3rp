@@ -30,12 +30,12 @@ func modelGlob(pattern, value string) bool {
 		m[i] = make([]bool, len(v)+1)
 	}
 	m[len(p)][len(v)] = true
-	for i, v0 := range slices.Backward(p) {
+	for i, c := range slices.Backward(p) {
 		for j := len(v); j >= 0; j-- {
 			switch {
-			case v0 == '*':
+			case c == '*':
 				m[i][j] = m[i+1][j] || (j < len(v) && m[i][j+1])
-			case j < len(v) && (v0 == '?' || v0 == v[j]):
+			case j < len(v) && (c == '?' || c == v[j]):
 				m[i][j] = m[i+1][j+1]
 			}
 		}
