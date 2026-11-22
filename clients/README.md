@@ -12,17 +12,24 @@ read a run, and why each expected failure is expected, is in
 $ ./clients/run.sh                 # every client in clients/defs
 $ ./clients/run.sh rclone mc       # the named ones
 $ SCHEMES=http ./clients/run.sh    # default: https
+$ JOBS=1 ./clients/run.sh          # default: 4 clients at a time
 ```
 
 It needs docker (the compose Ceph RGW backend, `ceph-tls`), mise, Go, curl,
 openssl, FUSE for s3fs, and Wine (32-bit, with xvfb) for WinSCP; the
 AWS SDK for PHP runs in a container. For
 every client and scheme it starts an s3rp serving a bucket of its own
-(removed afterwards) and runs every scenario against it. The gateway is
+(removed afterwards) and runs every scenario against it. Clients run
+`JOBS` at a time, each against a gateway of its own on its own port; only
+the backend is shared, since a scenario's verdict reads the log of the
+gateway that served it. The gateway is
 served over https and reaches its backend over https, as a deployment
 does: clients frame and sign bodies differently without TLS, and so does
 the gateway toward its backend. Both certificates are issued by a CA made
-for the run, which the clients and the gateway are made to trust. A
+for the run, which the clients and the gateway are made to trust. The
+CA and the backend container are kept between runs (`docker compose down
+ceph-tls` and removing `work/tls` start over); a client's bucket is removed
+when it ends, so only an interrupted run leaves one behind. A
 client that cannot be made to trust it names `schemes: [http]` in its
 definition and is run over http. The report is `clients/work/results/report.md`: a client ×
 scenario table, the expected failures, and the operations each client
