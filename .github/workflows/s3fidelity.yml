@@ -15,6 +15,7 @@ on:
   pull_request:
     paths:
       - s3fidelity/**
+      - s3gw/localbackend/**
       - .github/workflows/s3fidelity.yml
 
 permissions:
@@ -22,9 +23,15 @@ permissions:
 
 jobs:
   s3fidelity:
-    name: s3-fidelity (ceph)
+    name: s3-fidelity (${{ matrix.backend }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # localbackend is the in-process backend (s3gw/localbackend), kept
+        # in a directory: no backend to start, its own expected failures
+        backend: [ceph, localbackend]
     steps:
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -40,6 +47,7 @@ jobs:
           install: false # run.sh installs the tools pinned in mise.toml and s3fidelity/mise.toml
 
       - name: Start the ceph backend
+        if: matrix.backend == 'ceph'
         run: |
           docker compose up -d --wait ceph
           echo "backend: $(docker compose exec ceph ceph version)" >> "$GITHUB_STEP_SUMMARY"
@@ -47,6 +55,8 @@ jobs:
       - name: Run the suite
         run: ./s3fidelity/run.sh
         env:
+          # unset, run.sh uses the compose ceph
+          S3RP_TEST_BACKEND_ENDPOINT: ${{ matrix.backend == 'localbackend' && format('directory:{0}/localbackend', runner.temp) || '' }}
           # mise-action v5 no longer exports its token; run.sh's mise install
           # needs one against GitHub API rate limits
           MISE_GITHUB_TOKEN: ${{ github.token }}
@@ -64,6 +74,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: s3fidelity-results
+          name: s3fidelity-results-${{ matrix.backend }}
           path: s3fidelity/work/results/
           if-no-files-found: warn

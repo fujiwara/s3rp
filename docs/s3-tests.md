@@ -28,6 +28,11 @@ the report has something to triage by hand.
   killing the daemon for the rest of the run. The bench MicroCeph
   (`s3tests/setup-microceph.sh`) can be targeted via
   `S3RP_TEST_BACKEND_ENDPOINT` instead.
+- A second run uses the in-process backend
+  ([`s3gw/localbackend`](building-a-service.md#running-without-a-backend),
+  kept in a directory) instead of Ceph: the workflow's `localbackend`
+  job, or `S3RP_TEST_BACKEND_ENDPOINT=directory:PATH ./s3tests/run.sh`
+  (`memory` for the form held in memory).
 
 ## Reading a run
 
@@ -77,6 +82,25 @@ The expected-failure categories, and why each failure is expected:
   semantics for part ETags on `partNumber` reads and COMPOSITE-only
   multipart checksum types (umbrella follows S3 on both), and every
   release refuses some SSE copy combinations.
+- **In-process backend** — on the `localbackend` run the three
+  backend categories above do not apply: their rules are name heuristics
+  for RGW, and a heuristic would hide a regression in a backend that
+  changes with this repository's code. `s3tests/expected-localbackend.tsv`
+  lists exactly the tests that fail for that backend's sake, each with a
+  reason, and the run needs a person when a failure of that kind is not
+  listed or a listed test does not fail that way. The reasons: **s3** —
+  it answers as Amazon S3 does where the suite expects RGW (listings
+  form-encode keys and encode the echoed prefix, a part number out of
+  range is `416 InvalidPartNumber`, GetObjectAttributes gives a composite
+  checksum without its part count, SSE-KMS without a key id uses a
+  default key); **rgw** — an RGW behavior it does not imitate, with no
+  evidence that S3 has it either (completing an upload a second time
+  succeeds, a conditional delete of a missing key succeeds, a missing
+  key's 404 says `x-amz-delete-marker: false`, one part number may be
+  listed twice at completion, a copy range past the source is
+  `InvalidRange`); **gateway** — the gateway's doing, sorted with the
+  backend's only by the test's name (SSE headers on a read are not
+  forwarded, the POST tests sign with SigV2).
 - **RGW extension APIs** — usage/account APIs, `x-rgw-*` headers,
   `allow-unordered` listing: not in the S3 API model; matching RGW here
   is a non-goal.
@@ -103,6 +127,7 @@ A run leaves everything under `s3tests/work/results/` (gitignored):
 `pytest.out`, junit `results.xml`, `harness.log` (one JSON line per
 request, correlate by bucket name / `x-amz-request-id`), and `report.md`
 (`triage.py`'s classification). A CI run uploads the same directory as
-the `s3tests-results` artifact
-(`gh run download <run-id> -n s3tests-results`) and puts `report.md` in
-the job summary, alongside the backend Ceph version.
+the `s3tests-results-<backend>` artifact
+(`gh run download <run-id> -n s3tests-results-ceph`, or `-localbackend`)
+and puts `report.md` in the job summary, alongside the backend Ceph
+version.

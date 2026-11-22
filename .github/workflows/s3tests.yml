@@ -26,9 +26,16 @@ permissions:
 
 jobs:
   s3tests:
-    name: s3-tests (ceph)
+    name: s3-tests (${{ matrix.backend }})
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # localbackend is the in-process backend (s3gw/localbackend), kept
+        # in a directory: no backend to start, and the image input does
+        # not apply to it
+        backend: [ceph, localbackend]
     steps:
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -44,6 +51,7 @@ jobs:
           install: false # run.sh installs the tools pinned in s3tests/mise.toml
 
       - name: Start the ceph backend
+        if: matrix.backend == 'ceph'
         run: |
           docker compose up -d --wait ceph
           echo "backend: $(docker compose exec ceph ceph version)" >> "$GITHUB_STEP_SUMMARY"
@@ -53,7 +61,10 @@ jobs:
       - name: Run the suite
         run: ./s3tests/run.sh
         env:
-          CEPH_IMAGE: ${{ inputs.image != 'compose default' && inputs.image || '' }}
+          # unset, run.sh uses the compose ceph
+          S3RP_TEST_BACKEND_ENDPOINT: ${{ matrix.backend == 'localbackend' && format('directory:{0}/localbackend', runner.temp) || '' }}
+          # the image is Ceph's alone: run.sh deselects a test for a squid image
+          CEPH_IMAGE: ${{ matrix.backend == 'ceph' && inputs.image != 'compose default' && inputs.image || '' }}
           # mise-action v5 no longer exports its token; run.sh's mise install
           # needs one against GitHub API rate limits
           MISE_GITHUB_TOKEN: ${{ github.token }}
@@ -71,6 +82,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: s3tests-results
+          name: s3tests-results-${{ matrix.backend }}
           path: s3tests/work/results/
           if-no-files-found: warn

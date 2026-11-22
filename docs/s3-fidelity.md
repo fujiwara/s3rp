@@ -32,6 +32,14 @@ IAM need operations the gateway does not have and are not selected.
   `compose.yml`. `expected.tsv` is exact for that image, and releases do
   differ: tentacle fails three tests umbrella passes (the tagging
   directive on copy, a conditional-write race).
+- A second run serves the same selection from the in-process backend
+  ([`s3gw/localbackend`](building-a-service.md#running-without-a-backend),
+  kept in a directory) instead of Ceph: the workflow's `localbackend` job,
+  or `S3RP_TEST_BACKEND_ENDPOINT=directory:PATH ./s3fidelity/run.sh`
+  (`memory` for the form held in memory). Its expected failures are
+  `expected-localbackend.tsv`, which `run.sh` picks by the endpoint. It is
+  what holds that backend to S3: a result that moves there is a change in
+  `localbackend` or in the gateway, never in an image.
 - Region `us-east-1`, the gateway's own: the runner's default
   (`us-west-2`) would fail the tests that read the bucket region.
 - The emulator the suite was written for is not part of the setup.
@@ -115,11 +123,28 @@ refusal, by request id.
 - **out-of-scope** — S3 Express One Zone (directory buckets, session
   auth).
 
+`expected-localbackend.tsv` uses the same categories, and most of its
+entries are the gateway's (**message**, **deliberate**, **out-of-scope**),
+shared with the Ceph list. What differs:
+
+- **backend** there is what `localbackend` leaves out, which is one thing:
+  a storage class is a label, so an object stored as `GLACIER` or
+  `DEEP_ARCHIVE` reads like any other. Where RGW differs from S3 in the
+  ways listed above, `localbackend` follows S3, so those tests pass.
+- Some failures the Ceph list files under **backend** are **message**
+  there: with the backend answering S3's code, what is left is the
+  gateway's one message per code.
+- **gateway** — a gap in the gateway that the Ceph run does not show
+  apart from the backend's own: a `HEAD` of one part (`partNumber`) is
+  answered without the `Content-Range` the backend reports.
+
 ## Maintaining
 
 - A classification that changes (a deliberate refusal lifted, a backend
   behavior that moved with a release) changes `expected.tsv` in the same
-  commit as the code or the image bump.
+  commit as the code or the image bump. A change to `s3gw/localbackend`
+  that moves a result changes `expected-localbackend.tsv` in its commit;
+  the workflow runs on pull requests that touch the package.
 - After bumping the suite pin, expect new tests in the selection: triage
   each new failure the way above before listing it.
 - Run counts are not recorded here; the latest workflow run's report has
