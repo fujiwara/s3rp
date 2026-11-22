@@ -101,7 +101,12 @@ OUT=$(pwd)/$RESULTS/pytest.out
 
 echo "==> triaging"
 status=0
-"$VENV/bin/python" s3tests/triage.py "$XML" "$RESULTS/harness.log" > "$RESULTS/report.md" || status=$?
+# the in-process backend's failures are listed exactly, not by heuristic
+case "$BACKEND_ENDPOINT" in
+memory | directory:*) EXPECTED=s3tests/expected-localbackend.tsv ;;
+*) EXPECTED= ;;
+esac
+"$VENV/bin/python" s3tests/triage.py "$XML" "$RESULTS/harness.log" $EXPECTED > "$RESULTS/report.md" || status=$?
 echo "report: $RESULTS/report.md"
 # 1 when the report asks for a person: a contaminated run or an unmatched failure
 exit "$status"

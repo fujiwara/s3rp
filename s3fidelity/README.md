@@ -30,9 +30,9 @@ Python and dependencies (`uv.lock`).
 
 `S3RP_TEST_BACKEND_ENDPOINT=memory ./s3fidelity/run.sh` runs the same
 tests on the in-memory backend (`s3gw/localbackend`) instead of Ceph.
-`expected.tsv` describes the Ceph run, so the report then lists what the
-two backends answer differently; it is how that backend's fidelity is
-measured, not a run that passes.
+Its expected failures are `expected-localbackend.tsv`, which the script
+picks for these two endpoint forms (`directory:PATH` is the same backend
+kept in `PATH`). CI runs it beside the Ceph run.
 
 The script starts the `ceph` compose service, builds and starts the
 harness on `127.0.0.1:7482`, checks out the suite at the pinned commit

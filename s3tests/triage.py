@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Classify a ceph/s3-tests junit XML result into compatibility categories.
 
-Usage: triage.py results.xml [harness.log] > report.md
+Usage: triage.py results.xml [harness.log [expected-localbackend.tsv]] > report.md
 
 Exits 1 when the run needs a person: it is contaminated, or a failure
-matched no rule.
+matched no rule. The third argument is for a run on the in-process backend
+(s3gw/localbackend): the exact list of the failures that are that
+backend's, which then stands in for the "Backend" rules below, and a
+listed test that does not fail that way needs a person too.
 
 Failures are bucketed by the first matching rule. The rules encode the
 hand-verified findings of docs/s3-tests.md (see s3tests/AGENTS.md for the
@@ -40,6 +43,9 @@ CATEGORIES = [
     ("backend_sse", "Backend: SSE/encrypted-copy behavior"),
     ("backend_checksum", "Backend: checksum/part-ETag semantics"),
     ("backend_conditional", "Backend: partial conditional-write enforcement"),
+    ("local_s3", "In-process backend: Amazon S3's answer where the suite expects RGW's"),
+    ("local_rgw", "In-process backend: an RGW behavior it does not imitate"),
+    ("local_gateway", "In-process backend: the gateway's doing, sorted here by the test's name"),
     ("rgw_extension", "RGW extension API (out of scope)"),
     ("conf_artifact", "Harness/conf artifact (create semantics, api_name, leftovers)"),
     ("investigate", "UNMATCHED — triage by hand (see s3tests/AGENTS.md)"),
@@ -64,6 +70,25 @@ KNOWN = {
     "test_object_raw_put_authenticated_expired": "header_edge",
     "test_put_excess_tags": "s3_answer",
 }
+
+
+# The categories that describe the backend. Their rules are name heuristics
+# verified against Ceph RGW; for the in-process backend an exact list takes
+# their place (expected-localbackend.tsv), since that backend's behavior
+# changes with this repository's code and a heuristic would hide a
+# regression in it.
+BACKEND_KEYS = {"backend_sse", "backend_checksum", "backend_conditional", "investigate"}
+
+
+def load_expected(path):
+    expected = {}
+    for line in open(path):
+        if line.strip() and not line.startswith("#"):
+            name, reason = line.split()[:2]
+            if "local_" + reason not in dict(CATEGORIES):
+                sys.exit(f"{path}: unknown reason {reason!r} for {name}")
+            expected[name] = "local_" + reason
+    return expected
 
 
 def classify(name, text):
@@ -133,6 +158,10 @@ def excerpt_of(text):
 def main():
     xmlfile = sys.argv[1]
     logfile = sys.argv[2] if len(sys.argv) > 2 else None
+    # given for a run on the in-process backend
+    expected = load_expected(sys.argv[3]) if len(sys.argv) > 3 else None
+    hidden = BACKEND_KEYS - {"investigate"} if expected is not None else {"local_s3", "local_rgw", "local_gateway"}
+    matched = set()
     root = ET.parse(xmlfile).getroot()
 
     total = passed = skipped = 0
@@ -151,11 +180,17 @@ def main():
             continue
         text = (node.get("message") or "") + "\n" + (node.text or "")
         cat, sub = classify(name, text)
+        if expected is not None and cat in BACKEND_KEYS:
+            cat = expected.get(name, "investigate")
+            matched.add(name)
         buckets[cat].append((name, sub, excerpt_of(text)))
 
     failed = total - passed - skipped
     contaminated = buckets.get("contaminated", [])
     unmatched = buckets.get("investigate", [])
+    # a listed test that does not fail any more, or fails for a reason of
+    # the gateway's that the rules sort elsewhere
+    stale = sorted(set(expected or {}) - matched)
 
     print("# s3-tests triage report\n")
     print(f"**{passed} passed / {failed} failed / {skipped} skipped** "
@@ -183,7 +218,15 @@ def main():
         for name, _, excerpt in sorted(unmatched):
             print(f"- `{name}` — {excerpt}")
         print()
-    if not contaminated and not unmatched:
+    if stale:
+        print(f"## ⚠️ Listed as expected, but not failing that way ({len(stale)})\n")
+        print("These are in the in-process backend's list and passed, did not")
+        print("run, or failed in a way the gateway's rules explain: remove")
+        print("them from the list, or find out what moved.\n")
+        for name in stale:
+            print(f"- `{name}`")
+        print()
+    if not contaminated and not unmatched and not stale:
         print("## ✅ No action needed\n")
         print("Every failure matches the verified classification: the")
         print("deliberate design surface and documented backend behavior")
@@ -198,12 +241,12 @@ def main():
     print("| category | count |")
     print("|---|---|")
     for key, title in CATEGORIES:
-        if key in ("contaminated", "investigate"):
+        if key in ("contaminated", "investigate") or key in hidden:
             continue
         print(f"| {title} | {len(buckets.get(key, []))} |")
     print()
     for key, title in CATEGORIES:
-        if key in ("contaminated", "investigate"):
+        if key in ("contaminated", "investigate") or key in hidden:
             continue
         cases = buckets.get(key, [])
         if not cases:
@@ -222,7 +265,7 @@ def main():
               "(JSON lines; correlate by bucket name / x-amz-request-id).")
 
     # a run that needs a person fails, so a scheduled run says so
-    sys.exit(1 if contaminated or unmatched else 0)
+    sys.exit(1 if contaminated or unmatched or stale else 0)
 
 
 if __name__ == "__main__":

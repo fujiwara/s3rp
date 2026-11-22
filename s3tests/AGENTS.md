@@ -14,7 +14,8 @@ moved the counts.
 - Local run: `s3tests/work/results/` — `report.md` (mechanical triage),
   `results.xml` (junit), `pytest.out`, `harness.log` (JSON lines,
   correlate by bucket name / `x-amz-request-id`).
-- CI run: `gh run download <run-id> -n s3tests-results`. The job summary
+- CI run: `gh run download <run-id> -n s3tests-results-ceph` (or
+  `-localbackend`, the run on the in-process backend). The job summary
   shows the backend Ceph version — always note it; the failure mix
   changes with the backend (see the backend-limitations category in
   docs/s3-tests.md).

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Runs the S3 fidelity tests of aws/aws-emulator-evaluation-suite against
-# s3rp proxying to the Ceph RGW backend from compose.yml. See
-# s3fidelity/README.md.
+# s3rp proxying to the Ceph RGW backend from compose.yml, or serving from the
+# in-process backend when S3RP_TEST_BACKEND_ENDPOINT is "memory" or
+# "directory:PATH". See s3fidelity/README.md.
 set -euo pipefail
 
 SUITE_REPO=${SUITE_REPO:-https://github.com/aws/aws-emulator-evaluation-suite}
@@ -10,6 +11,11 @@ SUITE_REF=${SUITE_REF:-abd08117ad242c3e244125df9d525c41eb6f7d91}
 PORT=${PORT:-7482}
 BACKEND_ENDPOINT=${S3RP_TEST_BACKEND_ENDPOINT:-http://127.0.0.1:7480}
 JOBS=${JOBS:-4}
+# the in-process backend has failures of its own to expect
+case "$BACKEND_ENDPOINT" in
+memory | directory:*) EXPECTED=${EXPECTED:-s3fidelity/expected-localbackend.tsv} ;;
+*) EXPECTED=${EXPECTED:-s3fidelity/expected.tsv} ;;
+esac
 
 cd "$(dirname "$0")/.."   # repo root
 ROOT=$(pwd)
@@ -97,7 +103,7 @@ export RUNNER PORT CREDS RESULTS
 
 echo "==> triaging"
 status=0
-"$SUITE/.venv/bin/python" s3fidelity/triage.py "$RESULTS/reports" s3fidelity/expected.tsv \
+"$SUITE/.venv/bin/python" s3fidelity/triage.py "$RESULTS/reports" "$EXPECTED" \
     "$RESULTS/selected.txt" > "$RESULTS/report.md" || status=$?
 echo "report: $RESULTS/report.md"
 exit "$status"
