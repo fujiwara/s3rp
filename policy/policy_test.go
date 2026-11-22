@@ -424,6 +424,13 @@ func TestMatchWildcards(t *testing.T) {
 		// no escaping: a literal ? in the value needs a ? or * in the pattern
 		{"a?c", "a?c", true},
 		{"abc", "a?c", false},
+		// a * in the pattern stays a wildcard where the value has a
+		// literal * of its own (it used to end its run there, so a Deny on
+		// b/logs/* let b/logs/*x through)
+		{"b/logs/*", "b/logs/*", true},
+		{"b/logs/*", "b/logs/*x", true},
+		{"b/*/x", "b/*/y/x", true},
+		{"b/*.jpg", "b/*.png", false},
 		// rune-aware: ? matches one multibyte rune
 		{"a?c", "aあc", true},
 	}

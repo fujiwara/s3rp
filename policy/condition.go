@@ -126,13 +126,23 @@ func parsePrefixes(values []string) ([]netip.Prefix, error) {
 }
 
 // parseIPValue parses one operator value: a CIDR prefix, or a plain address
-// treated as a /32 (IPv4) or /128 (IPv6) prefix. Zoned addresses are
-// rejected — a zone is local to one host and meaningless in a policy.
+// treated as a /32 (IPv4) or /128 (IPv6) prefix. An IPv4-mapped value is the
+// IPv4 range it maps (so a block wider than ::ffff:0:0/96 is rejected).
+// Zoned addresses are rejected — a zone is local to one host and
+// meaningless in a policy.
 func parseIPValue(v string) (netip.Prefix, error) {
 	if strings.Contains(v, "/") {
 		p, err := netip.ParsePrefix(v)
 		if err != nil {
 			return netip.Prefix{}, fmt.Errorf("invalid source IP value %q", v)
+		}
+		// sources are unmapped before matching, so an IPv4-mapped block
+		// kept as IPv6 would contain none of them
+		if p.Addr().Is4In6() {
+			if p.Bits() < 96 {
+				return netip.Prefix{}, fmt.Errorf("invalid source IP value %q", v)
+			}
+			return netip.PrefixFrom(p.Addr().Unmap(), p.Bits()-96), nil
 		}
 		return p, nil
 	}
