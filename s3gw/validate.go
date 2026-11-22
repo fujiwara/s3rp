@@ -133,9 +133,11 @@ func (c *opCtx) optionalObjectAttributes() ([]types.OptionalObjectAttributes, er
 }
 
 // restoreStatusFromSDK converts a listing entry's restore status, nil when
-// the backend reported none.
-func restoreStatusFromSDK(rs *types.RestoreStatus) *s3xml.RestoreStatus {
-	if rs == nil {
+// the backend reported none or the request did not ask (asked = the
+// request's optionalObjectAttributes): a backend that reports it unasked
+// must not make the listing differ from S3's.
+func restoreStatusFromSDK(rs *types.RestoreStatus, asked []types.OptionalObjectAttributes) *s3xml.RestoreStatus {
+	if rs == nil || len(asked) == 0 {
 		return nil
 	}
 	out := &s3xml.RestoreStatus{IsRestoreInProgress: aws.ToBool(rs.IsRestoreInProgress)}

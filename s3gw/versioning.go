@@ -92,7 +92,7 @@ func (g *Gateway) listObjectVersions(c *opCtx) error {
 			Size:              aws.ToInt64(v.Size),
 			ChecksumAlgorithm: c.reportAlgorithms(v.ChecksumAlgorithm),
 			ChecksumType:      string(v.ChecksumType),
-			RestoreStatus:     restoreStatusFromSDK(v.RestoreStatus),
+			RestoreStatus:     restoreStatusFromSDK(v.RestoreStatus, attrs),
 		}
 		if v.LastModified != nil {
 			version.LastModified = s3xml.FormatTime(*v.LastModified)

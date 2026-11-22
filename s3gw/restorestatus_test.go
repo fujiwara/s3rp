@@ -87,12 +87,32 @@ func TestListingsRelayRestoreStatus(t *testing.T) {
 			t.Errorf("restore status (-want +got):\n%s", diff)
 		}
 	})
+	// a backend that reports the status unasked does not get it relayed
 	t.Run("not asked", func(t *testing.T) {
-		if _, err := client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{Bucket: bucket}); err != nil {
+		v2, err := client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{Bucket: bucket})
+		if err != nil {
 			t.Fatal(err)
 		}
 		if got := stub.listIn.OptionalObjectAttributes; len(got) != 0 {
 			t.Errorf("sent to the backend unasked: %v", got)
+		}
+		v1, err := client.ListObjects(ctx, &s3.ListObjectsInput{Bucket: bucket})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ver, err := client.ListObjectVersions(ctx, &s3.ListObjectVersionsInput{Bucket: bucket})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, o := range append(v2.Contents, v1.Contents...) {
+			if o.RestoreStatus != nil {
+				t.Errorf("%s: restore status shown unasked", aws.ToString(o.Key))
+			}
+		}
+		for _, v := range ver.Versions {
+			if v.RestoreStatus != nil {
+				t.Errorf("version %s: restore status shown unasked", aws.ToString(v.Key))
+			}
 		}
 	})
 	// an attribute the listings would not relay is refused, not dropped
