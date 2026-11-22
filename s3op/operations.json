@@ -159,6 +159,18 @@
       "note": "answered from the store"
     },
     {
+      "name": "GetBucketNotificationConfiguration",
+      "scope": "bucket",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:GetBucketNotification",
+          "on": "target"
+        }
+      ],
+      "note": "answered from the store; the configuration a tenant is shown, not the backend bucket's"
+    },
+    {
       "name": "GetBucketVersioning",
       "scope": "bucket",
       "support": "supported",
@@ -321,6 +333,12 @@
     },
     {
       "name": "DeleteBucketTagging",
+      "scope": "bucket",
+      "support": "refused",
+      "note": "bucket configuration is written where the bucket is created, not through the S3 API"
+    },
+    {
+      "name": "PutBucketNotificationConfiguration",
       "scope": "bucket",
       "support": "refused",
       "note": "bucket configuration is written where the bucket is created, not through the S3 API"
@@ -727,15 +745,6 @@
       "operations": [
         "GetObjectTorrent"
       ]
-    },
-    {
-      "feature": "Event notifications",
-      "kind": "bucket-configuration",
-      "operations": [
-        "GetBucketNotificationConfiguration",
-        "PutBucketNotificationConfiguration"
-      ],
-      "note": "a service can emit its own from the gateway's hooks"
     },
     {
       "feature": "Server access logging",

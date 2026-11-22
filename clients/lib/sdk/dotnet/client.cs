@@ -54,6 +54,10 @@ switch (args[0])
         foreach (var tag in (await s3.GetBucketTaggingAsync(new GetBucketTaggingRequest { BucketName = bucket })).TagSet)
             Console.WriteLine($"{tag.Key}={tag.Value}");
         break;
+    case "notification":
+        foreach (var topic in (await s3.GetBucketNotificationAsync(bucket)).TopicConfigurations ?? [])
+            Console.WriteLine($"{topic.Id} topic={topic.Topic} events={string.Join(",", topic.Events.Select(e => e.Value))}");
+        break;
     case "put_tree":
         foreach (var file in Directory.GetFiles(args[1]).Order())
             await transfer.UploadAsync(file, bucket, args[2] + "/" + Path.GetFileName(file));

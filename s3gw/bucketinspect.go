@@ -1,6 +1,7 @@
 package s3gw
 
 import (
+	"encoding/xml"
 	"maps"
 	"net/http"
 	"slices"
@@ -60,6 +61,19 @@ func (g *Gateway) getBucketReplication(c *opCtx) error {
 			"The replication configuration was not found")
 	}
 	return writeStoredXML(c.w, c.rt.cfg.ReplicationText)
+}
+
+// emptyNotificationConfiguration is what S3 answers for a bucket that has
+// no notification configuration: an empty one, not an error.
+const emptyNotificationConfiguration = xml.Header +
+	`<NotificationConfiguration xmlns="` + s3xml.Namespace + `"></NotificationConfiguration>`
+
+func (g *Gateway) getBucketNotificationConfiguration(c *opCtx) error {
+	text := c.rt.cfg.NotificationText
+	if text == "" {
+		text = emptyNotificationConfiguration
+	}
+	return writeStoredXML(c.w, text)
 }
 
 // getBucketTagging renders the store's tags, sorted by key: a map has no

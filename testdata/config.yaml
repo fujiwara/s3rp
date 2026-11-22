@@ -43,6 +43,10 @@ tenants:
               <Expiration><Days>30</Days></Expiration>
             </Rule>
           </LifecycleConfiguration>
+        notification: |
+          <NotificationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+            <EventBridgeConfiguration></EventBridgeConfiguration>
+          </NotificationConfiguration>
         replication: |
           <ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
             <Role>replication</Role>

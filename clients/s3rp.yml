@@ -14,8 +14,8 @@ tenants:
           bucket: ${BACKEND_BUCKET}
           access_key_id: ${BACKEND_ACCESS_KEY}
           secret_access_key: ${BACKEND_SECRET_KEY}
-        # what the bucket-tags, bucket-lifecycle and bucket-replication
-        # scenarios read back; the gateway serves them from here and
+        # what the bucket-tags, bucket-lifecycle, bucket-replication and
+        # bucket-notification scenarios read back; the gateway serves them from here and
         # nothing applies them to the backend
         tags:
           env: compat-run
@@ -49,3 +49,13 @@ tenants:
               <Destination><Bucket>arn:aws:s3:::compat-backup</Bucket></Destination>
             </Rule>
           </ReplicationConfiguration>
+        notification: |
+          <?xml version="1.0" encoding="UTF-8"?>
+          <NotificationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+            <TopicConfiguration>
+              <Id>on-create</Id>
+              <Topic>arn:aws:sns:us-east-1:000000000000:compat-events</Topic>
+              <Event>s3:ObjectCreated:*</Event>
+              <Filter><S3Key><FilterRule><Name>prefix</Name><Value>incoming/</Value></FilterRule></S3Key></Filter>
+            </TopicConfiguration>
+          </NotificationConfiguration>

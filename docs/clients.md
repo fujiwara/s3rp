@@ -5,8 +5,8 @@ gateway. It is drawn from the [client compatibility run](client-compat.md),
 which runs each client below through the same scenarios: small and awkward
 keys, a server-side copy, a listing of more than a thousand keys, a
 multipart upload and its download, and a presigned GET; aws-cli, `mc`,
-s3cmd and the AWS SDKs also read the bucket's tags and its lifecycle and
-replication configurations (s3cmd not the last). What a client does
+s3cmd and the AWS SDKs also read the bucket's tags and its lifecycle,
+notification and replication configurations (s3cmd not the last). What a client does
 outside those — versioning, tags, Object Lock, server-side encryption — is
 not covered here.
 

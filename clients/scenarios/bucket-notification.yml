@@ -1,0 +1,14 @@
+desc: Read the bucket's notification configuration, which the gateway serves as its store holds it
+vars:
+  client: yaml://${CLIENT_FILE}
+steps:
+  read:
+    exec:
+      # on one line, as in bucket-lifecycle
+      command: "{{ vars.client.verbs.notification }}"
+    # the configuration of clients/s3rp.yml, as the client's own parser read it
+    test: |
+      current.exit_code == 0
+      && current.stdout contains "on-create"
+      && current.stdout contains "arn:aws:sns:us-east-1:000000000000:compat-events"
+      && current.stdout contains "s3:ObjectCreated:*"
