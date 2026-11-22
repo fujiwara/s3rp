@@ -40,6 +40,10 @@ jobs:
         uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version: '1.27'
+          # This job compiles nothing and ends first: its cache, saved empty
+          # under the key every Go 1.27 job shares, is the one they would
+          # all restore.
+          cache: false
 
       - name: Check and regenerate
         run: make semconv
