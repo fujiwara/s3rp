@@ -5,6 +5,7 @@ const {
   S3Client, GetObjectCommand, DeleteObjectCommand, CopyObjectCommand, paginateListObjectsV2,
   GetBucketLifecycleConfigurationCommand, GetBucketReplicationCommand,
   GetBucketTaggingCommand, GetBucketNotificationConfigurationCommand,
+  GetBucketLoggingCommand,
 } = require("@aws-sdk/client-s3");
 const { Upload } = require("@aws-sdk/lib-storage");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
@@ -72,6 +73,11 @@ async function main([verb, ...args]) {
       for (const topic of TopicConfigurations ?? []) {
         console.log(`${topic.Id} topic=${topic.TopicArn} events=${(topic.Events ?? []).join(",")}`);
       }
+      break;
+    }
+    case "logging": {
+      const { LoggingEnabled } = await s3.send(new GetBucketLoggingCommand({ Bucket }));
+      console.log(`target=${LoggingEnabled?.TargetBucket} prefix=${LoggingEnabled?.TargetPrefix}`);
       break;
     }
     case "put_tree":

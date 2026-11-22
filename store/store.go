@@ -168,6 +168,14 @@ type Bucket struct {
 	// ValidateNotificationText where it is written.
 	NotificationText string
 
+	// LoggingText is the server access logging status a tenant is shown
+	// (empty if logging is off): the XML document GetBucketLogging returns,
+	// verbatim. Like the documents above it is served and never read; the
+	// gateway delivers no log because of it. The target bucket it names is
+	// shown as written, so it must be a front bucket. Check it with
+	// ValidateLoggingText where it is written.
+	LoggingText string
+
 	// Tags are the bucket's tags (nil if none), which GetBucketTagging
 	// returns. Unlike the configuration documents above they are typed: a
 	// tag set has one small shape, which the gateway renders. They are

@@ -165,6 +165,15 @@ async fn main() -> Result<()> {
                 println!("{} topic={} events={}", topic.id().unwrap_or_default(), topic.topic_arn(), events.join(","));
             }
         }
+        "logging" => {
+            let out = s3.get_bucket_logging().bucket(&bucket).send().await?;
+            let enabled = out.logging_enabled();
+            println!(
+                "target={} prefix={}",
+                enabled.map(|e| e.target_bucket()).unwrap_or_default(),
+                enabled.map(|e| e.target_prefix()).unwrap_or_default(),
+            );
+        }
         "put_tree" => {
             let mut names = Vec::new();
             let mut entries = tokio::fs::read_dir(&args[1]).await?;

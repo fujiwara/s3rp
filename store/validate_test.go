@@ -204,3 +204,18 @@ func TestValidateNotificationText(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateLoggingText(t *testing.T) {
+	if err := store.ValidateLoggingText(`<BucketLoggingStatus><LoggingEnabled><TargetBucket>b</TargetBucket><TargetPrefix>p/</TargetPrefix></LoggingEnabled></BucketLoggingStatus>`); err != nil {
+		t.Errorf("must be valid: %v", err)
+	}
+	for name, text := range map[string]string{
+		"empty":        ``,
+		"another root": `<NotificationConfiguration/>`,
+		"unclosed":     `<BucketLoggingStatus><LoggingEnabled>`,
+	} {
+		if err := store.ValidateLoggingText(text); err == nil {
+			t.Errorf("%s: %q must be rejected", name, text)
+		}
+	}
+}

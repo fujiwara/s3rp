@@ -14,8 +14,8 @@ tenants:
           bucket: ${BACKEND_BUCKET}
           access_key_id: ${BACKEND_ACCESS_KEY}
           secret_access_key: ${BACKEND_SECRET_KEY}
-        # what the bucket-tags, bucket-lifecycle, bucket-replication and
-        # bucket-notification scenarios read back; the gateway serves them from here and
+        # what the bucket-tags, bucket-lifecycle, bucket-replication,
+        # bucket-notification and bucket-logging scenarios read back; the gateway serves them from here and
         # nothing applies them to the backend
         tags:
           env: compat-run
@@ -59,3 +59,11 @@ tenants:
               <Filter><S3Key><FilterRule><Name>prefix</Name><Value>incoming/</Value></FilterRule></S3Key></Filter>
             </TopicConfiguration>
           </NotificationConfiguration>
+        logging: |
+          <?xml version="1.0" encoding="UTF-8"?>
+          <BucketLoggingStatus xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+            <LoggingEnabled>
+              <TargetBucket>compat-audit</TargetBucket>
+              <TargetPrefix>access/compat/</TargetPrefix>
+            </LoggingEnabled>
+          </BucketLoggingStatus>

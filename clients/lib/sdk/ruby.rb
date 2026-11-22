@@ -55,6 +55,9 @@ when "notification"
   s3.get_bucket_notification_configuration(bucket: bucket).topic_configurations.each do |topic|
     puts "#{topic.id} topic=#{topic.topic_arn} events=#{topic.events.join(',')}"
   end
+when "logging"
+  enabled = s3.get_bucket_logging(bucket: bucket).logging_enabled
+  puts "target=#{enabled&.target_bucket} prefix=#{enabled&.target_prefix}"
 when "put_tree"
   Dir.children(args[0]).sort.each do |name|
     transfer.upload_file(File.join(args[0], name), bucket: bucket, key: "#{args[1]}/#{name}")

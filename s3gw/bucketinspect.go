@@ -76,6 +76,19 @@ func (g *Gateway) getBucketNotificationConfiguration(c *opCtx) error {
 	return writeStoredXML(c.w, text)
 }
 
+// emptyBucketLoggingStatus is what S3 answers for a bucket whose logging
+// is off: a status without LoggingEnabled, not an error.
+const emptyBucketLoggingStatus = xml.Header +
+	`<BucketLoggingStatus xmlns="` + s3xml.Namespace + `"></BucketLoggingStatus>`
+
+func (g *Gateway) getBucketLogging(c *opCtx) error {
+	text := c.rt.cfg.LoggingText
+	if text == "" {
+		text = emptyBucketLoggingStatus
+	}
+	return writeStoredXML(c.w, text)
+}
+
 // getBucketTagging renders the store's tags, sorted by key: a map has no
 // order of its own and a client should not see one request differ from the
 // next.

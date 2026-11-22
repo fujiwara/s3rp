@@ -27,4 +27,5 @@ verbs:
   lifecycle: $S3CMD getlifecycle "s3://$BUCKET"
   tags:     $S3CMD gettagging "s3://$BUCKET"
   notification: $S3CMD getnotification "s3://$BUCKET"
+  logging:  $S3CMD accesslog "s3://$BUCKET"
   put_tree: $S3CMD put --recursive "$DIR/" "s3://$BUCKET/$PREFIX/"

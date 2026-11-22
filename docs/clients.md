@@ -4,9 +4,10 @@ What to set in a client, and what does not work, when its endpoint is the
 gateway. It is drawn from the [client compatibility run](client-compat.md),
 which runs each client below through the same scenarios: small and awkward
 keys, a server-side copy, a listing of more than a thousand keys, a
-multipart upload and its download, and a presigned GET; aws-cli, `mc`,
-s3cmd and the AWS SDKs also read the bucket's tags and its lifecycle,
-notification and replication configurations (s3cmd not the last). What a client does
+multipart upload and its download, and a presigned GET; aws-cli, s3cmd
+and the AWS SDKs also read the bucket's tags and its lifecycle,
+notification, logging and replication configurations, and `mc` those it
+has a command for (s3cmd has none for replication, `mc` none for logging). What a client does
 outside those — versioning, tags, Object Lock, server-side encryption — is
 not covered here.
 

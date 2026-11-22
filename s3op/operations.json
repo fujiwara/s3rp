@@ -171,6 +171,18 @@
       "note": "answered from the store; the configuration a tenant is shown, not the backend bucket's"
     },
     {
+      "name": "GetBucketLogging",
+      "scope": "bucket",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:GetBucketLogging",
+          "on": "target"
+        }
+      ],
+      "note": "answered from the store; the status a tenant is shown, not the backend bucket's"
+    },
+    {
       "name": "GetBucketVersioning",
       "scope": "bucket",
       "support": "supported",
@@ -339,6 +351,12 @@
     },
     {
       "name": "PutBucketNotificationConfiguration",
+      "scope": "bucket",
+      "support": "refused",
+      "note": "bucket configuration is written where the bucket is created, not through the S3 API"
+    },
+    {
+      "name": "PutBucketLogging",
       "scope": "bucket",
       "support": "refused",
       "note": "bucket configuration is written where the bucket is created, not through the S3 API"
@@ -745,15 +763,6 @@
       "operations": [
         "GetObjectTorrent"
       ]
-    },
-    {
-      "feature": "Server access logging",
-      "kind": "bucket-configuration",
-      "operations": [
-        "GetBucketLogging",
-        "PutBucketLogging"
-      ],
-      "note": "the gateway reports every request to the service's observer"
     },
     {
       "feature": "Analytics, inventory, metrics and Intelligent-Tiering configurations",

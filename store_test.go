@@ -75,6 +75,12 @@ func storeContract(t *testing.T, st store.Store) {
 		if err := store.ValidateNotificationText(logs.NotificationText); err != nil {
 			t.Errorf("logs notification configuration: %v", err)
 		}
+		if b.LoggingText != "" {
+			t.Errorf("photos has no logging status, got %q", b.LoggingText)
+		}
+		if err := store.ValidateLoggingText(logs.LoggingText); err != nil {
+			t.Errorf("logs logging status: %v", err)
+		}
 		if b.ReplicationText != "" {
 			t.Errorf("photos has no replication configuration, got %q", b.ReplicationText)
 		}

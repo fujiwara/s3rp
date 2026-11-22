@@ -33,6 +33,7 @@ func NewConfigStore(cfg *Config) store.Store {
 				CORS:             b.CORS,
 				LifecycleText:    b.Lifecycle,
 				ReplicationText:  b.Replication,
+				LoggingText:      b.Logging,
 				NotificationText: b.Notification,
 				Tags:             b.Tags,
 				CreatedAt:        b.CreatedAt,

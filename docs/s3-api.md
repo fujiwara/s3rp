@@ -25,6 +25,7 @@ Because operations are reconstructed rather than forwarded, each one is implemen
 | GetBucketReplication | `s3:GetReplicationConfiguration` |
 | GetBucketTagging | `s3:GetBucketTagging` |
 | GetBucketNotificationConfiguration | `s3:GetBucketNotification` |
+| GetBucketLogging | `s3:GetBucketLogging` |
 | GetBucketVersioning | `s3:GetBucketVersioning` |
 | GetBucketEncryption | `s3:GetEncryptionConfiguration` |
 | GetBucketOwnershipControls | `s3:GetBucketOwnershipControls` |
@@ -55,7 +56,7 @@ Because operations are reconstructed rather than forwarded, each one is implemen
 
 The actions are what bucket and user policies match ([Bucket policies](#bucket-policies), [User policies](#user-policies)); some headers add one ([Actions a header adds](#actions-a-header-adds)). ListBuckets has no bucket policy to consult, so `s3:ListAllMyBuckets` is decided by the user policy alone; it lists only the requester's own buckets. PostObject is the browser-based POST upload ([below](#browser-based-uploads-post)).
 
-These operations are recognized and always refused — `NotImplemented`, or `AccessControlListNotSupported` for the ACL writes — and recorded under their name on `Op.Operation` so a service can count attempts: CreateBucket, DeleteBucket, PutBucketAcl, PutBucketPolicy, DeleteBucketPolicy, PutBucketCors, DeleteBucketCors, PutBucketLifecycleConfiguration, DeleteBucketLifecycle, PutBucketReplication, DeleteBucketReplication, PutBucketTagging, DeleteBucketTagging, PutBucketNotificationConfiguration, PutBucketVersioning, PutObjectLockConfiguration, PutBucketEncryption, DeleteBucketEncryption, PutBucketOwnershipControls, DeleteBucketOwnershipControls, PutPublicAccessBlock, DeletePublicAccessBlock, PutObjectAcl. Any other request is `NotImplemented` as well. The S3 operations that fall under that are listed by feature in [Unsupported features](#unsupported-features).
+These operations are recognized and always refused — `NotImplemented`, or `AccessControlListNotSupported` for the ACL writes — and recorded under their name on `Op.Operation` so a service can count attempts: CreateBucket, DeleteBucket, PutBucketAcl, PutBucketPolicy, DeleteBucketPolicy, PutBucketCors, DeleteBucketCors, PutBucketLifecycleConfiguration, DeleteBucketLifecycle, PutBucketReplication, DeleteBucketReplication, PutBucketTagging, DeleteBucketTagging, PutBucketNotificationConfiguration, PutBucketLogging, PutBucketVersioning, PutObjectLockConfiguration, PutBucketEncryption, DeleteBucketEncryption, PutBucketOwnershipControls, DeleteBucketOwnershipControls, PutPublicAccessBlock, DeletePublicAccessBlock, PutObjectAcl. Any other request is `NotImplemented` as well. The S3 operations that fall under that are listed by feature in [Unsupported features](#unsupported-features).
 
 The same catalog is machine-readable: [`s3op/operations.json`](../s3op/operations.json), exposed to Go as package `s3op` (`Operations`, `Lookup`, `Unsupported`, `Actions`, `CheckActionPattern` and generated `Op*` / `Action*` constants), for a control plane validating the policies it stores or a console listing what a policy can grant.
 
@@ -377,6 +378,25 @@ buckets:
 
 The gateway emits no event and does not read the document. A service that notifies — from the gateway's hooks, or through its backend — configures that in its control plane and records here what the tenant is to be shown; a destination is shown as written, so it is the service's name for it and never a backend's. PutBucketNotificationConfiguration is refused like every bucket-configuration write.
 
+### Server access logging
+
+GetBucketLogging returns the logging status recorded in the bucket's definition, as it is, from the store and without asking the backend. A bucket without one answers with an empty status — logging off — not an error, as on S3.
+
+```yaml
+buckets:
+  - name: photos
+    backend: { ... }
+    logging: |
+      <BucketLoggingStatus xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+        <LoggingEnabled>
+          <TargetBucket>audit</TargetBucket>
+          <TargetPrefix>access/photos/</TargetPrefix>
+        </LoggingEnabled>
+      </BucketLoggingStatus>
+```
+
+The gateway delivers no log and does not read the document. It reports every request to the service's observer; a service that turns those into access logs in a tenant's bucket configures that in its control plane and records here what the tenant is to be shown, the target being a front bucket. PutBucketLogging is refused like every bucket-configuration write.
+
 ### ACLs
 
 The gateway behaves like a bucket with ACLs disabled (Object Ownership = bucket owner enforced, the AWS default since 2023). GetBucketAcl / GetObjectAcl return a fixed policy granting FULL_CONTROL to the tenant; PutBucketAcl / PutObjectAcl return `AccessControlListNotSupported`, and canned ACLs other than `private` / `bucket-owner-full-control` — and any explicit `x-amz-grant-*` header — are rejected on uploads. Use bucket policies for access control instead.
@@ -428,7 +448,6 @@ Configuration of a bucket, which the control plane writes and a data-plane key m
 
 | feature | operations | |
 |---|---|---|
-| Server access logging | GetBucketLogging, PutBucketLogging | the gateway reports every request to the service's observer |
 | Analytics, inventory, metrics and Intelligent-Tiering configurations | GetBucketAnalyticsConfiguration, PutBucketAnalyticsConfiguration, DeleteBucketAnalyticsConfiguration, ListBucketAnalyticsConfigurations, GetBucketInventoryConfiguration, PutBucketInventoryConfiguration, DeleteBucketInventoryConfiguration, ListBucketInventoryConfigurations, GetBucketMetricsConfiguration, PutBucketMetricsConfiguration, DeleteBucketMetricsConfiguration, ListBucketMetricsConfigurations, GetBucketIntelligentTieringConfiguration, PutBucketIntelligentTieringConfiguration, DeleteBucketIntelligentTieringConfiguration, ListBucketIntelligentTieringConfigurations |  |
 | Attribute-based access control | GetBucketAbac, PutBucketAbac | authorization is the gateway's own policy evaluation |
 

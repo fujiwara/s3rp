@@ -70,6 +70,10 @@ switch ($verb) {
             echo "{$topic['Id']} topic={$topic['TopicArn']} events=", implode(',', $topic['Events']), "\n";
         }
         break;
+    case 'logging':
+        $enabled = $s3->getBucketLogging(['Bucket' => $bucket])['LoggingEnabled'] ?? [];
+        echo 'target=', $enabled['TargetBucket'] ?? '', ' prefix=', $enabled['TargetPrefix'] ?? '', "\n";
+        break;
     case 'put_tree':
         $names = array_values(array_diff(scandir($args[0]), ['.', '..']));
         sort($names);
