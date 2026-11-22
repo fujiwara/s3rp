@@ -63,10 +63,13 @@ type Gateway struct {
 	// checksums is the SetChecksumSupport policy (checksums.go)
 	checksums *checksumPolicy
 
-	newClient     func(ctx context.Context, b *store.Backend) (BackendClient, error)
-	clientOptions func(b *store.Backend) []func(*s3.Options)
-	breaker       func(b *store.Backend) Breaker
-	clients       *lru.Cache[clientCacheKey, BackendClient]
+	newClient func(ctx context.Context, b *store.Backend) (BackendClient, error)
+	// backendFactory is the SetBackendFactory hook; nil, or a nil client
+	// from it, means the SDK client
+	backendFactory func(ctx context.Context, b *store.Backend) (BackendClient, error)
+	clientOptions  func(b *store.Backend) []func(*s3.Options)
+	breaker        func(b *store.Backend) Breaker
+	clients        *lru.Cache[clientCacheKey, BackendClient]
 
 	// client cache counters; the capacity is stored here because the LRU
 	// does not report its own bound
@@ -121,6 +124,12 @@ func New(st store.Store) *Gateway {
 		func(clientCacheKey, BackendClient) { g.clientEvictions.Add(1) })
 	g.clientCacheCap.Store(defaultClientCacheSize)
 	g.newClient = func(ctx context.Context, b *store.Backend) (BackendClient, error) {
+		if g.backendFactory != nil {
+			client, err := g.backendFactory(ctx, b)
+			if err != nil || client != nil {
+				return client, err
+			}
+		}
 		return newBackendClient(ctx, b, g.clientOptions, g.breaker)
 	}
 	return g

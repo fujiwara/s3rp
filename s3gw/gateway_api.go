@@ -21,6 +21,22 @@ func (g *Gateway) SetBackend(bucket string, client BackendClient) error {
 	return nil
 }
 
+// SetBackendFactory installs fn as the source of backend clients, for a
+// backend that is not reached through the aws-sdk: an in-process object
+// store (s3gw/membackend), or a client the service builds itself. fn is
+// given the backend definition and returns the client that serves it; a nil
+// client (with a nil error) leaves that backend to the gateway's own SDK
+// client, so one service can mix both.
+//
+// A client fn returns is cached like any other, by backend identity —
+// endpoint, region, credentials, path style, and not the bucket — so fn must
+// be deterministic over those fields and its client serves every bucket of
+// that backend. SetClientOptions and SetBreaker shape the SDK client only:
+// a client fn returns is used as it is. Call before serving requests.
+func (g *Gateway) SetBackendFactory(fn func(ctx context.Context, b *store.Backend) (BackendClient, error)) {
+	g.backendFactory = fn
+}
+
 // SetClientOptions installs a hook that contributes s3.Options to every
 // backend client the gateway builds — a custom Retryer, an instrumented
 // HTTPClient (e.g. an otelhttp transport), timeouts. It receives the backend
