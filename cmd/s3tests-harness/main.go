@@ -41,9 +41,9 @@ func main() {
 	flag.Parse()
 
 	inProcess := endpoint == inProcessEndpoint
-	inProcessDir, isDir := strings.CutPrefix(endpoint, inProcessDirPrefix)
-	if isDir {
-		inProcess = true
+	var inProcessDir string
+	if dir, ok := strings.CutPrefix(endpoint, inProcessDirPrefix); ok {
+		inProcess, inProcessDir = true, dir
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -66,7 +66,9 @@ func main() {
 		ReadHeaderTimeout: 30 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
+	drained := make(chan struct{})
 	go func() {
+		defer close(drained)
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -74,6 +76,12 @@ func main() {
 	}()
 	log.Printf("s3tests-harness listening on %s (backend %s)", listen, endpoint)
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatal(err)
+	}
+	// ListenAndServe returns as soon as Shutdown begins; the backend is
+	// closed only once the requests in flight are done
+	<-drained
+	if err := h.Close(); err != nil {
 		log.Fatal(err)
 	}
 }

@@ -350,3 +350,16 @@ func TestSyncAndCloseInMemory(t *testing.T) {
 		t.Errorf("a Backend in memory after Close: %v", err)
 	}
 }
+
+// An empty path is how the package tells memory from files, so Open must
+// not take one for the working directory.
+func TestOpenNeedsADirectory(t *testing.T) {
+	t.Chdir(t.TempDir())
+	if be, err := localbackend.Open(""); err == nil {
+		be.Close()
+		t.Error("Open of an empty path succeeded")
+	}
+	if entries, _ := os.ReadDir("."); len(entries) != 0 {
+		t.Errorf("Open of an empty path wrote %v", entries)
+	}
+}

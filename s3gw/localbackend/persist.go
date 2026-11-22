@@ -49,6 +49,10 @@ const (
 // nothing enforces. It survives the process ending; it does not promise to
 // survive the machine losing power.
 func Open(dir string) (*Backend, error) {
+	// an empty dir is how the rest of the package tells memory from files
+	if dir == "" {
+		return nil, errors.New("localbackend: Open needs a directory; use New for a Backend in memory")
+	}
 	b := New()
 	b.dir = dir
 	b.pending = map[string]*blob{}

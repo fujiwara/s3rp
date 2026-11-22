@@ -71,11 +71,20 @@ type Config struct {
 	LogWriter io.Writer
 }
 
+// Handler is the harness: an http.Handler to serve, and a Close to call
+// once no request is being served any more.
+type Handler interface {
+	http.Handler
+	// Close writes what an in-process backend kept in a directory has not
+	// written yet. It does nothing otherwise.
+	Close() error
+}
+
 // New returns the harness handler: the s3rp gateway with the
 // CreateBucket/DeleteBucket interceptor in front. Serve it directly —
 // never behind an http.ServeMux, whose path canonicalization breaks S3
 // keys and signatures.
-func New(ctx context.Context, cfg Config) (http.Handler, error) {
+func New(ctx context.Context, cfg Config) (Handler, error) {
 	if cfg.LogWriter == nil {
 		cfg.LogWriter = os.Stderr
 	}
@@ -88,8 +97,6 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 			if inProcess, err = localbackend.Open(cfg.InProcessDir); err != nil {
 				return nil, fmt.Errorf("failed to open %s: %w", cfg.InProcessDir, err)
 			}
-			// the harness lives as long as ctx
-			context.AfterFunc(ctx, func() { inProcess.Close() })
 		}
 		backend = inProcess
 		// never dialed: the definitions only have to name one backend
@@ -135,12 +142,20 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	})
 
 	return &bucketInterceptor{
-		verifier: sigv4.NewVerifier(),
-		store:    st,
-		backend:  backend,
-		next:     gw.Handler(),
-		logger:   logger,
+		verifier:  sigv4.NewVerifier(),
+		store:     st,
+		backend:   backend,
+		next:      gw.Handler(),
+		logger:    logger,
+		inProcess: inProcess,
 	}, nil
+}
+
+func (i *bucketInterceptor) Close() error {
+	if i.inProcess == nil {
+		return nil
+	}
+	return i.inProcess.Close()
 }
 
 // jsonLogger serializes JSON-line writes from the observer and the
