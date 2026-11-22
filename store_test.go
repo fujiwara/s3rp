@@ -66,6 +66,12 @@ func storeContract(t *testing.T, st store.Store) {
 		if err := store.ValidateLifecycleText(logs.LifecycleText); err != nil {
 			t.Errorf("logs lifecycle configuration: %v", err)
 		}
+		if b.ReplicationText != "" {
+			t.Errorf("photos has no replication configuration, got %q", b.ReplicationText)
+		}
+		if err := store.ValidateReplicationText(logs.ReplicationText); err != nil {
+			t.Errorf("logs replication configuration: %v", err)
+		}
 		// another tenant's bucket is not visible
 		if _, err := st.GetBucket(ctx, "acme", "research"); !errors.Is(err, store.ErrNotFound) {
 			t.Errorf("expect ErrNotFound, got %v", err)

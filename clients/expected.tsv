@@ -12,3 +12,4 @@ s3fs	https	double-slash-key	client: sends the key with the empty segment removed
 s3cmd	https	presigned-get	gateway: signurl signs with SigV2, which the gateway does not verify
 sdk-java	https	multipart	backend: RGW answers GetObject partNumber without Content-Range, which the SDK's parallel download requires (https://tracker.ceph.com/issues/83398)
 sdk-ruby	https	multipart	backend: RGW answers GetObject partNumber without Content-Range, which the SDK's parallel download requires (https://tracker.ceph.com/issues/83398)
+mc	https	bucket-replication	client: mc replicate ls reads the configuration, then asks MinIO's admin API for the remote targets

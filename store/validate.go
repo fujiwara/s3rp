@@ -94,6 +94,13 @@ func ValidateLifecycleText(text string) error {
 	return validateXMLDocument(text, "LifecycleConfiguration")
 }
 
+// ValidateReplicationText is ValidateLifecycleText for a bucket's
+// replication configuration: a well-formed XML document whose root element
+// is ReplicationConfiguration.
+func ValidateReplicationText(text string) error {
+	return validateXMLDocument(text, "ReplicationConfiguration")
+}
+
 func validateXMLDocument(text, root string) error {
 	dec := xml.NewDecoder(strings.NewReader(text))
 	depth, seen := 0, false

@@ -26,13 +26,14 @@ func NewConfigStore(cfg *Config) store.Store {
 		buckets := make(map[string]*store.Bucket, len(t.Buckets))
 		for _, b := range t.Buckets {
 			bucket := &store.Bucket{
-				Tenant:        t.Name,
-				Name:          b.Name,
-				Backend:       b.Backend,
-				PolicyText:    b.Policy,
-				CORS:          b.CORS,
-				LifecycleText: b.Lifecycle,
-				CreatedAt:     b.CreatedAt,
+				Tenant:          t.Name,
+				Name:            b.Name,
+				Backend:         b.Backend,
+				PolicyText:      b.Policy,
+				CORS:            b.CORS,
+				LifecycleText:   b.Lifecycle,
+				ReplicationText: b.Replication,
+				CreatedAt:       b.CreatedAt,
 			}
 			if b.Policy != "" {
 				// the config is validated, so this cannot fail; actions

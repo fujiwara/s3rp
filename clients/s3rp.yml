@@ -14,8 +14,9 @@ tenants:
           bucket: ${BACKEND_BUCKET}
           access_key_id: ${BACKEND_ACCESS_KEY}
           secret_access_key: ${BACKEND_SECRET_KEY}
-        # served as it is by GetBucketLifecycleConfiguration (the
-        # bucket-lifecycle scenario); nothing applies it to the backend
+        # served as they are by GetBucketLifecycleConfiguration and
+        # GetBucketReplication (the bucket-lifecycle and bucket-replication
+        # scenarios); nothing applies them to the backend
         lifecycle: |
           <?xml version="1.0" encoding="UTF-8"?>
           <LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
@@ -32,3 +33,16 @@ tenants:
               <AbortIncompleteMultipartUpload><DaysAfterInitiation>3</DaysAfterInitiation></AbortIncompleteMultipartUpload>
             </Rule>
           </LifecycleConfiguration>
+        replication: |
+          <?xml version="1.0" encoding="UTF-8"?>
+          <ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+            <Role>replication</Role>
+            <Rule>
+              <ID>to-backup</ID>
+              <Priority>1</Priority>
+              <Status>Enabled</Status>
+              <Filter><Prefix>docs/</Prefix></Filter>
+              <DeleteMarkerReplication><Status>Disabled</Status></DeleteMarkerReplication>
+              <Destination><Bucket>arn:aws:s3:::compat-backup</Bucket></Destination>
+            </Rule>
+          </ReplicationConfiguration>

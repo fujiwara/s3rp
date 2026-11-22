@@ -52,6 +52,14 @@ func (g *Gateway) getBucketLifecycleConfiguration(c *opCtx) error {
 	return writeStoredXML(c.w, c.rt.cfg.LifecycleText)
 }
 
+func (g *Gateway) getBucketReplication(c *opCtx) error {
+	if c.rt.cfg.ReplicationText == "" {
+		return s3err.New(http.StatusNotFound, "ReplicationConfigurationNotFoundError",
+			"The replication configuration was not found")
+	}
+	return writeStoredXML(c.w, c.rt.cfg.ReplicationText)
+}
+
 func writeStoredXML(w http.ResponseWriter, text string) error {
 	w.Header().Set("Content-Type", "application/xml")
 	w.WriteHeader(http.StatusOK)

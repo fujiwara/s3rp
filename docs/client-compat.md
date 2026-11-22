@@ -125,6 +125,12 @@ Why each entry of `clients/expected.tsv` is expected.
   sends none, where S3 does (AWS Emulator 1.0.552; reported as
   [Ceph #83398](https://tracker.ceph.com/issues/83398)). The gateway
   cannot supply it: the part's offset is not in RGW's answer.
+- **`mc`, `bucket-replication`** (client). `mc replicate ls` reads the
+  configuration with GetBucketReplication, which is served, and then asks
+  MinIO's admin API (`/minio/admin/v3/list-remote-targets`) for the
+  remote targets its rules refer to. That API exists on MinIO only; the
+  gateway reads the request as one for a bucket named `minio`. minio-go's
+  own `GetBucketReplication` is the first half and works.
 - **s3cmd, `presigned-get`** (gateway, deliberate). `s3cmd signurl` signs
   with Signature Version 2. The gateway verifies SigV4 only; SigV2 is
   HMAC-SHA1 over a canonical form of its own and Amazon S3 itself no

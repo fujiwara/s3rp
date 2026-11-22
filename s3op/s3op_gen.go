@@ -16,6 +16,7 @@ const (
 	OpGetBucketPolicyStatus           = "GetBucketPolicyStatus"
 	OpGetBucketCors                   = "GetBucketCors"
 	OpGetBucketLifecycleConfiguration = "GetBucketLifecycleConfiguration"
+	OpGetBucketReplication            = "GetBucketReplication"
 	OpGetBucketVersioning             = "GetBucketVersioning"
 	OpGetBucketEncryption             = "GetBucketEncryption"
 	OpGetBucketOwnershipControls      = "GetBucketOwnershipControls"
@@ -32,6 +33,8 @@ const (
 	OpDeleteBucketCors                = "DeleteBucketCors"
 	OpPutBucketLifecycleConfiguration = "PutBucketLifecycleConfiguration"
 	OpDeleteBucketLifecycle           = "DeleteBucketLifecycle"
+	OpPutBucketReplication            = "PutBucketReplication"
+	OpDeleteBucketReplication         = "DeleteBucketReplication"
 	OpPutBucketVersioning             = "PutBucketVersioning"
 	OpPutObjectLockConfiguration      = "PutObjectLockConfiguration"
 	OpPutBucketEncryption             = "PutBucketEncryption"
@@ -90,6 +93,7 @@ const (
 	ActionGetObjectVersion                 = "s3:GetObjectVersion"
 	ActionGetObjectVersionAcl              = "s3:GetObjectVersionAcl"
 	ActionGetObjectVersionTagging          = "s3:GetObjectVersionTagging"
+	ActionGetReplicationConfiguration      = "s3:GetReplicationConfiguration"
 	ActionListAllMyBuckets                 = "s3:ListAllMyBuckets"
 	ActionListBucket                       = "s3:ListBucket"
 	ActionListBucketMultipartUploads       = "s3:ListBucketMultipartUploads"
@@ -202,6 +206,15 @@ var operations = []Operation{
 		Note: "answered from the store; the tenant's own rules, not the backend bucket's configuration",
 	},
 	{
+		Name:    OpGetBucketReplication,
+		Scope:   ScopeBucket,
+		Support: Supported,
+		Authorizations: []Authorization{
+			{Action: ActionGetReplicationConfiguration, On: OnTarget},
+		},
+		Note: "answered from the store; the configuration a tenant is shown, not the backend bucket's",
+	},
+	{
 		Name:    OpGetBucketVersioning,
 		Scope:   ScopeBucket,
 		Support: Supported,
@@ -310,6 +323,18 @@ var operations = []Operation{
 	},
 	{
 		Name:    OpDeleteBucketLifecycle,
+		Scope:   ScopeBucket,
+		Support: Refused,
+		Note:    "bucket configuration is written where the bucket is created, not through the S3 API",
+	},
+	{
+		Name:    OpPutBucketReplication,
+		Scope:   ScopeBucket,
+		Support: Refused,
+		Note:    "bucket configuration is written where the bucket is created, not through the S3 API",
+	},
+	{
+		Name:    OpDeleteBucketReplication,
 		Scope:   ScopeBucket,
 		Support: Refused,
 		Note:    "bucket configuration is written where the bucket is created, not through the S3 API",
@@ -572,6 +597,7 @@ var actions = []string{
 	ActionGetObjectVersion,
 	ActionGetObjectVersionAcl,
 	ActionGetObjectVersionTagging,
+	ActionGetReplicationConfiguration,
 	ActionListAllMyBuckets,
 	ActionListBucket,
 	ActionListBucketMultipartUploads,
@@ -615,11 +641,6 @@ var unsupported = []Feature{
 		Name:       "Bucket tagging",
 		Kind:       FeatureBucketConfiguration,
 		Operations: []string{"GetBucketTagging", "PutBucketTagging", "DeleteBucketTagging"},
-	},
-	{
-		Name:       "Replication",
-		Kind:       FeatureBucketConfiguration,
-		Operations: []string{"GetBucketReplication", "PutBucketReplication", "DeleteBucketReplication"},
 	},
 	{
 		Name:       "Event notifications",

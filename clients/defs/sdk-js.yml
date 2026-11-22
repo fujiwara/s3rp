@@ -17,4 +17,5 @@ verbs:
   copy:     $SDK copy "$SRC" "$DST"
   presign:  $SDK presign "$KEY"
   lifecycle: $SDK lifecycle
+  replication: $SDK replication
   put_tree: $SDK put_tree "$DIR" "$PREFIX"

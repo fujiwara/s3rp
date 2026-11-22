@@ -140,6 +140,18 @@ async fn main() -> Result<()> {
                 );
             }
         }
+        "replication" => {
+            let out = s3.get_bucket_replication().bucket(&bucket).send().await?;
+            for rule in out.replication_configuration().map(|c| c.rules()).unwrap_or_default() {
+                println!(
+                    "{} prefix={} status={} destination={}",
+                    rule.id().unwrap_or_default(),
+                    rule.filter().and_then(|f| f.prefix()).unwrap_or_default(),
+                    rule.status().as_str(),
+                    rule.destination().map(|d| d.bucket()).unwrap_or_default(),
+                );
+            }
+        }
         "put_tree" => {
             let mut names = Vec::new();
             let mut entries = tokio::fs::read_dir(&args[1]).await?;
