@@ -72,6 +72,15 @@ public class Client {
                             .getObjectRequest(g -> g.bucket(bucket).key(args[1]))).url());
                     }
                 }
+                case "lifecycle" -> s3.getBucketLifecycleConfiguration(g -> g.bucket(bucket)).join().rules().forEach(rule -> {
+                    var filter = rule.filter();
+                    var expiration = rule.expiration();
+                    var abort = rule.abortIncompleteMultipartUpload();
+                    System.out.println(rule.id()
+                        + " prefix=" + (filter == null || filter.prefix() == null ? "" : filter.prefix())
+                        + " expire=" + (expiration == null || expiration.days() == null ? "-" : expiration.days())
+                        + " abort=" + (abort == null ? "-" : abort.daysAfterInitiation()));
+                });
                 case "put_tree" -> {
                     List<Path> files;
                     try (var entries = Files.list(Path.of(args[1]))) {

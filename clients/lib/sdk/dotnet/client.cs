@@ -39,6 +39,13 @@ switch (args[0])
             Protocol = Env("SCHEME") == "https" ? Protocol.HTTPS : Protocol.HTTP,
         }));
         break;
+    case "lifecycle":
+        foreach (var rule in (await s3.GetLifecycleConfigurationAsync(bucket)).Configuration.Rules)
+        {
+            var prefix = (rule.Filter?.LifecycleFilterPredicate as LifecyclePrefixPredicate)?.Prefix;
+            Console.WriteLine($"{rule.Id} prefix={prefix} expire={rule.Expiration?.Days} abort={rule.AbortIncompleteMultipartUpload?.DaysAfterInitiation}");
+        }
+        break;
     case "put_tree":
         foreach (var file in Directory.GetFiles(args[1]).Order())
             await transfer.UploadAsync(file, bucket, args[2] + "/" + Path.GetFileName(file));

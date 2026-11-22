@@ -4,60 +4,63 @@ package s3op
 
 // Operation names, the values of Op.Operation.
 const (
-	OpListBuckets                   = "ListBuckets"
-	OpHeadBucket                    = "HeadBucket"
-	OpListObjects                   = "ListObjects"
-	OpListObjectsV2                 = "ListObjectsV2"
-	OpListObjectVersions            = "ListObjectVersions"
-	OpListMultipartUploads          = "ListMultipartUploads"
-	OpGetBucketLocation             = "GetBucketLocation"
-	OpGetBucketAcl                  = "GetBucketAcl"
-	OpGetBucketPolicy               = "GetBucketPolicy"
-	OpGetBucketPolicyStatus         = "GetBucketPolicyStatus"
-	OpGetBucketCors                 = "GetBucketCors"
-	OpGetBucketVersioning           = "GetBucketVersioning"
-	OpGetBucketEncryption           = "GetBucketEncryption"
-	OpGetBucketOwnershipControls    = "GetBucketOwnershipControls"
-	OpGetPublicAccessBlock          = "GetPublicAccessBlock"
-	OpGetObjectLockConfiguration    = "GetObjectLockConfiguration"
-	OpDeleteObjects                 = "DeleteObjects"
-	OpPostObject                    = "PostObject"
-	OpCreateBucket                  = "CreateBucket"
-	OpDeleteBucket                  = "DeleteBucket"
-	OpPutBucketAcl                  = "PutBucketAcl"
-	OpPutBucketPolicy               = "PutBucketPolicy"
-	OpDeleteBucketPolicy            = "DeleteBucketPolicy"
-	OpPutBucketCors                 = "PutBucketCors"
-	OpDeleteBucketCors              = "DeleteBucketCors"
-	OpPutBucketVersioning           = "PutBucketVersioning"
-	OpPutObjectLockConfiguration    = "PutObjectLockConfiguration"
-	OpPutBucketEncryption           = "PutBucketEncryption"
-	OpDeleteBucketEncryption        = "DeleteBucketEncryption"
-	OpPutBucketOwnershipControls    = "PutBucketOwnershipControls"
-	OpDeleteBucketOwnershipControls = "DeleteBucketOwnershipControls"
-	OpPutPublicAccessBlock          = "PutPublicAccessBlock"
-	OpDeletePublicAccessBlock       = "DeletePublicAccessBlock"
-	OpGetObject                     = "GetObject"
-	OpHeadObject                    = "HeadObject"
-	OpGetObjectAttributes           = "GetObjectAttributes"
-	OpPutObject                     = "PutObject"
-	OpCopyObject                    = "CopyObject"
-	OpDeleteObject                  = "DeleteObject"
-	OpGetObjectTagging              = "GetObjectTagging"
-	OpPutObjectTagging              = "PutObjectTagging"
-	OpDeleteObjectTagging           = "DeleteObjectTagging"
-	OpGetObjectAcl                  = "GetObjectAcl"
-	OpGetObjectRetention            = "GetObjectRetention"
-	OpPutObjectRetention            = "PutObjectRetention"
-	OpGetObjectLegalHold            = "GetObjectLegalHold"
-	OpPutObjectLegalHold            = "PutObjectLegalHold"
-	OpPutObjectAcl                  = "PutObjectAcl"
-	OpCreateMultipartUpload         = "CreateMultipartUpload"
-	OpUploadPart                    = "UploadPart"
-	OpUploadPartCopy                = "UploadPartCopy"
-	OpCompleteMultipartUpload       = "CompleteMultipartUpload"
-	OpAbortMultipartUpload          = "AbortMultipartUpload"
-	OpListParts                     = "ListParts"
+	OpListBuckets                     = "ListBuckets"
+	OpHeadBucket                      = "HeadBucket"
+	OpListObjects                     = "ListObjects"
+	OpListObjectsV2                   = "ListObjectsV2"
+	OpListObjectVersions              = "ListObjectVersions"
+	OpListMultipartUploads            = "ListMultipartUploads"
+	OpGetBucketLocation               = "GetBucketLocation"
+	OpGetBucketAcl                    = "GetBucketAcl"
+	OpGetBucketPolicy                 = "GetBucketPolicy"
+	OpGetBucketPolicyStatus           = "GetBucketPolicyStatus"
+	OpGetBucketCors                   = "GetBucketCors"
+	OpGetBucketLifecycleConfiguration = "GetBucketLifecycleConfiguration"
+	OpGetBucketVersioning             = "GetBucketVersioning"
+	OpGetBucketEncryption             = "GetBucketEncryption"
+	OpGetBucketOwnershipControls      = "GetBucketOwnershipControls"
+	OpGetPublicAccessBlock            = "GetPublicAccessBlock"
+	OpGetObjectLockConfiguration      = "GetObjectLockConfiguration"
+	OpDeleteObjects                   = "DeleteObjects"
+	OpPostObject                      = "PostObject"
+	OpCreateBucket                    = "CreateBucket"
+	OpDeleteBucket                    = "DeleteBucket"
+	OpPutBucketAcl                    = "PutBucketAcl"
+	OpPutBucketPolicy                 = "PutBucketPolicy"
+	OpDeleteBucketPolicy              = "DeleteBucketPolicy"
+	OpPutBucketCors                   = "PutBucketCors"
+	OpDeleteBucketCors                = "DeleteBucketCors"
+	OpPutBucketLifecycleConfiguration = "PutBucketLifecycleConfiguration"
+	OpDeleteBucketLifecycle           = "DeleteBucketLifecycle"
+	OpPutBucketVersioning             = "PutBucketVersioning"
+	OpPutObjectLockConfiguration      = "PutObjectLockConfiguration"
+	OpPutBucketEncryption             = "PutBucketEncryption"
+	OpDeleteBucketEncryption          = "DeleteBucketEncryption"
+	OpPutBucketOwnershipControls      = "PutBucketOwnershipControls"
+	OpDeleteBucketOwnershipControls   = "DeleteBucketOwnershipControls"
+	OpPutPublicAccessBlock            = "PutPublicAccessBlock"
+	OpDeletePublicAccessBlock         = "DeletePublicAccessBlock"
+	OpGetObject                       = "GetObject"
+	OpHeadObject                      = "HeadObject"
+	OpGetObjectAttributes             = "GetObjectAttributes"
+	OpPutObject                       = "PutObject"
+	OpCopyObject                      = "CopyObject"
+	OpDeleteObject                    = "DeleteObject"
+	OpGetObjectTagging                = "GetObjectTagging"
+	OpPutObjectTagging                = "PutObjectTagging"
+	OpDeleteObjectTagging             = "DeleteObjectTagging"
+	OpGetObjectAcl                    = "GetObjectAcl"
+	OpGetObjectRetention              = "GetObjectRetention"
+	OpPutObjectRetention              = "PutObjectRetention"
+	OpGetObjectLegalHold              = "GetObjectLegalHold"
+	OpPutObjectLegalHold              = "PutObjectLegalHold"
+	OpPutObjectAcl                    = "PutObjectAcl"
+	OpCreateMultipartUpload           = "CreateMultipartUpload"
+	OpUploadPart                      = "UploadPart"
+	OpUploadPartCopy                  = "UploadPartCopy"
+	OpCompleteMultipartUpload         = "CompleteMultipartUpload"
+	OpAbortMultipartUpload            = "AbortMultipartUpload"
+	OpListParts                       = "ListParts"
 )
 
 // Actions some operation authorizes.
@@ -78,6 +81,7 @@ const (
 	ActionGetBucketPublicAccessBlock       = "s3:GetBucketPublicAccessBlock"
 	ActionGetBucketVersioning              = "s3:GetBucketVersioning"
 	ActionGetEncryptionConfiguration       = "s3:GetEncryptionConfiguration"
+	ActionGetLifecycleConfiguration        = "s3:GetLifecycleConfiguration"
 	ActionGetObject                        = "s3:GetObject"
 	ActionGetObjectAcl                     = "s3:GetObjectAcl"
 	ActionGetObjectLegalHold               = "s3:GetObjectLegalHold"
@@ -189,6 +193,15 @@ var operations = []Operation{
 		},
 	},
 	{
+		Name:    OpGetBucketLifecycleConfiguration,
+		Scope:   ScopeBucket,
+		Support: Supported,
+		Authorizations: []Authorization{
+			{Action: ActionGetLifecycleConfiguration, On: OnTarget},
+		},
+		Note: "answered from the store; the tenant's own rules, not the backend bucket's configuration",
+	},
+	{
 		Name:    OpGetBucketVersioning,
 		Scope:   ScopeBucket,
 		Support: Supported,
@@ -285,6 +298,18 @@ var operations = []Operation{
 	},
 	{
 		Name:    OpDeleteBucketCors,
+		Scope:   ScopeBucket,
+		Support: Refused,
+		Note:    "bucket configuration is written where the bucket is created, not through the S3 API",
+	},
+	{
+		Name:    OpPutBucketLifecycleConfiguration,
+		Scope:   ScopeBucket,
+		Support: Refused,
+		Note:    "bucket configuration is written where the bucket is created, not through the S3 API",
+	},
+	{
+		Name:    OpDeleteBucketLifecycle,
 		Scope:   ScopeBucket,
 		Support: Refused,
 		Note:    "bucket configuration is written where the bucket is created, not through the S3 API",
@@ -538,6 +563,7 @@ var actions = []string{
 	ActionGetBucketPublicAccessBlock,
 	ActionGetBucketVersioning,
 	ActionGetEncryptionConfiguration,
+	ActionGetLifecycleConfiguration,
 	ActionGetObject,
 	ActionGetObjectAcl,
 	ActionGetObjectLegalHold,
@@ -584,12 +610,6 @@ var unsupported = []Feature{
 		Name:       "BitTorrent",
 		Kind:       FeatureObject,
 		Operations: []string{"GetObjectTorrent"},
-	},
-	{
-		Name:       "Lifecycle configuration",
-		Kind:       FeatureBucketConfiguration,
-		Operations: []string{"GetBucketLifecycleConfiguration", "PutBucketLifecycleConfiguration", "DeleteBucketLifecycle"},
-		Note:       "expiration is enforced by the backend, whose rules the control plane writes",
 	},
 	{
 		Name:       "Bucket tagging",

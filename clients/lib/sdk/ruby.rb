@@ -39,6 +39,12 @@ when "copy"
   s3.copy_object(bucket: bucket, key: args[1], copy_source: "#{bucket}/#{source}")
 when "presign"
   puts Aws::S3::Presigner.new(client: s3).presigned_url(:get_object, bucket: bucket, key: args[0], expires_in: 3600)
+when "lifecycle"
+  s3.get_bucket_lifecycle_configuration(bucket: bucket).rules.each do |rule|
+    expire = rule.expiration&.days || "-"
+    abort_days = rule.abort_incomplete_multipart_upload&.days_after_initiation || "-"
+    puts "#{rule.id} prefix=#{rule.filter&.prefix} expire=#{expire} abort=#{abort_days}"
+  end
 when "put_tree"
   Dir.children(args[0]).sort.each do |name|
     transfer.upload_file(File.join(args[0], name), bucket: bucket, key: "#{args[1]}/#{name}")

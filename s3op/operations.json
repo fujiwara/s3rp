@@ -123,6 +123,18 @@
       ]
     },
     {
+      "name": "GetBucketLifecycleConfiguration",
+      "scope": "bucket",
+      "support": "supported",
+      "authorizations": [
+        {
+          "action": "s3:GetLifecycleConfiguration",
+          "on": "target"
+        }
+      ],
+      "note": "answered from the store; the tenant's own rules, not the backend bucket's configuration"
+    },
+    {
       "name": "GetBucketVersioning",
       "scope": "bucket",
       "support": "supported",
@@ -249,6 +261,18 @@
     },
     {
       "name": "DeleteBucketCors",
+      "scope": "bucket",
+      "support": "refused",
+      "note": "bucket configuration is written where the bucket is created, not through the S3 API"
+    },
+    {
+      "name": "PutBucketLifecycleConfiguration",
+      "scope": "bucket",
+      "support": "refused",
+      "note": "bucket configuration is written where the bucket is created, not through the S3 API"
+    },
+    {
+      "name": "DeleteBucketLifecycle",
       "scope": "bucket",
       "support": "refused",
       "note": "bucket configuration is written where the bucket is created, not through the S3 API"
@@ -655,16 +679,6 @@
       "operations": [
         "GetObjectTorrent"
       ]
-    },
-    {
-      "feature": "Lifecycle configuration",
-      "kind": "bucket-configuration",
-      "operations": [
-        "GetBucketLifecycleConfiguration",
-        "PutBucketLifecycleConfiguration",
-        "DeleteBucketLifecycle"
-      ],
-      "note": "expiration is enforced by the backend, whose rules the control plane writes"
     },
     {
       "feature": "Bucket tagging",

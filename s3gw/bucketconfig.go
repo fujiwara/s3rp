@@ -1,6 +1,8 @@
 package s3gw
 
 import (
+	"net/http"
+
 	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/s3xml"
 
@@ -35,6 +37,26 @@ func (g *Gateway) getPublicAccessBlock(c *opCtx) error {
 		BlockPublicPolicy:     true,
 		RestrictPublicBuckets: true,
 	})
+}
+
+// Bucket-configuration reads answered from the store's definition of the
+// bucket, as GetBucketPolicy is: the control plane accepts the write and
+// records what the tenant is shown, and no backend is asked. The document
+// is served as stored; the gateway does not read it.
+
+func (g *Gateway) getBucketLifecycleConfiguration(c *opCtx) error {
+	if c.rt.cfg.LifecycleText == "" {
+		return s3err.New(http.StatusNotFound, "NoSuchLifecycleConfiguration",
+			"The lifecycle configuration does not exist")
+	}
+	return writeStoredXML(c.w, c.rt.cfg.LifecycleText)
+}
+
+func writeStoredXML(w http.ResponseWriter, text string) error {
+	w.Header().Set("Content-Type", "application/xml")
+	w.WriteHeader(http.StatusOK)
+	_, err := w.Write([]byte(text))
+	return err
 }
 
 // getBucketEncryption is proxied like GetBucketVersioning: the default

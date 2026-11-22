@@ -3,6 +3,7 @@ const { createReadStream, createWriteStream, readdirSync } = require("node:fs");
 const { pipeline } = require("node:stream/promises");
 const {
   S3Client, GetObjectCommand, DeleteObjectCommand, CopyObjectCommand, paginateListObjectsV2,
+  GetBucketLifecycleConfigurationCommand,
 } = require("@aws-sdk/client-s3");
 const { Upload } = require("@aws-sdk/lib-storage");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
@@ -44,6 +45,15 @@ async function main([verb, ...args]) {
     case "presign":
       console.log(await getSignedUrl(s3, new GetObjectCommand({ Bucket, Key: args[0] }), { expiresIn: 3600 }));
       break;
+    case "lifecycle": {
+      const { Rules } = await s3.send(new GetBucketLifecycleConfigurationCommand({ Bucket }));
+      for (const rule of Rules ?? []) {
+        const expire = rule.Expiration?.Days ?? "-";
+        const abort = rule.AbortIncompleteMultipartUpload?.DaysAfterInitiation ?? "-";
+        console.log(`${rule.ID} prefix=${rule.Filter?.Prefix ?? ""} expire=${expire} abort=${abort}`);
+      }
+      break;
+    }
     case "put_tree":
       for (const name of readdirSync(args[0]).sort()) await upload(`${args[0]}/${name}`, `${args[1]}/${name}`);
       break;

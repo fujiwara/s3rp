@@ -14,3 +14,21 @@ tenants:
           bucket: ${BACKEND_BUCKET}
           access_key_id: ${BACKEND_ACCESS_KEY}
           secret_access_key: ${BACKEND_SECRET_KEY}
+        # served as it is by GetBucketLifecycleConfiguration (the
+        # bucket-lifecycle scenario); nothing applies it to the backend
+        lifecycle: |
+          <?xml version="1.0" encoding="UTF-8"?>
+          <LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+            <Rule>
+              <ID>expire-tmp</ID>
+              <Filter><Prefix>tmp/</Prefix></Filter>
+              <Status>Enabled</Status>
+              <Expiration><Days>7</Days></Expiration>
+            </Rule>
+            <Rule>
+              <ID>abort-uploads</ID>
+              <Filter><Prefix></Prefix></Filter>
+              <Status>Enabled</Status>
+              <AbortIncompleteMultipartUpload><DaysAfterInitiation>3</DaysAfterInitiation></AbortIncompleteMultipartUpload>
+            </Rule>
+          </LifecycleConfiguration>

@@ -101,6 +101,9 @@ type BucketConfig struct {
 	Backend *BackendConfig `yaml:"backend" json:"backend"`
 	Policy  string         `yaml:"policy,omitempty" json:"policy,omitempty"` // bucket policy JSON text
 	CORS    []*cors.Rule   `yaml:"cors,omitempty" json:"cors,omitempty"`
+	// Lifecycle is the lifecycle configuration XML GetBucketLifecycleConfiguration
+	// returns. It is a declaration: nothing here applies it to the backend.
+	Lifecycle string `yaml:"lifecycle,omitempty" json:"lifecycle,omitempty"`
 	// CreatedAt is reported by ListBuckets (unset = the Unix epoch).
 	CreatedAt time.Time `yaml:"created_at,omitzero" json:"created_at,omitzero"`
 }
@@ -322,6 +325,11 @@ func (n *configNames) validateBucket(tenant string, b *BucketConfig) error {
 	for _, rule := range b.CORS {
 		if err := rule.Validate(); err != nil {
 			return fmt.Errorf("bucket %s: %w", b.Name, err)
+		}
+	}
+	if b.Lifecycle != "" {
+		if err := store.ValidateLifecycleText(b.Lifecycle); err != nil {
+			return fmt.Errorf("bucket %s: lifecycle: %w", b.Name, err)
 		}
 	}
 	return nil

@@ -1,9 +1,13 @@
 package store
 
 import (
+	"encoding/xml"
+	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"regexp"
+	"strings"
 )
 
 // Name charsets are gateway invariants, not cosmetics, so every Store
@@ -76,6 +80,60 @@ func (b *Backend) Validate() error {
 	}
 	if (b.AccessKeyID == "") != (b.SecretAccessKey == "") {
 		return fmt.Errorf("backend access_key_id and secret_access_key must be set together")
+	}
+	return nil
+}
+
+// ValidateLifecycleText checks that text can be served as a bucket's
+// lifecycle configuration: a well-formed XML document whose root element
+// is LifecycleConfiguration. The rules themselves are not checked — the
+// gateway serves the document without reading it, and what a rule may say
+// is for whoever enforces it — so this only keeps a client from being
+// handed something its parser refuses.
+func ValidateLifecycleText(text string) error {
+	return validateXMLDocument(text, "LifecycleConfiguration")
+}
+
+func validateXMLDocument(text, root string) error {
+	dec := xml.NewDecoder(strings.NewReader(text))
+	depth, seen := 0, false
+	for {
+		tok, err := dec.Token()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("invalid %s document: %w", root, err)
+		}
+		switch t := tok.(type) {
+		case xml.StartElement:
+			if depth == 0 {
+				if seen || t.Name.Local != root {
+					return fmt.Errorf("invalid %s document: root element is %s", root, t.Name.Local)
+				}
+				seen = true
+			}
+			// the decoder lets a repeated attribute through, which no
+			// XML parser a client uses does
+			for i, a := range t.Attr {
+				for _, b := range t.Attr[:i] {
+					if a.Name == b.Name {
+						return fmt.Errorf("invalid %s document: attribute %s repeated on %s", root, a.Name.Local, t.Name.Local)
+					}
+				}
+			}
+			depth++
+		case xml.EndElement:
+			depth--
+		case xml.CharData:
+			// XML's own white space only: TrimSpace would also pass U+00A0
+			if depth == 0 && strings.Trim(string(t), " \t\r\n") != "" {
+				return fmt.Errorf("invalid %s document: text outside the root element", root)
+			}
+		}
+	}
+	if !seen {
+		return fmt.Errorf("invalid %s document: no root element", root)
 	}
 	return nil
 }

@@ -763,6 +763,7 @@ var bucketRoutes = bindRoutes(map[string][]route{
 		{match: has(subACL), params: aclOnlyParams, name: s3op.OpGetBucketAcl, handle: (*Gateway).getBucketACL},
 		{match: has(subPolicy), params: policyOnlyParams, name: s3op.OpGetBucketPolicy, handle: (*Gateway).getBucketPolicy},
 		{match: has(subCORS), params: corsOnlyParams, name: s3op.OpGetBucketCors, handle: (*Gateway).getBucketCors},
+		{match: has(subLifecycle), params: lifecycleOnlyParams, name: s3op.OpGetBucketLifecycleConfiguration, handle: (*Gateway).getBucketLifecycleConfiguration},
 		{match: has(subObjectLock), params: objectLockOnlyParams, name: s3op.OpGetObjectLockConfiguration, handle: (*Gateway).getObjectLockConfiguration},
 		{match: has(subVersioning), params: versioningOnlyParams, name: s3op.OpGetBucketVersioning, handle: (*Gateway).getBucketVersioning},
 		{match: has(subEncryption), params: encryptionOnlyParams, name: s3op.OpGetBucketEncryption, handle: (*Gateway).getBucketEncryption},
@@ -787,6 +788,9 @@ var bucketRoutes = bindRoutes(map[string][]route{
 		notImplemented(has(subObjectLock), s3op.OpPutObjectLockConfiguration),
 		notImplemented(has(subPolicy), s3op.OpPutBucketPolicy),
 		notImplemented(has(subCORS), s3op.OpPutBucketCors),
+		// one configuration per backend bucket, which also holds the
+		// operator's rules: a tenant's write would replace them
+		notImplemented(has(subLifecycle), s3op.OpPutBucketLifecycleConfiguration),
 		notImplemented(has(subEncryption), s3op.OpPutBucketEncryption),
 		notImplemented(has(subOwnership), s3op.OpPutBucketOwnershipControls),
 		notImplemented(has(subPublicAccess), s3op.OpPutPublicAccessBlock),
@@ -797,6 +801,7 @@ var bucketRoutes = bindRoutes(map[string][]route{
 	http.MethodDelete: {
 		notImplemented(has(subPolicy), s3op.OpDeleteBucketPolicy),
 		notImplemented(has(subCORS), s3op.OpDeleteBucketCors),
+		notImplemented(has(subLifecycle), s3op.OpDeleteBucketLifecycle),
 		notImplemented(has(subEncryption), s3op.OpDeleteBucketEncryption),
 		notImplemented(has(subOwnership), s3op.OpDeleteBucketOwnershipControls),
 		notImplemented(has(subPublicAccess), s3op.OpDeletePublicAccessBlock),
@@ -886,6 +891,7 @@ const (
 	subDelete       = "delete"
 	subEncryption   = "encryption"
 	subLegalHold    = "legal-hold"
+	subLifecycle    = "lifecycle"
 	subLocation     = "location"
 	subObjectLock   = "object-lock"
 	subOwnership    = "ownershipControls"
@@ -906,10 +912,14 @@ const (
 )
 
 var (
-	noParams               = newParamSet()
-	aclOnlyParams          = newParamSet(subACL)
-	policyOnlyParams       = newParamSet(subPolicy)
-	corsOnlyParams         = newParamSet(subCORS)
+	noParams         = newParamSet()
+	aclOnlyParams    = newParamSet(subACL)
+	policyOnlyParams = newParamSet(subPolicy)
+	corsOnlyParams   = newParamSet(subCORS)
+	// withUpdatedAt is accepted and not read: minio-go sends it on every
+	// lifecycle read, asking MinIO for a response header no other server
+	// has, and reads the configuration the same without it
+	lifecycleOnlyParams    = newParamSet(subLifecycle, "withUpdatedAt")
 	objectLockOnlyParams   = newParamSet(subObjectLock)
 	retentionParams        = newParamSet(subRetention, qpVersionID)
 	legalHoldParams        = newParamSet(subLegalHold, qpVersionID)
