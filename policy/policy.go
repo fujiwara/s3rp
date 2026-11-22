@@ -830,20 +830,26 @@ func matchRunes(pat, val []rune) bool {
 	// so we can backtrack and let the '*' consume one more character
 	star, starV := -1, 0
 	for v < len(val) {
-		switch {
-		case p < len(pat) && (pat[p] == '?' || pat[p] == val[v]):
-			p++
-			v++
-		case p < len(pat) && pat[p] == '*':
-			star, starV = p, v
-			p++
-		case star >= 0:
-			p = star + 1
-			starV++
-			v = starV
-		default:
+		if p < len(pat) {
+			// the wildcard test comes before the literal one: a '*' in the
+			// pattern is a wildcard even where the value has a '*' of its
+			// own, and taking it as that character would end its run there
+			if c := pat[p]; c == '*' {
+				star, starV = p, v
+				p++
+				continue
+			} else if c == '?' || c == val[v] {
+				p++
+				v++
+				continue
+			}
+		}
+		if star < 0 {
 			return false
 		}
+		p = star + 1
+		starV++
+		v = starV
 	}
 	for p < len(pat) && pat[p] == '*' {
 		p++
