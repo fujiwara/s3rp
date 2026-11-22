@@ -1,4 +1,4 @@
-package membackend_test
+package localbackend_test
 
 import (
 	"context"
@@ -15,14 +15,14 @@ import (
 	"github.com/aws/smithy-go"
 
 	"github.com/fujiwara/s3rp/s3gw"
-	"github.com/fujiwara/s3rp/s3gw/membackend"
+	"github.com/fujiwara/s3rp/s3gw/localbackend"
 	"github.com/fujiwara/s3rp/store"
 )
 
 const (
 	testTenant          = "acme"
-	testAccessKeyID     = "MEMBACKENDTESTKEY001"
-	testSecretAccessKey = "membackendtestsecret"
+	testAccessKeyID     = "LOCALBACKENDTESTKEY1"
+	testSecretAccessKey = "localbackendtestsecret"
 )
 
 // testStore is the definition store of a service in miniature: one tenant,
@@ -57,7 +57,7 @@ func (s *testStore) GetBucketByName(_ context.Context, bucket string) (*store.Bu
 	}
 	// the endpoint is never dialed; the backend bucket carries a prefix so
 	// that a front name reaching the backend would not resolve
-	be := &store.Backend{Endpoint: "http://membackend.invalid", Bucket: backendName(bucket)}
+	be := &store.Backend{Endpoint: "http://localbackend.invalid", Bucket: backendName(bucket)}
 	be.SetDefaults(bucket)
 	return &store.Bucket{Tenant: testTenant, Name: bucket, Backend: be}, nil
 }
@@ -80,13 +80,13 @@ func backendName(front string) string { return "be-" + front }
 type fixture struct {
 	t       *testing.T
 	client  *s3.Client
-	backend *membackend.Backend
+	backend *localbackend.Backend
 	store   *testStore
 }
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
-	be := membackend.New()
+	be := localbackend.New()
 	st := &testStore{buckets: map[string]bool{}}
 	gw := s3gw.New(st)
 	gw.SetBackendFactory(func(context.Context, *store.Backend) (s3gw.BackendClient, error) {

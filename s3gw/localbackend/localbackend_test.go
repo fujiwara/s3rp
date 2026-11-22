@@ -1,4 +1,4 @@
-package membackend_test
+package localbackend_test
 
 import (
 	"context"
@@ -16,13 +16,13 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
 	"github.com/fujiwara/s3rp/s3err"
-	"github.com/fujiwara/s3rp/s3gw/membackend"
+	"github.com/fujiwara/s3rp/s3gw/localbackend"
 )
 
 // The methods a control plane calls, as it would call them on the SDK
 // client: failures are the SDK's modeled errors where it has them.
 func TestBucketAdministration(t *testing.T) {
-	be := membackend.New()
+	be := localbackend.New()
 	ctx := t.Context()
 	create := func(name string, lock bool) error {
 		_, err := be.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String(name), ObjectLockEnabledForBucket: aws.Bool(lock)})
@@ -106,7 +106,7 @@ func TestDefaultEncryption(t *testing.T) {
 // finds it in what the backend returns: the write must fail with that error
 // in the chain and store nothing.
 func TestBodyReadErrorFailsTheWrite(t *testing.T) {
-	be := membackend.New()
+	be := localbackend.New()
 	ctx := t.Context()
 	if _, err := be.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String("b")}); err != nil {
 		t.Fatal(err)
@@ -128,7 +128,7 @@ func TestBodyReadErrorFailsTheWrite(t *testing.T) {
 }
 
 func TestChecksumMismatchRefused(t *testing.T) {
-	be := membackend.New()
+	be := localbackend.New()
 	ctx := t.Context()
 	if _, err := be.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String("b")}); err != nil {
 		t.Fatal(err)
@@ -148,7 +148,7 @@ func TestChecksumMismatchRefused(t *testing.T) {
 // An algorithm the package cannot compute is refused, never stored
 // unverified or silently left out.
 func TestUncomputableChecksumRefused(t *testing.T) {
-	be := membackend.New()
+	be := localbackend.New()
 	ctx := t.Context()
 	if _, err := be.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String("b")}); err != nil {
 		t.Fatal(err)
@@ -175,7 +175,7 @@ func TestUncomputableChecksumRefused(t *testing.T) {
 // A whole-object checksum stated at completion is verified even when the
 // upload was started without a checksum algorithm.
 func TestCompleteVerifiesStatedChecksum(t *testing.T) {
-	be := membackend.New()
+	be := localbackend.New()
 	ctx := t.Context()
 	if _, err := be.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String("b")}); err != nil {
 		t.Fatal(err)
@@ -204,7 +204,7 @@ func TestCompleteVerifiesStatedChecksum(t *testing.T) {
 }
 
 func TestCanceledContext(t *testing.T) {
-	be := membackend.New()
+	be := localbackend.New()
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	if _, err := be.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String("b")}); !errors.Is(err, context.Canceled) {
@@ -214,7 +214,7 @@ func TestCanceledContext(t *testing.T) {
 
 // One Backend serves every request of a gateway at once.
 func TestConcurrentUse(t *testing.T) {
-	be := membackend.New()
+	be := localbackend.New()
 	ctx := t.Context()
 	if _, err := be.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String("b")}); err != nil {
 		t.Fatal(err)

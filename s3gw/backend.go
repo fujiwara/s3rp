@@ -39,7 +39,7 @@ func mergeRepeatedHeadersMiddleware(stack *middleware.Stack) error {
 // BackendClient is the S3 client methods the gateway calls on a backend.
 // The aws-sdk's *s3.Client is the implementation the gateway builds for
 // itself; SetBackendFactory supplies another (an in-process object store,
-// as s3gw/membackend), and SetBackend a stub in tests.
+// as s3gw/localbackend), and SetBackend a stub in tests.
 //
 // An implementation that is not an SDK client must keep three habits of
 // one. It reads a write's Body to its end and fails the write when the read

@@ -19,7 +19,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/fujiwara/s3rp"
 	"github.com/fujiwara/s3rp/s3gw"
-	"github.com/fujiwara/s3rp/s3gw/membackend"
+	"github.com/fujiwara/s3rp/s3gw/localbackend"
 	"github.com/fujiwara/s3rp/store"
 )
 
@@ -78,10 +78,10 @@ func TestIntegration(t *testing.T) {
 // The same suite with no backend to start: every bucket is served by the
 // in-process backend, so this run is part of plain go test.
 func TestIntegrationInProcess(t *testing.T) {
-	be := membackend.New()
+	be := localbackend.New()
 	runIntegration(t, integrationBackend{
 		// never dialed; the scheme is what config validation asks for
-		endpoint: "http://membackend.invalid", key: "backendkey", secret: "backendsecret",
+		endpoint: "http://localbackend.invalid", key: "backendkey", secret: "backendsecret",
 		admin: be,
 		attach: func(app *s3rp.S3RP) {
 			app.SetBackendFactory(func(context.Context, *store.Backend) (s3gw.BackendClient, error) {

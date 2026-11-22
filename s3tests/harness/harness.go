@@ -23,7 +23,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/fujiwara/s3rp/s3gw"
-	"github.com/fujiwara/s3rp/s3gw/membackend"
+	"github.com/fujiwara/s3rp/s3gw/localbackend"
 	"github.com/fujiwara/s3rp/sigv4"
 	"github.com/fujiwara/s3rp/store"
 )
@@ -53,7 +53,7 @@ func defaultKeys() []*store.Key {
 // Config configures the harness.
 type Config struct {
 	// InProcess serves every bucket from an in-memory backend
-	// (s3gw/membackend) instead of an S3 backend: nothing to start, nothing
+	// (s3gw/localbackend) instead of an S3 backend: nothing to start, nothing
 	// kept. The backend endpoint and credentials are then unused.
 	InProcess bool
 	// BackendEndpoint is the S3 backend buckets are created on
@@ -77,13 +77,13 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 		cfg.LogWriter = os.Stderr
 	}
 	var backend backendBuckets
-	var inProcess *membackend.Backend
+	var inProcess *localbackend.Backend
 	if cfg.InProcess {
-		inProcess = membackend.New()
+		inProcess = localbackend.New()
 		backend = inProcess
 		// never dialed: the definitions only have to name one backend
-		cfg.BackendEndpoint = "http://membackend.invalid"
-		cfg.BackendAccessKeyID, cfg.BackendSecretAccessKey = "membackend", "membackend"
+		cfg.BackendEndpoint = "http://localbackend.invalid"
+		cfg.BackendAccessKeyID, cfg.BackendSecretAccessKey = "localbackend", "localbackend"
 	} else {
 		if cfg.BackendEndpoint == "" {
 			return nil, fmt.Errorf("BackendEndpoint is required")

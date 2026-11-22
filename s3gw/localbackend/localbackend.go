@@ -1,10 +1,10 @@
-// Package membackend is an S3 object store held in memory, shaped as the
+// Package localbackend is an S3 object store held in memory, shaped as the
 // client the gateway calls a backend through. With it a service built on
 // s3gw runs without any backend at all: the gateway, the service's own hooks
 // and store, and this package in one process — a local stand-in for the
 // service (an emulator, a test fixture), not a place to keep data.
 //
-//	be := membackend.New()
+//	be := localbackend.New()
 //	gw.SetBackendFactory(func(context.Context, *store.Backend) (s3gw.BackendClient, error) {
 //		return be, nil
 //	})
@@ -25,7 +25,7 @@
 // tiers (a class is a label). A checksum algorithm it cannot compute (the
 // XXHASH family) is refused rather than stored unverified. Errors carry
 // S3's codes and statuses; the wording a client reads is the gateway's.
-package membackend
+package localbackend
 
 import (
 	"context"
