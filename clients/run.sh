@@ -104,6 +104,10 @@ if [ "$BACKEND_ENDPOINT" = "https://127.0.0.1:7443" ]; then
         recreate=""
     fi
     docker compose up -d --wait $recreate ceph-tls
+    # A reused backend still holds what earlier runs deleted: RGW frees a
+    # deleted object's data two hours later, and a few runs in that time
+    # fill the 10 GiB OSD (507 InsufficientCapacity).
+    docker compose exec -T ceph-tls radosgw-admin gc process --include-all > /dev/null
 else
     echo "==> using external backend $BACKEND_ENDPOINT"
 fi
