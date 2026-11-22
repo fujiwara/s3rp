@@ -138,6 +138,7 @@ A few request values are checked by the gateway itself, before the backend sees 
 
 - **Object tags** (`x-amz-tagging`, the POST field, PutObjectTagging): more than 10 tags is `400 BadRequest` "Object tags cannot be greater than 10"; a key longer than 128 or a value longer than 256 characters, or a character outside letters, numbers, spaces and `+ - = . _ : / @`, is `400 InvalidTag`; a key given twice is `400 InvalidTag` in PutObjectTagging and `400 InvalidArgument` inline.
 - **`x-amz-tagging-directive`, `x-amz-metadata-directive`**: anything but `COPY` and `REPLACE` is `400 InvalidArgument`.
+- **`x-amz-object-annotation-directive`**: `EXCLUDE` is accepted and changes nothing, since objects have no annotations; `COPY` is `501 NotImplemented`.
 - **`x-amz-object-attributes`**: a name S3 does not define is `400 InvalidArgument`.
 - **CompleteMultipartUpload**: a part number lower than the one before it is `400 InvalidPartOrder`.
 

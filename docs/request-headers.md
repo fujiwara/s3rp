@@ -18,6 +18,7 @@ Which request headers the gateway honors, which it refuses by name, and what hap
 | `x-amz-storage-class` | PutObject, CopyObject, CreateMultipartUpload, POST upload | forwarded, unless a service installs a `StorageClassMapper` ([Storage class](s3-api.md#storage-class)) |
 | `x-amz-tagging` | PutObject, CopyObject, CreateMultipartUpload, POST upload | requires `s3:PutObjectTagging` in addition to the operation's action; validated by the gateway ([Request validation](s3-api.md#request-validation)) |
 | `x-amz-tagging-directive`, `x-amz-metadata-directive` | CopyObject | `COPY` or `REPLACE`; anything else is `InvalidArgument` |
+| `x-amz-object-annotation-directive` | CopyObject | `EXCLUDE` only, which is what a copy does without it: there are no object annotations. `COPY` is `501` |
 | `x-amz-copy-source` | PutObject → CopyObject, UploadPart → UploadPartCopy | source resolved within the requester's tenant; same backend only |
 | `x-amz-copy-source-if-match`, `-if-none-match`, `-if-modified-since`, `-if-unmodified-since` | CopyObject | |
 | `x-amz-copy-source-range` | UploadPartCopy | |

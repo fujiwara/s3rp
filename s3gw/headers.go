@@ -23,6 +23,7 @@ const hdrCopySource = "x-amz-copy-source"
 // headerPresence); the values are applied to the backend input by
 // proxy.go / multipart.go / copy.go and objectlock.go
 const (
+	hdrAnnotationDirective       = "x-amz-object-annotation-directive"
 	hdrTagging                   = "x-amz-tagging"
 	hdrObjectLockMode            = "x-amz-object-lock-mode"
 	hdrObjectLockRetainUntil     = "x-amz-object-lock-retain-until-date"
@@ -54,7 +55,8 @@ var knownAmzHeaders = map[string]bool{
 	"x-amz-sdk-checksum-algorithm": true,
 	// object writes and copies
 	hdrStorageClass: true, hdrTagging: true, "x-amz-tagging-directive": true, "x-amz-metadata-directive": true,
-	hdrCopySource: true, "x-amz-copy-source-if-match": true, "x-amz-copy-source-if-none-match": true,
+	hdrAnnotationDirective: true,
+	hdrCopySource:          true, "x-amz-copy-source-if-match": true, "x-amz-copy-source-if-none-match": true,
 	"x-amz-copy-source-if-modified-since": true, "x-amz-copy-source-if-unmodified-since": true,
 	"x-amz-copy-source-range": true, "x-amz-mp-object-size": true,
 	// encryption (sse.go); the SSE-C family is deliberately absent so a

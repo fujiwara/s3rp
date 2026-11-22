@@ -25,6 +25,11 @@ else
     for f in clients/defs/*.yml; do CLIENTS+=("$(basename "$f" .yml)"); done
 fi
 
+# Nothing of the caller's AWS configuration reaches a client: a profile it
+# does not have, or a session token sent along with the run's key, fails
+# every request of the clients that read the environment.
+for v in $(compgen -e AWS_); do unset "$v"; done
+
 # what the gateway config (clients/s3rp.yml), the client definitions and
 # the scenarios read
 export PORT BACKEND_ENDPOINT

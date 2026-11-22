@@ -1,0 +1,27 @@
+# aws-cli with the CRT transfer client (aws-c-s3): `aws s3` transfers leave
+# botocore for a signer, HTTP stack and part scheduling of their own.
+name: aws-cli-crt
+env:
+  AWS_CONFIG_FILE: ${STATE_DIR}/config
+  AWS_SHARED_CREDENTIALS_FILE: ${STATE_DIR}/credentials
+  AWS_ACCESS_KEY_ID: ${ACCESS_KEY}
+  AWS_SECRET_ACCESS_KEY: ${SECRET_KEY}
+  AWS_CA_BUNDLE: ${CA_FILE}
+  AWS_PAGER: ""
+setup: |
+  cat > "$AWS_CONFIG_FILE" <<CONFIG
+  [default]
+  region = us-east-1
+  endpoint_url = $ENDPOINT
+  s3 =
+    preferred_transfer_client = crt
+    addressing_style = path
+  CONFIG
+verbs:
+  put:      aws s3 cp --no-progress "$FILE" "s3://$BUCKET/$KEY"
+  get:      aws s3 cp --no-progress "s3://$BUCKET/$KEY" "$OUT"
+  list:     aws s3 ls --recursive "s3://$BUCKET/$PREFIX/"
+  delete:   aws s3 rm "s3://$BUCKET/$KEY"
+  copy:     aws s3 cp --no-progress "s3://$BUCKET/$SRC" "s3://$BUCKET/$DST"
+  presign:  aws s3 presign "s3://$BUCKET/$KEY"
+  put_tree: aws s3 sync --no-progress "$DIR" "s3://$BUCKET/$PREFIX/"

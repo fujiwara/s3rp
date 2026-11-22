@@ -20,6 +20,7 @@ else:
 
 - the AWS SDKs for JavaScript, Go, .NET, PHP and Rust, and the AWS SDK for
   Python (boto3) apart from [presigned URLs](#boto3-presigned-urls)
+- aws-cli, with either transfer client (`preferred_transfer_client`)
 - `mc`, restic, kopia, s5cmd, DuckDB (httpfs), Bun's `S3Client`, WinSCP
 
 The other clients are below.
