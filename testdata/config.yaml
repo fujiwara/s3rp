@@ -29,6 +29,7 @@ tenants:
           access_key_id: ${TEST_BACKEND_ACCESS_KEY_ID}
           secret_access_key: ${TEST_BACKEND_SECRET_ACCESS_KEY}
       - name: logs
+        tags: {env: prod, team: storage}
         backend:
           endpoint: http://backend2.example.com:9000
           access_key_id: logskey

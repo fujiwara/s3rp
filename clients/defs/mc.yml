@@ -13,4 +13,5 @@ verbs:
   presign:  mc share download --json "s3rp/$BUCKET/$KEY" | jq -r .share
   lifecycle: mc ilm rule ls --json "s3rp/$BUCKET"
   replication: mc replicate ls --json "s3rp/$BUCKET"
+  tags:     mc tag list --json "s3rp/$BUCKET"
   put_tree: mc cp --recursive "$DIR/" "s3rp/$BUCKET/$PREFIX/"

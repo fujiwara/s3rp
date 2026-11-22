@@ -125,3 +125,32 @@ func TestValidateReplicationText(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateBucketTags(t *testing.T) {
+	many := map[string]string{}
+	for i := range 51 {
+		many[strings.Repeat("k", i+1)] = "v"
+	}
+	for name, tags := range map[string]map[string]string{
+		"none":          nil,
+		"plain":         {"env": "prod", "team": "storage"},
+		"empty value":   {"env": ""},
+		"longest":       {strings.Repeat("k", 128): strings.Repeat("v", 256)},
+		"other scripts": {"名前": "値"},
+	} {
+		if err := store.ValidateBucketTags(tags); err != nil {
+			t.Errorf("%s must be valid: %v", name, err)
+		}
+	}
+	for name, tags := range map[string]map[string]string{
+		"empty key":      {"": "v"},
+		"key too long":   {strings.Repeat("k", 129): "v"},
+		"value too long": {"k": strings.Repeat("v", 257)},
+		"reserved key":   {"aws:created-by": "x"},
+		"too many":       many,
+	} {
+		if err := store.ValidateBucketTags(tags); err == nil {
+			t.Errorf("%s must be rejected", name)
+		}
+	}
+}

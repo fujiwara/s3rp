@@ -14,9 +14,12 @@ tenants:
           bucket: ${BACKEND_BUCKET}
           access_key_id: ${BACKEND_ACCESS_KEY}
           secret_access_key: ${BACKEND_SECRET_KEY}
-        # served as they are by GetBucketLifecycleConfiguration and
-        # GetBucketReplication (the bucket-lifecycle and bucket-replication
-        # scenarios); nothing applies them to the backend
+        # what the bucket-tags, bucket-lifecycle and bucket-replication
+        # scenarios read back; the gateway serves them from here and
+        # nothing applies them to the backend
+        tags:
+          env: compat-run
+          team: storage
         lifecycle: |
           <?xml version="1.0" encoding="UTF-8"?>
           <LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">

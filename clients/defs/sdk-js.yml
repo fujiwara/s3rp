@@ -18,4 +18,5 @@ verbs:
   presign:  $SDK presign "$KEY"
   lifecycle: $SDK lifecycle
   replication: $SDK replication
+  tags:     $SDK tags
   put_tree: $SDK put_tree "$DIR" "$PREFIX"

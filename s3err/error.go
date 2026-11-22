@@ -162,6 +162,7 @@ var canonicalMessage = map[string]string{
 	"NoSuchCORSConfiguration":               "The CORS configuration does not exist",
 	"NoSuchKey":                             "The specified key does not exist.",
 	"NoSuchLifecycleConfiguration":          "The lifecycle configuration does not exist",
+	"NoSuchTagSet":                          "The TagSet does not exist",
 	"ReplicationConfigurationNotFoundError": "The replication configuration was not found",
 	"NoSuchUpload":                          "The specified upload does not exist. The upload ID may be invalid, or the upload may have been aborted or completed.",
 	"NoSuchVersion":                         "The specified version does not exist.",

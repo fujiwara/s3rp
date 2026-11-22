@@ -159,6 +159,14 @@ type Bucket struct {
 	// where it is written.
 	ReplicationText string
 
+	// Tags are the bucket's tags (nil if none), which GetBucketTagging
+	// returns. Unlike the configuration documents above they are typed: a
+	// tag set has one small shape, which the gateway renders. They are
+	// shown to the tenant and used for nothing else — no authorization
+	// reads them. Check them with ValidateBucketTags where they are
+	// written.
+	Tags map[string]string
+
 	// Metadata is an opaque value a Store implementation may attach when it
 	// builds the bucket — data it already had in hand, such as quota or
 	// plan information loaded with the same query. The gateway never

@@ -1,7 +1,9 @@
 package s3gw
 
 import (
+	"maps"
 	"net/http"
+	"slices"
 
 	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/s3xml"
@@ -58,6 +60,21 @@ func (g *Gateway) getBucketReplication(c *opCtx) error {
 			"The replication configuration was not found")
 	}
 	return writeStoredXML(c.w, c.rt.cfg.ReplicationText)
+}
+
+// getBucketTagging renders the store's tags, sorted by key: a map has no
+// order of its own and a client should not see one request differ from the
+// next.
+func (g *Gateway) getBucketTagging(c *opCtx) error {
+	tags := c.rt.cfg.Tags
+	if len(tags) == 0 {
+		return s3err.New(http.StatusNotFound, "NoSuchTagSet", "The TagSet does not exist")
+	}
+	result := &s3xml.Tagging{XMLNS: s3xml.Namespace}
+	for _, k := range slices.Sorted(maps.Keys(tags)) {
+		result.TagSet.Tags = append(result.TagSet.Tags, s3xml.Tag{Key: k, Value: tags[k]})
+	}
+	return s3xml.Write(c.w, result)
 }
 
 func writeStoredXML(w http.ResponseWriter, text string) error {

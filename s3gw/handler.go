@@ -765,6 +765,7 @@ var bucketRoutes = bindRoutes(map[string][]route{
 		{match: has(subCORS), params: corsOnlyParams, name: s3op.OpGetBucketCors, handle: (*Gateway).getBucketCors},
 		{match: has(subLifecycle), params: lifecycleOnlyParams, name: s3op.OpGetBucketLifecycleConfiguration, handle: (*Gateway).getBucketLifecycleConfiguration},
 		{match: has(subReplication), params: replicationOnlyParams, name: s3op.OpGetBucketReplication, handle: (*Gateway).getBucketReplication},
+		{match: has(subTagging), params: bucketTaggingParams, name: s3op.OpGetBucketTagging, handle: (*Gateway).getBucketTagging},
 		{match: has(subObjectLock), params: objectLockOnlyParams, name: s3op.OpGetObjectLockConfiguration, handle: (*Gateway).getObjectLockConfiguration},
 		{match: has(subVersioning), params: versioningOnlyParams, name: s3op.OpGetBucketVersioning, handle: (*Gateway).getBucketVersioning},
 		{match: has(subEncryption), params: encryptionOnlyParams, name: s3op.OpGetBucketEncryption, handle: (*Gateway).getBucketEncryption},
@@ -793,6 +794,7 @@ var bucketRoutes = bindRoutes(map[string][]route{
 		// operator's rules: a tenant's write would replace them
 		notImplemented(has(subLifecycle), s3op.OpPutBucketLifecycleConfiguration),
 		notImplemented(has(subReplication), s3op.OpPutBucketReplication),
+		notImplemented(has(subTagging), s3op.OpPutBucketTagging),
 		notImplemented(has(subEncryption), s3op.OpPutBucketEncryption),
 		notImplemented(has(subOwnership), s3op.OpPutBucketOwnershipControls),
 		notImplemented(has(subPublicAccess), s3op.OpPutPublicAccessBlock),
@@ -805,6 +807,7 @@ var bucketRoutes = bindRoutes(map[string][]route{
 		notImplemented(has(subCORS), s3op.OpDeleteBucketCors),
 		notImplemented(has(subLifecycle), s3op.OpDeleteBucketLifecycle),
 		notImplemented(has(subReplication), s3op.OpDeleteBucketReplication),
+		notImplemented(has(subTagging), s3op.OpDeleteBucketTagging),
 		notImplemented(has(subEncryption), s3op.OpDeleteBucketEncryption),
 		notImplemented(has(subOwnership), s3op.OpDeleteBucketOwnershipControls),
 		notImplemented(has(subPublicAccess), s3op.OpDeletePublicAccessBlock),
@@ -940,6 +943,7 @@ var (
 	ownershipOnlyParams    = newParamSet(subOwnership)
 	publicAccessOnlyParams = newParamSet(subPublicAccess)
 	taggingParams          = newParamSet(subTagging, qpVersionID)
+	bucketTaggingParams    = newParamSet(subTagging)
 	uploadPartParams       = newParamSet(qpUploadID, qpPartNumber)
 	listPartsParams        = newParamSet(qpUploadID, "max-parts", "part-number-marker")
 	listObjectsV1Params    = newParamSet(

@@ -66,6 +66,9 @@ func storeContract(t *testing.T, st store.Store) {
 		if err := store.ValidateLifecycleText(logs.LifecycleText); err != nil {
 			t.Errorf("logs lifecycle configuration: %v", err)
 		}
+		if len(b.Tags) != 0 || logs.Tags["env"] != "prod" || logs.Tags["team"] != "storage" {
+			t.Errorf("bucket tags: photos %v, logs %v", b.Tags, logs.Tags)
+		}
 		if b.ReplicationText != "" {
 			t.Errorf("photos has no replication configuration, got %q", b.ReplicationText)
 		}

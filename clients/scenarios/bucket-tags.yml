@@ -1,0 +1,15 @@
+desc: Read the bucket's tags, which the gateway serves from its store
+vars:
+  client: yaml://${CLIENT_FILE}
+steps:
+  read:
+    exec:
+      # on one line, as in bucket-lifecycle
+      command: "{{ vars.client.verbs.tags }}"
+    # the tags of clients/s3rp.yml, as the client's own parser read them
+    test: |
+      current.exit_code == 0
+      && current.stdout contains "env"
+      && current.stdout contains "compat-run"
+      && current.stdout contains "team"
+      && current.stdout contains "storage"

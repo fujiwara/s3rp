@@ -60,6 +60,11 @@ switch ($verb) {
             echo "{$rule['ID']} prefix={$prefix} status={$rule['Status']} destination={$rule['Destination']['Bucket']}\n";
         }
         break;
+    case 'tags':
+        foreach ($s3->getBucketTagging(['Bucket' => $bucket])['TagSet'] as $tag) {
+            echo "{$tag['Key']}={$tag['Value']}\n";
+        }
+        break;
     case 'put_tree':
         $names = array_values(array_diff(scandir($args[0]), ['.', '..']));
         sort($names);

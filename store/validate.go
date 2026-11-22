@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 // Name charsets are gateway invariants, not cosmetics, so every Store
@@ -80,6 +81,35 @@ func (b *Backend) Validate() error {
 	}
 	if (b.AccessKeyID == "") != (b.SecretAccessKey == "") {
 		return fmt.Errorf("backend access_key_id and secret_access_key must be set together")
+	}
+	return nil
+}
+
+// S3's limits on a bucket's tag set.
+const (
+	MaxBucketTags       = 50
+	MaxTagKeyLength     = 128
+	MaxTagValueLength   = 256
+	reservedTagKeyStart = "aws:"
+)
+
+// ValidateBucketTags checks a bucket's tag set against the limits S3 puts
+// on one: at most 50 tags, a key of 1 to 128 characters that does not
+// start with "aws:", a value of at most 256.
+func ValidateBucketTags(tags map[string]string) error {
+	if len(tags) > MaxBucketTags {
+		return fmt.Errorf("%d bucket tags, at most %d are allowed", len(tags), MaxBucketTags)
+	}
+	for k, v := range tags {
+		if n := utf8.RuneCountInString(k); n < 1 || n > MaxTagKeyLength {
+			return fmt.Errorf("bucket tag key %q: must be 1 to %d characters", k, MaxTagKeyLength)
+		}
+		if strings.HasPrefix(strings.ToLower(k), reservedTagKeyStart) {
+			return fmt.Errorf("bucket tag key %q: the %q prefix is reserved", k, reservedTagKeyStart)
+		}
+		if utf8.RuneCountInString(v) > MaxTagValueLength {
+			return fmt.Errorf("bucket tag %q: value longer than %d characters", k, MaxTagValueLength)
+		}
 	}
 	return nil
 }

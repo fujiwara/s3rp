@@ -49,6 +49,8 @@ when "replication"
   s3.get_bucket_replication(bucket: bucket).replication_configuration.rules.each do |rule|
     puts "#{rule.id} prefix=#{rule.filter&.prefix} status=#{rule.status} destination=#{rule.destination.bucket}"
   end
+when "tags"
+  s3.get_bucket_tagging(bucket: bucket).tag_set.each { |tag| puts "#{tag.key}=#{tag.value}" }
 when "put_tree"
   Dir.children(args[0]).sort.each do |name|
     transfer.upload_file(File.join(args[0], name), bucket: bucket, key: "#{args[1]}/#{name}")

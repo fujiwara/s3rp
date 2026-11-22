@@ -27,4 +27,5 @@ verbs:
   presign:  aws s3 presign "s3://$BUCKET/$KEY"
   lifecycle: aws s3api get-bucket-lifecycle-configuration --bucket "$BUCKET"
   replication: aws s3api get-bucket-replication --bucket "$BUCKET"
+  tags:     aws s3api get-bucket-tagging --bucket "$BUCKET"
   put_tree: aws s3 sync --no-progress "$DIR" "s3://$BUCKET/$PREFIX/"
