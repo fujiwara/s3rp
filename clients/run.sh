@@ -5,9 +5,12 @@
 #
 #   ./clients/run.sh [client...]     default: every client in clients/defs
 #   SCHEMES=http ./clients/run.sh    default: https, or what a definition names
+#   JOBS=1 ./clients/run.sh          default: 4 clients at a time
 set -euo pipefail
 
+# the first gateway's port; each of the JOBS workers has its own from there
 PORT=${PORT:-7483}
+JOBS=${JOBS:-4}
 SCHEMES=${SCHEMES:-}
 BACKEND_ENDPOINT=${S3RP_TEST_BACKEND_ENDPOINT:-https://127.0.0.1:7443}
 
@@ -139,13 +142,14 @@ cleanup() {
 # destination already matches.
 run_client() {
     local scheme=$1 client=$2
+    export PORT=$3
     local def=$ROOT/clients/defs/$client.yml
     # not local: cleanup reads them when the subshell exits
     dir=$RESULTS/$scheme/$client teardown="" gateway_pid=""
     mkdir -p "$dir" "$OUT_DIR/$scheme/$client"
     export SCHEME=$scheme ENDPOINT=$scheme://127.0.0.1:$PORT
     export BACKEND_BUCKET=compat-$RUN_ID-$scheme-$client
-    export STATE_DIR=$WORK/state/$client OUT_DIR=$WORK/out/$scheme/$client
+    export STATE_DIR=$WORK/state/$scheme/$client OUT_DIR=$WORK/out/$scheme/$client
     curl -fsS -o /dev/null -X PUT --aws-sigv4 "aws:amz:us-east-1:s3" \
         --user "$BACKEND_ACCESS_KEY:$BACKEND_SECRET_KEY" "$BACKEND_ENDPOINT/$BACKEND_BUCKET"
     trap cleanup EXIT
@@ -225,16 +229,43 @@ for client in "${CLIENTS[@]}"; do
     for scheme in ${SCHEMES:-$(yq '.schemes // ["https"] | .[]' "clients/defs/$client.yml")}; do
         [ "$(SCHEME=$scheme yq '.schemes // [strenv(SCHEME)] | contains([strenv(SCHEME)])' "clients/defs/$client.yml")" = true ] || continue
         COLUMNS+=("$client/$scheme")
+    done
+done
+
+# JOBS workers, each with a gateway port of its own, take the next column
+# until none is left. A scenario's verdict reads the gateway's log, which
+# is why the gateway is per client and only the backend is shared.
+: > "$RESULTS/next"
+worker() {
+    local port=$1 n column rc
+    while :; do
+        n=$(flock "$RESULTS/next" sh -c 'n=$(cat "$1"); echo $((n + 1)) > "$1"; echo "${n:-0}"' sh "$RESULTS/next")
+        [ "$n" -lt "${#COLUMNS[@]}" ] || return 0
+        column=${COLUMNS[$n]}
         # a subshell, so one client's environment does not reach the next
         # and not as the left side of ||, where bash ignores errexit in the
         # whole of run_client: a failed step there must abort the run
         set +e
-        (set -e; run_client "$scheme" "$client")
+        (set -e; run_client "${column#*/}" "${column%/*}" "$port")
         rc=$?
         set -e
-        [ "$rc" -eq 0 ] || { echo "aborted at $client/$scheme" >&2; exit 2; }
+        if [ "$rc" -ne 0 ]; then
+            echo "$column" >> "$RESULTS/aborted"
+            return 1
+        fi
+        # the others finish the client they are on and take no more
+        [ ! -e "$RESULTS/aborted" ] || return 0
     done
+}
+echo "==> running ${#COLUMNS[@]} clients, $JOBS at a time"
+for job in $(seq 0 $((JOBS - 1))); do
+    worker $((PORT + job)) &
 done
+wait
+if [ -e "$RESULTS/aborted" ]; then
+    echo "aborted at $(paste -sd' ' "$RESULTS/aborted")" >&2
+    exit 2
+fi
 
 echo "==> report"
 status=0
