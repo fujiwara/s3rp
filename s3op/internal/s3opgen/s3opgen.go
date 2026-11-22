@@ -22,7 +22,16 @@ const (
 )
 
 type catalog struct {
-	Operations []operation `json:"operations"`
+	Operations  []operation `json:"operations"`
+	Unsupported []feature   `json:"unsupported"`
+}
+
+// feature is a part of S3 the gateway does not implement, with the SDK
+// operations that belong to it.
+type feature struct {
+	Feature    string   `json:"feature"`
+	Operations []string `json:"operations"`
+	Note       string   `json:"note"`
 }
 
 type operation struct {
@@ -52,11 +61,12 @@ var (
 type constant struct{ Name, Value string }
 
 type data struct {
-	Operations []operation
-	Actions    []constant
-	Scopes     map[string]string
-	Supports   map[string]string
-	Resources  map[string]string
+	Operations  []operation
+	Unsupported []feature
+	Actions     []constant
+	Scopes      map[string]string
+	Supports    map[string]string
+	Resources   map[string]string
 }
 
 // File returns the generated Go source for the catalog in src.
@@ -72,7 +82,7 @@ func File(src []byte) ([]byte, error) {
 		return nil, fmt.Errorf("%s: %w", SourceFile, err)
 	}
 	var buf bytes.Buffer
-	d := data{c.Operations, actions, scopes, supports, resources}
+	d := data{c.Operations, c.Unsupported, actions, scopes, supports, resources}
 	if err := tmpl.Execute(&buf, d); err != nil {
 		return nil, err
 	}
@@ -132,6 +142,27 @@ func validate(c catalog) ([]constant, error) {
 			actionSet[a.Action] = true
 		}
 	}
+	features := map[string]bool{}
+	for _, f := range c.Unsupported {
+		if f.Feature == "" || features[f.Feature] {
+			return nil, fmt.Errorf("unsupported feature %q: empty or duplicate", f.Feature)
+		}
+		features[f.Feature] = true
+		if len(f.Operations) == 0 {
+			return nil, fmt.Errorf("unsupported feature %q: no operations", f.Feature)
+		}
+		for _, name := range f.Operations {
+			if !namePattern.MatchString(name) {
+				return nil, fmt.Errorf("unsupported feature %q: operation name %q: not an S3 operation name", f.Feature, name)
+			}
+			// one list or the other: an operation the gateway recognizes
+			// is not an unsupported one
+			if seen[name] {
+				return nil, fmt.Errorf("unsupported feature %q: operation %s: duplicate", f.Feature, name)
+			}
+			seen[name] = true
+		}
+	}
 	var actions []constant
 	for a := range actionSet {
 		actions = append(actions, constant{"Action" + strings.TrimPrefix(a, "s3:"), a})
@@ -181,6 +212,18 @@ var operations = []Operation{
 var actions = []string{
 {{- range .Actions}}
 	{{.Name}},
+{{- end}}
+}
+
+var unsupported = []Feature{
+{{- range .Unsupported}}
+	{
+		Name: {{printf "%q" .Feature}},
+		Operations: []string{ {{- range .Operations}}{{printf "%q" .}}, {{end -}} },
+{{- if .Note}}
+		Note: {{printf "%q" .Note}},
+{{- end}}
+	},
 {{- end}}
 }
 `))

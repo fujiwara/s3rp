@@ -29,15 +29,20 @@ func TestGenerated(t *testing.T) {
 
 func TestGeneratorRejects(t *testing.T) {
 	for name, src := range map[string]string{
-		"unknown field":         `{"operations":[{"name":"GetObject","scope":"object","support":"supported","extra":1}]}`,
-		"duplicate":             `{"operations":[{"name":"GetObject","scope":"object","support":"supported"},{"name":"GetObject","scope":"object","support":"supported"}]}`,
-		"bad scope":             `{"operations":[{"name":"GetObject","scope":"key","support":"supported"}]}`,
-		"bad support":           `{"operations":[{"name":"GetObject","scope":"object","support":"maybe"}]}`,
-		"bad action":            `{"operations":[{"name":"GetObject","scope":"object","support":"supported","authorizations":[{"action":"GetObject","on":"target"}]}]}`,
-		"bad resource":          `{"operations":[{"name":"GetObject","scope":"object","support":"supported","authorizations":[{"action":"s3:GetObject","on":"bucket"}]}]}`,
-		"upper-case header":     `{"operations":[{"name":"PutObject","scope":"object","support":"supported","authorizations":[{"action":"s3:PutObjectTagging","on":"target","header":"X-Amz-Tagging"}]}]}`,
-		"refused authorizes":    `{"operations":[{"name":"PutBucketPolicy","scope":"bucket","support":"refused","authorizations":[{"action":"s3:PutBucketPolicy","on":"target"}]}]}`,
-		"not an operation name": `{"operations":[{"name":"get-object","scope":"object","support":"supported"}]}`,
+		"unknown field":                  `{"operations":[{"name":"GetObject","scope":"object","support":"supported","extra":1}]}`,
+		"duplicate":                      `{"operations":[{"name":"GetObject","scope":"object","support":"supported"},{"name":"GetObject","scope":"object","support":"supported"}]}`,
+		"bad scope":                      `{"operations":[{"name":"GetObject","scope":"key","support":"supported"}]}`,
+		"bad support":                    `{"operations":[{"name":"GetObject","scope":"object","support":"maybe"}]}`,
+		"bad action":                     `{"operations":[{"name":"GetObject","scope":"object","support":"supported","authorizations":[{"action":"GetObject","on":"target"}]}]}`,
+		"bad resource":                   `{"operations":[{"name":"GetObject","scope":"object","support":"supported","authorizations":[{"action":"s3:GetObject","on":"bucket"}]}]}`,
+		"upper-case header":              `{"operations":[{"name":"PutObject","scope":"object","support":"supported","authorizations":[{"action":"s3:PutObjectTagging","on":"target","header":"X-Amz-Tagging"}]}]}`,
+		"refused authorizes":             `{"operations":[{"name":"PutBucketPolicy","scope":"bucket","support":"refused","authorizations":[{"action":"s3:PutBucketPolicy","on":"target"}]}]}`,
+		"not an operation name":          `{"operations":[{"name":"get-object","scope":"object","support":"supported"}]}`,
+		"unsupported and in the catalog": `{"operations":[{"name":"GetObject","scope":"object","support":"supported"}],"unsupported":[{"feature":"Reads","operations":["GetObject"]}]}`,
+		"unsupported twice":              `{"unsupported":[{"feature":"A","operations":["RestoreObject"]},{"feature":"B","operations":["RestoreObject"]}]}`,
+		"duplicate feature":              `{"unsupported":[{"feature":"A","operations":["RestoreObject"]},{"feature":"A","operations":["SelectObjectContent"]}]}`,
+		"feature without operations":     `{"unsupported":[{"feature":"A"}]}`,
+		"feature without a name":         `{"unsupported":[{"operations":["RestoreObject"]}]}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := s3opgen.File([]byte(src)); err == nil {
@@ -120,13 +125,30 @@ func TestActionsSortedAndComplete(t *testing.T) {
 }
 
 // docs/s3-api.md renders the catalog for readers: the supported-operations
-// table, the refused list and the table of actions a header adds.
+// table, the refused list, the table of actions a header adds and the
+// unsupported features.
 func TestCatalogDocumented(t *testing.T) {
 	b, err := os.ReadFile("../docs/s3-api.md")
 	if err != nil {
 		t.Fatal(err)
 	}
-	doc := string(b)
+	// the unsupported features have a table of their own, whose rows the
+	// operations table's pattern would also match
+	doc, rest, ok := strings.Cut(string(b), "\n## Unsupported features\n")
+	if !ok {
+		t.Fatal("docs/s3-api.md: no Unsupported features section")
+	}
+	unsupportedDoc, _, _ := strings.Cut(rest, "\n## ")
+	var wantFeatures, features []string
+	for _, f := range s3op.Unsupported() {
+		wantFeatures = append(wantFeatures, f.Name+" | "+strings.Join(f.Operations, ", ")+" | "+f.Note)
+	}
+	for _, m := range regexp.MustCompile(`(?m)^\| ([^|]+) \| ([A-Z][A-Za-z, ]+) \| ([^|]*)\|$`).FindAllStringSubmatch(unsupportedDoc, -1) {
+		features = append(features, m[1]+" | "+m[2]+" | "+strings.TrimSpace(m[3]))
+	}
+	if diff := cmp.Diff(wantFeatures, features); diff != "" {
+		t.Errorf("docs/s3-api.md unsupported features table differs from the catalog (-catalog +docs):\n%s", diff)
+	}
 
 	onSuffix := map[s3op.Resource]string{s3op.OnTarget: "", s3op.OnCopySource: " on the copy source", s3op.OnEachKey: " per key"}
 	var wantRows, wantRefused, wantHeaders []string

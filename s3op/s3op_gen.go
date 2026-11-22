@@ -557,3 +557,81 @@ var actions = []string{
 	ActionPutObjectTagging,
 	ActionPutObjectVersionTagging,
 }
+
+var unsupported = []Feature{
+	{
+		Name:       "Object annotations",
+		Operations: []string{"GetObjectAnnotation", "PutObjectAnnotation", "DeleteObjectAnnotation", "ListObjectAnnotations"},
+		Note:       "CopyObject accepts x-amz-object-annotation-directive: EXCLUDE and nothing else",
+	},
+	{
+		Name:       "Lifecycle configuration",
+		Operations: []string{"GetBucketLifecycleConfiguration", "PutBucketLifecycleConfiguration", "DeleteBucketLifecycle"},
+		Note:       "expiration is enforced by the backend, whose rules the control plane writes",
+	},
+	{
+		Name:       "Restoring archived objects",
+		Operations: []string{"RestoreObject"},
+	},
+	{
+		Name:       "Bucket tagging",
+		Operations: []string{"GetBucketTagging", "PutBucketTagging", "DeleteBucketTagging"},
+	},
+	{
+		Name:       "Replication",
+		Operations: []string{"GetBucketReplication", "PutBucketReplication", "DeleteBucketReplication"},
+	},
+	{
+		Name:       "Event notifications",
+		Operations: []string{"GetBucketNotificationConfiguration", "PutBucketNotificationConfiguration"},
+	},
+	{
+		Name:       "Server access logging",
+		Operations: []string{"GetBucketLogging", "PutBucketLogging"},
+	},
+	{
+		Name:       "Static website hosting",
+		Operations: []string{"GetBucketWebsite", "PutBucketWebsite", "DeleteBucketWebsite"},
+	},
+	{
+		Name:       "Analytics, inventory, metrics and Intelligent-Tiering configurations",
+		Operations: []string{"GetBucketAnalyticsConfiguration", "PutBucketAnalyticsConfiguration", "DeleteBucketAnalyticsConfiguration", "ListBucketAnalyticsConfigurations", "GetBucketInventoryConfiguration", "PutBucketInventoryConfiguration", "DeleteBucketInventoryConfiguration", "ListBucketInventoryConfigurations", "GetBucketMetricsConfiguration", "PutBucketMetricsConfiguration", "DeleteBucketMetricsConfiguration", "ListBucketMetricsConfigurations", "GetBucketIntelligentTieringConfiguration", "PutBucketIntelligentTieringConfiguration", "DeleteBucketIntelligentTieringConfiguration", "ListBucketIntelligentTieringConfigurations"},
+	},
+	{
+		Name:       "S3 Metadata tables",
+		Operations: []string{"CreateBucketMetadataConfiguration", "GetBucketMetadataConfiguration", "DeleteBucketMetadataConfiguration", "CreateBucketMetadataTableConfiguration", "GetBucketMetadataTableConfiguration", "DeleteBucketMetadataTableConfiguration", "UpdateBucketMetadataAnnotationTableConfiguration", "UpdateBucketMetadataInventoryTableConfiguration", "UpdateBucketMetadataJournalTableConfiguration"},
+	},
+	{
+		Name:       "Transfer Acceleration",
+		Operations: []string{"GetBucketAccelerateConfiguration", "PutBucketAccelerateConfiguration"},
+	},
+	{
+		Name:       "Requester Pays",
+		Operations: []string{"GetBucketRequestPayment", "PutBucketRequestPayment"},
+		Note:       "the tenant is billed by the service",
+	},
+	{
+		Name:       "Attribute-based access control",
+		Operations: []string{"GetBucketAbac", "PutBucketAbac"},
+	},
+	{
+		Name:       "Directory buckets",
+		Operations: []string{"CreateSession", "ListDirectoryBuckets", "RenameObject"},
+	},
+	{
+		Name:       "Changing an object's encryption in place",
+		Operations: []string{"UpdateObjectEncryption"},
+	},
+	{
+		Name:       "S3 Select",
+		Operations: []string{"SelectObjectContent"},
+	},
+	{
+		Name:       "S3 Object Lambda",
+		Operations: []string{"WriteGetObjectResponse"},
+	},
+	{
+		Name:       "BitTorrent",
+		Operations: []string{"GetObjectTorrent"},
+	},
+}

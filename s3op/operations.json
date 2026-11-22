@@ -615,5 +615,159 @@
         }
       ]
     }
+  ],
+  "unsupported": [
+    {
+      "feature": "Object annotations",
+      "operations": [
+        "GetObjectAnnotation",
+        "PutObjectAnnotation",
+        "DeleteObjectAnnotation",
+        "ListObjectAnnotations"
+      ],
+      "note": "CopyObject accepts x-amz-object-annotation-directive: EXCLUDE and nothing else"
+    },
+    {
+      "feature": "Lifecycle configuration",
+      "operations": [
+        "GetBucketLifecycleConfiguration",
+        "PutBucketLifecycleConfiguration",
+        "DeleteBucketLifecycle"
+      ],
+      "note": "expiration is enforced by the backend, whose rules the control plane writes"
+    },
+    {
+      "feature": "Restoring archived objects",
+      "operations": [
+        "RestoreObject"
+      ]
+    },
+    {
+      "feature": "Bucket tagging",
+      "operations": [
+        "GetBucketTagging",
+        "PutBucketTagging",
+        "DeleteBucketTagging"
+      ]
+    },
+    {
+      "feature": "Replication",
+      "operations": [
+        "GetBucketReplication",
+        "PutBucketReplication",
+        "DeleteBucketReplication"
+      ]
+    },
+    {
+      "feature": "Event notifications",
+      "operations": [
+        "GetBucketNotificationConfiguration",
+        "PutBucketNotificationConfiguration"
+      ]
+    },
+    {
+      "feature": "Server access logging",
+      "operations": [
+        "GetBucketLogging",
+        "PutBucketLogging"
+      ]
+    },
+    {
+      "feature": "Static website hosting",
+      "operations": [
+        "GetBucketWebsite",
+        "PutBucketWebsite",
+        "DeleteBucketWebsite"
+      ]
+    },
+    {
+      "feature": "Analytics, inventory, metrics and Intelligent-Tiering configurations",
+      "operations": [
+        "GetBucketAnalyticsConfiguration",
+        "PutBucketAnalyticsConfiguration",
+        "DeleteBucketAnalyticsConfiguration",
+        "ListBucketAnalyticsConfigurations",
+        "GetBucketInventoryConfiguration",
+        "PutBucketInventoryConfiguration",
+        "DeleteBucketInventoryConfiguration",
+        "ListBucketInventoryConfigurations",
+        "GetBucketMetricsConfiguration",
+        "PutBucketMetricsConfiguration",
+        "DeleteBucketMetricsConfiguration",
+        "ListBucketMetricsConfigurations",
+        "GetBucketIntelligentTieringConfiguration",
+        "PutBucketIntelligentTieringConfiguration",
+        "DeleteBucketIntelligentTieringConfiguration",
+        "ListBucketIntelligentTieringConfigurations"
+      ]
+    },
+    {
+      "feature": "S3 Metadata tables",
+      "operations": [
+        "CreateBucketMetadataConfiguration",
+        "GetBucketMetadataConfiguration",
+        "DeleteBucketMetadataConfiguration",
+        "CreateBucketMetadataTableConfiguration",
+        "GetBucketMetadataTableConfiguration",
+        "DeleteBucketMetadataTableConfiguration",
+        "UpdateBucketMetadataAnnotationTableConfiguration",
+        "UpdateBucketMetadataInventoryTableConfiguration",
+        "UpdateBucketMetadataJournalTableConfiguration"
+      ]
+    },
+    {
+      "feature": "Transfer Acceleration",
+      "operations": [
+        "GetBucketAccelerateConfiguration",
+        "PutBucketAccelerateConfiguration"
+      ]
+    },
+    {
+      "feature": "Requester Pays",
+      "operations": [
+        "GetBucketRequestPayment",
+        "PutBucketRequestPayment"
+      ],
+      "note": "the tenant is billed by the service"
+    },
+    {
+      "feature": "Attribute-based access control",
+      "operations": [
+        "GetBucketAbac",
+        "PutBucketAbac"
+      ]
+    },
+    {
+      "feature": "Directory buckets",
+      "operations": [
+        "CreateSession",
+        "ListDirectoryBuckets",
+        "RenameObject"
+      ]
+    },
+    {
+      "feature": "Changing an object's encryption in place",
+      "operations": [
+        "UpdateObjectEncryption"
+      ]
+    },
+    {
+      "feature": "S3 Select",
+      "operations": [
+        "SelectObjectContent"
+      ]
+    },
+    {
+      "feature": "S3 Object Lambda",
+      "operations": [
+        "WriteGetObjectResponse"
+      ]
+    },
+    {
+      "feature": "BitTorrent",
+      "operations": [
+        "GetObjectTorrent"
+      ]
+    }
   ]
 }

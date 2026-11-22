@@ -51,9 +51,9 @@ Because operations are reconstructed rather than forwarded, each one is implemen
 
 The actions are what bucket and user policies match ([Bucket policies](#bucket-policies), [User policies](#user-policies)); some headers add one ([Actions a header adds](#actions-a-header-adds)). ListBuckets has no bucket policy to consult, so `s3:ListAllMyBuckets` is decided by the user policy alone; it lists only the requester's own buckets. PostObject is the browser-based POST upload ([below](#browser-based-uploads-post)).
 
-These operations are recognized and always refused — `NotImplemented`, or `AccessControlListNotSupported` for the ACL writes — and recorded under their name on `Op.Operation` so a service can count attempts: CreateBucket, DeleteBucket, PutBucketAcl, PutBucketPolicy, DeleteBucketPolicy, PutBucketCors, DeleteBucketCors, PutBucketVersioning, PutObjectLockConfiguration, PutBucketEncryption, DeleteBucketEncryption, PutBucketOwnershipControls, DeleteBucketOwnershipControls, PutPublicAccessBlock, DeletePublicAccessBlock, PutObjectAcl. Any other request is `NotImplemented` as well.
+These operations are recognized and always refused — `NotImplemented`, or `AccessControlListNotSupported` for the ACL writes — and recorded under their name on `Op.Operation` so a service can count attempts: CreateBucket, DeleteBucket, PutBucketAcl, PutBucketPolicy, DeleteBucketPolicy, PutBucketCors, DeleteBucketCors, PutBucketVersioning, PutObjectLockConfiguration, PutBucketEncryption, DeleteBucketEncryption, PutBucketOwnershipControls, DeleteBucketOwnershipControls, PutPublicAccessBlock, DeletePublicAccessBlock, PutObjectAcl. Any other request is `NotImplemented` as well. The S3 operations that fall under that are listed by feature in [Unsupported features](#unsupported-features).
 
-The same catalog is machine-readable: [`s3op/operations.json`](../s3op/operations.json), exposed to Go as package `s3op` (`Operations`, `Lookup`, `Actions`, `CheckActionPattern` and generated `Op*` / `Action*` constants), for a control plane validating the policies it stores or a console listing what a policy can grant.
+The same catalog is machine-readable: [`s3op/operations.json`](../s3op/operations.json), exposed to Go as package `s3op` (`Operations`, `Lookup`, `Unsupported`, `Actions`, `CheckActionPattern` and generated `Op*` / `Action*` constants), for a control plane validating the policies it stores or a console listing what a policy can grant.
 
 CopyObject and UploadPartCopy work between buckets served by the same backend (same endpoint, region and credentials); copying across different backends returns `NotImplemented`. The copy source bucket must belong to the requester's tenant; the destination may be another tenant's bucket when its policy grants `s3:PutObject` ([cross-tenant access](#cross-tenant-access)).
 
@@ -319,6 +319,33 @@ http://localhost:8080/photos/foo.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&...
 - Conditions: exact match (`{"field": "value"}` / `["eq", "$field", "value"]`), `["starts-with", "$field", "prefix"]` and `["content-length-range", min, max]` (enforced while the file streams; an upload that ends up under the minimum is deleted from the backend and refused). Field names are case-insensitive; `${filename}` in the `key` field is substituted before conditions are evaluated, and the target bucket is checked as the `bucket` condition.
 - As on AWS, every form field must be covered by a condition (except `policy`, `x-amz-signature`, `x-ignore-*` and the file itself), the policy `expiration` is enforced, and form fields after the `file` part are ignored. Beyond AWS, which documents no such bound, a form signed (`x-amz-date`) more than seven days ago is refused whatever its `expiration` — the same bound as a presigned URL, so that a policy's lifetime is not entirely up to whoever signs it.
 - Supported fields: `key`, `Content-Type`, `Content-MD5`, `Cache-Control`, `Content-Disposition`, `Content-Encoding`, `Content-Language`, `Expires`, `x-amz-storage-class`, `x-amz-tagging`, `x-amz-meta-*`, `x-amz-server-side-encryption` (+ `-aws-kms-key-id`), `success_action_status` (200/201/204) and `success_action_redirect` (303 with `bucket`/`key`/`etag` appended). `acl` follows the same rule as everywhere else (ACLs are disabled); unsupported fields are refused with `NotImplemented` rather than silently dropped.
+
+## Unsupported features
+
+The parts of the S3 API the gateway does not implement, with the operations each consists of. A request for one of them is answered `501 NotImplemented` naming the query parameter or header the gateway does not know, as any request it does not recognize is, and unlike the refused operations above it is not recorded under its name. (ListDirectoryBuckets and WriteGetObjectResponse are addressed to endpoints of their own on Amazon S3, not to a bucket's.) Together with the operations above, the list accounts for every operation of the S3 API as the AWS SDK for Go defines it: a test fails when an SDK update brings one that is in neither.
+
+| feature | operations | |
+|---|---|---|
+| Object annotations | GetObjectAnnotation, PutObjectAnnotation, DeleteObjectAnnotation, ListObjectAnnotations | CopyObject accepts x-amz-object-annotation-directive: EXCLUDE and nothing else |
+| Lifecycle configuration | GetBucketLifecycleConfiguration, PutBucketLifecycleConfiguration, DeleteBucketLifecycle | expiration is enforced by the backend, whose rules the control plane writes |
+| Restoring archived objects | RestoreObject |  |
+| Bucket tagging | GetBucketTagging, PutBucketTagging, DeleteBucketTagging |  |
+| Replication | GetBucketReplication, PutBucketReplication, DeleteBucketReplication |  |
+| Event notifications | GetBucketNotificationConfiguration, PutBucketNotificationConfiguration |  |
+| Server access logging | GetBucketLogging, PutBucketLogging |  |
+| Static website hosting | GetBucketWebsite, PutBucketWebsite, DeleteBucketWebsite |  |
+| Analytics, inventory, metrics and Intelligent-Tiering configurations | GetBucketAnalyticsConfiguration, PutBucketAnalyticsConfiguration, DeleteBucketAnalyticsConfiguration, ListBucketAnalyticsConfigurations, GetBucketInventoryConfiguration, PutBucketInventoryConfiguration, DeleteBucketInventoryConfiguration, ListBucketInventoryConfigurations, GetBucketMetricsConfiguration, PutBucketMetricsConfiguration, DeleteBucketMetricsConfiguration, ListBucketMetricsConfigurations, GetBucketIntelligentTieringConfiguration, PutBucketIntelligentTieringConfiguration, DeleteBucketIntelligentTieringConfiguration, ListBucketIntelligentTieringConfigurations |  |
+| S3 Metadata tables | CreateBucketMetadataConfiguration, GetBucketMetadataConfiguration, DeleteBucketMetadataConfiguration, CreateBucketMetadataTableConfiguration, GetBucketMetadataTableConfiguration, DeleteBucketMetadataTableConfiguration, UpdateBucketMetadataAnnotationTableConfiguration, UpdateBucketMetadataInventoryTableConfiguration, UpdateBucketMetadataJournalTableConfiguration |  |
+| Transfer Acceleration | GetBucketAccelerateConfiguration, PutBucketAccelerateConfiguration |  |
+| Requester Pays | GetBucketRequestPayment, PutBucketRequestPayment | the tenant is billed by the service |
+| Attribute-based access control | GetBucketAbac, PutBucketAbac |  |
+| Directory buckets | CreateSession, ListDirectoryBuckets, RenameObject |  |
+| Changing an object's encryption in place | UpdateObjectEncryption |  |
+| S3 Select | SelectObjectContent |  |
+| S3 Object Lambda | WriteGetObjectResponse |  |
+| BitTorrent | GetObjectTorrent |  |
+
+The list is in the same catalog (`unsupported` in [`s3op/operations.json`](../s3op/operations.json), `s3op.Unsupported` in Go). Request headers the gateway does not support are in [Request headers](request-headers.md#not-supported).
 
 ## Limitations
 

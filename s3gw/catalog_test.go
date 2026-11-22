@@ -1,9 +1,12 @@
 package s3gw_test
 
 import (
+	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fujiwara/s3rp/s3gw"
 	"github.com/fujiwara/s3rp/s3op"
 	"github.com/google/go-cmp/cmp"
@@ -47,5 +50,49 @@ func TestCatalogHandAuthorized(t *testing.T) {
 		if diff := cmp.Diff(want, op.Authorizations); diff != "" {
 			t.Errorf("%s authorizations (-code +catalog):\n%s", name, diff)
 		}
+	}
+}
+
+// Every operation the SDK's client has is either in the catalog or listed
+// as unsupported, and nothing listed as unsupported is unknown to the SDK:
+// an SDK update that brings an operation fails here until someone decides
+// which of the two it is. PostObject is the one operation no SDK client
+// has.
+func TestCatalogCoversSDK(t *testing.T) {
+	var sdk []string
+	client := reflect.TypeFor[*s3.Client]()
+	for m := range client.Methods() {
+		m := m
+		// an operation is Name(ctx, *NameInput, ...func(*Options))
+		if m.Type.NumIn() == 4 && m.Type.In(2).Kind() == reflect.Pointer && m.Type.In(2).Elem().Name() == m.Name+"Input" {
+			sdk = append(sdk, m.Name)
+		}
+	}
+	if len(sdk) < 100 {
+		t.Fatalf("found %d operations on the SDK client; the method shape changed", len(sdk))
+	}
+	var known, unsupported []string
+	for _, op := range s3op.Operations() {
+		if op.Name != s3op.OpPostObject {
+			known = append(known, op.Name)
+		}
+	}
+	for _, f := range s3op.Unsupported() {
+		unsupported = append(unsupported, f.Operations...)
+	}
+	for _, name := range append(known, unsupported...) {
+		if !slices.Contains(sdk, name) {
+			t.Errorf("%s is not an operation of the SDK client", name)
+		}
+	}
+	var unaccounted []string
+	for _, name := range sdk {
+		if !slices.Contains(known, name) && !slices.Contains(unsupported, name) {
+			unaccounted = append(unaccounted, name)
+		}
+	}
+	if len(unaccounted) > 0 {
+		t.Errorf("SDK operations neither in the s3op catalog nor listed as unsupported (s3op/operations.json): %s",
+			strings.Join(unaccounted, ", "))
 	}
 }
