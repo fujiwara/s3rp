@@ -20,7 +20,6 @@ CATEGORIES = [
     ("message", "Cause-specific message: the backend's wording is not relayed"),
     ("deliberate", "Deliberate difference of the gateway"),
     ("out-of-scope", "Feature outside the gateway's scope"),
-    ("gateway", "Gap in the gateway, not fixed yet"),
 ]
 
 

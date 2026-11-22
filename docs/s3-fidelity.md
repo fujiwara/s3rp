@@ -134,9 +134,6 @@ shared with the Ceph list. What differs:
 - Some failures the Ceph list files under **backend** are **message**
   there: with the backend answering S3's code, what is left is the
   gateway's one message per code.
-- **gateway** — a gap in the gateway that the Ceph run does not show
-  apart from the backend's own: a `HEAD` of one part (`partNumber`) is
-  answered without the `Content-Range` the backend reports.
 
 ## Maintaining
 

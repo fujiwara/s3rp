@@ -24,7 +24,6 @@ s3.error-bucket-already-owned	deliberate
 s3.error-bucket-not-empty	deliberate
 s3.error-no-such-bucket	deliberate
 s3.get-glacier-object-without-restore-rejected	backend
-s3.get-object-part-number-reads-single-part	gateway
 s3.list-objects-nosuchbucket	deliberate
 s3.list-objects-v1-basic-listing	deliberate
 s3.multipart-complete-checksum-type-mismatched-from-create-rejected	message

@@ -192,7 +192,13 @@ func (g *Gateway) headObject(c *opCtx) error {
 	}
 	c.setChecksumHeaders(w.Header(), checksumsFromHeadObjectOutput(out), string(out.ChecksumType))
 	setObjectLockResponseHeaders(w.Header(), out.ObjectLockMode, out.ObjectLockRetainUntilDate, out.ObjectLockLegalHoldStatus)
-	w.WriteHeader(http.StatusOK)
+	// a HEAD of one part or of a range is answered as its GET is
+	status := http.StatusOK
+	if out.ContentRange != nil {
+		w.Header().Set("Content-Range", *out.ContentRange)
+		status = http.StatusPartialContent
+	}
+	w.WriteHeader(status)
 	return nil
 }
 

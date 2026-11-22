@@ -150,6 +150,7 @@ var canonicalMessage = map[string]string{
 	"InvalidDigest":                         "The Content-MD5 or checksum value that you specified is not valid.",
 	"InvalidObjectState":                    "The operation is not valid for the object's storage class",
 	"InvalidPart":                           "One or more of the specified parts could not be found.  The part may not have been uploaded, or the specified entity tag may not match the part's entity tag.",
+	"InvalidPartNumber":                     "The requested partnumber is not satisfiable",
 	"InvalidPartOrder":                      "The list of parts was not in ascending order. Parts must be ordered by part number.",
 	"InvalidRange":                          "The requested range is not satisfiable",
 	"InvalidRequest":                        "Invalid Request",
