@@ -95,8 +95,15 @@ fi
 export SSL_CERT_FILE=$CA_FILE CURL_CA_BUNDLE=$CA_FILE
 if [ "$BACKEND_ENDPOINT" = "https://127.0.0.1:7443" ]; then
     echo "==> starting Ceph RGW backend"
-    # recreated, since it reads the certificate only when it starts
-    docker compose up -d --wait --force-recreate ceph-tls
+    # It reads the certificate only when it starts, so one started before
+    # the certificate was made is recreated; otherwise a running one is
+    # used as it is.
+    recreate=--force-recreate
+    started=$(docker compose ps -q ceph-tls | xargs -r docker inspect -f '{{.State.StartedAt}}' 2>/dev/null || true)
+    if [ -n "$started" ] && [ "$(date -d "$started" +%s)" -gt "$(stat -c %Y "$CERT")" ]; then
+        recreate=""
+    fi
+    docker compose up -d --wait $recreate ceph-tls
 else
     echo "==> using external backend $BACKEND_ENDPOINT"
 fi
