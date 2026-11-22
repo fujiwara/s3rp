@@ -9,4 +9,5 @@ verbs:
   delete:   $SDK delete "$KEY"
   copy:     $SDK copy "$SRC" "$DST"
   presign:  $SDK presign "$KEY"
+  lifecycle: $SDK lifecycle
   put_tree: $SDK put_tree "$DIR" "$PREFIX"

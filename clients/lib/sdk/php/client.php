@@ -46,6 +46,14 @@ switch ($verb) {
         $command = $s3->getCommand('GetObject', ['Bucket' => $bucket, 'Key' => $args[0]]);
         echo $s3->createPresignedRequest($command, '+1 hour')->getUri(), "\n";
         break;
+    case 'lifecycle':
+        foreach ($s3->getBucketLifecycleConfiguration(['Bucket' => $bucket])['Rules'] as $rule) {
+            $prefix = $rule['Filter']['Prefix'] ?? '';
+            $expire = $rule['Expiration']['Days'] ?? '-';
+            $abort = $rule['AbortIncompleteMultipartUpload']['DaysAfterInitiation'] ?? '-';
+            echo "{$rule['ID']} prefix={$prefix} expire={$expire} abort={$abort}\n";
+        }
+        break;
     case 'put_tree':
         $names = array_values(array_diff(scandir($args[0]), ['.', '..']));
         sort($names);

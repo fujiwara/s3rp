@@ -93,6 +93,25 @@ func run(ctx context.Context, verb string, args []string) error {
 		}
 		fmt.Println(req.URL)
 		return nil
+	case "lifecycle":
+		out, err := client.GetBucketLifecycleConfiguration(ctx, &s3.GetBucketLifecycleConfigurationInput{Bucket: bucket})
+		if err != nil {
+			return err
+		}
+		for _, rule := range out.Rules {
+			prefix, expire, abort := "", "-", "-"
+			if rule.Filter != nil {
+				prefix = aws.ToString(rule.Filter.Prefix)
+			}
+			if rule.Expiration != nil && rule.Expiration.Days != nil {
+				expire = fmt.Sprint(*rule.Expiration.Days)
+			}
+			if a := rule.AbortIncompleteMultipartUpload; a != nil && a.DaysAfterInitiation != nil {
+				abort = fmt.Sprint(*a.DaysAfterInitiation)
+			}
+			fmt.Printf("%s prefix=%s expire=%s abort=%s\n", aws.ToString(rule.ID), prefix, expire, abort)
+		}
+		return nil
 	case "put_tree":
 		entries, err := os.ReadDir(args[0])
 		if err != nil {

@@ -127,6 +127,19 @@ async fn main() -> Result<()> {
                 .await?;
             println!("{}", request.uri());
         }
+        "lifecycle" => {
+            let out = s3.get_bucket_lifecycle_configuration().bucket(&bucket).send().await?;
+            for rule in out.rules() {
+                let days = |d: Option<i32>| d.map_or("-".to_string(), |d| d.to_string());
+                println!(
+                    "{} prefix={} expire={} abort={}",
+                    rule.id().unwrap_or_default(),
+                    rule.filter().and_then(|f| f.prefix()).unwrap_or_default(),
+                    days(rule.expiration().and_then(|e| e.days())),
+                    days(rule.abort_incomplete_multipart_upload().and_then(|a| a.days_after_initiation())),
+                );
+            }
+        }
         "put_tree" => {
             let mut names = Vec::new();
             let mut entries = tokio::fs::read_dir(&args[1]).await?;

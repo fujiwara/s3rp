@@ -41,6 +41,12 @@ match verb:
         s3.copy({"Bucket": bucket, "Key": args[0]}, bucket, args[1])
     case "presign":
         print(s3.generate_presigned_url("get_object", Params={"Bucket": bucket, "Key": args[0]}, ExpiresIn=3600))
+    case "lifecycle":
+        for rule in s3.get_bucket_lifecycle_configuration(Bucket=bucket)["Rules"]:
+            prefix = rule.get("Filter", {}).get("Prefix", "")
+            expire = rule.get("Expiration", {}).get("Days", "-")
+            abort = rule.get("AbortIncompleteMultipartUpload", {}).get("DaysAfterInitiation", "-")
+            print(f"{rule['ID']} prefix={prefix} expire={expire} abort={abort}")
     case "put_tree":
         for path in sorted(Path(args[0]).iterdir()):
             s3.upload_file(str(path), bucket, f"{args[1]}/{path.name}")
