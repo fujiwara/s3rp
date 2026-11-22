@@ -50,6 +50,10 @@ switch (args[0])
         foreach (var rule in (await s3.GetBucketReplicationAsync(new GetBucketReplicationRequest { BucketName = bucket })).Configuration.Rules)
             Console.WriteLine($"{rule.Id} prefix={rule.Filter?.Prefix} status={rule.Status} destination={rule.Destination?.BucketArn}");
         break;
+    case "tags":
+        foreach (var tag in (await s3.GetBucketTaggingAsync(new GetBucketTaggingRequest { BucketName = bucket })).TagSet)
+            Console.WriteLine($"{tag.Key}={tag.Value}");
+        break;
     case "put_tree":
         foreach (var file in Directory.GetFiles(args[1]).Order())
             await transfer.UploadAsync(file, bucket, args[2] + "/" + Path.GetFileName(file));

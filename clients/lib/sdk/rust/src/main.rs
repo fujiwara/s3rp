@@ -152,6 +152,12 @@ async fn main() -> Result<()> {
                 );
             }
         }
+        "tags" => {
+            let out = s3.get_bucket_tagging().bucket(&bucket).send().await?;
+            for tag in out.tag_set() {
+                println!("{}={}", tag.key(), tag.value());
+            }
+        }
         "put_tree" => {
             let mut names = Vec::new();
             let mut entries = tokio::fs::read_dir(&args[1]).await?;

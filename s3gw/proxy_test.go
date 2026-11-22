@@ -379,9 +379,9 @@ func TestProxyNotImplemented(t *testing.T) {
 			},
 		},
 		{
-			name: "GetBucketTagging",
+			name: "GetBucketRequestPayment",
 			call: func(ctx context.Context, client *s3.Client) error {
-				_, err := client.GetBucketTagging(ctx, &s3.GetBucketTaggingInput{
+				_, err := client.GetBucketRequestPayment(ctx, &s3.GetBucketRequestPaymentInput{
 					Bucket: aws.String("testbucket"),
 				})
 				return err

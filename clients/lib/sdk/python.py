@@ -51,6 +51,9 @@ match verb:
         for rule in s3.get_bucket_replication(Bucket=bucket)["ReplicationConfiguration"]["Rules"]:
             prefix = rule.get("Filter", {}).get("Prefix", "")
             print(f"{rule['ID']} prefix={prefix} status={rule['Status']} destination={rule['Destination']['Bucket']}")
+    case "tags":
+        for tag in s3.get_bucket_tagging(Bucket=bucket)["TagSet"]:
+            print(f"{tag['Key']}={tag['Value']}")
     case "put_tree":
         for path in sorted(Path(args[0]).iterdir()):
             s3.upload_file(str(path), bucket, f"{args[1]}/{path.name}")

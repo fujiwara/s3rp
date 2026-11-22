@@ -128,6 +128,15 @@ func run(ctx context.Context, verb string, args []string) error {
 			fmt.Printf("%s prefix=%s status=%s destination=%s\n", aws.ToString(rule.ID), prefix, rule.Status, destination)
 		}
 		return nil
+	case "tags":
+		out, err := client.GetBucketTagging(ctx, &s3.GetBucketTaggingInput{Bucket: bucket})
+		if err != nil {
+			return err
+		}
+		for _, tag := range out.TagSet {
+			fmt.Printf("%s=%s\n", aws.ToString(tag.Key), aws.ToString(tag.Value))
+		}
+		return nil
 	case "put_tree":
 		entries, err := os.ReadDir(args[0])
 		if err != nil {

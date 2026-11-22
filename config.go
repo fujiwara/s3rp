@@ -107,6 +107,8 @@ type BucketConfig struct {
 	// Replication is the replication configuration XML GetBucketReplication
 	// returns, a declaration like Lifecycle.
 	Replication string `yaml:"replication,omitempty" json:"replication,omitempty"`
+	// Tags are the bucket tags GetBucketTagging returns.
+	Tags map[string]string `yaml:"tags,omitempty" json:"tags,omitempty"`
 	// CreatedAt is reported by ListBuckets (unset = the Unix epoch).
 	CreatedAt time.Time `yaml:"created_at,omitzero" json:"created_at,omitzero"`
 }
@@ -334,6 +336,9 @@ func (n *configNames) validateBucket(tenant string, b *BucketConfig) error {
 		if err := store.ValidateLifecycleText(b.Lifecycle); err != nil {
 			return fmt.Errorf("bucket %s: lifecycle: %w", b.Name, err)
 		}
+	}
+	if err := store.ValidateBucketTags(b.Tags); err != nil {
+		return fmt.Errorf("bucket %s: %w", b.Name, err)
 	}
 	if b.Replication != "" {
 		if err := store.ValidateReplicationText(b.Replication); err != nil {

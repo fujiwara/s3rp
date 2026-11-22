@@ -125,3 +125,67 @@ func TestValidateReplicationText(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateBucketTags(t *testing.T) {
+	many := map[string]string{}
+	for i := range 51 {
+		many[strings.Repeat("k", i+1)] = "v"
+	}
+	for name, tags := range map[string]map[string]string{
+		"none":          nil,
+		"plain":         {"env": "prod", "team": "storage"},
+		"empty value":   {"env": ""},
+		"longest":       {strings.Repeat("k", 128): strings.Repeat("v", 256)},
+		"other scripts": {"名前": "値"},
+		"every symbol":  {"a+b-c=d.e_f:g/h@i": "x y"},
+	} {
+		if err := store.ValidateBucketTags(tags); err != nil {
+			t.Errorf("%s must be valid: %v", name, err)
+		}
+	}
+	for name, tags := range map[string]map[string]string{
+		"empty key":      {"": "v"},
+		"key too long":   {strings.Repeat("k", 129): "v"},
+		"value too long": {"k": strings.Repeat("v", 257)},
+		"reserved key":   {"aws:created-by": "x"},
+		// what the XML response could not carry unchanged
+		"NUL in a value":      {"env": "a\x00b"},
+		"NUL in a key":        {"e\x00v": "x"},
+		"control character":   {"env": "a\x01b"},
+		"invalid UTF-8":       {"env": "a\xffb"},
+		"invalid UTF-8 key":   {"e\xffv": "x"},
+		"noncharacter":        {"env": "a\ufffeb"},
+		"markup":              {"env": "a<b"},
+		"symbol outside S3's": {"env": "100%"},
+		"too many":            many,
+	} {
+		if err := store.ValidateBucketTags(tags); err == nil {
+			t.Errorf("%s must be rejected", name)
+		}
+	}
+}
+
+// One tag's rules are shared by a bucket's tags and the gateway's check of
+// object tags.
+func TestValidTag(t *testing.T) {
+	for _, k := range []string{"env", "a+b-c=d.e_f:g/h@i", "名前", strings.Repeat("k", 128)} {
+		if !store.ValidTagKey(k) {
+			t.Errorf("key %q must be valid", k)
+		}
+	}
+	for _, k := range []string{"", strings.Repeat("k", 129), "a<b", "e\x00v", "e\xffv", "😀", "e\u0301"} {
+		if store.ValidTagKey(k) {
+			t.Errorf("key %q must be invalid", k)
+		}
+	}
+	for _, v := range []string{"", "x y", "café 東京", strings.Repeat("v", 256)} {
+		if !store.ValidTagValue(v) {
+			t.Errorf("value %q must be valid", v)
+		}
+	}
+	for _, v := range []string{strings.Repeat("v", 257), "100%", "a\x00b", "a\xffb", "😀"} {
+		if store.ValidTagValue(v) {
+			t.Errorf("value %q must be invalid", v)
+		}
+	}
+}

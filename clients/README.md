@@ -116,6 +116,7 @@ command with its output (`<scenario>.log`).
 | `put_tree` | `DIR`, `PREFIX` | |
 | `lifecycle` | | prints the bucket's lifecycle rules |
 | `replication` | | prints the bucket's replication rules |
+| `tags` | | prints the bucket's tags |
 
 The arguments are shell variables, not environment: a verb that runs a
 script passes them on its command line. `BUCKET`, `ENDPOINT`, `ACCESS_KEY`

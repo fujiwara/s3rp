@@ -17,6 +17,7 @@ const (
 	OpGetBucketCors                   = "GetBucketCors"
 	OpGetBucketLifecycleConfiguration = "GetBucketLifecycleConfiguration"
 	OpGetBucketReplication            = "GetBucketReplication"
+	OpGetBucketTagging                = "GetBucketTagging"
 	OpGetBucketVersioning             = "GetBucketVersioning"
 	OpGetBucketEncryption             = "GetBucketEncryption"
 	OpGetBucketOwnershipControls      = "GetBucketOwnershipControls"
@@ -35,6 +36,8 @@ const (
 	OpDeleteBucketLifecycle           = "DeleteBucketLifecycle"
 	OpPutBucketReplication            = "PutBucketReplication"
 	OpDeleteBucketReplication         = "DeleteBucketReplication"
+	OpPutBucketTagging                = "PutBucketTagging"
+	OpDeleteBucketTagging             = "DeleteBucketTagging"
 	OpPutBucketVersioning             = "PutBucketVersioning"
 	OpPutObjectLockConfiguration      = "PutObjectLockConfiguration"
 	OpPutBucketEncryption             = "PutBucketEncryption"
@@ -82,6 +85,7 @@ const (
 	ActionGetBucketPolicy                  = "s3:GetBucketPolicy"
 	ActionGetBucketPolicyStatus            = "s3:GetBucketPolicyStatus"
 	ActionGetBucketPublicAccessBlock       = "s3:GetBucketPublicAccessBlock"
+	ActionGetBucketTagging                 = "s3:GetBucketTagging"
 	ActionGetBucketVersioning              = "s3:GetBucketVersioning"
 	ActionGetEncryptionConfiguration       = "s3:GetEncryptionConfiguration"
 	ActionGetLifecycleConfiguration        = "s3:GetLifecycleConfiguration"
@@ -215,6 +219,15 @@ var operations = []Operation{
 		Note: "answered from the store; the configuration a tenant is shown, not the backend bucket's",
 	},
 	{
+		Name:    OpGetBucketTagging,
+		Scope:   ScopeBucket,
+		Support: Supported,
+		Authorizations: []Authorization{
+			{Action: ActionGetBucketTagging, On: OnTarget},
+		},
+		Note: "answered from the store",
+	},
+	{
 		Name:    OpGetBucketVersioning,
 		Scope:   ScopeBucket,
 		Support: Supported,
@@ -335,6 +348,18 @@ var operations = []Operation{
 	},
 	{
 		Name:    OpDeleteBucketReplication,
+		Scope:   ScopeBucket,
+		Support: Refused,
+		Note:    "bucket configuration is written where the bucket is created, not through the S3 API",
+	},
+	{
+		Name:    OpPutBucketTagging,
+		Scope:   ScopeBucket,
+		Support: Refused,
+		Note:    "bucket configuration is written where the bucket is created, not through the S3 API",
+	},
+	{
+		Name:    OpDeleteBucketTagging,
 		Scope:   ScopeBucket,
 		Support: Refused,
 		Note:    "bucket configuration is written where the bucket is created, not through the S3 API",
@@ -586,6 +611,7 @@ var actions = []string{
 	ActionGetBucketPolicy,
 	ActionGetBucketPolicyStatus,
 	ActionGetBucketPublicAccessBlock,
+	ActionGetBucketTagging,
 	ActionGetBucketVersioning,
 	ActionGetEncryptionConfiguration,
 	ActionGetLifecycleConfiguration,
@@ -636,11 +662,6 @@ var unsupported = []Feature{
 		Name:       "BitTorrent",
 		Kind:       FeatureObject,
 		Operations: []string{"GetObjectTorrent"},
-	},
-	{
-		Name:       "Bucket tagging",
-		Kind:       FeatureBucketConfiguration,
-		Operations: []string{"GetBucketTagging", "PutBucketTagging", "DeleteBucketTagging"},
 	},
 	{
 		Name:       "Event notifications",
