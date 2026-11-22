@@ -22,6 +22,7 @@ rust = "1.100.0"
 # from the release itself: 2.0 renamed its assets, which the aqua registry
 # does not follow yet
 "github:duckdb/duckdb" = { version = "2.0.0", asset_pattern = "duckdb-cli-linux-amd64.tar.gz" }
+"aqua:kopia/kopia" = "0.23.1"
 "aqua:minio/mc" = "RELEASE.2025-08-13T08-35-41Z"
 "aqua:rclone/rclone" = "1.76.0"
 "aqua:restic/restic" = "0.20.0"

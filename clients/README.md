@@ -38,7 +38,7 @@ sent.
   `teardown` script for a client that needs a config file or a mount). A
   scenario using a verb the client lacks is skipped and reported as such.
 - `own/<client>/*.yml` — scenarios for one client only, for what verbs do
-  not express (a restic repository, DuckDB reading Parquet).
+  not express (a restic or kopia repository, DuckDB reading Parquet).
 - `lib/` — the verbs of clients that are libraries, as small scripts;
   `lib/sdk/` holds one per AWS SDK (`defs/sdk-*.yml`), with the SDK's
   version pinned beside it in the form its language uses (a lock file, or
