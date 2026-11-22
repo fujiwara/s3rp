@@ -48,6 +48,7 @@ func TestParseCondition(t *testing.T) {
 		{"bad CIDR", `{"IpAddress": {"aws:SourceIp": "10.0.0.0/33"}}`, "invalid source IP value"},
 		{"not an address", `{"IpAddress": {"aws:SourceIp": "office"}}`, "invalid source IP value"},
 		{"zoned address", `{"IpAddress": {"aws:SourceIp": "fe80::1%eth0"}}`, "invalid source IP value"},
+		{"wider than the IPv4-mapped range", `{"IpAddress": {"aws:SourceIp": "::ffff:0.0.0.0/95"}}`, "invalid source IP value"},
 		{"empty condition", `{}`, "at least one operator"},
 		{"operator without keys", `{"IpAddress": {}}`, "has no values"},
 		{"operator with empty values", `{"IpAddress": {"aws:SourceIp": []}}`, "has no values"},
@@ -109,6 +110,14 @@ func TestEvaluateCondition(t *testing.T) {
 				}
 			},
 			{
+				"Sid": "MappedRange",
+				"Effect": "Deny",
+				"Principal": {"S3RP": ["ta/erin"]},
+				"Action": "s3:GetObject",
+				"Resource": "b/*",
+				"Condition": {"IpAddress": {"aws:SourceIp": "::ffff:10.0.0.0/104"}}
+			},
+			{
 				"Sid": "PlainAddresses",
 				"Effect": "Deny",
 				"Principal": {"S3RP": ["ta/dave"]},
@@ -140,6 +149,9 @@ func TestEvaluateCondition(t *testing.T) {
 		{"both operators, in range and not excluded", "ta/carol", "s3:DeleteObject", "203.0.113.5", policy.Deny},
 		{"both operators, excluded by NotIpAddress", "ta/carol", "s3:DeleteObject", "203.0.113.7", policy.None},
 		{"both operators, outside IpAddress", "ta/carol", "s3:DeleteObject", "198.51.100.1", policy.None},
+		{"IPv4-mapped range is its IPv4 range", "ta/erin", "s3:GetObject", "10.1.2.3", policy.Deny},
+		{"IPv4-mapped range, 4-in-6 source", "ta/erin", "s3:GetObject", "::ffff:10.1.2.3", policy.Deny},
+		{"IPv4-mapped range excludes other IPv4", "ta/erin", "s3:GetObject", "11.1.2.3", policy.None},
 		{"plain IPv4 is /32", "ta/dave", "s3:GetObject", "198.51.100.7", policy.Deny},
 		{"plain IPv4 excludes neighbor", "ta/dave", "s3:GetObject", "198.51.100.8", policy.None},
 		{"plain IPv6 is /128", "ta/dave", "s3:GetObject", "2001:db8::1", policy.Deny},
