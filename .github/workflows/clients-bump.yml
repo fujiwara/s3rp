@@ -31,6 +31,9 @@ jobs:
         uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version: '1.27'
+          # it builds another module (clients/lib/sdk/go), and would save
+          # that under the key the repository's Go 1.27 jobs share
+          cache: false
 
       - name: Set up mise
         uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
