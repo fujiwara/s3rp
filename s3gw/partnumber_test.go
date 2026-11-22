@@ -3,12 +3,16 @@ package s3gw_test
 import (
 	"errors"
 	"io"
+	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
+	"github.com/aws/smithy-go/middleware"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // GetObject/HeadObject with partNumber read a single part of a multipart
@@ -24,6 +28,7 @@ func TestGetObjectPartNumber(t *testing.T) {
 		},
 		headOut: &s3.HeadObjectOutput{
 			ContentLength: aws.Int64(8),
+			ContentRange:  aws.String("bytes 8-15/16"),
 			PartsCount:    aws.Int32(2),
 			ETag:          aws.String(`"e"`),
 		},
@@ -63,6 +68,33 @@ func TestGetObjectPartNumber(t *testing.T) {
 	if aws.ToInt32(hout.PartsCount) != 2 {
 		t.Errorf("HEAD x-amz-mp-parts-count not returned: %+v", hout.PartsCount)
 	}
+	// the HEAD of a part says which bytes it is, as its GET does
+	if aws.ToString(hout.ContentRange) != "bytes 8-15/16" {
+		t.Errorf("HEAD Content-Range not returned: %+v", hout.ContentRange)
+	}
+	if status := httpStatusOf(hout.ResultMetadata); status != http.StatusPartialContent {
+		t.Errorf("HEAD of a part answered %d, want 206", status)
+	}
+}
+
+// A HEAD of the whole object stays a plain 200 without Content-Range.
+func TestHeadObjectWholeIsNotPartial(t *testing.T) {
+	stub := &stubBackend{headOut: &s3.HeadObjectOutput{ContentLength: aws.Int64(16), ETag: aws.String(`"e"`)}}
+	client, _ := newTestProxy(t, stub)
+	hout, err := client.HeadObject(t.Context(), &s3.HeadObjectInput{Bucket: aws.String("testbucket"), Key: aws.String("k")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hout.ContentRange != nil || httpStatusOf(hout.ResultMetadata) != http.StatusOK {
+		t.Errorf("whole-object HEAD: Content-Range %v, status %d", hout.ContentRange, httpStatusOf(hout.ResultMetadata))
+	}
+}
+
+func httpStatusOf(md middleware.Metadata) int {
+	if resp, ok := awsmiddleware.GetRawResponse(md).(*smithyhttp.Response); ok {
+		return resp.StatusCode
+	}
+	return 0
 }
 
 func TestGetObjectPartNumberOutOfRange(t *testing.T) {
