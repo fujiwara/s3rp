@@ -79,9 +79,9 @@ type listed struct {
 }
 
 // page walks sorted keys after a marker and gathers one page of keys and
-// common prefixes, each counting once. A marker that is itself a common
-// prefix was the last entry of the previous page, so the keys under it are
-// behind it.
+// common prefixes, each counting once. A common prefix that does not sort
+// after the marker is behind it, with every key it rolls up: the marker was
+// that prefix (the last entry of the previous page) or a key inside it.
 func page(keys []string, prefix, delimiter, after string, limit int) (entries []listed, truncated bool) {
 	if limit == 0 {
 		return nil, false
@@ -92,7 +92,7 @@ func page(keys []string, prefix, delimiter, after string, limit int) (entries []
 			continue
 		}
 		cp, rolled := commonPrefix(k, prefix, delimiter)
-		if rolled && (cp == lastPrefix || cp == after) {
+		if rolled && (cp == lastPrefix || (after != "" && cp <= after)) {
 			continue
 		}
 		if len(entries) == limit {
@@ -283,7 +283,7 @@ keys:
 			continue
 		}
 		if cp, rolled := commonPrefix(k, prefix, delimiter); rolled {
-			if cp == lastPrefix || cp == keyMarker {
+			if cp == lastPrefix || (keyMarker != "" && cp <= keyMarker) {
 				continue
 			}
 			if full() {

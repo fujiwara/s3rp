@@ -145,6 +145,64 @@ func TestChecksumMismatchRefused(t *testing.T) {
 	wantError(t, err, http.StatusBadRequest, "BadDigest")
 }
 
+// An algorithm the package cannot compute is refused, never stored
+// unverified or silently left out.
+func TestUncomputableChecksumRefused(t *testing.T) {
+	be := membackend.New()
+	ctx := t.Context()
+	if _, err := be.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String("b")}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := be.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String("b"), Key: aws.String("k"), Body: strings.NewReader("data"),
+		ChecksumXXHASH64: aws.String("AAAAAAAAAAA="),
+	})
+	wantError(t, err, http.StatusNotImplemented, "NotImplemented")
+	_, err = be.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String("b"), Key: aws.String("k"), Body: strings.NewReader("data"),
+		ChecksumAlgorithm: types.ChecksumAlgorithmXxhash3,
+	})
+	wantError(t, err, http.StatusNotImplemented, "NotImplemented")
+	_, err = be.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+		Bucket: aws.String("b"), Key: aws.String("k"), ChecksumAlgorithm: types.ChecksumAlgorithmXxhash128,
+	})
+	wantError(t, err, http.StatusNotImplemented, "NotImplemented")
+	if _, err := be.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String("b"), Key: aws.String("k")}); err == nil {
+		t.Error("a refused write left an object")
+	}
+}
+
+// A whole-object checksum stated at completion is verified even when the
+// upload was started without a checksum algorithm.
+func TestCompleteVerifiesStatedChecksum(t *testing.T) {
+	be := membackend.New()
+	ctx := t.Context()
+	if _, err := be.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String("b")}); err != nil {
+		t.Fatal(err)
+	}
+	create, err := be.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{Bucket: aws.String("b"), Key: aws.String("k")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	part, err := be.UploadPart(ctx, &s3.UploadPartInput{
+		Bucket: aws.String("b"), Key: aws.String("k"), UploadId: create.UploadId, PartNumber: aws.Int32(1), Body: strings.NewReader("abc"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	complete := func(crc32 string) error {
+		_, err := be.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
+			Bucket: aws.String("b"), Key: aws.String("k"), UploadId: create.UploadId, ChecksumCRC32: aws.String(crc32),
+			MultipartUpload: &types.CompletedMultipartUpload{Parts: []types.CompletedPart{{PartNumber: aws.Int32(1), ETag: part.ETag}}},
+		})
+		return err
+	}
+	wantError(t, complete("AAAAAA=="), http.StatusBadRequest, "BadDigest")
+	if err := complete("NSRBwg=="); err != nil { // CRC32 of "abc"
+		t.Errorf("completing with the right checksum: %v", err)
+	}
+}
+
 func TestCanceledContext(t *testing.T) {
 	be := membackend.New()
 	ctx, cancel := context.WithCancel(t.Context())

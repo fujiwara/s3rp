@@ -69,6 +69,9 @@ func (b *Backend) CreateMultipartUpload(ctx context.Context, in *s3.CreateMultip
 	algorithm := types.ChecksumAlgorithm(strings.ToUpper(string(in.ChecksumAlgorithm)))
 	checksumType := in.ChecksumType
 	if algorithm != "" {
+		if checksum.NewHash(string(algorithm)) == nil {
+			return nil, unsupportedChecksum(string(algorithm)).err()
+		}
 		// a full-object checksum of parts needs an algorithm that combines:
 		// the CRCs do, the SHAs can only be composed
 		composable := algorithm == types.ChecksumAlgorithmSha1 || algorithm == types.ChecksumAlgorithmSha256
@@ -295,9 +298,17 @@ func (b *Backend) CompleteMultipartUpload(ctx context.Context, in *s3.CompleteMu
 			o.checksums, o.checksumType = checksum.Values{name: value}, u.checksumType
 		}
 	}
-	// the checksum of the whole object, when the client states one
+	// the checksum of the whole object, when the client states one: held
+	// against the upload's own, or computed for the occasion when the
+	// upload has none of that algorithm
 	for name, want := range checksumsOf(in) {
-		if got, ok := o.checksums[name]; ok && got != want {
+		got, ok := o.checksums[name]
+		if !ok {
+			if got, ok = computeChecksum(name, o.data); !ok {
+				return nil, unsupportedChecksum(name).err()
+			}
+		}
+		if got != want {
 			return nil, fail(http.StatusBadRequest, "BadDigest",
 				fmt.Sprintf("The %s you specified did not match the calculated checksum.", name)).err()
 		}
@@ -473,7 +484,7 @@ func (b *Backend) ListMultipartUploads(ctx context.Context, in *s3.ListMultipart
 			continue
 		}
 		cp, rolled := commonPrefix(u.key, prefix, delimiter)
-		if rolled && (cp == lastPrefix || cp == keyMarker) {
+		if rolled && (cp == lastPrefix || (keyMarker != "" && cp <= keyMarker)) {
 			continue
 		}
 		if count == limit {

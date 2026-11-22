@@ -58,9 +58,16 @@ func computeChecksum(name string, data []byte) (string, bool) {
 	return checksum.Base64(h), true
 }
 
+// unsupportedChecksum refuses an algorithm this package cannot compute: a
+// value stored unverified, or a named algorithm silently not applied, would
+// report an integrity check that never happened.
+func unsupportedChecksum(name string) *failure {
+	return fail(http.StatusNotImplemented, "NotImplemented",
+		fmt.Sprintf("The %s checksum algorithm is not supported.", name))
+}
+
 // writeChecksums settles the checksums stored with data: each value the
-// client supplied is verified where the algorithm can be computed (and kept
-// as given where it cannot), and the algorithm a write names without a
+// client supplied is verified, and the algorithm a write names without a
 // value is computed.
 func writeChecksums(data []byte, supplied checksum.Values, algorithm types.ChecksumAlgorithm) (checksum.Values, *failure) {
 	var v checksum.Values
@@ -72,16 +79,21 @@ func writeChecksums(data []byte, supplied checksum.Values, algorithm types.Check
 	}
 	for name, want := range supplied {
 		got, ok := computeChecksum(name, data)
-		if ok && got != want {
+		if !ok {
+			return nil, unsupportedChecksum(name)
+		}
+		if got != want {
 			return nil, fail(http.StatusBadRequest, "BadDigest",
 				fmt.Sprintf("The %s you specified did not match the calculated checksum.", name))
 		}
 		set(name, want)
 	}
 	if name := strings.ToUpper(string(algorithm)); name != "" && v[name] == "" {
-		if got, ok := computeChecksum(name, data); ok {
-			set(name, got)
+		got, ok := computeChecksum(name, data)
+		if !ok {
+			return nil, unsupportedChecksum(name)
 		}
+		set(name, got)
 	}
 	return v, nil
 }

@@ -22,8 +22,9 @@
 // What it does not do is what a backend does on its own schedule or beyond
 // the API: lifecycle expiration, replication, encryption (the requested
 // mode and key id are recorded and reported, nothing is encrypted), storage
-// tiers (a class is a label). Errors carry S3's codes and statuses; the
-// wording a client reads is the gateway's.
+// tiers (a class is a label). A checksum algorithm it cannot compute (the
+// XXHASH family) is refused rather than stored unverified. Errors carry
+// S3's codes and statuses; the wording a client reads is the gateway's.
 package membackend
 
 import (

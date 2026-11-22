@@ -136,13 +136,15 @@ func (b *Backend) CopyObject(ctx context.Context, in *s3.CopyObjectInput, _ ...f
 		algorithms = []types.ChecksumAlgorithm{types.ChecksumAlgorithm(strings.ToUpper(string(in.ChecksumAlgorithm)))}
 	}
 	for _, a := range algorithms {
-		if value, ok := computeChecksum(string(a), o.data); ok {
-			if o.checksums == nil {
-				o.checksums = checksum.Values{}
-			}
-			o.checksums[string(a)] = value
-			o.checksumType = types.ChecksumTypeFullObject
+		value, ok := computeChecksum(string(a), o.data)
+		if !ok {
+			return nil, unsupportedChecksum(string(a)).err()
 		}
+		if o.checksums == nil {
+			o.checksums = checksum.Values{}
+		}
+		o.checksums[string(a)] = value
+		o.checksumType = types.ChecksumTypeFullObject
 	}
 	if f := b.commit(bkt, key, o); f != nil {
 		return nil, f.err()

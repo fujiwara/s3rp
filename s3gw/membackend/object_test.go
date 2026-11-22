@@ -124,6 +124,7 @@ func TestRange(t *testing.T) {
 		{"open end", "bytes=7-", "789", "bytes 7-9/10"},
 		{"suffix", "bytes=-3", "789", "bytes 7-9/10"},
 		{"last past the end", "bytes=8-100", "89", "bytes 8-9/10"},
+		{"last at the largest offset", "bytes=8-9223372036854775807", "89", "bytes 8-9/10"},
 		{"suffix longer than the object", "bytes=-100", "0123456789", "bytes 0-9/10"},
 		{"ignored: another unit", "items=1-2", "0123456789", ""},
 		{"ignored: several ranges", "bytes=0-1,3-4", "0123456789", ""},
@@ -249,6 +250,20 @@ func TestListObjects(t *testing.T) {
 		}
 		if diff := cmp.Diff([]string{"dir/2", "dir/sub/3"}, keys); diff != "" {
 			t.Errorf("keys (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("marker inside a common prefix", func(t *testing.T) {
+		// the prefix the marker lies in is behind the marker, with the
+		// keys it rolls up
+		out, err := f.client.ListObjectsV2(t.Context(), &s3.ListObjectsV2Input{
+			Bucket: aws.String("docs"), Delimiter: aws.String("/"), StartAfter: aws.String("dir/1"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(out.CommonPrefixes) != 0 || len(out.Contents) != 2 || *out.Contents[0].Key != "e f.txt" {
+			t.Errorf("after dir/1: prefixes %+v, contents %+v", out.CommonPrefixes, out.Contents)
 		}
 	})
 

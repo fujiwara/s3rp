@@ -300,7 +300,8 @@ func parseRange(header string, size int64) (start, end int64, ok bool, f *failur
 		if err != nil || l < start {
 			return 0, 0, false, nil
 		}
-		end = min(l+1, size)
+		// clamped before the +1: the last byte may be given as MaxInt64
+		end = min(l, size-1) + 1
 	}
 	if start >= size {
 		return 0, 0, false, invalidRange()
