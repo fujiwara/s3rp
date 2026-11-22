@@ -8,8 +8,6 @@ env:
   AWS_ACCESS_KEY_ID: ${ACCESS_KEY}
   AWS_SECRET_ACCESS_KEY: ${SECRET_KEY}
   AWS_CA_BUNDLE: ${CA_FILE}
-  # not the profile of whoever runs this
-  AWS_PROFILE: default
   AWS_PAGER: ""
 setup: |
   cat > "$AWS_CONFIG_FILE" <<CONFIG
