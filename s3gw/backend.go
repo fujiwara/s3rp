@@ -36,8 +36,19 @@ func mergeRepeatedHeadersMiddleware(stack *middleware.Stack) error {
 		}), "Signing", middleware.Before)
 }
 
-// BackendClient is the narrow interface of the S3 client methods s3rp uses,
-// for injecting stubs in tests.
+// BackendClient is the S3 client methods the gateway calls on a backend.
+// The aws-sdk's *s3.Client is the implementation the gateway builds for
+// itself; SetBackendFactory supplies another (an in-process object store,
+// as s3gw/membackend), and SetBackend a stub in tests.
+//
+// An implementation that is not an SDK client must keep three habits of
+// one. It reads a write's Body to its end and fails the write when the read
+// fails, keeping that error in the chain: the gateway verifies the payload
+// as it is read, so the error is the refusal the client is owed. It reports
+// failures as the SDK does — a smithy.APIError for the code and an
+// *awshttp.ResponseError for the status — because that is what
+// s3err.FromSDKError maps. And it computes the checksum a write names in
+// ChecksumAlgorithm, which the SDK client does on the way to the backend.
 type BackendClient interface {
 	GetObject(ctx context.Context, in *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error)
 	GetObjectAttributes(ctx context.Context, in *s3.GetObjectAttributesInput, optFns ...func(*s3.Options)) (*s3.GetObjectAttributesOutput, error)
@@ -67,6 +78,15 @@ type BackendClient interface {
 	PutObjectRetention(ctx context.Context, in *s3.PutObjectRetentionInput, optFns ...func(*s3.Options)) (*s3.PutObjectRetentionOutput, error)
 	GetObjectLegalHold(ctx context.Context, in *s3.GetObjectLegalHoldInput, optFns ...func(*s3.Options)) (*s3.GetObjectLegalHoldOutput, error)
 	PutObjectLegalHold(ctx context.Context, in *s3.PutObjectLegalHoldInput, optFns ...func(*s3.Options)) (*s3.PutObjectLegalHoldOutput, error)
+}
+
+// StreamChecksummer is implemented by a BackendClient that says for itself
+// whether it can compute the checksum a write names in ChecksumAlgorithm
+// over a body it can read only once. The SDK client can over https only
+// (see trailerChecksumAlgorithm), which is what the gateway assumes of a
+// client that does not implement this.
+type StreamChecksummer interface {
+	ChecksumsStream() bool
 }
 
 func newBackendClient(ctx context.Context, b *store.Backend, clientOptions func(*store.Backend) []func(*s3.Options), breaker func(*store.Backend) Breaker) (BackendClient, error) {

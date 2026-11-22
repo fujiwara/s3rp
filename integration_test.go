@@ -18,12 +18,47 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/fujiwara/s3rp"
+	"github.com/fujiwara/s3rp/s3gw"
+	"github.com/fujiwara/s3rp/s3gw/membackend"
+	"github.com/fujiwara/s3rp/store"
 )
 
 const (
 	testAccessKeyID     = "S3RPTESTKEY001"
 	testSecretAccessKey = "testsecret001"
 )
+
+// integrationBackend is the backend one run of the suite is served by.
+type integrationBackend struct {
+	endpoint, key, secret string
+	// admin is the backend as a control plane reaches it, to provision what
+	// the gateway does not proxy
+	admin backendAdmin
+	// attach connects an assembled app to a backend that is not reached
+	// through the endpoint; nil for one that is
+	attach func(app *s3rp.S3RP)
+}
+
+type backendAdmin interface {
+	CreateBucket(ctx context.Context, in *s3.CreateBucketInput, optFns ...func(*s3.Options)) (*s3.CreateBucketOutput, error)
+	PutBucketVersioning(ctx context.Context, in *s3.PutBucketVersioningInput, optFns ...func(*s3.Options)) (*s3.PutBucketVersioningOutput, error)
+}
+
+func (b integrationBackend) newApp(t *testing.T, cfg *s3rp.Config) *s3rp.S3RP {
+	t.Helper()
+	cfg.SetDefaults()
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	app, err := s3rp.New(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.attach != nil {
+		b.attach(app)
+	}
+	return app
+}
 
 // Integration test against a real S3-compatible backend (versitygw).
 // Run: docker compose up -d && S3RP_TEST_BACKEND_ENDPOINT=http://localhost:7070 go test ./...
@@ -34,10 +69,34 @@ func TestIntegration(t *testing.T) {
 	}
 	backendKey := envOr("S3RP_TEST_BACKEND_ACCESS_KEY_ID", "backendkey")
 	backendSecret := envOr("S3RP_TEST_BACKEND_SECRET_ACCESS_KEY", "backendsecret")
+	runIntegration(t, integrationBackend{
+		endpoint: endpoint, key: backendKey, secret: backendSecret,
+		admin: newS3Client(t, endpoint, backendKey, backendSecret),
+	})
+}
+
+// The same suite with no backend to start: every bucket is served by the
+// in-process backend, so this run is part of plain go test.
+func TestIntegrationInProcess(t *testing.T) {
+	be := membackend.New()
+	runIntegration(t, integrationBackend{
+		// never dialed; the scheme is what config validation asks for
+		endpoint: "http://membackend.invalid", key: "backendkey", secret: "backendsecret",
+		admin: be,
+		attach: func(app *s3rp.S3RP) {
+			app.SetBackendFactory(func(context.Context, *store.Backend) (s3gw.BackendClient, error) {
+				return be, nil
+			})
+		},
+	})
+}
+
+func runIntegration(t *testing.T, backend integrationBackend) {
+	endpoint, backendKey, backendSecret := backend.endpoint, backend.key, backend.secret
 	const backendBucket = "s3rp-it-backend"
 
 	// create the backend bucket directly (s3rp does not proxy CreateBucket)
-	backendClient := newS3Client(t, endpoint, backendKey, backendSecret)
+	backendClient := backend.admin
 	_, err := backendClient.CreateBucket(t.Context(), &s3.CreateBucketInput{
 		Bucket: aws.String(backendBucket),
 	})
@@ -78,14 +137,7 @@ func TestIntegration(t *testing.T) {
 	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" {
 		cfg.Metrics = &s3rp.MetricsConfig{Tenant: true, Bucket: true}
 	}
-	cfg.SetDefaults()
-	if err := cfg.Validate(); err != nil {
-		t.Fatal(err)
-	}
-	app, err := s3rp.New(t.Context(), cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
+	app := backend.newApp(t, cfg)
 	t.Cleanup(func() {
 		// t.Context() is already done in cleanup; bound the final flush so
 		// an unreachable collector cannot hold the suite
@@ -814,14 +866,7 @@ func TestIntegration(t *testing.T) {
 				}},
 			}},
 		}
-		lockCfg.SetDefaults()
-		if err := lockCfg.Validate(); err != nil {
-			t.Fatal(err)
-		}
-		lockApp, err := s3rp.New(t.Context(), lockCfg)
-		if err != nil {
-			t.Fatal(err)
-		}
+		lockApp := backend.newApp(t, lockCfg)
 		lockTS := httptest.NewServer(lockApp.Handler())
 		t.Cleanup(lockTS.Close)
 		lc := newS3Client(t, lockTS.URL, testAccessKeyID, testSecretAccessKey)
@@ -926,14 +971,7 @@ func TestIntegration(t *testing.T) {
 				},
 			},
 		}
-		ctCfg.SetDefaults()
-		if err := ctCfg.Validate(); err != nil {
-			t.Fatal(err)
-		}
-		ctApp, err := s3rp.New(t.Context(), ctCfg)
-		if err != nil {
-			t.Fatal(err)
-		}
+		ctApp := backend.newApp(t, ctCfg)
 		ctTS := httptest.NewServer(ctApp.Handler())
 		t.Cleanup(ctTS.Close)
 		owner := newS3Client(t, ctTS.URL, testAccessKeyID, testSecretAccessKey)

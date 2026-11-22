@@ -23,6 +23,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/fujiwara/s3rp/s3gw"
+	"github.com/fujiwara/s3rp/s3gw/membackend"
 	"github.com/fujiwara/s3rp/sigv4"
 	"github.com/fujiwara/s3rp/store"
 )
@@ -51,9 +52,13 @@ func defaultKeys() []*store.Key {
 
 // Config configures the harness.
 type Config struct {
+	// InProcess serves every bucket from an in-memory backend
+	// (s3gw/membackend) instead of an S3 backend: nothing to start, nothing
+	// kept. The backend endpoint and credentials are then unused.
+	InProcess bool
 	// BackendEndpoint is the S3 backend buckets are created on
 	// (e.g. http://127.0.0.1:7480 — use 127.0.0.1, never localhost, for
-	// Ceph RGW). Required.
+	// Ceph RGW). Required unless InProcess.
 	BackendEndpoint string
 	// Backend credentials.
 	BackendAccessKeyID     string
@@ -68,28 +73,38 @@ type Config struct {
 // never behind an http.ServeMux, whose path canonicalization breaks S3
 // keys and signatures.
 func New(ctx context.Context, cfg Config) (http.Handler, error) {
-	if cfg.BackendEndpoint == "" {
-		return nil, fmt.Errorf("BackendEndpoint is required")
-	}
-	if cfg.BackendAccessKeyID == "" || cfg.BackendSecretAccessKey == "" {
-		return nil, fmt.Errorf("backend credentials are required")
-	}
 	if cfg.LogWriter == nil {
 		cfg.LogWriter = os.Stderr
 	}
-	awscfg, err := awsconfig.LoadDefaultConfig(ctx,
-		awsconfig.WithRegion(store.DefaultRegion),
-		awsconfig.WithCredentialsProvider(
-			credentials.NewStaticCredentialsProvider(cfg.BackendAccessKeyID, cfg.BackendSecretAccessKey, ""),
-		),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load backend client config: %w", err)
+	var backend backendBuckets
+	var inProcess *membackend.Backend
+	if cfg.InProcess {
+		inProcess = membackend.New()
+		backend = inProcess
+		// never dialed: the definitions only have to name one backend
+		cfg.BackendEndpoint = "http://membackend.invalid"
+		cfg.BackendAccessKeyID, cfg.BackendSecretAccessKey = "membackend", "membackend"
+	} else {
+		if cfg.BackendEndpoint == "" {
+			return nil, fmt.Errorf("BackendEndpoint is required")
+		}
+		if cfg.BackendAccessKeyID == "" || cfg.BackendSecretAccessKey == "" {
+			return nil, fmt.Errorf("backend credentials are required")
+		}
+		awscfg, err := awsconfig.LoadDefaultConfig(ctx,
+			awsconfig.WithRegion(store.DefaultRegion),
+			awsconfig.WithCredentialsProvider(
+				credentials.NewStaticCredentialsProvider(cfg.BackendAccessKeyID, cfg.BackendSecretAccessKey, ""),
+			),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load backend client config: %w", err)
+		}
+		backend = s3.NewFromConfig(awscfg, func(o *s3.Options) {
+			o.BaseEndpoint = aws.String(cfg.BackendEndpoint)
+			o.UsePathStyle = true
+		})
 	}
-	client := s3.NewFromConfig(awscfg, func(o *s3.Options) {
-		o.BaseEndpoint = aws.String(cfg.BackendEndpoint)
-		o.UsePathStyle = true
-	})
 
 	st := newMemStore(backendConfig{
 		endpoint:        cfg.BackendEndpoint,
@@ -99,6 +114,11 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 
 	logger := &jsonLogger{enc: json.NewEncoder(cfg.LogWriter)}
 	gw := s3gw.New(st)
+	if inProcess != nil {
+		gw.SetBackendFactory(func(context.Context, *store.Backend) (s3gw.BackendClient, error) {
+			return inProcess, nil
+		})
+	}
 	gw.SetObserver(func(ctx context.Context, info *s3gw.RequestInfo) {
 		logger.log(info)
 	})
@@ -106,7 +126,7 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	return &bucketInterceptor{
 		verifier: sigv4.NewVerifier(),
 		store:    st,
-		backend:  client,
+		backend:  backend,
 		next:     gw.Handler(),
 		logger:   logger,
 	}, nil

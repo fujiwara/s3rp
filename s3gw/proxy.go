@@ -808,11 +808,19 @@ func requestBody(c *opCtx) (io.Reader, int64, *s3err.Error) {
 // (unseekable) body to put the checksum in a header and fails the request
 // instead. So over an http backend the algorithm is not forwarded — the
 // upload is still integrity-checked by the proxy, the backend just does not
-// store a checksum.
+// store a checksum. A client that is not the SDK's answers for itself
+// (StreamChecksummer).
 func trailerChecksumAlgorithm(rt *bucketRT, h http.Header) types.ChecksumAlgorithm {
 	// requestBody has already refused a trailer it cannot verify
 	alg, err := checksum.TrailerAlgorithm(h)
-	if err != nil || alg == "" || !rt.cfg.Backend.IsHTTPS() {
+	if err != nil || alg == "" {
+		return ""
+	}
+	capable := rt.cfg.Backend.IsHTTPS()
+	if sc, ok := rt.client.(StreamChecksummer); ok {
+		capable = sc.ChecksumsStream()
+	}
+	if !capable {
 		return ""
 	}
 	return types.ChecksumAlgorithm(strings.ToUpper(alg))
