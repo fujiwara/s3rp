@@ -79,3 +79,29 @@ func RouteOperations() []string {
 	}
 	return out
 }
+
+// AuthorizationDecision is what the authorization path decides for one
+// requester, action and resource, on each of its three ways there.
+type AuthorizationDecision struct {
+	Visible    bool // resolveBucket resolved the bucket for the requester
+	Allowed    bool // authorize let the action through
+	PerObject  bool // perObjectAuthorizer let the resource through
+	SkipsCheck bool // perObjectAuthorizer said no resource needs testing
+}
+
+// DecideAs runs the authorization path as the holder of key would reach it,
+// without a request around it.
+func (g *Gateway) DecideAs(ctx context.Context, key *store.Key, bucket, action, resource string) AuthorizationDecision {
+	vr := &verifiedRequest{Tenant: key.Tenant, User: key.User, UserPolicy: key.Policy}
+	b, s3e := g.resolveBucket(ctx, vr, bucket)
+	if s3e != nil {
+		return AuthorizationDecision{}
+	}
+	a := g.perObjectAuthorizer(vr, b, action)
+	return AuthorizationDecision{
+		Visible:    true,
+		Allowed:    g.authorize(vr, b, action, resource) == nil,
+		PerObject:  !a.denies(resource),
+		SkipsCheck: a.allowsEverything(),
+	}
+}
