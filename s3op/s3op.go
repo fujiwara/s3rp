@@ -117,9 +117,11 @@ const (
 )
 
 // Feature is a part of the S3 API the gateway does not implement. Its
-// operations have no route: a request for one is answered NotImplemented
-// like any request the gateway does not recognize, and is not recorded
-// under its name.
+// operations have no route of their own and are not recorded under their
+// name: a request for one is answered NotImplemented for the query
+// parameter or header the gateway does not know, and one that matches an
+// existing route (ListDirectoryBuckets is a GET /, as ListBuckets is) is
+// handled by that route.
 type Feature struct {
 	Name       string
 	Kind       FeatureKind

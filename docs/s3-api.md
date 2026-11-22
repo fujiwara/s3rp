@@ -322,7 +322,7 @@ http://localhost:8080/photos/foo.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&...
 
 ## Unsupported features
 
-The parts of the S3 API the gateway does not implement, with the operations each consists of. A request for one of them is answered `501 NotImplemented` naming the query parameter or header the gateway does not know, as any request it does not recognize is, and unlike the refused operations above it is not recorded under its name. (ListDirectoryBuckets and WriteGetObjectResponse are addressed to endpoints of their own on Amazon S3, not to a bucket's.) Together with the operations above, the list accounts for every operation of the S3 API as the AWS SDK for Go defines it: a test fails when an SDK update brings one that is in neither.
+The parts of the S3 API the gateway does not implement, with the operations each consists of. None of them has a route of its own. A request for one carries a query parameter or header the gateway does not know and is answered `501 NotImplemented` naming it, like any request it does not recognize; unlike the refused operations above, it is not recorded under its name. A request that matches an existing route is handled by that route: ListDirectoryBuckets is a `GET /` on the wire, which is ListBuckets, and is answered as one. Together with the operations above, the list accounts for every operation of the S3 API as the AWS SDK for Go defines it: a test fails when an SDK update brings one that is in neither.
 
 They are grouped by what they are, which is also what supporting one would take. Why a feature is absent is given only where it is the gateway's own reason: what Amazon or a backend does with a feature today is not recorded here.
 
