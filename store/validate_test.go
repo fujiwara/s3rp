@@ -164,3 +164,28 @@ func TestValidateBucketTags(t *testing.T) {
 		}
 	}
 }
+
+// One tag's rules are shared by a bucket's tags and the gateway's check of
+// object tags.
+func TestValidTag(t *testing.T) {
+	for _, k := range []string{"env", "a+b-c=d.e_f:g/h@i", "名前", strings.Repeat("k", 128)} {
+		if !store.ValidTagKey(k) {
+			t.Errorf("key %q must be valid", k)
+		}
+	}
+	for _, k := range []string{"", strings.Repeat("k", 129), "a<b", "e\x00v", "e\xffv", "😀", "e\u0301"} {
+		if store.ValidTagKey(k) {
+			t.Errorf("key %q must be invalid", k)
+		}
+	}
+	for _, v := range []string{"", "x y", "café 東京", strings.Repeat("v", 256)} {
+		if !store.ValidTagValue(v) {
+			t.Errorf("value %q must be valid", v)
+		}
+	}
+	for _, v := range []string{strings.Repeat("v", 257), "100%", "a\x00b", "a\xffb", "😀"} {
+		if store.ValidTagValue(v) {
+			t.Errorf("value %q must be invalid", v)
+		}
+	}
+}

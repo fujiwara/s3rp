@@ -94,11 +94,24 @@ const (
 )
 
 // tagCharsRegexp is the character class S3 allows in a tag key or value:
-// letters, numbers, spaces and + - = . _ : / @ (the class the gateway
-// holds object tags to). Besides being S3's rule it keeps out what a tag
-// could not survive being served with — invalid UTF-8 and the characters
-// XML forbids, which the response would carry as U+FFFD.
+// letters, numbers, spaces and + - = . _ : / @. A combining mark or an
+// emoji is outside it, and so is everything a tag could not survive being
+// served with: invalid UTF-8 (which matches as U+FFFD) and the characters
+// XML forbids.
 var tagCharsRegexp = regexp.MustCompile(`^[\p{L}\p{Z}\p{N}_.:/=+\-@]*$`)
+
+// ValidTagKey and ValidTagValue are S3's rules for one tag, of a bucket or
+// of an object: the gateway holds object tags to them per request, and
+// ValidateBucketTags holds a bucket's to them where they are written, so
+// the two cannot come to disagree.
+func ValidTagKey(key string) bool {
+	n := utf8.RuneCountInString(key)
+	return n >= 1 && n <= MaxTagKeyLength && tagCharsRegexp.MatchString(key)
+}
+
+func ValidTagValue(value string) bool {
+	return utf8.RuneCountInString(value) <= MaxTagValueLength && tagCharsRegexp.MatchString(value)
+}
 
 // ValidateBucketTags checks a bucket's tag set against the limits S3 puts
 // on one: at most 50 tags, a key of 1 to 128 characters that does not
@@ -109,17 +122,14 @@ func ValidateBucketTags(tags map[string]string) error {
 		return fmt.Errorf("%d bucket tags, at most %d are allowed", len(tags), MaxBucketTags)
 	}
 	for k, v := range tags {
-		if n := utf8.RuneCountInString(k); n < 1 || n > MaxTagKeyLength {
-			return fmt.Errorf("bucket tag key %q: must be 1 to %d characters", k, MaxTagKeyLength)
+		if !ValidTagKey(k) {
+			return fmt.Errorf("bucket tag key %q: must be 1 to %d characters of letters, numbers, spaces and + - = . _ : / @", k, MaxTagKeyLength)
 		}
 		if strings.HasPrefix(strings.ToLower(k), reservedTagKeyStart) {
 			return fmt.Errorf("bucket tag key %q: the %q prefix is reserved", k, reservedTagKeyStart)
 		}
-		if utf8.RuneCountInString(v) > MaxTagValueLength {
-			return fmt.Errorf("bucket tag %q: value longer than %d characters", k, MaxTagValueLength)
-		}
-		if !utf8.ValidString(k) || !utf8.ValidString(v) || !tagCharsRegexp.MatchString(k) || !tagCharsRegexp.MatchString(v) {
-			return fmt.Errorf("bucket tag %q: only letters, numbers, spaces and + - = . _ : / @ are allowed", k)
+		if !ValidTagValue(v) {
+			return fmt.Errorf("bucket tag %q: the value must be at most %d characters of letters, numbers, spaces and + - = . _ : / @", k, MaxTagValueLength)
 		}
 	}
 	return nil

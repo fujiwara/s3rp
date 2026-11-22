@@ -3,11 +3,10 @@ package s3gw
 import (
 	"net/http"
 	"net/url"
-	"regexp"
-	"unicode/utf8"
 
 	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/s3xml"
+	"github.com/fujiwara/s3rp/store"
 )
 
 // Request values S3 itself refuses are refused here, before the backend
@@ -17,27 +16,19 @@ import (
 // backend's wording never reaches the client, so the client would learn
 // only "Invalid Argument".
 
-// S3's limits on an object's tag set.
-const (
-	maxObjectTags     = 10
-	maxTagKeyLength   = 128
-	maxTagValueLength = 256
-)
-
-// tagCharsRegexp is the character class S3 allows in a tag key or value:
-// letters, numbers, spaces and + - = . _ : / @. A combining mark or an
-// emoji is outside it.
-var tagCharsRegexp = regexp.MustCompile(`^[\p{L}\p{Z}\p{N}_.:/=+\-@]*$`)
+// S3's limit on an object's tag set. What one tag may be is the store
+// package's (ValidTagKey, ValidTagValue), shared with a bucket's tags.
+const maxObjectTags = 10
 
 func errTooManyTags() *s3err.Error {
 	return s3err.New(http.StatusBadRequest, "BadRequest", "Object tags cannot be greater than 10")
 }
 
 func checkTag(key, value string) *s3err.Error {
-	if n := utf8.RuneCountInString(key); n < 1 || n > maxTagKeyLength || !tagCharsRegexp.MatchString(key) {
+	if !store.ValidTagKey(key) {
 		return s3err.New(http.StatusBadRequest, "InvalidTag", "The TagKey you have provided is invalid")
 	}
-	if utf8.RuneCountInString(value) > maxTagValueLength || !tagCharsRegexp.MatchString(value) {
+	if !store.ValidTagValue(value) {
 		return s3err.New(http.StatusBadRequest, "InvalidTag", "The TagValue you have provided is invalid")
 	}
 	return nil
