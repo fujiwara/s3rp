@@ -29,7 +29,7 @@ Prerequisite: [mise](https://mise.jdx.dev/) — uv is pinned in
 Python and dependencies (`uv.lock`).
 
 `S3RP_TEST_BACKEND_ENDPOINT=memory ./s3fidelity/run.sh` runs the same
-tests on the in-memory backend (`s3gw/membackend`) instead of Ceph.
+tests on the in-memory backend (`s3gw/localbackend`) instead of Ceph.
 `expected.tsv` describes the Ceph run, so the report then lists what the
 two backends answer differently; it is how that backend's fidelity is
 measured, not a run that passes.

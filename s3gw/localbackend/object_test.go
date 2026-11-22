@@ -1,4 +1,4 @@
-package membackend_test
+package localbackend_test
 
 import (
 	"bytes"
@@ -14,6 +14,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/fujiwara/s3rp/s3gw/localbackend"
 )
 
 func (f *fixture) put(bucket, key, body string) *s3.PutObjectOutput {
@@ -43,8 +45,10 @@ func (f *fixture) get(bucket, key string, versionID *string) string {
 	return string(b)
 }
 
-func TestObjectRoundTrip(t *testing.T) {
-	f := newFixture(t)
+func TestObjectRoundTrip(t *testing.T) { eachBackend(t, testObjectRoundTrip) }
+
+func testObjectRoundTrip(t *testing.T, be *localbackend.Backend) {
+	f := newFixture(t, be)
 	f.createBucket("docs", false)
 	const body = "hello, in-process backend"
 	sum := md5.Sum([]byte(body))
@@ -111,8 +115,10 @@ func TestObjectRoundTrip(t *testing.T) {
 	wantError(t, err, http.StatusNotFound, "NoSuchKey")
 }
 
-func TestRange(t *testing.T) {
-	f := newFixture(t)
+func TestRange(t *testing.T) { eachBackend(t, testRange) }
+
+func testRange(t *testing.T, be *localbackend.Backend) {
+	f := newFixture(t, be)
 	f.createBucket("docs", false)
 	f.put("docs", "digits", "0123456789")
 	tests := []struct {
@@ -150,8 +156,10 @@ func TestRange(t *testing.T) {
 	wantError(t, err, http.StatusRequestedRangeNotSatisfiable, "InvalidRange")
 }
 
-func TestConditionalRequests(t *testing.T) {
-	f := newFixture(t)
+func TestConditionalRequests(t *testing.T) { eachBackend(t, testConditionalRequests) }
+
+func testConditionalRequests(t *testing.T, be *localbackend.Backend) {
+	f := newFixture(t, be)
 	f.createBucket("docs", false)
 	etag := f.put("docs", "k", "v1").ETag
 	past := aws.Time(time.Now().Add(-time.Hour))
@@ -196,8 +204,10 @@ func TestConditionalRequests(t *testing.T) {
 	}
 }
 
-func TestListObjects(t *testing.T) {
-	f := newFixture(t)
+func TestListObjects(t *testing.T) { eachBackend(t, testListObjects) }
+
+func testListObjects(t *testing.T, be *localbackend.Backend) {
+	f := newFixture(t, be)
 	f.createBucket("docs", false)
 	for _, k := range []string{"a.txt", "dir/1", "dir/2", "dir/sub/3", "e f.txt", "z.txt"} {
 		f.put("docs", k, "x")
@@ -313,8 +323,10 @@ func TestListObjects(t *testing.T) {
 	})
 }
 
-func TestVersioning(t *testing.T) {
-	f := newFixture(t)
+func TestVersioning(t *testing.T) { eachBackend(t, testVersioning) }
+
+func testVersioning(t *testing.T, be *localbackend.Backend) {
+	f := newFixture(t, be)
 	f.createBucket("docs", false)
 	f.put("docs", "k", "before versioning")
 	setVersioning := func(status types.BucketVersioningStatus) {
@@ -424,8 +436,10 @@ func TestVersioning(t *testing.T) {
 	}
 }
 
-func TestDeleteObjects(t *testing.T) {
-	f := newFixture(t)
+func TestDeleteObjects(t *testing.T) { eachBackend(t, testDeleteObjects) }
+
+func testDeleteObjects(t *testing.T, be *localbackend.Backend) {
+	f := newFixture(t, be)
 	f.createBucket("docs", false)
 	f.put("docs", "a", "x")
 	f.put("docs", "b", "x")
@@ -456,8 +470,10 @@ func TestDeleteObjects(t *testing.T) {
 	}
 }
 
-func TestTagging(t *testing.T) {
-	f := newFixture(t)
+func TestTagging(t *testing.T) { eachBackend(t, testTagging) }
+
+func testTagging(t *testing.T, be *localbackend.Backend) {
+	f := newFixture(t, be)
 	f.createBucket("docs", false)
 	f.put("docs", "k", "x")
 	if _, err := f.client.PutObjectTagging(t.Context(), &s3.PutObjectTaggingInput{
@@ -483,8 +499,10 @@ func TestTagging(t *testing.T) {
 	wantError(t, err, http.StatusNotFound, "NoSuchKey")
 }
 
-func TestCopyObject(t *testing.T) {
-	f := newFixture(t)
+func TestCopyObject(t *testing.T) { eachBackend(t, testCopyObject) }
+
+func testCopyObject(t *testing.T, be *localbackend.Backend) {
+	f := newFixture(t, be)
 	f.createBucket("docs", false)
 	f.createBucket("archive", false)
 	if _, err := f.client.PutObject(t.Context(), &s3.PutObjectInput{
@@ -544,8 +562,10 @@ func TestCopyObject(t *testing.T) {
 	wantError(t, err, http.StatusPreconditionFailed, "PreconditionFailed")
 }
 
-func TestMultipart(t *testing.T) {
-	f := newFixture(t)
+func TestMultipart(t *testing.T) { eachBackend(t, testMultipart) }
+
+func testMultipart(t *testing.T, be *localbackend.Backend) {
+	f := newFixture(t, be)
 	f.createBucket("docs", false)
 	const partSize = 5 * 1024 * 1024
 	part1 := bytes.Repeat([]byte("a"), partSize)
@@ -674,8 +694,10 @@ func TestMultipart(t *testing.T) {
 	wantError(t, err, http.StatusNotFound, "NoSuchUpload")
 }
 
-func TestMultipartPartTooSmall(t *testing.T) {
-	f := newFixture(t)
+func TestMultipartPartTooSmall(t *testing.T) { eachBackend(t, testMultipartPartTooSmall) }
+
+func testMultipartPartTooSmall(t *testing.T, be *localbackend.Backend) {
+	f := newFixture(t, be)
 	f.createBucket("docs", false)
 	create, err := f.client.CreateMultipartUpload(t.Context(), &s3.CreateMultipartUploadInput{Bucket: aws.String("docs"), Key: aws.String("k")})
 	if err != nil {
@@ -699,8 +721,10 @@ func TestMultipartPartTooSmall(t *testing.T) {
 	wantError(t, err, http.StatusBadRequest, "EntityTooSmall")
 }
 
-func TestUploadPartCopy(t *testing.T) {
-	f := newFixture(t)
+func TestUploadPartCopy(t *testing.T) { eachBackend(t, testUploadPartCopy) }
+
+func testUploadPartCopy(t *testing.T, be *localbackend.Backend) {
+	f := newFixture(t, be)
 	f.createBucket("docs", false)
 	f.put("docs", "src", "0123456789")
 	create, err := f.client.CreateMultipartUpload(t.Context(), &s3.CreateMultipartUploadInput{Bucket: aws.String("docs"), Key: aws.String("dst")})

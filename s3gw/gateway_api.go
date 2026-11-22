@@ -23,7 +23,7 @@ func (g *Gateway) SetBackend(bucket string, client BackendClient) error {
 
 // SetBackendFactory installs fn as the source of backend clients, for a
 // backend that is not reached through the aws-sdk: an in-process object
-// store (s3gw/membackend), or a client the service builds itself. fn is
+// store (s3gw/localbackend), or a client the service builds itself. fn is
 // given the backend definition and returns the client that serves it; a nil
 // client (with a nil error) leaves that backend to the gateway's own SDK
 // client, so one service can mix both.

@@ -23,7 +23,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/fujiwara/s3rp/s3gw"
-	"github.com/fujiwara/s3rp/s3gw/membackend"
+	"github.com/fujiwara/s3rp/s3gw/localbackend"
 	"github.com/fujiwara/s3rp/sigv4"
 	"github.com/fujiwara/s3rp/store"
 )
@@ -53,9 +53,12 @@ func defaultKeys() []*store.Key {
 // Config configures the harness.
 type Config struct {
 	// InProcess serves every bucket from an in-memory backend
-	// (s3gw/membackend) instead of an S3 backend: nothing to start, nothing
+	// (s3gw/localbackend) instead of an S3 backend: nothing to start, nothing
 	// kept. The backend endpoint and credentials are then unused.
 	InProcess bool
+	// InProcessDir, with InProcess, keeps the in-process backend's state in
+	// this directory (localbackend.Open) instead of in memory.
+	InProcessDir string
 	// BackendEndpoint is the S3 backend buckets are created on
 	// (e.g. http://127.0.0.1:7480 — use 127.0.0.1, never localhost, for
 	// Ceph RGW). Required unless InProcess.
@@ -68,22 +71,37 @@ type Config struct {
 	LogWriter io.Writer
 }
 
+// Handler is the harness: an http.Handler to serve, and a Close to call
+// once no request is being served any more.
+type Handler interface {
+	http.Handler
+	// Close writes what an in-process backend kept in a directory has not
+	// written yet. It does nothing otherwise.
+	Close() error
+}
+
 // New returns the harness handler: the s3rp gateway with the
 // CreateBucket/DeleteBucket interceptor in front. Serve it directly —
 // never behind an http.ServeMux, whose path canonicalization breaks S3
 // keys and signatures.
-func New(ctx context.Context, cfg Config) (http.Handler, error) {
+func New(ctx context.Context, cfg Config) (Handler, error) {
 	if cfg.LogWriter == nil {
 		cfg.LogWriter = os.Stderr
 	}
 	var backend backendBuckets
-	var inProcess *membackend.Backend
+	var inProcess *localbackend.Backend
 	if cfg.InProcess {
-		inProcess = membackend.New()
+		inProcess = localbackend.New()
+		if cfg.InProcessDir != "" {
+			var err error
+			if inProcess, err = localbackend.Open(cfg.InProcessDir); err != nil {
+				return nil, fmt.Errorf("failed to open %s: %w", cfg.InProcessDir, err)
+			}
+		}
 		backend = inProcess
 		// never dialed: the definitions only have to name one backend
-		cfg.BackendEndpoint = "http://membackend.invalid"
-		cfg.BackendAccessKeyID, cfg.BackendSecretAccessKey = "membackend", "membackend"
+		cfg.BackendEndpoint = "http://localbackend.invalid"
+		cfg.BackendAccessKeyID, cfg.BackendSecretAccessKey = "localbackend", "localbackend"
 	} else {
 		if cfg.BackendEndpoint == "" {
 			return nil, fmt.Errorf("BackendEndpoint is required")
@@ -124,12 +142,20 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	})
 
 	return &bucketInterceptor{
-		verifier: sigv4.NewVerifier(),
-		store:    st,
-		backend:  backend,
-		next:     gw.Handler(),
-		logger:   logger,
+		verifier:  sigv4.NewVerifier(),
+		store:     st,
+		backend:   backend,
+		next:      gw.Handler(),
+		logger:    logger,
+		inProcess: inProcess,
 	}, nil
+}
+
+func (i *bucketInterceptor) Close() error {
+	if i.inProcess == nil {
+		return nil
+	}
+	return i.inProcess.Close()
 }
 
 // jsonLogger serializes JSON-line writes from the observer and the

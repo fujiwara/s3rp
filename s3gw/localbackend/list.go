@@ -1,4 +1,4 @@
-package membackend
+package localbackend
 
 import (
 	"context"
@@ -113,7 +113,7 @@ func (bkt *bucket) listEntry(key string, encode func(string) *string) types.Obje
 	return types.Object{
 		Key:               encode(key),
 		ETag:              aws.String(o.etag),
-		Size:              aws.Int64(int64(len(o.data))),
+		Size:              aws.Int64(o.size),
 		LastModified:      aws.Time(o.modified),
 		StorageClass:      types.ObjectStorageClass(o.listedStorageClass()),
 		ChecksumAlgorithm: checksumAlgorithms(o.checksums),
@@ -313,7 +313,7 @@ keys:
 					VersionId:         aws.String(o.versionID),
 					IsLatest:          latest,
 					ETag:              aws.String(o.etag),
-					Size:              aws.Int64(int64(len(o.data))),
+					Size:              aws.Int64(o.size),
 					LastModified:      aws.Time(o.modified),
 					StorageClass:      types.ObjectVersionStorageClass(o.listedStorageClass()),
 					ChecksumAlgorithm: checksumAlgorithms(o.checksums),

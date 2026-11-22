@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/fujiwara/s3rp/s3err"
+	"github.com/fujiwara/s3rp/s3gw/localbackend"
 	"github.com/fujiwara/s3rp/sigv4"
 	"github.com/fujiwara/s3rp/store"
 )
@@ -41,6 +42,9 @@ type bucketInterceptor struct {
 	backend  backendBuckets
 	next     http.Handler
 	logger   *jsonLogger
+	// inProcess is the in-process backend to close with the harness, if
+	// that is what serves the buckets
+	inProcess *localbackend.Backend
 }
 
 func (i *bucketInterceptor) ServeHTTP(w http.ResponseWriter, r *http.Request) {

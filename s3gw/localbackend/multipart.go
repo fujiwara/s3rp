@@ -1,4 +1,4 @@
-package membackend
+package localbackend
 
 import (
 	"cmp"
@@ -39,7 +39,8 @@ type upload struct {
 }
 
 type part struct {
-	data      []byte
+	body      content
+	size      int64
 	etag      string
 	modified  time.Time
 	checksums checksum.Values
@@ -96,7 +97,7 @@ func (b *Backend) CreateMultipartUpload(ctx context.Context, in *s3.CreateMultip
 		}
 	}
 	proto := &object{
-		content: contentAttrs{
+		attrs: contentAttrs{
 			contentType:        in.ContentType,
 			cacheControl:       in.CacheControl,
 			contentDisposition: in.ContentDisposition,
@@ -114,8 +115,7 @@ func (b *Backend) CreateMultipartUpload(ctx context.Context, in *s3.CreateMultip
 		legalHold:    in.ObjectLockLegalHoldStatus,
 	}
 
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	defer b.mutate()()
 	bkt, f := b.getBucket(in.Bucket)
 	if f != nil {
 		return nil, f.err()
@@ -165,34 +165,52 @@ func (b *Backend) UploadPart(ctx context.Context, in *s3.UploadPartInput, _ ...f
 	if f := checkPartNumber(in.PartNumber); f != nil {
 		return nil, f.err()
 	}
-	data, err := readBody(in.Body, in.ContentLength)
+	// the upload says which checksum its parts carry, and the body can be
+	// read only once
+	b.mu.RLock()
+	algorithm := in.ChecksumAlgorithm
+	bkt, f := b.getBucket(in.Bucket)
+	if f == nil {
+		var u *upload
+		if u, f = bkt.findUpload(in.Key, in.UploadId); f == nil && algorithm == "" {
+			algorithm = u.algorithm
+		}
+	}
+	b.mu.RUnlock()
+	if f != nil {
+		return nil, f.err()
+	}
+	supplied := checksumsOf(in)
+	d, f := newDigests(checksumNames(supplied, string(algorithm))...)
+	if f != nil {
+		return nil, f.err()
+	}
+	bl, err := b.ingest(in.Body, d)
 	if err != nil {
 		return nil, err
 	}
-	if f := checkContentMD5(data, in.ContentMD5); f != nil {
+	committed := false
+	defer func() { b.release(bl, committed) }()
+	if in.ContentLength != nil && bl.size != *in.ContentLength {
+		return nil, incompleteBody().err()
+	}
+	if f := d.verify(in.ContentMD5, supplied); f != nil {
 		return nil, f.err()
 	}
 
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	bkt, f := b.getBucket(in.Bucket)
-	if f != nil {
+	defer b.mutate()()
+	// the upload may have ended while the body was read
+	if bkt, f = b.getBucket(in.Bucket); f != nil {
 		return nil, f.err()
 	}
 	u, f := bkt.findUpload(in.Key, in.UploadId)
 	if f != nil {
 		return nil, f.err()
 	}
-	algorithm := in.ChecksumAlgorithm
-	if algorithm == "" {
-		algorithm = u.algorithm
-	}
-	sums, f := writeChecksums(data, checksumsOf(in), algorithm)
-	if f != nil {
-		return nil, f.err()
-	}
-	p := &part{data: data, etag: md5ETag(data), modified: b.clock(), checksums: sums}
+	sums := d.values()
+	p := &part{body: content{{blob: bl, size: bl.size}}, size: bl.size, etag: d.etag(), modified: b.clock(), checksums: sums}
 	u.parts[*in.PartNumber] = p
+	committed = true
 	out := &s3.UploadPartOutput{
 		ETag:                 aws.String(p.etag),
 		ServerSideEncryption: u.proto.sse,
@@ -226,8 +244,7 @@ func (b *Backend) CompleteMultipartUpload(ctx context.Context, in *s3.CompleteMu
 	if in.MultipartUpload == nil || len(in.MultipartUpload.Parts) == 0 {
 		return nil, malformedXML().err()
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	defer b.mutate()()
 	bkt, f := b.getBucket(in.Bucket)
 	if f != nil {
 		return nil, f.err()
@@ -244,7 +261,7 @@ func (b *Backend) CompleteMultipartUpload(ctx context.Context, in *s3.CompleteMu
 		"One or more of the specified parts could not be found.  The part may not have been uploaded, or the specified entity tag may not match the part's entity tag.")
 	completed := in.MultipartUpload.Parts
 	parts := make([]*part, 0, len(completed))
-	var size int
+	var size int64
 	for i, cp := range completed {
 		n := aws.ToInt32(cp.PartNumber)
 		if i > 0 && n <= aws.ToInt32(completed[i-1].PartNumber) {
@@ -261,56 +278,67 @@ func (b *Backend) CompleteMultipartUpload(ctx context.Context, in *s3.CompleteMu
 			}
 		}
 		parts = append(parts, p)
-		size += len(p.data)
+		size += p.size
 	}
 	// only once every part is known to be there
 	for _, p := range parts[:len(parts)-1] {
-		if len(p.data) < minPartSize {
+		if p.size < minPartSize {
 			return nil, fail(http.StatusBadRequest, "EntityTooSmall",
 				"Your proposed upload is smaller than the minimum allowed size").err()
 		}
 	}
-	if in.MpuObjectSize != nil && *in.MpuObjectSize != int64(size) {
+	if in.MpuObjectSize != nil && *in.MpuObjectSize != size {
 		return nil, fail(http.StatusBadRequest, "InvalidRequest",
 			"The provided 'x-amz-mp-object-size' header value does not match what was computed").err()
 	}
 
+	// the object is its parts end to end: nothing is copied
 	o := *u.proto
-	o.data = make([]byte, 0, size)
+	o.size = size
 	etag := md5.New()
 	for _, p := range parts {
-		o.data = append(o.data, p.data...)
+		o.body = append(o.body, p.body...)
 		sum, _ := hex.DecodeString(strings.Trim(p.etag, `"`))
 		etag.Write(sum)
-		o.parts = append(o.parts, objectPart{size: int64(len(p.data)), checksums: p.checksums})
+		o.parts = append(o.parts, objectPart{size: p.size, checksums: p.checksums})
 	}
 	o.etag = `"` + hex.EncodeToString(etag.Sum(nil)) + "-" + strconv.Itoa(len(parts)) + `"`
 
-	if name := string(u.algorithm); name != "" {
-		var value string
-		var ok bool
-		if u.checksumType == types.ChecksumTypeFullObject {
-			value, ok = computeChecksum(name, o.data)
-		} else {
-			value, ok = compositeChecksum(name, parts)
-		}
-		if ok {
-			o.checksums, o.checksumType = checksum.Values{name: value}, u.checksumType
+	// A composite checksum is made of the parts' own. One of the whole
+	// object needs its bytes, as does a checksum the client states in an
+	// algorithm the upload does not carry; they are read once for both.
+	stated := checksumsOf(in)
+	algorithm := string(u.algorithm)
+	fullObject := algorithm != "" && u.checksumType == types.ChecksumTypeFullObject
+	var toCompute []string
+	if fullObject {
+		toCompute = append(toCompute, algorithm)
+	} else if value, ok := compositeChecksum(algorithm, parts); ok {
+		o.checksums, o.checksumType = checksum.Values{algorithm: value}, u.checksumType
+	}
+	for name := range stated {
+		if o.checksums[name] == "" {
+			toCompute = append(toCompute, name)
 		}
 	}
-	// the checksum of the whole object, when the client states one: held
-	// against the upload's own, or computed for the occasion when the
-	// upload has none of that algorithm
-	for name, want := range checksumsOf(in) {
-		got, ok := o.checksums[name]
-		if !ok {
-			if got, ok = computeChecksum(name, o.data); !ok {
-				return nil, unsupportedChecksum(name).err()
-			}
+	computed := checksum.Values{}
+	if len(toCompute) > 0 {
+		d, err := digestContent(o.body, toCompute...)
+		if err != nil {
+			return nil, err
+		}
+		computed = d.values()
+	}
+	if fullObject {
+		o.checksums, o.checksumType = checksum.Values{algorithm: computed[algorithm]}, u.checksumType
+	}
+	for name, want := range stated {
+		got := o.checksums[name]
+		if got == "" {
+			got = computed[name]
 		}
 		if got != want {
-			return nil, fail(http.StatusBadRequest, "BadDigest",
-				fmt.Sprintf("The %s you specified did not match the calculated checksum.", name)).err()
+			return nil, badChecksum(name).err()
 		}
 	}
 
@@ -339,8 +367,7 @@ func (b *Backend) AbortMultipartUpload(ctx context.Context, in *s3.AbortMultipar
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	defer b.mutate()()
 	bkt, f := b.getBucket(in.Bucket)
 	if f != nil {
 		return nil, f.err()
@@ -407,7 +434,7 @@ func (b *Backend) ListParts(ctx context.Context, in *s3.ListPartsInput, _ ...fun
 		entry := types.Part{
 			PartNumber:   aws.Int32(n),
 			ETag:         aws.String(p.etag),
-			Size:         aws.Int64(int64(len(p.data))),
+			Size:         aws.Int64(p.size),
 			LastModified: aws.Time(p.modified),
 		}
 		setChecksums(&entry, p.checksums)

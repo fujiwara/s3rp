@@ -1,4 +1,4 @@
-package membackend
+package localbackend
 
 import (
 	"context"
@@ -76,8 +76,7 @@ func (b *Backend) CopyObject(ctx context.Context, in *s3.CopyObjectInput, _ ...f
 	if f != nil {
 		return nil, f.err()
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	defer b.mutate()()
 	bkt, f := b.getBucket(in.Bucket)
 	if f != nil {
 		return nil, f.err()
@@ -101,11 +100,12 @@ func (b *Backend) CopyObject(ctx context.Context, in *s3.CopyObjectInput, _ ...f
 			"This copy request is illegal because it is trying to copy an object to itself without changing the object's metadata, storage class, website redirect location or encryption attributes.").err()
 	}
 
-	// a copy is a single-part object whatever the source was assembled from
+	// a copy is a single-part object whatever the source was assembled
+	// from, of the same bytes: it shares the source's blobs
 	o := &object{
-		data:         src.data,
-		etag:         md5ETag(src.data),
-		content:      src.content,
+		body:         src.body,
+		size:         src.size,
+		attrs:        src.attrs,
 		metadata:     src.metadata,
 		storageClass: string(in.StorageClass),
 		sse:          in.ServerSideEncryption,
@@ -116,7 +116,7 @@ func (b *Backend) CopyObject(ctx context.Context, in *s3.CopyObjectInput, _ ...f
 		legalHold:    in.ObjectLockLegalHoldStatus,
 	}
 	if replaceMetadata {
-		o.content = contentAttrs{
+		o.attrs = contentAttrs{
 			contentType:        in.ContentType,
 			cacheControl:       in.CacheControl,
 			contentDisposition: in.ContentDisposition,
@@ -129,21 +129,41 @@ func (b *Backend) CopyObject(ctx context.Context, in *s3.CopyObjectInput, _ ...f
 	if replaceTags {
 		o.tags = tags
 	}
-	// the copy keeps the source's checksum algorithm unless it names its
-	// own; either way the value is of the whole object
+	// The copy keeps the source's checksum algorithm unless it names its
+	// own; either way the value is of the whole object. What the source
+	// already holds in that form — the MD5 its ETag is, a full-object
+	// checksum — is taken over, and the bytes are read only for the rest.
 	algorithms := checksumAlgorithms(src.checksums)
 	if in.ChecksumAlgorithm != "" {
 		algorithms = []types.ChecksumAlgorithm{types.ChecksumAlgorithm(strings.ToUpper(string(in.ChecksumAlgorithm)))}
 	}
+	var toCompute []string
 	for _, a := range algorithms {
-		value, ok := computeChecksum(string(a), o.data)
-		if !ok {
-			return nil, unsupportedChecksum(string(a)).err()
+		name := string(a)
+		if value := src.checksums[name]; value != "" && src.checksumType == types.ChecksumTypeFullObject {
+			if o.checksums == nil {
+				o.checksums = checksum.Values{}
+			}
+			o.checksums[name] = value
+		} else {
+			toCompute = append(toCompute, name)
 		}
-		if o.checksums == nil {
-			o.checksums = checksum.Values{}
+	}
+	o.etag = src.etag
+	if len(src.parts) > 0 || len(toCompute) > 0 {
+		d, err := digestContent(o.body, toCompute...)
+		if err != nil {
+			return nil, err
 		}
-		o.checksums[string(a)] = value
+		o.etag = d.etag()
+		for name, value := range d.values() {
+			if o.checksums == nil {
+				o.checksums = checksum.Values{}
+			}
+			o.checksums[name] = value
+		}
+	}
+	if len(o.checksums) > 0 {
 		o.checksumType = types.ChecksumTypeFullObject
 	}
 	if f := b.commit(bkt, key, o); f != nil {
@@ -194,8 +214,7 @@ func (b *Backend) UploadPartCopy(ctx context.Context, in *s3.UploadPartCopyInput
 	if f := checkPartNumber(in.PartNumber); f != nil {
 		return nil, f.err()
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	defer b.mutate()()
 	bkt, f := b.getBucket(in.Bucket)
 	if f != nil {
 		return nil, f.err()
@@ -212,19 +231,20 @@ func (b *Backend) UploadPartCopy(ctx context.Context, in *s3.UploadPartCopyInput
 		in.CopySourceIfModifiedSince, in.CopySourceIfUnmodifiedSince); f != nil {
 		return nil, f.err()
 	}
-	data := src.data
+	body := src.body
 	if in.CopySourceRange != nil {
-		start, end, f := parseCopyRange(*in.CopySourceRange, int64(len(src.data)))
+		start, end, f := parseCopyRange(*in.CopySourceRange, src.size)
 		if f != nil {
 			return nil, f.err()
 		}
-		data = src.data[start:end]
+		body = src.body.slice(start, end-start)
 	}
-	sums, f := writeChecksums(data, nil, u.algorithm)
-	if f != nil {
-		return nil, f.err()
+	d, err := digestContent(body, string(u.algorithm))
+	if err != nil {
+		return nil, err
 	}
-	p := &part{data: data, etag: md5ETag(data), modified: b.clock(), checksums: sums}
+	sums := d.values()
+	p := &part{body: body, size: body.size(), etag: d.etag(), modified: b.clock(), checksums: sums}
 	u.parts[*in.PartNumber] = p
 	result := &types.CopyPartResult{ETag: aws.String(p.etag), LastModified: aws.Time(p.modified)}
 	setChecksums(result, sums)

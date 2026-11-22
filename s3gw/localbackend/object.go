@@ -1,10 +1,8 @@
-package membackend
+package localbackend
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"slices"
@@ -19,22 +17,9 @@ import (
 	"github.com/fujiwara/s3rp/checksum"
 )
 
-// readBody reads a write's body to its end. The error is returned as it
-// is: the gateway's body readers fail with the S3 error the client must
-// see, and the gateway finds it in the chain.
-func readBody(body io.Reader, contentLength *int64) ([]byte, error) {
-	var data []byte
-	if body != nil {
-		var err error
-		if data, err = io.ReadAll(body); err != nil {
-			return nil, fmt.Errorf("failed to read the request body: %w", err)
-		}
-	}
-	if contentLength != nil && int64(len(data)) != *contentLength {
-		return nil, fail(http.StatusBadRequest, "IncompleteBody",
-			"You did not provide the number of bytes specified by the Content-Length HTTP header").err()
-	}
-	return data, nil
+func incompleteBody() *failure {
+	return fail(http.StatusBadRequest, "IncompleteBody",
+		"You did not provide the number of bytes specified by the Content-Length HTTP header")
 }
 
 // parseTagging reads the x-amz-tagging form (a URL query string).
@@ -135,25 +120,33 @@ func (b *Backend) PutObject(ctx context.Context, in *s3.PutObjectInput, _ ...fun
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	data, err := readBody(in.Body, in.ContentLength)
-	if err != nil {
-		return nil, err
-	}
-	if f := checkContentMD5(data, in.ContentMD5); f != nil {
-		return nil, f.err()
-	}
-	sums, f := writeChecksums(data, checksumsOf(in), in.ChecksumAlgorithm)
+	supplied := checksumsOf(in)
+	d, f := newDigests(checksumNames(supplied, string(in.ChecksumAlgorithm))...)
 	if f != nil {
 		return nil, f.err()
 	}
+	bl, err := b.ingest(in.Body, d)
+	if err != nil {
+		return nil, err
+	}
+	committed := false
+	defer func() { b.release(bl, committed) }()
+	if in.ContentLength != nil && bl.size != *in.ContentLength {
+		return nil, incompleteBody().err()
+	}
+	if f := d.verify(in.ContentMD5, supplied); f != nil {
+		return nil, f.err()
+	}
+	sums := d.values()
 	tags, f := parseTagging(in.Tagging)
 	if f != nil {
 		return nil, f.err()
 	}
 	o := &object{
-		data: data,
-		etag: md5ETag(data),
-		content: contentAttrs{
+		body: content{{blob: bl, size: bl.size}},
+		size: bl.size,
+		etag: d.etag(),
+		attrs: contentAttrs{
 			contentType:        in.ContentType,
 			cacheControl:       in.CacheControl,
 			contentDisposition: in.ContentDisposition,
@@ -175,8 +168,7 @@ func (b *Backend) PutObject(ctx context.Context, in *s3.PutObjectInput, _ ...fun
 		o.checksumType = types.ChecksumTypeFullObject
 	}
 
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	defer b.mutate()()
 	bkt, f := b.getBucket(in.Bucket)
 	if f != nil {
 		return nil, f.err()
@@ -188,12 +180,13 @@ func (b *Backend) PutObject(ctx context.Context, in *s3.PutObjectInput, _ ...fun
 	if f := b.commit(bkt, key, o); f != nil {
 		return nil, f.err()
 	}
+	committed = true
 	out := &s3.PutObjectOutput{
 		ETag:                 aws.String(o.etag),
 		VersionId:            bkt.versionIDOut(o),
 		ServerSideEncryption: o.sse,
 		ChecksumType:         o.checksumType,
-		Size:                 aws.Int64(int64(len(data))),
+		Size:                 aws.Int64(o.size),
 	}
 	if o.kmsKeyID != "" {
 		out.SSEKMSKeyId = aws.String(o.kmsKeyID)
@@ -344,7 +337,7 @@ func (v view) contentRange(size int64) *string {
 
 // viewOf resolves partNumber and Range, which S3 does not combine.
 func viewOf(o *object, partNumber *int32, rng *string) (view, *failure) {
-	size := int64(len(o.data))
+	size := o.size
 	v := view{end: size, whole: true}
 	if partNumber != nil {
 		if rng != nil {
@@ -417,17 +410,17 @@ func (o *object) kmsKeyIDOut() *string {
 }
 
 func (o *object) contentTypeOut() *string {
-	if o.content.contentType == nil {
+	if o.attrs.contentType == nil {
 		return aws.String("binary/octet-stream")
 	}
-	return o.content.contentType
+	return o.attrs.contentType
 }
 
 func (o *object) expiresOut() *string {
-	if o.content.expires == nil {
+	if o.attrs.expires == nil {
 		return nil
 	}
-	return aws.String(o.content.expires.UTC().Format(http.TimeFormat))
+	return aws.String(o.attrs.expires.UTC().Format(http.TimeFormat))
 }
 
 func (b *Backend) GetObject(ctx context.Context, in *s3.GetObjectInput, _ ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
@@ -452,17 +445,17 @@ func (b *Backend) GetObject(ctx context.Context, in *s3.GetObjectInput, _ ...fun
 		return nil, f.err()
 	}
 	out := &s3.GetObjectOutput{
-		Body:                      io.NopCloser(bytes.NewReader(o.data[v.start:v.end])),
+		Body:                      o.body.slice(v.start, v.end-v.start).open(),
 		ContentLength:             aws.Int64(v.end - v.start),
-		ContentRange:              v.contentRange(int64(len(o.data))),
+		ContentRange:              v.contentRange(o.size),
 		AcceptRanges:              aws.String("bytes"),
 		ETag:                      aws.String(o.etag),
 		LastModified:              aws.Time(o.modified),
 		ContentType:               o.contentTypeOut(),
-		CacheControl:              o.content.cacheControl,
-		ContentDisposition:        o.content.contentDisposition,
-		ContentEncoding:           o.content.contentEncoding,
-		ContentLanguage:           o.content.contentLanguage,
+		CacheControl:              o.attrs.cacheControl,
+		ContentDisposition:        o.attrs.contentDisposition,
+		ContentEncoding:           o.attrs.contentEncoding,
+		ContentLanguage:           o.attrs.contentLanguage,
 		ExpiresString:             o.expiresOut(),
 		Metadata:                  o.metadata,
 		StorageClass:              o.reportedStorageClass(),
@@ -526,15 +519,15 @@ func (b *Backend) HeadObject(ctx context.Context, in *s3.HeadObjectInput, _ ...f
 	}
 	out := &s3.HeadObjectOutput{
 		ContentLength:             aws.Int64(v.end - v.start),
-		ContentRange:              v.contentRange(int64(len(o.data))),
+		ContentRange:              v.contentRange(o.size),
 		AcceptRanges:              aws.String("bytes"),
 		ETag:                      aws.String(o.etag),
 		LastModified:              aws.Time(o.modified),
 		ContentType:               o.contentTypeOut(),
-		CacheControl:              o.content.cacheControl,
-		ContentDisposition:        o.content.contentDisposition,
-		ContentEncoding:           o.content.contentEncoding,
-		ContentLanguage:           o.content.contentLanguage,
+		CacheControl:              o.attrs.cacheControl,
+		ContentDisposition:        o.attrs.contentDisposition,
+		ContentEncoding:           o.attrs.contentEncoding,
+		ContentLanguage:           o.attrs.contentLanguage,
 		ExpiresString:             o.expiresOut(),
 		Metadata:                  o.metadata,
 		StorageClass:              o.reportedStorageClass(),
@@ -587,7 +580,7 @@ func (b *Backend) deleteOne(bkt *bucket, d deletion) (deleted, *failure) {
 		}
 		if (d.ifMatch != nil && !etagMatches(*d.ifMatch, cur.etag)) ||
 			(d.lastModified != nil && !cur.modified.Equal(d.lastModified.Truncate(time.Second))) ||
-			(d.size != nil && *d.size != int64(len(cur.data))) {
+			(d.size != nil && *d.size != cur.size) {
 			return deleted{}, preconditionFailed()
 		}
 	}
@@ -631,8 +624,7 @@ func (b *Backend) DeleteObject(ctx context.Context, in *s3.DeleteObjectInput, _ 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	defer b.mutate()()
 	bkt, f := b.getBucket(in.Bucket)
 	if f != nil {
 		return nil, f.err()
@@ -662,8 +654,7 @@ func (b *Backend) DeleteObjects(ctx context.Context, in *s3.DeleteObjectsInput, 
 	if in.Delete == nil {
 		return nil, malformedXML().err()
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	defer b.mutate()()
 	bkt, f := b.getBucket(in.Bucket)
 	if f != nil {
 		return nil, f.err()
@@ -723,8 +714,7 @@ func (b *Backend) PutObjectTagging(ctx context.Context, in *s3.PutObjectTaggingI
 	if in.Tagging == nil {
 		return nil, malformedXML().err()
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	defer b.mutate()()
 	bkt, f := b.getBucket(in.Bucket)
 	if f != nil {
 		return nil, f.err()
@@ -741,8 +731,7 @@ func (b *Backend) DeleteObjectTagging(ctx context.Context, in *s3.DeleteObjectTa
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	defer b.mutate()()
 	bkt, f := b.getBucket(in.Bucket)
 	if f != nil {
 		return nil, f.err()
@@ -802,7 +791,7 @@ func (b *Backend) GetObjectAttributes(ctx context.Context, in *s3.GetObjectAttri
 		case types.ObjectAttributesStorageClass:
 			out.StorageClass = types.StorageClass(o.listedStorageClass())
 		case types.ObjectAttributesObjectSize:
-			out.ObjectSize = aws.Int64(int64(len(o.data)))
+			out.ObjectSize = aws.Int64(o.size)
 		}
 	}
 	return out, nil
