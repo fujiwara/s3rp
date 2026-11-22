@@ -80,5 +80,5 @@ check is exhaustive, not sampled.
 - CORS preflights are outside the property: they are unauthenticated by
   design and answer for any bucket that has rules
   ([0005](0005-cors-in-the-gateway.md)).
-- The enumeration adds a few seconds to the package's tests under the race
+- The enumeration adds about ten seconds to the package's tests under the race
   detector; it runs its worlds in parallel to keep that down.
