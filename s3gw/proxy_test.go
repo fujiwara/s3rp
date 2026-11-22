@@ -388,9 +388,9 @@ func TestProxyNotImplemented(t *testing.T) {
 			},
 		},
 		{
-			name: "GetBucketLifecycleConfiguration",
+			name: "GetBucketAccelerateConfiguration",
 			call: func(ctx context.Context, client *s3.Client) error {
-				_, err := client.GetBucketLifecycleConfiguration(ctx, &s3.GetBucketLifecycleConfigurationInput{
+				_, err := client.GetBucketAccelerateConfiguration(ctx, &s3.GetBucketAccelerateConfigurationInput{
 					Bucket: aws.String("testbucket"),
 				})
 				return err

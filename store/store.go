@@ -141,6 +141,15 @@ type Bucket struct {
 	// CORS is the CORS configuration of the bucket (nil if none).
 	CORS []*cors.Rule
 
+	// LifecycleText is the lifecycle configuration a tenant is shown (empty
+	// if none): the XML document GetBucketLifecycleConfiguration returns,
+	// verbatim. The gateway does not interpret it and enforces nothing; it
+	// is the tenant's own rules as the control plane recorded them, not
+	// necessarily everything the backend bucket is configured with (an
+	// operator's baseline rules stay out of it). Check it with
+	// ValidateLifecycleText where it is written.
+	LifecycleText string
+
 	// Metadata is an opaque value a Store implementation may attach when it
 	// builds the bucket — data it already had in hand, such as quota or
 	// plan information loaded with the same query. The gateway never

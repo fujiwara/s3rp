@@ -303,6 +303,32 @@ tenants:
 		errStr: "at least one allowed origin",
 	},
 	{
+		name: "lifecycle that is not XML",
+		yaml: `
+tenants:
+  - name: foo
+    users: [{name: user1, keys: [{access_key_id: k, secret_access_key: s}]}]
+    buckets:
+      - name: bucket1
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
+        lifecycle: "<LifecycleConfiguration><Rule></LifecycleConfiguration>"
+`,
+		errStr: "invalid LifecycleConfiguration document",
+	},
+	{
+		name: "lifecycle with another root element",
+		yaml: `
+tenants:
+  - name: foo
+    users: [{name: user1, keys: [{access_key_id: k, secret_access_key: s}]}]
+    buckets:
+      - name: bucket1
+        backend: {endpoint: http://b.example.com, access_key_id: a, secret_access_key: s}
+        lifecycle: "<CORSConfiguration></CORSConfiguration>"
+`,
+		errStr: "root element is CORSConfiguration",
+	},
+	{
 		name: "cors unsupported method",
 		yaml: `
 tenants:

@@ -56,6 +56,16 @@ func storeContract(t *testing.T, st store.Store) {
 		if b.Backend.UsePathStyle == nil || !*b.Backend.UsePathStyle {
 			t.Errorf("expect use_path_style true, got %+v", b.Backend)
 		}
+		if b.LifecycleText != "" {
+			t.Errorf("photos has no lifecycle configuration, got %q", b.LifecycleText)
+		}
+		logs, err := st.GetBucket(ctx, "acme", "logs")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.ValidateLifecycleText(logs.LifecycleText); err != nil {
+			t.Errorf("logs lifecycle configuration: %v", err)
+		}
 		// another tenant's bucket is not visible
 		if _, err := st.GetBucket(ctx, "acme", "research"); !errors.Is(err, store.ErrNotFound) {
 			t.Errorf("expect ErrNotFound, got %v", err)

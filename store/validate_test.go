@@ -81,3 +81,30 @@ func TestBackendValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateLifecycleText(t *testing.T) {
+	for _, text := range []string{
+		`<LifecycleConfiguration/>`,
+		`<?xml version="1.0" encoding="UTF-8"?>
+<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Rule><ID>a</ID><Status>Enabled</Status><Expiration><Days>1</Days></Expiration></Rule>
+</LifecycleConfiguration>`,
+	} {
+		if err := store.ValidateLifecycleText(text); err != nil {
+			t.Errorf("%q must be valid: %v", text, err)
+		}
+	}
+	for name, text := range map[string]string{
+		"empty":           ``,
+		"not XML":         `{"Rules": []}`,
+		"unclosed":        `<LifecycleConfiguration><Rule>`,
+		"mismatched tags": `<LifecycleConfiguration><Rule></LifecycleConfiguration>`,
+		"another root":    `<CORSConfiguration/>`,
+		"two roots":       `<LifecycleConfiguration/><LifecycleConfiguration/>`,
+		"text after":      `<LifecycleConfiguration/>trailing`,
+	} {
+		if err := store.ValidateLifecycleText(text); err == nil {
+			t.Errorf("%s: %q must be rejected", name, text)
+		}
+	}
+}

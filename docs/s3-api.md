@@ -21,6 +21,7 @@ Because operations are reconstructed rather than forwarded, each one is implemen
 | GetBucketPolicy | `s3:GetBucketPolicy` |
 | GetBucketPolicyStatus | `s3:GetBucketPolicyStatus` |
 | GetBucketCors | `s3:GetBucketCORS` |
+| GetBucketLifecycleConfiguration | `s3:GetLifecycleConfiguration` |
 | GetBucketVersioning | `s3:GetBucketVersioning` |
 | GetBucketEncryption | `s3:GetEncryptionConfiguration` |
 | GetBucketOwnershipControls | `s3:GetBucketOwnershipControls` |
@@ -51,7 +52,7 @@ Because operations are reconstructed rather than forwarded, each one is implemen
 
 The actions are what bucket and user policies match ([Bucket policies](#bucket-policies), [User policies](#user-policies)); some headers add one ([Actions a header adds](#actions-a-header-adds)). ListBuckets has no bucket policy to consult, so `s3:ListAllMyBuckets` is decided by the user policy alone; it lists only the requester's own buckets. PostObject is the browser-based POST upload ([below](#browser-based-uploads-post)).
 
-These operations are recognized and always refused — `NotImplemented`, or `AccessControlListNotSupported` for the ACL writes — and recorded under their name on `Op.Operation` so a service can count attempts: CreateBucket, DeleteBucket, PutBucketAcl, PutBucketPolicy, DeleteBucketPolicy, PutBucketCors, DeleteBucketCors, PutBucketVersioning, PutObjectLockConfiguration, PutBucketEncryption, DeleteBucketEncryption, PutBucketOwnershipControls, DeleteBucketOwnershipControls, PutPublicAccessBlock, DeletePublicAccessBlock, PutObjectAcl. Any other request is `NotImplemented` as well. The S3 operations that fall under that are listed by feature in [Unsupported features](#unsupported-features).
+These operations are recognized and always refused — `NotImplemented`, or `AccessControlListNotSupported` for the ACL writes — and recorded under their name on `Op.Operation` so a service can count attempts: CreateBucket, DeleteBucket, PutBucketAcl, PutBucketPolicy, DeleteBucketPolicy, PutBucketCors, DeleteBucketCors, PutBucketLifecycleConfiguration, DeleteBucketLifecycle, PutBucketVersioning, PutObjectLockConfiguration, PutBucketEncryption, DeleteBucketEncryption, PutBucketOwnershipControls, DeleteBucketOwnershipControls, PutPublicAccessBlock, DeletePublicAccessBlock, PutObjectAcl. Any other request is `NotImplemented` as well. The S3 operations that fall under that are listed by feature in [Unsupported features](#unsupported-features).
 
 The same catalog is machine-readable: [`s3op/operations.json`](../s3op/operations.json), exposed to Go as package `s3op` (`Operations`, `Lookup`, `Unsupported`, `Actions`, `CheckActionPattern` and generated `Op*` / `Action*` constants), for a control plane validating the policies it stores or a console listing what a policy can grant.
 
@@ -293,6 +294,27 @@ Preflight `OPTIONS` requests are answered without authentication based on these 
 
 GetBucketCors returns the configuration (`NoSuchCORSConfiguration` when absent); PutBucketCors / DeleteBucketCors are not supported (rules are defined in the store, not via the S3 API).
 
+### Lifecycle configuration
+
+GetBucketLifecycleConfiguration returns the lifecycle configuration recorded in the bucket's definition, as it is (`NoSuchLifecycleConfiguration` when there is none). It is answered from the store, like the bucket policy; the backend is not asked.
+
+```yaml
+buckets:
+  - name: logs
+    backend: { ... }
+    lifecycle: |
+      <LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+        <Rule>
+          <ID>expire-logs</ID>
+          <Filter><Prefix>logs/</Prefix></Filter>
+          <Status>Enabled</Status>
+          <Expiration><Days>30</Days></Expiration>
+        </Rule>
+      </LifecycleConfiguration>
+```
+
+What is recorded is what a tenant is shown, and the gateway neither reads it nor applies it: expiration is the backend's work, on the rules the control plane wrote to the backend bucket. In a service the control plane records the tenant's own rules here when it writes them there; in the bundled config it is a declaration the operator keeps in step by hand. PutBucketLifecycleConfiguration and DeleteBucketLifecycle are refused ([Limitations](#limitations)), and `x-amz-expiration` is not returned on object responses.
+
 ### ACLs
 
 The gateway behaves like a bucket with ACLs disabled (Object Ownership = bucket owner enforced, the AWS default since 2023). GetBucketAcl / GetObjectAcl return a fixed policy granting FULL_CONTROL to the tenant; PutBucketAcl / PutObjectAcl return `AccessControlListNotSupported`, and canned ACLs other than `private` / `bucket-owner-full-control` — and any explicit `x-amz-grant-*` header — are rejected on uploads. Use bucket policies for access control instead.
@@ -344,7 +366,6 @@ Configuration of a bucket, which the control plane writes and a data-plane key m
 
 | feature | operations | |
 |---|---|---|
-| Lifecycle configuration | GetBucketLifecycleConfiguration, PutBucketLifecycleConfiguration, DeleteBucketLifecycle | expiration is enforced by the backend, whose rules the control plane writes |
 | Bucket tagging | GetBucketTagging, PutBucketTagging, DeleteBucketTagging |  |
 | Replication | GetBucketReplication, PutBucketReplication, DeleteBucketReplication |  |
 | Event notifications | GetBucketNotificationConfiguration, PutBucketNotificationConfiguration | a service can emit its own from the gateway's hooks |
@@ -371,5 +392,5 @@ The list is in the same catalog (`unsupported` in [`s3op/operations.json`](../s3
 
 - An `x-amz-*` request header that no supported operation reads is refused with `501 NotImplemented` naming the header, never ignored — the same rule as for an unknown query subresource and an unknown POST form field. Ignoring a header the client signed would apply less than the client believes: `x-amz-server-side-encryption-context`, `x-amz-website-redirect-location`, `x-amz-request-payer`, `x-amz-expected-bucket-owner` are the ones real SDK options produce. Headers an operation reads are accepted on every operation (a `x-amz-tagging` on a GET is ignored, as on AWS); `x-amz-meta-*` is always accepted. The full header-level view — supported, refused by name, not supported — is [Request headers](request-headers.md).
 - Requests whose query string is not canonically percent-encoded (raw reserved characters in values, signed as sent) fail verification — as they do against AWS itself and every implementation measured; duplicate query keys are accepted in exactly one value ordering. Reachable only from hand-rolled SigV4 clients; see [SigV4 query canonicalization](sigv4-canonicalization.md).
-- Bucket lifecycle configuration (expiration, transitions) is deliberately **not** exposed via the S3 API — `?lifecycle` gets the same loud `NotImplemented` as every unsupported subresource. Enforcement is the backend's job, so rules must live on the backend bucket, and they are written there by the control plane with backend credentials — the same split as bucket policies and CORS, whose `Put*` are also not proxied. This is a deliberate choice beyond consistency: a bucket holds exactly **one** lifecycle configuration, so letting tenants `PutBucketLifecycleConfiguration` would let one request replace the operator's baseline rules (such as aborting stale multipart uploads); exposing it would require a merge layer, not a pass-through. For experiments, Ceph RGW's `rgw_lc_debug_interval` shortens expiry to seconds.
+- Bucket lifecycle configuration (expiration, transitions) cannot be **written** via the S3 API: PutBucketLifecycleConfiguration and DeleteBucketLifecycle are `NotImplemented`. Enforcement is the backend's job, so rules must live on the backend bucket, and they are written there by the control plane with backend credentials — the same split as bucket policies and CORS, whose `Put*` are also not proxied. The read is served from the bucket's definition ([Lifecycle configuration](#lifecycle-configuration)). This is a deliberate choice beyond consistency: a bucket holds exactly **one** lifecycle configuration, so letting tenants `PutBucketLifecycleConfiguration` would let one request replace the operator's baseline rules (such as aborting stale multipart uploads); exposing it would require a merge layer, not a pass-through. For experiments, Ceph RGW's `rgw_lc_debug_interval` shortens expiry to seconds.
 - The same rule covers every bucket-configuration write: PutBucketVersioning, PutObjectLockConfiguration, PutBucketEncryption, PutBucketOwnershipControls and PutPublicAccessBlock (and their `Delete`s) are also `NotImplemented`. Bucket configuration is written where the bucket is created — the control plane — and a data-plane access key must not be able to overwrite it: suspending versioning changes what the bucket retains from then on, and rewriting the Object Lock default retention would let any key of the tenant undo what the bucket was provisioned with. The reads (GetBucketVersioning, GetObjectLockConfiguration, GetBucketEncryption) stay proxied.

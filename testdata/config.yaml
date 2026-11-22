@@ -33,6 +33,15 @@ tenants:
           endpoint: http://backend2.example.com:9000
           access_key_id: logskey
           secret_access_key: logssecret
+        lifecycle: |
+          <LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+            <Rule>
+              <ID>expire</ID>
+              <Filter><Prefix></Prefix></Filter>
+              <Status>Enabled</Status>
+              <Expiration><Days>30</Days></Expiration>
+            </Rule>
+          </LifecycleConfiguration>
   - name: umbrella
     users:
       - name: research1
