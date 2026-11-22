@@ -118,6 +118,10 @@ func (g *Gateway) copyObject(c *opCtx) error {
 	if v := c.signed(hdrTagging); v != "" {
 		in.Tagging = aws.String(v)
 	}
+	// checked and not forwarded: a backend need not know the header
+	if s3e := checkAnnotationDirective(c.signed(hdrAnnotationDirective)); s3e != nil {
+		return s3e
+	}
 	applyObjectLockHeaders(c.hdr, &in.ObjectLockMode, &in.ObjectLockRetainUntilDate, &in.ObjectLockLegalHoldStatus)
 	if md := c.hdr.AmzMeta(); len(md) > 0 {
 		in.Metadata = md

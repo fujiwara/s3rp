@@ -105,6 +105,20 @@ func TestRequestValuesValidated(t *testing.T) {
 			})
 			return err
 		}, code: "InvalidArgument", message: "Unknown metadata directive."},
+		{name: "annotations excluded from a copy", call: func(t *testing.T, c *s3.Client) error {
+			_, err := c.CopyObject(t.Context(), &s3.CopyObjectInput{
+				Bucket: aws.String("testbucket"), Key: aws.String("dst"), CopySource: aws.String("testbucket/src"),
+				AnnotationDirective: types.AnnotationDirectiveExclude,
+			})
+			return err
+		}},
+		{name: "annotations copied", call: func(t *testing.T, c *s3.Client) error {
+			_, err := c.CopyObject(t.Context(), &s3.CopyObjectInput{
+				Bucket: aws.String("testbucket"), Key: aws.String("dst"), CopySource: aws.String("testbucket/src"),
+				AnnotationDirective: types.AnnotationDirectiveCopy,
+			})
+			return err
+		}, code: "NotImplemented", message: "x-amz-object-annotation-directive: COPY is not implemented"},
 		{name: "parts out of order", call: func(t *testing.T, c *s3.Client) error {
 			_, err := c.CompleteMultipartUpload(t.Context(), &s3.CompleteMultipartUploadInput{
 				Bucket: aws.String("testbucket"), Key: aws.String("k"), UploadId: aws.String("u"),
@@ -118,7 +132,7 @@ func TestRequestValuesValidated(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			stub := &stubBackend{putOut: &s3.PutObjectOutput{}}
+			stub := &stubBackend{putOut: &s3.PutObjectOutput{}, copyOut: &s3.CopyObjectOutput{CopyObjectResult: &types.CopyObjectResult{}}}
 			client, _ := newTestProxy(t, stub)
 			err := tc.call(t, client)
 			reached := stub.putIn != nil || stub.putTagIn != nil || stub.getAttrIn != nil || stub.copyIn != nil || stub.completeMPUIn != nil

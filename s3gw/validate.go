@@ -99,3 +99,16 @@ func checkDirective(kind, v string) *s3err.Error {
 	}
 	return s3err.New(http.StatusBadRequest, "InvalidArgument", "Unknown "+kind+" directive.")
 }
+
+// checkAnnotationDirective accepts the one object-annotation directive a
+// gateway without annotations honors exactly: EXCLUDE, which aws-cli sends
+// on every `aws s3 cp` between buckets. COPY promises the source's
+// annotations on the destination, so it is refused, as S3 refuses it on a
+// directory bucket.
+func checkAnnotationDirective(v string) *s3err.Error {
+	switch v {
+	case "", "EXCLUDE":
+		return nil
+	}
+	return s3err.NotImplemented(hdrAnnotationDirective + ": " + v)
+}

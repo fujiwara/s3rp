@@ -27,6 +27,8 @@ other.
 
 | client | lineage | why it is here |
 |---|---|---|
+| aws-cli (`aws-cli-crt`) | the AWS CRT (`aws-c-s3`), the transfer client of `aws s3` | the most used client; a signer, HTTP stack and part scheduling apart from botocore's |
+| aws-cli (`aws-cli-classic`) | botocore and s3transfer, as aws-cli v1 and `preferred_transfer_client = classic` | boto3's lineage under the `aws s3` command layer: `sync`, and the headers `cp` adds to a copy |
 | `mc` | minio-go | the most used non-AWS client library; signer and streaming signatures of its own |
 | restic | minio-go | the same library driven as a backup tool: its own repository scenario |
 | kopia | minio-go | a second backup tool on it: ranged reads of pack blobs, and repository maintenance |
