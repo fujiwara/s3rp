@@ -98,6 +98,49 @@ func Lookup(name string) (Operation, bool) {
 	return Operation{}, false
 }
 
+// FeatureKind is what an unsupported feature is, which is also what
+// supporting it would take.
+type FeatureKind string
+
+const (
+	// FeatureObject is an operation on objects: a backend that implements
+	// it would be passed the request, as for the operations supported now.
+	FeatureObject FeatureKind = "object"
+	// FeatureBucketConfiguration is configuration of a bucket, which the
+	// control plane writes and a data-plane key must not: a read would be
+	// answered from the store's definition, and the function itself is the
+	// service's to provide.
+	FeatureBucketConfiguration FeatureKind = "bucket-configuration"
+	// FeatureOutside is outside what the gateway models: another bucket
+	// type, anonymous access, or a function of Amazon's own infrastructure.
+	FeatureOutside FeatureKind = "outside"
+)
+
+// Feature is a part of the S3 API the gateway does not implement. Its
+// operations have no route of their own and are not recorded under their
+// name: a request for one is answered NotImplemented for the query
+// parameter or header the gateway does not know, and one that matches an
+// existing route (ListDirectoryBuckets is a GET /, as ListBuckets is) is
+// handled by that route.
+type Feature struct {
+	Name       string
+	Kind       FeatureKind
+	Operations []string
+	Note       string
+}
+
+// Unsupported returns the features the gateway does not implement, with
+// the S3 operations each consists of. With Operations it accounts for every
+// operation of the S3 API.
+func Unsupported() []Feature {
+	out := make([]Feature, len(unsupported))
+	for i, f := range unsupported {
+		f.Operations = append([]string(nil), f.Operations...)
+		out[i] = f
+	}
+	return out
+}
+
 // Actions returns every action some operation authorizes, sorted.
 func Actions() []string {
 	return append([]string(nil), actions...)

@@ -615,5 +615,185 @@
         }
       ]
     }
+  ],
+  "unsupported": [
+    {
+      "feature": "Object annotations",
+      "kind": "object",
+      "operations": [
+        "GetObjectAnnotation",
+        "PutObjectAnnotation",
+        "DeleteObjectAnnotation",
+        "ListObjectAnnotations"
+      ],
+      "note": "CopyObject accepts x-amz-object-annotation-directive: EXCLUDE and nothing else"
+    },
+    {
+      "feature": "Restoring archived objects",
+      "kind": "object",
+      "operations": [
+        "RestoreObject"
+      ]
+    },
+    {
+      "feature": "Changing an object's encryption in place",
+      "kind": "object",
+      "operations": [
+        "UpdateObjectEncryption"
+      ]
+    },
+    {
+      "feature": "S3 Select",
+      "kind": "object",
+      "operations": [
+        "SelectObjectContent"
+      ]
+    },
+    {
+      "feature": "BitTorrent",
+      "kind": "object",
+      "operations": [
+        "GetObjectTorrent"
+      ]
+    },
+    {
+      "feature": "Lifecycle configuration",
+      "kind": "bucket-configuration",
+      "operations": [
+        "GetBucketLifecycleConfiguration",
+        "PutBucketLifecycleConfiguration",
+        "DeleteBucketLifecycle"
+      ],
+      "note": "expiration is enforced by the backend, whose rules the control plane writes"
+    },
+    {
+      "feature": "Bucket tagging",
+      "kind": "bucket-configuration",
+      "operations": [
+        "GetBucketTagging",
+        "PutBucketTagging",
+        "DeleteBucketTagging"
+      ]
+    },
+    {
+      "feature": "Replication",
+      "kind": "bucket-configuration",
+      "operations": [
+        "GetBucketReplication",
+        "PutBucketReplication",
+        "DeleteBucketReplication"
+      ]
+    },
+    {
+      "feature": "Event notifications",
+      "kind": "bucket-configuration",
+      "operations": [
+        "GetBucketNotificationConfiguration",
+        "PutBucketNotificationConfiguration"
+      ],
+      "note": "a service can emit its own from the gateway's hooks"
+    },
+    {
+      "feature": "Server access logging",
+      "kind": "bucket-configuration",
+      "operations": [
+        "GetBucketLogging",
+        "PutBucketLogging"
+      ],
+      "note": "the gateway reports every request to the service's observer"
+    },
+    {
+      "feature": "Analytics, inventory, metrics and Intelligent-Tiering configurations",
+      "kind": "bucket-configuration",
+      "operations": [
+        "GetBucketAnalyticsConfiguration",
+        "PutBucketAnalyticsConfiguration",
+        "DeleteBucketAnalyticsConfiguration",
+        "ListBucketAnalyticsConfigurations",
+        "GetBucketInventoryConfiguration",
+        "PutBucketInventoryConfiguration",
+        "DeleteBucketInventoryConfiguration",
+        "ListBucketInventoryConfigurations",
+        "GetBucketMetricsConfiguration",
+        "PutBucketMetricsConfiguration",
+        "DeleteBucketMetricsConfiguration",
+        "ListBucketMetricsConfigurations",
+        "GetBucketIntelligentTieringConfiguration",
+        "PutBucketIntelligentTieringConfiguration",
+        "DeleteBucketIntelligentTieringConfiguration",
+        "ListBucketIntelligentTieringConfigurations"
+      ]
+    },
+    {
+      "feature": "Attribute-based access control",
+      "kind": "bucket-configuration",
+      "operations": [
+        "GetBucketAbac",
+        "PutBucketAbac"
+      ],
+      "note": "authorization is the gateway's own policy evaluation"
+    },
+    {
+      "feature": "Static website hosting",
+      "kind": "outside",
+      "operations": [
+        "GetBucketWebsite",
+        "PutBucketWebsite",
+        "DeleteBucketWebsite"
+      ],
+      "note": "needs anonymous access, which does not exist"
+    },
+    {
+      "feature": "S3 Metadata tables",
+      "kind": "outside",
+      "operations": [
+        "CreateBucketMetadataConfiguration",
+        "GetBucketMetadataConfiguration",
+        "DeleteBucketMetadataConfiguration",
+        "CreateBucketMetadataTableConfiguration",
+        "GetBucketMetadataTableConfiguration",
+        "DeleteBucketMetadataTableConfiguration",
+        "UpdateBucketMetadataAnnotationTableConfiguration",
+        "UpdateBucketMetadataInventoryTableConfiguration",
+        "UpdateBucketMetadataJournalTableConfiguration"
+      ],
+      "note": "tables Amazon maintains about a bucket's objects"
+    },
+    {
+      "feature": "Transfer Acceleration",
+      "kind": "outside",
+      "operations": [
+        "GetBucketAccelerateConfiguration",
+        "PutBucketAccelerateConfiguration"
+      ],
+      "note": "a function of Amazon's network, not of the API"
+    },
+    {
+      "feature": "Requester Pays",
+      "kind": "outside",
+      "operations": [
+        "GetBucketRequestPayment",
+        "PutBucketRequestPayment"
+      ],
+      "note": "the tenant is billed by the service"
+    },
+    {
+      "feature": "Directory buckets",
+      "kind": "outside",
+      "operations": [
+        "CreateSession",
+        "ListDirectoryBuckets",
+        "RenameObject"
+      ],
+      "note": "another bucket type, with session-based authentication of its own"
+    },
+    {
+      "feature": "S3 Object Lambda",
+      "kind": "outside",
+      "operations": [
+        "WriteGetObjectResponse"
+      ],
+      "note": "transforms responses with AWS Lambda functions"
+    }
   ]
 }
