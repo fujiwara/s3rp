@@ -316,9 +316,14 @@ func checkAgainstModel(t *testing.T, impl, spec *policy.Policy, pr probes) {
 					if got := impl.Decide(principal, action, resource, rc); got != want {
 						t.Fatalf("Decide(%v) = %+v, model says %+v", r, got, want)
 					}
-					// the action is case-insensitive as a whole
-					if got := impl.Decide(principal, strings.ToUpper(action), resource, rc); got != want {
-						t.Fatalf("Decide(%v) with the action upper-cased = %+v, model says %+v", r, got, want)
+					// the request's action folds as the patterns do; what the
+					// model says of the upper-cased one is asked separately,
+					// since a letter need not come back from it ("ı")
+					upper := r
+					upper.action = strings.ToUpper(action)
+					wantUpper := modelDecision(modelFirst(t, spec, "Deny", upper), modelFirst(t, spec, "Allow", upper))
+					if got := impl.Decide(principal, upper.action, resource, rc); got != wantUpper {
+						t.Fatalf("Decide(%v) = %+v, model says %+v", upper, got, wantUpper)
 					}
 					if want.Effect == policy.Allow && !mentions {
 						t.Fatalf("%v is allowed to a principal the visibility gate hides the bucket from", r)

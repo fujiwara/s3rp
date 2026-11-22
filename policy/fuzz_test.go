@@ -293,6 +293,7 @@ func FuzzParse(f *testing.F) {
 			"Condition": {"NotIpAddress": {"aws:SourceIp": ["10.0.0.0/8", "2001:db8::/32"]}}}]}`,
 		`{"Statement": [{"Effect": "Allow", "Principal": {"S3RP": "ta/*"}, "Action": "S3:PUTOBJECT", "Resource": "b/*",
 			"Condition": {"IpAddress": {"AWS:sourceip": "::ffff:10.1.2.3"}, "NotIpAddress": {"aws:SourceIp": "10.1.2.4"}}}]}`,
+		`{"Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:ı", "Resource": "b/*"}]}`,
 		`{"Statement": []}`,
 		`{"Statement": [{"Effect": "Allow", "NotPrincipal": {"S3RP": "ta/alice"}, "Action": "s3:*", "Resource": "b/*"}]}`,
 		`{"Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:*", "Resource": "other/*"}]}`,
@@ -333,6 +334,7 @@ func FuzzUserPolicy(f *testing.F) {
 		}
 		for _, action := range fuzzActions {
 			want := modelUserDecide(up, action)
+			// the vocabulary is ASCII, so upper-casing names the same action
 			for _, a := range []string{action, strings.ToUpper(action)} {
 				if got := up.Decide(a); got != want {
 					t.Errorf("Decide(%q) = %+v, model says %+v\npolicy: %+v", a, got, want, up.Statements)
