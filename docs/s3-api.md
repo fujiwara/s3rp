@@ -354,7 +354,7 @@ buckets:
       team: storage
 ```
 
-The gateway shows the tags and uses them for nothing: no policy reads them, and none is sent to the backend. S3's limits apply where they are written (50 tags, a key of up to 128 characters that does not start with `aws:`, a value of up to 256). PutBucketTagging and DeleteBucketTagging are refused like every bucket-configuration write.
+The gateway shows the tags and uses them for nothing: no policy reads them, and none is sent to the backend. S3's limits apply where they are written (50 tags; a key of up to 128 characters that does not start with `aws:`; a value of up to 256; letters, numbers, spaces and `+ - = . _ : / @` only). PutBucketTagging and DeleteBucketTagging are refused like every bucket-configuration write.
 
 ### ACLs
 

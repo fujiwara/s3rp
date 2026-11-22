@@ -93,9 +93,17 @@ const (
 	reservedTagKeyStart = "aws:"
 )
 
+// tagCharsRegexp is the character class S3 allows in a tag key or value:
+// letters, numbers, spaces and + - = . _ : / @ (the class the gateway
+// holds object tags to). Besides being S3's rule it keeps out what a tag
+// could not survive being served with — invalid UTF-8 and the characters
+// XML forbids, which the response would carry as U+FFFD.
+var tagCharsRegexp = regexp.MustCompile(`^[\p{L}\p{Z}\p{N}_.:/=+\-@]*$`)
+
 // ValidateBucketTags checks a bucket's tag set against the limits S3 puts
 // on one: at most 50 tags, a key of 1 to 128 characters that does not
-// start with "aws:", a value of at most 256.
+// start with "aws:", a value of at most 256, both of letters, numbers,
+// spaces and + - = . _ : / @.
 func ValidateBucketTags(tags map[string]string) error {
 	if len(tags) > MaxBucketTags {
 		return fmt.Errorf("%d bucket tags, at most %d are allowed", len(tags), MaxBucketTags)
@@ -109,6 +117,9 @@ func ValidateBucketTags(tags map[string]string) error {
 		}
 		if utf8.RuneCountInString(v) > MaxTagValueLength {
 			return fmt.Errorf("bucket tag %q: value longer than %d characters", k, MaxTagValueLength)
+		}
+		if !utf8.ValidString(k) || !utf8.ValidString(v) || !tagCharsRegexp.MatchString(k) || !tagCharsRegexp.MatchString(v) {
+			return fmt.Errorf("bucket tag %q: only letters, numbers, spaces and + - = . _ : / @ are allowed", k)
 		}
 	}
 	return nil

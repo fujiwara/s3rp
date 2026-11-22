@@ -137,6 +137,7 @@ func TestValidateBucketTags(t *testing.T) {
 		"empty value":   {"env": ""},
 		"longest":       {strings.Repeat("k", 128): strings.Repeat("v", 256)},
 		"other scripts": {"名前": "値"},
+		"every symbol":  {"a+b-c=d.e_f:g/h@i": "x y"},
 	} {
 		if err := store.ValidateBucketTags(tags); err != nil {
 			t.Errorf("%s must be valid: %v", name, err)
@@ -147,7 +148,16 @@ func TestValidateBucketTags(t *testing.T) {
 		"key too long":   {strings.Repeat("k", 129): "v"},
 		"value too long": {"k": strings.Repeat("v", 257)},
 		"reserved key":   {"aws:created-by": "x"},
-		"too many":       many,
+		// what the XML response could not carry unchanged
+		"NUL in a value":      {"env": "a\x00b"},
+		"NUL in a key":        {"e\x00v": "x"},
+		"control character":   {"env": "a\x01b"},
+		"invalid UTF-8":       {"env": "a\xffb"},
+		"invalid UTF-8 key":   {"e\xffv": "x"},
+		"noncharacter":        {"env": "a\ufffeb"},
+		"markup":              {"env": "a<b"},
+		"symbol outside S3's": {"env": "100%"},
+		"too many":            many,
 	} {
 		if err := store.ValidateBucketTags(tags); err == nil {
 			t.Errorf("%s must be rejected", name)
