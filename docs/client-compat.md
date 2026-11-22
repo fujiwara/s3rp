@@ -34,6 +34,7 @@ other.
 | kopia | minio-go | a second backup tool on it: ranged reads of pack blobs, and repository maintenance |
 | s3cmd | Python, own implementation | long-lived in operations; sends ACL and location requests others do not |
 | s3fs-fuse | C++ on libcurl, own signer | file operations become HEAD, ranged GET, multipart and copy requests |
+| Mountpoint for Amazon S3 (`mountpoint-s3`) | Rust on the AWS CRT | a second FUSE client, of another shape: every file written is a multipart upload with a checksum on each part, and every listing asks for the restore status |
 | obstore | Rust `object_store` | what Polars, delta-rs and DataFusion use |
 | OpenDAL | Rust, `reqsign` signer | a second Rust lineage |
 | DuckDB httpfs | C++, own implementation | analytics: globbed listings and ranged reads of Parquet |
@@ -115,8 +116,8 @@ Why each entry of `clients/expected.tsv` is expected.
 
 - **obstore, `double-slash-key`** (client). `object_store` validates paths
   and refuses one with an empty segment before sending anything.
-- **duck, OpenDAL, rclone, s3fs, `double-slash-key`** (client). Each
-  removes the empty segment and stores `dir/x.txt`. On S3, as on RGW,
+- **duck, mountpoint-s3, OpenDAL, rclone, s3fs, `double-slash-key`**
+  (client). Each removes the empty segment and stores `dir/x.txt`. On S3, as on RGW,
   that is another key (AWS Emulator 1.0.533), so the object is not where
   it was put.
 - **sdk-java, sdk-ruby, `multipart`** (backend). The upload succeeds. The

@@ -19,6 +19,7 @@ Which request headers the gateway honors, which it refuses by name, and what hap
 | `x-amz-tagging` | PutObject, CopyObject, CreateMultipartUpload, POST upload | requires `s3:PutObjectTagging` in addition to the operation's action; validated by the gateway ([Request validation](s3-api.md#request-validation)) |
 | `x-amz-tagging-directive`, `x-amz-metadata-directive` | CopyObject | `COPY` or `REPLACE`; anything else is `InvalidArgument` |
 | `x-amz-object-annotation-directive` | CopyObject | `EXCLUDE` only, which is what a copy does without it: there are no object annotations. `COPY` is `501` |
+| `x-amz-optional-object-attributes` | ListObjects, ListObjectsV2, ListObjectVersions | `RestoreStatus` only: forwarded, and the restore status the backend reports is on each entry. Another value is `501` |
 | `x-amz-copy-source` | PutObject → CopyObject, UploadPart → UploadPartCopy | source resolved within the requester's tenant; same backend only |
 | `x-amz-copy-source-if-match`, `-if-none-match`, `-if-modified-since`, `-if-unmodified-since` | CopyObject | |
 | `x-amz-copy-source-range` | UploadPartCopy | |
@@ -67,7 +68,6 @@ Every other `x-amz-*` header is `501 NotImplemented`. The ones real SDK options 
 | `x-amz-request-payer` | `RequestPayer` | no requester-pays model; the tenant is billed by the service |
 | `x-amz-expected-bucket-owner`, `x-amz-source-expected-bucket-owner` | `ExpectedBucketOwner`, `ExpectedSourceBucketOwner` | bucket ownership is the tenant's; there is no account id to compare |
 | `x-amz-write-offset-bytes` | `WriteOffsetBytes` | append writes (S3 Express) are not supported |
-| `x-amz-optional-object-attributes` | `OptionalObjectAttributes` | restore status in listings; RestoreObject is not implemented |
 | `x-amz-object-ownership`, `x-amz-bucket-object-lock-enabled` | CreateBucket options | CreateBucket is not proxied; bucket configuration is written by the control plane |
 
 ## Standard headers

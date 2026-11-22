@@ -685,6 +685,7 @@ var unsupported = []Feature{
 		Name:       "Restoring archived objects",
 		Kind:       FeatureObject,
 		Operations: []string{"RestoreObject"},
+		Note:       "A listing relays the restore status the backend reports (x-amz-optional-object-attributes: RestoreStatus)",
 	},
 	{
 		Name:       "Changing an object's encryption in place",

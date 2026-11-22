@@ -56,6 +56,11 @@ func (g *Gateway) listObjectVersions(c *opCtx) error {
 	if v := query.Get("encoding-type"); v != "" {
 		in.EncodingType = types.EncodingType(v)
 	}
+	attrs, err := c.optionalObjectAttributes()
+	if err != nil {
+		return err
+	}
+	in.OptionalObjectAttributes = attrs
 	out, err := rt.client.ListObjectVersions(r.Context(), in)
 	if err != nil {
 		return s3err.FromSDKError(err, r.URL.Path)
@@ -87,6 +92,7 @@ func (g *Gateway) listObjectVersions(c *opCtx) error {
 			Size:              aws.ToInt64(v.Size),
 			ChecksumAlgorithm: c.reportAlgorithms(v.ChecksumAlgorithm),
 			ChecksumType:      string(v.ChecksumType),
+			RestoreStatus:     restoreStatusFromSDK(v.RestoreStatus),
 		}
 		if v.LastModified != nil {
 			version.LastModified = s3xml.FormatTime(*v.LastModified)

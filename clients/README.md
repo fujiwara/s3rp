@@ -16,7 +16,8 @@ $ JOBS=1 ./clients/run.sh          # default: 4 clients at a time
 ```
 
 It needs docker (the compose Ceph RGW backend, `ceph-tls`), mise, Go, curl,
-openssl, FUSE for s3fs, and Wine (32-bit, with xvfb) for WinSCP; the
+openssl, FUSE for s3fs and Mountpoint (which links libfuse 2:
+`libfuse2t64` on Ubuntu), and Wine (32-bit, with xvfb) for WinSCP; the
 AWS SDK for PHP runs in a container. For
 every client and scheme it starts an s3rp serving a bucket of its own
 (removed afterwards) and runs every scenario against it. Clients run

@@ -366,6 +366,11 @@ func (g *Gateway) listObjectsV2(c *opCtx) error {
 	if v := query.Get("encoding-type"); v != "" {
 		in.EncodingType = types.EncodingType(v)
 	}
+	attrs, err := c.optionalObjectAttributes()
+	if err != nil {
+		return err
+	}
+	in.OptionalObjectAttributes = attrs
 	out, err := rt.client.ListObjectsV2(r.Context(), in)
 	if err != nil {
 		return s3err.FromSDKError(err, r.URL.Path)
@@ -422,6 +427,7 @@ func (c *opCtx) objectsFromSDK(objects []types.Object, owner *s3xml.Owner) []s3x
 			Size:              aws.ToInt64(obj.Size),
 			ChecksumAlgorithm: c.reportAlgorithms(obj.ChecksumAlgorithm),
 			ChecksumType:      string(obj.ChecksumType),
+			RestoreStatus:     restoreStatusFromSDK(obj.RestoreStatus),
 		}
 		if obj.LastModified != nil {
 			o.LastModified = s3xml.FormatTime(*obj.LastModified)
@@ -457,6 +463,11 @@ func (g *Gateway) listObjectsV1(c *opCtx) error {
 	if v := query.Get("encoding-type"); v != "" {
 		in.EncodingType = types.EncodingType(v)
 	}
+	attrs, err := c.optionalObjectAttributes()
+	if err != nil {
+		return err
+	}
+	in.OptionalObjectAttributes = attrs
 	out, err := rt.client.ListObjects(r.Context(), in)
 	if err != nil {
 		return s3err.FromSDKError(err, r.URL.Path)

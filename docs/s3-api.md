@@ -145,6 +145,7 @@ A few request values are checked by the gateway itself, before the backend sees 
 - **`x-amz-tagging-directive`, `x-amz-metadata-directive`**: anything but `COPY` and `REPLACE` is `400 InvalidArgument`.
 - **`x-amz-object-annotation-directive`**: `EXCLUDE` is accepted and changes nothing, since objects have no annotations; `COPY` is `501 NotImplemented`.
 - **`x-amz-object-attributes`**: a name S3 does not define is `400 InvalidArgument`.
+- **`x-amz-optional-object-attributes`** (ListObjects, ListObjectsV2, ListObjectVersions): `RestoreStatus` is forwarded and each entry carries the restore status the backend reports, if any; another value is `501 NotImplemented`.
 - **CompleteMultipartUpload**: a part number lower than the one before it is `400 InvalidPartOrder`.
 
 Storage class names are deliberately not checked: which classes exist is the backend's and the service's to define ([Storage class](#storage-class)).
@@ -437,7 +438,7 @@ Operations on objects. A backend that implements one would be passed the request
 | feature | operations | |
 |---|---|---|
 | Object annotations | GetObjectAnnotation, PutObjectAnnotation, DeleteObjectAnnotation, ListObjectAnnotations | CopyObject accepts x-amz-object-annotation-directive: EXCLUDE and nothing else |
-| Restoring archived objects | RestoreObject |  |
+| Restoring archived objects | RestoreObject | A listing relays the restore status the backend reports (x-amz-optional-object-attributes: RestoreStatus) |
 | Changing an object's encryption in place | UpdateObjectEncryption |  |
 | S3 Select | SelectObjectContent |  |
 | BitTorrent | GetObjectTorrent |  |

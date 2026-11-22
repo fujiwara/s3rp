@@ -25,6 +25,7 @@ else:
   Python (boto3) apart from [presigned URLs](#boto3-presigned-urls)
 - aws-cli, with either transfer client (`preferred_transfer_client`)
 - `mc` (apart from [`mc replicate`](#mc-replication)), restic, kopia, s5cmd, DuckDB (httpfs), Bun's `S3Client`, WinSCP
+- Mountpoint for Amazon S3 (`mount-s3 --endpoint-url … --force-path-style`)
 
 The other clients are below.
 
@@ -70,7 +71,7 @@ A key such as `dir//x.txt` is a key of its own in S3, distinct from
 
 | client | what it does with `dir//x.txt` |
 |---|---|
-| rclone, s3fs, OpenDAL, Cyberduck (`duck`) | stores `dir/x.txt`, without an error |
+| rclone, s3fs, Mountpoint, OpenDAL, Cyberduck (`duck`) | stores `dir/x.txt`, without an error |
 | obstore (`object_store`) | refuses the key before sending anything |
 
 The object is then not where another client looks for it. The same

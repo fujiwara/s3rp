@@ -3,7 +3,10 @@ package s3gw
 import (
 	"net/http"
 	"net/url"
+	"strings"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/s3xml"
 	"github.com/fujiwara/s3rp/store"
@@ -102,4 +105,42 @@ func checkAnnotationDirective(v string) *s3err.Error {
 		return nil
 	}
 	return s3err.NotImplemented(hdrAnnotationDirective + ": " + v)
+}
+
+// optionalObjectAttributes reads what a listing is asked to add to each
+// entry. RestoreStatus is the one attribute S3 defines and the one the
+// listings relay from the backend; another name asks for an element the
+// gateway would not pass on, so it is refused.
+func (c *opCtx) optionalObjectAttributes() ([]types.OptionalObjectAttributes, error) {
+	var attrs []types.OptionalObjectAttributes
+	// one header line per attribute (the AWS SDK for Go) or one
+	// comma-separated line
+	for _, line := range c.hdr.SignedValues(hdrOptionalObjectAttributes) {
+		for name := range strings.SplitSeq(line, ",") {
+			name = strings.TrimSpace(name)
+			if name == "" {
+				continue
+			}
+			if name != string(types.OptionalObjectAttributesRestoreStatus) {
+				return nil, s3err.NotImplemented(hdrOptionalObjectAttributes + ": " + name)
+			}
+			if len(attrs) == 0 {
+				attrs = append(attrs, types.OptionalObjectAttributesRestoreStatus)
+			}
+		}
+	}
+	return attrs, nil
+}
+
+// restoreStatusFromSDK converts a listing entry's restore status, nil when
+// the backend reported none.
+func restoreStatusFromSDK(rs *types.RestoreStatus) *s3xml.RestoreStatus {
+	if rs == nil {
+		return nil
+	}
+	out := &s3xml.RestoreStatus{IsRestoreInProgress: aws.ToBool(rs.IsRestoreInProgress)}
+	if rs.RestoreExpiryDate != nil {
+		out.RestoreExpiryDate = s3xml.FormatTime(*rs.RestoreExpiryDate)
+	}
+	return out
 }
