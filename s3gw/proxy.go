@@ -366,6 +366,11 @@ func (g *Gateway) listObjectsV2(c *opCtx) error {
 	if v := query.Get("encoding-type"); v != "" {
 		in.EncodingType = types.EncodingType(v)
 	}
+	attrs, err := c.optionalObjectAttributes()
+	if err != nil {
+		return err
+	}
+	in.OptionalObjectAttributes = attrs
 	out, err := rt.client.ListObjectsV2(r.Context(), in)
 	if err != nil {
 		return s3err.FromSDKError(err, r.URL.Path)
@@ -392,7 +397,7 @@ func (g *Gateway) listObjectsV2(c *opCtx) error {
 	if in.FetchOwner != nil && *in.FetchOwner {
 		owner = tenantOwner(c.rt.cfg.Tenant)
 	}
-	result.Contents = c.objectsFromSDK(out.Contents, owner)
+	result.Contents = c.objectsFromSDK(out.Contents, owner, attrs)
 	for _, cp := range out.CommonPrefixes {
 		if cp.Prefix != nil {
 			result.CommonPrefixes = append(result.CommonPrefixes, s3xml.CommonPrefix{Prefix: *cp.Prefix})
@@ -410,8 +415,9 @@ func tenantOwner(tenant string) *s3xml.Owner {
 }
 
 // objectsFromSDK converts listed objects for the response; owner (nil =
-// omitted) replaces whatever owner the backend reported.
-func (c *opCtx) objectsFromSDK(objects []types.Object, owner *s3xml.Owner) []s3xml.Object {
+// omitted) replaces whatever owner the backend reported, and attrs is what
+// the request asked each entry to carry.
+func (c *opCtx) objectsFromSDK(objects []types.Object, owner *s3xml.Owner, attrs []types.OptionalObjectAttributes) []s3xml.Object {
 	result := make([]s3xml.Object, 0, len(objects))
 	for _, obj := range objects {
 		o := s3xml.Object{
@@ -422,6 +428,7 @@ func (c *opCtx) objectsFromSDK(objects []types.Object, owner *s3xml.Owner) []s3x
 			Size:              aws.ToInt64(obj.Size),
 			ChecksumAlgorithm: c.reportAlgorithms(obj.ChecksumAlgorithm),
 			ChecksumType:      string(obj.ChecksumType),
+			RestoreStatus:     restoreStatusFromSDK(obj.RestoreStatus, attrs),
 		}
 		if obj.LastModified != nil {
 			o.LastModified = s3xml.FormatTime(*obj.LastModified)
@@ -457,6 +464,11 @@ func (g *Gateway) listObjectsV1(c *opCtx) error {
 	if v := query.Get("encoding-type"); v != "" {
 		in.EncodingType = types.EncodingType(v)
 	}
+	attrs, err := c.optionalObjectAttributes()
+	if err != nil {
+		return err
+	}
+	in.OptionalObjectAttributes = attrs
 	out, err := rt.client.ListObjects(r.Context(), in)
 	if err != nil {
 		return s3err.FromSDKError(err, r.URL.Path)
@@ -473,7 +485,7 @@ func (g *Gateway) listObjectsV1(c *opCtx) error {
 		IsTruncated:  aws.ToBool(out.IsTruncated),
 	}
 	// ListObjects (V1) always carries an Owner on AWS
-	result.Contents = c.objectsFromSDK(out.Contents, tenantOwner(c.rt.cfg.Tenant))
+	result.Contents = c.objectsFromSDK(out.Contents, tenantOwner(c.rt.cfg.Tenant), attrs)
 	for _, cp := range out.CommonPrefixes {
 		if cp.Prefix != nil {
 			result.CommonPrefixes = append(result.CommonPrefixes, s3xml.CommonPrefix{Prefix: *cp.Prefix})

@@ -741,7 +741,8 @@
       "kind": "object",
       "operations": [
         "RestoreObject"
-      ]
+      ],
+      "note": "A listing relays the restore status the backend reports (x-amz-optional-object-attributes: RestoreStatus)"
     },
     {
       "feature": "Changing an object's encryption in place",

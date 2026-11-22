@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      APT_PACKAGES: fuse3 wine wine32:i386 xvfb
+      APT_PACKAGES: fuse3 libfuse2t64 wine wine32:i386 xvfb
     steps:
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -43,7 +43,7 @@ jobs:
       # WinSCP is a 32-bit program, and Wine for it is some 250 MB of packages
       # whose download from the runner's mirror took from one minute to eight.
       # They are kept in a cache keyed by the exact files apt would fetch.
-      - name: Resolve the packages for FUSE (s3fs) and Wine (WinSCP)
+      - name: Resolve the packages for FUSE (s3fs, Mountpoint) and Wine (WinSCP)
         id: apt
         run: |
           sudo dpkg --add-architecture i386
@@ -62,7 +62,7 @@ jobs:
           key: ${{ steps.apt.outputs.key }}
           restore-keys: clients-apt-
 
-      - name: Install FUSE (s3fs) and Wine (WinSCP)
+      - name: Install FUSE (s3fs, Mountpoint) and Wine (WinSCP)
         run: |
           apt_get() { sudo apt-get -o Dir::Cache::archives="$HOME/apt-archives" -o APT::Keep-Downloaded-Packages=true "$@"; }
           apt_get install -y $APT_PACKAGES

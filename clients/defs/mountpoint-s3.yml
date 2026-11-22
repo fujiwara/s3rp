@@ -1,0 +1,19 @@
+# Mountpoint for Amazon S3: Rust on the AWS CRT; a file is written
+# sequentially as a multipart upload with a checksum on every part, and
+# read with ranged GETs.
+name: mountpoint-s3
+setup: |
+  mkdir -p "$STATE_DIR/mnt"
+  mount-s3 "$BUCKET" "$STATE_DIR/mnt" --endpoint-url "$ENDPOINT" --force-path-style \
+      --region us-east-1 --ca-bundle "$CA_FILE" --allow-delete --allow-overwrite
+teardown: fusermount -u "$STATE_DIR/mnt"
+env:
+  AWS_ACCESS_KEY_ID: ${ACCESS_KEY}
+  AWS_SECRET_ACCESS_KEY: ${SECRET_KEY}
+  MNT: ${STATE_DIR}/mnt
+verbs:
+  put:      mkdir -p "$(dirname "$MNT/$KEY")" && cp "$FILE" "$MNT/$KEY"
+  get:      cp "$MNT/$KEY" "$OUT"
+  list:     find "$MNT/$PREFIX" -type f
+  delete:   rm "$MNT/$KEY"
+  put_tree: mkdir -p "$MNT/$PREFIX" && cp -r "$DIR/." "$MNT/$PREFIX/"

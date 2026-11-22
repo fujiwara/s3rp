@@ -40,14 +40,22 @@ type ListBucketResult struct {
 }
 
 type Object struct {
-	Key               string   `xml:"Key"`
-	LastModified      string   `xml:"LastModified"`
-	ETag              string   `xml:"ETag"`
-	ChecksumAlgorithm []string `xml:"ChecksumAlgorithm,omitempty"`
-	ChecksumType      string   `xml:"ChecksumType,omitempty"`
-	Size              int64    `xml:"Size"`
-	StorageClass      string   `xml:"StorageClass,omitempty"`
-	Owner             *Owner   `xml:"Owner,omitempty"`
+	Key               string         `xml:"Key"`
+	LastModified      string         `xml:"LastModified"`
+	ETag              string         `xml:"ETag"`
+	ChecksumAlgorithm []string       `xml:"ChecksumAlgorithm,omitempty"`
+	ChecksumType      string         `xml:"ChecksumType,omitempty"`
+	Size              int64          `xml:"Size"`
+	StorageClass      string         `xml:"StorageClass,omitempty"`
+	Owner             *Owner         `xml:"Owner,omitempty"`
+	RestoreStatus     *RestoreStatus `xml:"RestoreStatus,omitempty"`
+}
+
+// RestoreStatus is the restore state of an archived object, on a listing
+// entry when the request asked for it.
+type RestoreStatus struct {
+	IsRestoreInProgress bool   `xml:"IsRestoreInProgress"`
+	RestoreExpiryDate   string `xml:"RestoreExpiryDate,omitempty"`
 }
 
 type CommonPrefix struct {
@@ -303,16 +311,17 @@ type ListVersionsResult struct {
 }
 
 type ObjectVersion struct {
-	Key               string   `xml:"Key"`
-	VersionID         string   `xml:"VersionId"`
-	IsLatest          bool     `xml:"IsLatest"`
-	LastModified      string   `xml:"LastModified,omitempty"`
-	ETag              string   `xml:"ETag"`
-	ChecksumAlgorithm []string `xml:"ChecksumAlgorithm,omitempty"`
-	ChecksumType      string   `xml:"ChecksumType,omitempty"`
-	Size              int64    `xml:"Size"`
-	StorageClass      string   `xml:"StorageClass,omitempty"`
-	Owner             *Owner   `xml:"Owner,omitempty"`
+	Key               string         `xml:"Key"`
+	VersionID         string         `xml:"VersionId"`
+	IsLatest          bool           `xml:"IsLatest"`
+	LastModified      string         `xml:"LastModified,omitempty"`
+	ETag              string         `xml:"ETag"`
+	ChecksumAlgorithm []string       `xml:"ChecksumAlgorithm,omitempty"`
+	ChecksumType      string         `xml:"ChecksumType,omitempty"`
+	Size              int64          `xml:"Size"`
+	StorageClass      string         `xml:"StorageClass,omitempty"`
+	Owner             *Owner         `xml:"Owner,omitempty"`
+	RestoreStatus     *RestoreStatus `xml:"RestoreStatus,omitempty"`
 }
 
 type DeleteMarkerEntry struct {

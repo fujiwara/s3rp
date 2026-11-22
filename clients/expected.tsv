@@ -5,6 +5,7 @@
 #   gateway  a deliberate refusal or a known gap of the gateway
 #   backend  what Ceph RGW answers; the gateway relays it as it is
 duck	https	double-slash-key	client: sends the key with the empty segment removed
+mountpoint-s3	https	double-slash-key	client: sends the key with the empty segment removed
 obstore	https	double-slash-key	client: object_store refuses a path with an empty segment
 opendal	http	double-slash-key	client: sends the key with the empty segment removed
 rclone	https	double-slash-key	client: sends the key with the empty segment removed

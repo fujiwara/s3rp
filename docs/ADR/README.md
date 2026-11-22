@@ -57,6 +57,7 @@ retroactively").
 | [0043](0043-account-for-every-s3-operation.md) | Every S3 operation is in the catalog or listed as unsupported | 2026-11-22 | Accepted |
 | [0044](0044-serve-bucket-configuration-reads-from-the-store.md) | Bucket-configuration reads are served from the store | 2026-11-22 | Accepted |
 | [0045](0045-ignore-withupdatedat-on-lifecycle-reads.md) | GetBucketLifecycleConfiguration accepts and ignores `withUpdatedAt` | 2026-11-22 | Accepted |
+| [0046](0046-relay-restore-status-in-listings.md) | Listings relay the restore status the backend reports | 2026-11-22 | Accepted |
 
 ## Writing a record
 

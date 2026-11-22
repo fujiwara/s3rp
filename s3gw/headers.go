@@ -31,6 +31,10 @@ const (
 	hdrBypassGovernanceRetention = "x-amz-bypass-governance-retention"
 )
 
+// hdrOptionalObjectAttributes names what a listing is asked to add to each
+// entry (validate.go optionalObjectAttributes).
+const hdrOptionalObjectAttributes = "x-amz-optional-object-attributes"
+
 // knownAmzHeaders is every x-amz-* request header some operation honors or
 // refuses by name. checkKnownAmzHeaders refuses any other with
 // NotImplemented — the header-path counterpart of the 501 for an unknown
@@ -71,6 +75,7 @@ var knownAmzHeaders = map[string]bool{
 	// reads and conditional deletes
 	"x-amz-object-attributes": true, "x-amz-max-parts": true, "x-amz-part-number-marker": true,
 	"x-amz-if-match-size": true, "x-amz-if-match-last-modified-time": true,
+	hdrOptionalObjectAttributes: true,
 }
 
 // ignoredAmzHeaders are the x-amz-* request headers accepted and
