@@ -62,7 +62,6 @@ func TestCatalogCoversSDK(t *testing.T) {
 	var sdk []string
 	client := reflect.TypeFor[*s3.Client]()
 	for m := range client.Methods() {
-		m := m
 		// an operation is Name(ctx, *NameInput, ...func(*Options))
 		if m.Type.NumIn() == 4 && m.Type.In(2).Kind() == reflect.Pointer && m.Type.In(2).Elem().Name() == m.Name+"Input" {
 			sdk = append(sdk, m.Name)
