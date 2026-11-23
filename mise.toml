@@ -3,3 +3,5 @@
 [tools]
 yq = "4.54.3"
 jq = "1.8.2"
+# validates policy documents against docs/policy.schema.json (TestSchema)
+jsonschema = "17.3.3"

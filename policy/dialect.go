@@ -166,6 +166,10 @@ func (d *Dialect) Parse(bucket, text string, check ActionChecker) (*Policy, erro
 			return nil, fmt.Errorf("malformed policy JSON: %w", err)
 		}
 	}
+	// Policy.validate takes an empty Version for an absent one
+	if _, given := m["Version"]; given && doc.Version == "" {
+		return nil, fmt.Errorf("unsupported policy version %q", doc.Version)
+	}
 	p := &Policy{Version: doc.Version, Statement: make([]Statement, len(doc.Statement))}
 	for i, raw := range doc.Statement {
 		rs, err := decodeStatement(raw)

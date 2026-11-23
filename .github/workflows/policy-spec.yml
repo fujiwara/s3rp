@@ -1,14 +1,19 @@
-# The Lean specification of the policy semantics (policy/spec). Building it
+# The specifications of a policy, held to the Go code.
+#
+# The Lean specification of the policy semantics (policy/spec): building it
 # checks the proofs — a property the semantics do not have fails the build —
 # and the comparisons then hold the Go evaluator and the gateway's
-# authorization to the specification.
+# authorization to it.
+#
+# The JSON Schema of a policy document (docs/policy.schema.json): compared
+# with what Parse accepts.
 name: policy-spec
 on:
   push:
     branches: [main]
-    paths: ['policy/**', 's3gw/**', 'internal/policyspec/**', '.github/workflows/policy-spec.yml']
+    paths: ['policy/**', 's3gw/**', 'internal/policyspec/**', 'docs/policy.schema.json', 'mise.toml', '.github/workflows/policy-spec.yml']
   pull_request:
-    paths: ['policy/**', 's3gw/**', 'internal/policyspec/**', '.github/workflows/policy-spec.yml']
+    paths: ['policy/**', 's3gw/**', 'internal/policyspec/**', 'docs/policy.schema.json', 'mise.toml', '.github/workflows/policy-spec.yml']
 
 permissions:
   contents: read
@@ -47,3 +52,26 @@ jobs:
         env:
           S3RP_POLICY_SPEC: ${{ github.workspace }}/policy/spec/.lake/build/bin/policyspec
         run: go test ./s3gw -run 'TestAuthorizationMatchesLeanSpec$' -v
+
+  schema:
+    name: Check the document schema
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: '1.27'
+
+      # jsonschema, pinned in mise.toml
+      - name: Set up mise
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
+
+      - name: Check the schema is a schema
+        run: jsonschema metaschema docs/policy.schema.json
+
+      - name: Compare Parse with the schema
+        # -count=1: the documents are drawn anew, so a cached pass says nothing
+        run: S3RP_JSONSCHEMA="$(mise which jsonschema)" go test ./policy -run 'TestSchema$' -count=1 -v

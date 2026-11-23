@@ -209,6 +209,11 @@ func TestParse(t *testing.T) {
 			"unknown condition key",
 		},
 		{
+			"empty Version",
+			`{"Version": "", "Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*"}]}`,
+			"unsupported policy version",
+		},
+		{
 			"null Condition",
 			`{"Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*", "Condition": null}]}`,
 			"statement element \"Condition\" is null",
