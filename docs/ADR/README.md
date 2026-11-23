@@ -66,6 +66,7 @@ retroactively").
 | [0052](0052-state-the-policy-semantics-in-lean.md) | The policy semantics are stated in Lean, with their properties proved | 2026-11-23 | Accepted |
 | [0053](0053-read-policy-documents-strictly.md) | A policy document is read strictly | 2026-11-23 | Accepted |
 | [0054](0054-publish-a-schema-of-the-policy-document.md) | The policy document has a JSON Schema, held to Parse | 2026-11-23 | Accepted |
+| [0055](0055-read-json-with-encoding-json-v2.md) | JSON is read and written with encoding/json/v2 | 2026-11-23 | Accepted |
 
 ## Writing a record
 

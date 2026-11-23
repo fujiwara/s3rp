@@ -10,7 +10,7 @@ package harness
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net/http"
@@ -130,7 +130,7 @@ func New(ctx context.Context, cfg Config) (Handler, error) {
 		secretAccessKey: cfg.BackendSecretAccessKey,
 	}, defaultKeys())
 
-	logger := &jsonLogger{enc: json.NewEncoder(cfg.LogWriter)}
+	logger := &jsonLogger{w: cfg.LogWriter}
 	gw := s3gw.New(st)
 	if inProcess != nil {
 		gw.SetBackendFactory(func(context.Context, *store.Backend) (s3gw.BackendClient, error) {
@@ -161,12 +161,14 @@ func (i *bucketInterceptor) Close() error {
 // jsonLogger serializes JSON-line writes from the observer and the
 // interceptor onto one stream.
 type jsonLogger struct {
-	mu  sync.Mutex
-	enc *json.Encoder
+	mu sync.Mutex
+	w  io.Writer
 }
 
 func (l *jsonLogger) log(v any) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.enc.Encode(v)
+	if data, err := json.Marshal(v, json.Deterministic(true)); err == nil {
+		l.w.Write(append(data, '\n'))
+	}
 }

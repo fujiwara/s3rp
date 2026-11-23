@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"strings"
@@ -75,7 +75,7 @@ type RequestInfo struct {
 	// Op is the operation as the hooks saw it, present only once routing and
 	// the policies have passed. A request refused before that has none,
 	// which is why Route and the identity above are kept separately.
-	Op *Op `json:"op,omitempty"`
+	Op *Op `json:"op,omitzero"`
 	// Err is what actually went wrong, when anything did. It is never sent to
 	// the client — it may name backend endpoints and buckets — so this is the
 	// only place it can be recorded.
@@ -105,8 +105,10 @@ func (i RequestInfo) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(struct {
 		info
-		Error string `json:"error,omitempty"`
-	}{info(i), msg})
+		// json has no representation of a time.Duration of its own
+		Duration int64  `json:"duration"`
+		Error    string `json:"error,omitempty"`
+	}{info(i), i.Duration.Nanoseconds(), msg}, json.Deterministic(true))
 }
 
 // maxUserAgentLen bounds RequestInfo.UserAgent. The SDKs' own are a few

@@ -72,20 +72,20 @@ type Op struct {
 	// nil for every other operation. It is resolved and authorized before
 	// the hooks run, so an Authorizer can refuse on it; Bucket and Key
 	// above are the destination.
-	CopySource *CopySource `json:"copy_source,omitempty"`
+	CopySource *CopySource `json:"copy_source,omitzero"`
 
 	// Request is what the client asked for about the object itself, set
 	// before the Authorizer runs so it can refuse on it. Nil when the
 	// request asked for none of it — and nil as well for an operation that
 	// carries no object attributes at all, so a header an operation would
 	// ignore is never reported as something the client asked for.
-	Request *OpRequest `json:"request,omitempty"`
+	Request *OpRequest `json:"request,omitzero"`
 	// Response is what the backend reported about the object. It is nil
 	// until the operation has run — always nil in an Authorizer, and still
 	// nil for an operation that failed — and an Interceptor sees it once
 	// next returns, as with the byte counts. Operations that report none of
 	// it (UploadPart, DeleteObject, the listings) leave it nil.
-	Response *OpResponse `json:"response,omitempty"`
+	Response *OpResponse `json:"response,omitzero"`
 
 	// BytesIn and BytesOut count the request and response bodies as seen on
 	// the wire, so an upload sent with aws-chunked framing counts the frames
@@ -105,7 +105,7 @@ type Op struct {
 	// other operation and when the request failed as a whole. Key is empty
 	// for that operation — the keys are in the request body — so this is
 	// the only record of what it removed. Set by the time next returns.
-	Deleted *DeleteSummary `json:"deleted,omitempty"`
+	Deleted *DeleteSummary `json:"deleted,omitzero"`
 
 	// BucketMetadata and KeyMetadata carry the store.Bucket.Metadata and
 	// store.Key.Metadata the Store attached to the definitions this request

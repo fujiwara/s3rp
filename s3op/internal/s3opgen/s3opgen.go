@@ -5,7 +5,7 @@ package s3opgen
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"go/format"
 	"os"
@@ -74,10 +74,8 @@ type data struct {
 
 // File returns the generated Go source for the catalog in src.
 func File(src []byte) ([]byte, error) {
-	dec := json.NewDecoder(bytes.NewReader(src))
-	dec.DisallowUnknownFields()
 	var c catalog
-	if err := dec.Decode(&c); err != nil {
+	if err := json.Unmarshal(src, &c, json.RejectUnknownMembers(true)); err != nil {
 		return nil, fmt.Errorf("%s: %w", SourceFile, err)
 	}
 	actions, err := validate(c)

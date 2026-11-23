@@ -2,7 +2,7 @@ package sigv4_test
 
 import (
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/v2"
 	"maps"
 	"net/http/httptest"
 	"slices"

@@ -1,7 +1,7 @@
 package localbackend
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -190,7 +190,7 @@ func (b *Backend) flush() error {
 }
 
 func (b *Backend) writeMeta(snap *snapshot) error {
-	data, err := json.Marshal(snap)
+	data, err := json.Marshal(snap, json.Deterministic(true))
 	if err != nil {
 		return err
 	}
@@ -266,8 +266,8 @@ type snapshot struct {
 type bucketRecord struct {
 	Created    time.Time                  `json:"created"`
 	Versioning string                     `json:"versioning,omitempty"`
-	Lock       *lockRecord                `json:"lock,omitempty"`
-	Encryption *encryptionRecord          `json:"encryption,omitempty"`
+	Lock       *lockRecord                `json:"lock,omitzero"`
+	Encryption *encryptionRecord          `json:"encryption,omitzero"`
 	Objects    map[string][]*objectRecord `json:"objects,omitempty"`
 	Uploads    []*uploadRecord            `json:"uploads,omitempty"`
 	Finished   map[string]string          `json:"finished,omitempty"`
@@ -277,19 +277,19 @@ type bucketRecord struct {
 // being enabled, the fields its default retention.
 type lockRecord struct {
 	Mode  string `json:"mode,omitempty"`
-	Days  int32  `json:"days,omitempty"`
-	Years int32  `json:"years,omitempty"`
+	Days  int32  `json:"days,omitzero"`
+	Years int32  `json:"years,omitzero"`
 }
 
 type encryptionRecord struct {
 	Algorithm        string `json:"algorithm"`
 	KMSKeyID         string `json:"kmsKeyId,omitempty"`
-	BucketKeyEnabled *bool  `json:"bucketKeyEnabled,omitempty"`
+	BucketKeyEnabled *bool  `json:"bucketKeyEnabled,omitzero"`
 }
 
 type segmentRecord struct {
 	Blob string `json:"blob"`
-	Off  int64  `json:"off,omitempty"`
+	Off  int64  `json:"off,omitzero"`
 	Size int64  `json:"size"`
 }
 
@@ -305,16 +305,16 @@ type objectPartRecord struct {
 
 type objectRecord struct {
 	VersionID          string             `json:"versionId,omitempty"`
-	DeleteMarker       bool               `json:"deleteMarker,omitempty"`
+	DeleteMarker       bool               `json:"deleteMarker,omitzero"`
 	Modified           time.Time          `json:"modified"`
 	Body               []segmentRecord    `json:"body,omitempty"`
 	ETag               string             `json:"etag,omitempty"`
-	ContentType        *string            `json:"contentType,omitempty"`
-	CacheControl       *string            `json:"cacheControl,omitempty"`
-	ContentDisposition *string            `json:"contentDisposition,omitempty"`
-	ContentEncoding    *string            `json:"contentEncoding,omitempty"`
-	ContentLanguage    *string            `json:"contentLanguage,omitempty"`
-	Expires            *time.Time         `json:"expires,omitempty"`
+	ContentType        *string            `json:"contentType,omitzero"`
+	CacheControl       *string            `json:"cacheControl,omitzero"`
+	ContentDisposition *string            `json:"contentDisposition,omitzero"`
+	ContentEncoding    *string            `json:"contentEncoding,omitzero"`
+	ContentLanguage    *string            `json:"contentLanguage,omitzero"`
+	Expires            *time.Time         `json:"expires,omitzero"`
 	Metadata           map[string]string  `json:"metadata,omitempty"`
 	StorageClass       string             `json:"storageClass,omitempty"`
 	SSE                string             `json:"sse,omitempty"`
@@ -324,7 +324,7 @@ type objectRecord struct {
 	ChecksumType       string             `json:"checksumType,omitempty"`
 	Parts              []objectPartRecord `json:"parts,omitempty"`
 	LockMode           string             `json:"lockMode,omitempty"`
-	RetainUntil        *time.Time         `json:"retainUntil,omitempty"`
+	RetainUntil        *time.Time         `json:"retainUntil,omitzero"`
 	LegalHold          string             `json:"legalHold,omitempty"`
 }
 

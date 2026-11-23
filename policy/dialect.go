@@ -2,10 +2,11 @@ package policy
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
+	"errors"
 	"fmt"
 	"io"
-	"slices"
 	"strings"
 )
 
@@ -58,60 +59,47 @@ func (d *Dialect) principalKey() string {
 	return d.PrincipalKey
 }
 
-// members reads a JSON object's members as they are written. encoding/json
-// would do three things a policy must not be read with: skip a member no
-// field is named for (a misspelled Condition, a NotResource), take "effect"
-// for Effect, and let the last of two members of one name win. Each makes a
-// document mean something other than what it says — to its author, or to
-// another parser that validated it.
-func members(data []byte, what string, allowed ...string) (map[string]json.RawMessage, error) {
-	dec := json.NewDecoder(bytes.NewReader(data))
-	if tok, err := dec.Token(); err != nil {
-		return nil, err
-	} else if tok != json.Delim('{') {
-		return nil, fmt.Errorf("%s must be an object", what)
-	}
-	out := map[string]json.RawMessage{}
-	for dec.More() {
-		tok, err := dec.Token()
+// unmarshal reads a policy document, or a part of one, as it is written. It
+// is json.Unmarshal — which refuses a repeated member name and matches a
+// name exactly — refusing also a member no field is named for (a misspelled
+// Condition, a NotResource) and a null, which would read as the member being
+// absent. Each of those makes a document mean something other than what it
+// says, to its author or to another parser that validated it.
+func unmarshal(data []byte, v any) error {
+	dec := jsontext.NewDecoder(bytes.NewReader(data))
+	for {
+		tok, err := dec.ReadToken()
+		if err == io.EOF {
+			break
+		}
 		if err != nil {
-			return nil, err
+			return err
 		}
-		name := tok.(string) // a member name is all the grammar allows here
-		if allowed != nil && !slices.Contains(allowed, name) {
-			return nil, fmt.Errorf("unknown %s element %q", what, name)
+		if tok.Kind() == 'n' {
+			return fmt.Errorf("null at %s", dec.StackPointer())
 		}
-		if _, dup := out[name]; dup {
-			return nil, fmt.Errorf("duplicate %s element %q", what, name)
-		}
-		var value json.RawMessage
-		if err := dec.Decode(&value); err != nil {
-			return nil, err
-		}
-		if string(value) == "null" {
-			return nil, fmt.Errorf("%s element %q is null", what, name)
-		}
-		out[name] = value
 	}
-	if _, err := dec.Token(); err != nil {
-		return nil, err
-	}
-	if _, err := dec.Token(); err != io.EOF {
-		return nil, fmt.Errorf("data after the %s", what)
-	}
-	return out, nil
+	return describe(json.Unmarshal(data, v, json.RejectUnknownMembers(true)))
 }
 
-// member decodes the named member into v, if it is there.
-func member(m map[string]json.RawMessage, name string, v any) error {
-	raw, ok := m[name]
-	if !ok {
-		return nil
+// describe words a decoding error by where it is in the document; the
+// package's own wording names the Go type it was decoding into.
+func describe(err error) error {
+	var se *json.SemanticError
+	if !errors.As(err, &se) {
+		return err
 	}
-	if err := json.Unmarshal(raw, v); err != nil {
-		return fmt.Errorf("%s: %w", name, err)
+	at := string(se.JSONPointer)
+	if at == "" {
+		at = "the top"
 	}
-	return nil
+	switch {
+	case errors.Is(se.Err, json.ErrUnknownName):
+		return fmt.Errorf("unknown element %s", at)
+	case se.Err != nil:
+		return fmt.Errorf("%s: %w", at, se.Err)
+	}
+	return fmt.Errorf("unexpected %s at %s", se.JSONKind, at)
 }
 
 // rawStatement defers principal decoding to the dialect; the other fields
@@ -119,27 +107,11 @@ func member(m map[string]json.RawMessage, name string, v any) error {
 type rawStatement struct {
 	Sid          string
 	Effect       string
-	Principal    json.RawMessage
-	NotPrincipal json.RawMessage
+	Principal    jsontext.Value
+	NotPrincipal jsontext.Value
 	Action       StringOrSlice
 	Resource     StringOrSlice
 	Condition    *Condition
-}
-
-func decodeStatement(data []byte) (rs rawStatement, err error) {
-	m, err := members(data, "statement", "Sid", "Effect", "Principal", "NotPrincipal", "Action", "Resource", "Condition")
-	if err != nil {
-		return rs, err
-	}
-	rs.Principal, rs.NotPrincipal = m["Principal"], m["NotPrincipal"]
-	for name, v := range map[string]any{
-		"Sid": &rs.Sid, "Effect": &rs.Effect, "Action": &rs.Action, "Resource": &rs.Resource, "Condition": &rs.Condition,
-	} {
-		if err := member(m, name, v); err != nil {
-			return rs, err
-		}
-	}
-	return rs, nil
 }
 
 // Parse parses and validates the named bucket's policy document written in
@@ -153,29 +125,24 @@ func (d *Dialect) Parse(bucket, text string, check ActionChecker) (*Policy, erro
 		return nil, fmt.Errorf("policy is %d bytes, at most %d are allowed", len(text), MaxPolicyBytes)
 	}
 	// Id is a label AWS policies carry; it is accepted and means nothing
-	m, err := members([]byte(text), "policy", "Version", "Id", "Statement")
-	if err != nil {
+	var doc struct {
+		Version   *string
+		Id        string
+		Statement []rawStatement
+	}
+	if err := unmarshal([]byte(text), &doc); err != nil {
 		return nil, fmt.Errorf("malformed policy JSON: %w", err)
 	}
-	var doc struct {
-		Version, Id string
-		Statement   []json.RawMessage
-	}
-	for name, v := range map[string]any{"Version": &doc.Version, "Id": &doc.Id, "Statement": &doc.Statement} {
-		if err := member(m, name, v); err != nil {
-			return nil, fmt.Errorf("malformed policy JSON: %w", err)
-		}
-	}
 	// Policy.validate takes an empty Version for an absent one
-	if _, given := m["Version"]; given && doc.Version == "" {
-		return nil, fmt.Errorf("unsupported policy version %q", doc.Version)
-	}
-	p := &Policy{Version: doc.Version, Statement: make([]Statement, len(doc.Statement))}
-	for i, raw := range doc.Statement {
-		rs, err := decodeStatement(raw)
-		if err != nil {
-			return nil, fmt.Errorf("malformed policy JSON: statement[%d]: %w", i, err)
+	version := ""
+	if doc.Version != nil {
+		if version = *doc.Version; version == "" {
+			return nil, fmt.Errorf("unsupported policy version %q", version)
 		}
+	}
+	p := &Policy{Version: version, Statement: make([]Statement, len(doc.Statement))}
+	for i, rs := range doc.Statement {
+		var err error
 		name := statementName(rs.Sid, i)
 		st := Statement{Sid: rs.Sid, Effect: rs.Effect, Action: rs.Action, Resource: rs.Resource, Condition: rs.Condition}
 		if st.Principal, err = d.decodePrincipal(rs.Principal); err != nil {
@@ -219,28 +186,33 @@ func (d *Dialect) Parse(bucket, text string, check ActionChecker) (*Policy, erro
 
 // decodePrincipal decodes a Principal/NotPrincipal element under the
 // dialect's key. An absent one is no principal.
-func (d *Dialect) decodePrincipal(data json.RawMessage) (*Principal, error) {
+func (d *Dialect) decodePrincipal(data jsontext.Value) (*Principal, error) {
 	if len(data) == 0 {
 		return nil, nil
 	}
 	key := d.principalKey()
-	var s string
-	if err := json.Unmarshal(data, &s); err == nil {
+	if data.Kind() == '"' {
+		var s string
+		if err := unmarshal(data, &s); err != nil {
+			return nil, fmt.Errorf("malformed principal: %w", err)
+		}
 		if s != "*" {
 			return nil, fmt.Errorf("principal must be %q or an object with the %s key", "*", key)
 		}
 		return &Principal{All: true}, nil
 	}
-	// the one key: a principal of another kind beside it ("AWS") would be
-	// dropped, and the statement would be about fewer or more than it says
-	obj, err := members(data, "principal", key)
-	if err != nil {
+	var obj map[string]StringOrSlice
+	if err := unmarshal(data, &obj); err != nil {
 		return nil, fmt.Errorf("principal must be %q or an object with the %s key: %w", "*", key, err)
 	}
-	var users StringOrSlice
-	if err := member(obj, key, &users); err != nil {
-		return nil, fmt.Errorf("malformed principal: %w", err)
+	// the one key: a principal of another kind beside it ("AWS") would be
+	// dropped, and the statement would be about fewer or more than it says
+	for name := range obj {
+		if name != key {
+			return nil, fmt.Errorf("principal must be %q or an object with the %s key: unknown principal element %q", "*", key, name)
+		}
 	}
+	users := obj[key]
 	if len(users) == 0 {
 		return nil, fmt.Errorf("principal must be %q or an object with the %s key", "*", key)
 	}

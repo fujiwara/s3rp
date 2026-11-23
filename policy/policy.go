@@ -17,7 +17,8 @@
 package policy
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"regexp"
@@ -95,11 +96,11 @@ type Policy struct {
 type Statement struct {
 	Sid          string        `json:"Sid,omitempty"`
 	Effect       string        `json:"Effect"`
-	Principal    *Principal    `json:"Principal,omitempty"`
-	NotPrincipal *Principal    `json:"NotPrincipal,omitempty"`
+	Principal    *Principal    `json:"Principal,omitzero"`
+	NotPrincipal *Principal    `json:"NotPrincipal,omitzero"`
 	Action       StringOrSlice `json:"Action"`
 	Resource     StringOrSlice `json:"Resource"`
-	Condition    *Condition    `json:"Condition,omitempty"`
+	Condition    *Condition    `json:"Condition,omitzero"`
 
 	// precompiled by Policy.compile: action patterns are lower-cased for
 	// case-insensitive matching, resource patterns kept as-is.
@@ -116,24 +117,12 @@ type Principal struct {
 }
 
 func (p *Principal) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err == nil {
-		if s != "*" {
-			return fmt.Errorf("principal must be %q or an object with the S3RP key", "*")
-		}
-		p.All = true
-		return nil
+	d := Dialect{}
+	got, err := d.decodePrincipal(data)
+	if err != nil {
+		return err
 	}
-	var obj struct {
-		S3RP StringOrSlice `json:"S3RP"`
-	}
-	if err := json.Unmarshal(data, &obj); err != nil {
-		return fmt.Errorf("malformed principal: %w", err)
-	}
-	if len(obj.S3RP) == 0 {
-		return fmt.Errorf("principal must be %q or an object with the S3RP key", "*")
-	}
-	p.Users = obj.S3RP
+	*p = *got
 	return nil
 }
 
@@ -148,13 +137,16 @@ func (p *Principal) MarshalJSON() ([]byte, error) {
 type StringOrSlice []string
 
 func (s *StringOrSlice) UnmarshalJSON(data []byte) error {
-	var single string
-	if err := json.Unmarshal(data, &single); err == nil {
+	if jsontext.Value(data).Kind() == '"' {
+		var single string
+		if err := unmarshal(data, &single); err != nil {
+			return err
+		}
 		*s = []string{single}
 		return nil
 	}
 	var multi []string
-	if err := json.Unmarshal(data, &multi); err != nil {
+	if err := unmarshal(data, &multi); err != nil {
 		return err
 	}
 	*s = multi

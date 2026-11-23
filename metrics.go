@@ -22,8 +22,8 @@ import (
 type MetricsConfig struct {
 	// Tenant and Bucket add the opt-in s3gw.tenant and aws.s3.bucket
 	// attributes: one series per tenant or bucket.
-	Tenant bool `yaml:"tenant,omitempty" json:"tenant,omitempty"`
-	Bucket bool `yaml:"bucket,omitempty" json:"bucket,omitempty"`
+	Tenant bool `yaml:"tenant,omitempty" json:"tenant,omitzero"`
+	Bucket bool `yaml:"bucket,omitempty" json:"bucket,omitzero"`
 }
 
 // setupMetrics installs the metrics on gw and returns the provider to shut
