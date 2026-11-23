@@ -51,7 +51,9 @@ jobs:
       - name: Compare the gateway's authorization with the specification
         env:
           S3RP_POLICY_SPEC: ${{ github.workspace }}/policy/spec/.lake/build/bin/policyspec
-        run: go test ./s3gw -run 'TestAuthorizationMatchesLeanSpec$' -v
+        # the gateway's decision on one action, and the isolation
+        # specification's on whole requests
+        run: go test ./s3gw -run 'LeanSpec$' -v
 
   schema:
     name: Check the document schema

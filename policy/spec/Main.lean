@@ -4,8 +4,8 @@ import PolicySpec.Semantics
 /-!
 The specification as a program, for comparing an implementation with it
 (internal/policyspec). Each input line is a JSON object — a bucket policy, a
-user policy and requests — and each output line the decisions for those
-requests, in order.
+user policy and requests, or a world of buckets and whole operations — and
+each output line the decisions for those requests, in order.
 -/
 
 open Lean PolicySpec
@@ -100,11 +100,73 @@ def requestOf (r : WireRequest) : Except String Request := do
     | none => pure none
   pure ⟨⟨r.tenant, r.user⟩, r.action, r.resource, source⟩
 
+structure WireNeed where
+  action : String
+  resource : String
+  deriving FromJson
+
+structure WireCopy where
+  bucket : String
+  action : String
+  resource : String
+  deriving FromJson
+
+structure WireBucket where
+  name : String
+  owner : String
+  statements : List WireStatement
+  deriving FromJson
+
+structure WireOperation where
+  tenant : String
+  user : String
+  source : Option String
+  bucket : String
+  needs : List WireNeed
+  copy : Option WireCopy
+  /-- the keys of a DeleteObjects, each with what deleting it needs -/
+  keys : Option (List (List WireNeed))
+  deriving FromJson
+
+/-- A world of buckets and whole requests to it, where a `WireCase` is one
+policy and single actions. -/
+structure WireWorld where
+  buckets : List WireBucket
+  userPolicy : List WireUserStatement
+  operations : List WireOperation
+  deriving FromJson
+
+def userPolicyOf (statements : List WireUserStatement) : Except String (List UserStatement) :=
+  statements.mapM fun s => do pure ⟨← effectOf s.effect, s.actions⟩
+
+def answerWorld (c : WireWorld) : Except String Json := do
+  let world : World ← c.buckets.mapM fun b => do
+    pure (b.name, (⟨b.owner, ← b.statements.mapM statementOf⟩ : Policy))
+  let userPolicy ← userPolicyOf c.userPolicy
+  let need (n : WireNeed) : Need := ⟨n.action, n.resource⟩
+  let results ← c.operations.mapM fun o => do
+    let source ← match o.source with
+      | some hex => some <$> addrOfHex hex
+      | none => pure none
+    let who : Requester := ⟨⟨o.tenant, o.user⟩, userPolicy, source⟩
+    let copy := o.copy.map fun c => (⟨c.bucket, ⟨c.action, c.resource⟩⟩ : CopySource)
+    let deletes : Json := match o.keys with
+      | none => Json.null
+      | some keys => match world.deletes who o.bucket (keys.map (·.map need)) with
+        | none => Json.null
+        | some verdicts => toJson verdicts
+    pure <| Json.mkObj [
+      ("admits", world.admits who ⟨o.bucket, o.needs.map need, copy⟩),
+      ("deletes", deletes)]
+  pure (Json.arr results.toArray)
+
 def answer (line : String) : Except String Json := do
-  let c : WireCase ← fromJson? (← Json.parse line)
+  let json ← Json.parse line
+  if (json.getObjVal? "buckets").isOk then
+    return ← answerWorld (← fromJson? json)
+  let c : WireCase ← fromJson? json
   let policy : Policy := ⟨c.owner.getD "", ← c.statements.mapM statementOf⟩
-  let userPolicy ← c.userPolicy.mapM fun s => do
-    pure (⟨← effectOf s.effect, s.actions⟩ : UserStatement)
+  let userPolicy ← userPolicyOf c.userPolicy
   let results ← c.requests.mapM fun w => do
     let r ← requestOf w
     let (effect, statement) : String × Int := match policy.decide r with

@@ -210,4 +210,74 @@ def permits (up : List UserStatement) (p : Policy) (r : Request) : Bool :=
   | .allow _ => true
   | .none => r.principal.tenant == p.owner
 
+/-! ## Requests
+
+A request to the gateway is more than one action on one resource: an
+operation needs several actions (a tagging header adds one), a copy reads a
+second bucket, and DeleteObjects names many keys. Which actions an operation
+needs is the catalog's to say (`s3op`); here a request arrives with them. -/
+
+/-- The buckets that exist, by name, each with its policy. A bucket without
+a policy has one with no statements. -/
+abbrev World := List (String × Policy)
+
+def World.find (w : World) (bucket : String) : Option Policy :=
+  (w.find? (·.1 == bucket)).map (·.2)
+
+/-- One thing a request needs: an action on a resource. -/
+structure Need where
+  action : String
+  resource : String
+
+/-- The object a copy reads, and the action reading it needs. -/
+structure CopySource where
+  bucket : String
+  need : Need
+
+/-- Who asks, and from where. -/
+structure Requester where
+  principal : Principal
+  userPolicy : List UserStatement
+  source : Option Addr
+
+def Requester.may (who : Requester) (p : Policy) (n : Need) : Bool :=
+  permits who.userPolicy p ⟨who.principal, n.action, n.resource, who.source⟩
+
+/-- A request to a bucket: everything it needs there, and a copy's source. -/
+structure Operation where
+  bucket : String
+  needs : List Need
+  copy : Option CopySource := none
+
+/-- Whether the source of a copy may be read: its bucket is one of the
+requester's own tenant — never another tenant's, whatever that bucket
+grants — and the requester may read the object. -/
+def World.copyReadable (w : World) (who : Requester) (c : CopySource) : Bool :=
+  match w.find c.bucket with
+  | none => false
+  | some src => src.owner == who.principal.tenant && who.may src c.need
+
+/-- Whether the gateway lets a request through: the bucket is there for the
+requester, everything the request needs is permitted, and a copy's source is
+readable. -/
+def World.admits (w : World) (who : Requester) (op : Operation) : Bool :=
+  match w.find op.bucket with
+  | none => false
+  | some p =>
+    p.visible who.principal &&
+    op.needs.all (who.may p) &&
+    match op.copy with
+    | none => true
+    | some c => w.copyReadable who c
+
+/-- What DeleteObjects answers: nothing when the bucket is not there for the
+requester, and otherwise for each key whether everything deleting it needs
+is permitted. -/
+def World.deletes (w : World) (who : Requester) (bucket : String) (keys : List (List Need)) :
+    Option (List Bool) :=
+  match w.find bucket with
+  | none => none
+  | some p =>
+    if p.visible who.principal then some (keys.map fun needs => needs.all (who.may p)) else none
+
 end PolicySpec
