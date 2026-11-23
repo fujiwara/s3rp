@@ -65,6 +65,7 @@ retroactively").
 | [0051](0051-check-tenant-isolation-by-enumeration.md) | Tenant isolation is checked by enumeration against a specification | 2026-11-22 | Accepted |
 | [0052](0052-state-the-policy-semantics-in-lean.md) | The policy semantics are stated in Lean, with their properties proved | 2026-11-23 | Accepted |
 | [0053](0053-read-policy-documents-strictly.md) | A policy document is read strictly | 2026-11-23 | Accepted |
+| [0054](0054-publish-a-schema-of-the-policy-document.md) | The policy document has a JSON Schema, held to Parse | 2026-11-23 | Accepted |
 
 ## Writing a record
 

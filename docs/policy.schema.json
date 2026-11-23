@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/fujiwara/s3rp/blob/main/docs/policy.schema.json",
+  "title": "s3rp bucket policy",
+  "description": "A bucket policy document in the default dialect. Every document the gateway loads is valid against this schema. The reverse does not hold for what a schema cannot say: the resources must refer to the bucket the policy is attached to, a Sid must be unique within the policy, a condition value must be an IP address or a CIDR block, the lengths are limits in bytes, and the document is at most 20 KB.",
+  "type": "object",
+  "required": ["Statement"],
+  "additionalProperties": false,
+  "properties": {
+    "Version": {
+      "enum": ["2012-10-17", "2008-10-17"]
+    },
+    "Id": {
+      "description": "A label. It is accepted and has no effect.",
+      "type": "string"
+    },
+    "Statement": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": { "$ref": "#/$defs/statement" }
+    }
+  },
+  "$defs": {
+    "statement": {
+      "type": "object",
+      "required": ["Effect", "Action", "Resource"],
+      "additionalProperties": false,
+      "properties": {
+        "Sid": {
+          "description": "Names the statement in the operator's log. Unique within the policy when not empty.",
+          "type": "string"
+        },
+        "Effect": {
+          "enum": ["Allow", "Deny"]
+        },
+        "Principal": {
+          "description": "Whom the statement is about: \"*\" is every authenticated user of any tenant.",
+          "anyOf": [
+            { "const": "*" },
+            { "$ref": "#/$defs/principalNames" }
+          ]
+        },
+        "NotPrincipal": {
+          "description": "Everyone except the names listed. With Effect Deny only.",
+          "$ref": "#/$defs/principalNames"
+        },
+        "Action": {
+          "description": "s3: actions; * matches any run of characters and ? any one. Matched without regard to the case of ASCII letters.",
+          "anyOf": [
+            { "$ref": "#/$defs/action" },
+            {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 30,
+              "items": { "$ref": "#/$defs/action" }
+            }
+          ]
+        },
+        "Resource": {
+          "description": "The bucket (\"bucket\") or objects in it (\"bucket/prefix*\"); * matches any run of characters and ? any one.",
+          "anyOf": [
+            { "$ref": "#/$defs/resource" },
+            {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 10,
+              "items": { "$ref": "#/$defs/resource" }
+            }
+          ]
+        },
+        "Condition": { "$ref": "#/$defs/condition" }
+      },
+      "oneOf": [
+        { "required": ["Principal"] },
+        { "required": ["NotPrincipal"] }
+      ],
+      "if": { "required": ["NotPrincipal"] },
+      "then": { "properties": { "Effect": { "const": "Deny" } } }
+    },
+    "principalNames": {
+      "type": "object",
+      "required": ["S3RP"],
+      "additionalProperties": false,
+      "properties": {
+        "S3RP": {
+          "anyOf": [
+            { "$ref": "#/$defs/principalName" },
+            {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 100,
+              "items": { "$ref": "#/$defs/principalName" }
+            }
+          ]
+        }
+      }
+    },
+    "principalName": {
+      "description": "\"tenant/user\", or \"tenant/*\" for every user of the tenant.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]+/([a-z0-9][a-z0-9_-]+|\\*)$"
+    },
+    "action": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^[sS]3:[\\u0000-\\u007f]*$"
+    },
+    "resource": {
+      "type": "string",
+      "maxLength": 128
+    },
+    "condition": {
+      "description": "Every operator present must hold.",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "IpAddress": { "$ref": "#/$defs/sourceIP" },
+        "NotIpAddress": { "$ref": "#/$defs/sourceIP" }
+      }
+    },
+    "sourceIP": {
+      "description": "The one key is aws:SourceIp, in any case.",
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[aA][wW][sS]:[sS][oO][uU][rR][cC][eE][iI][pP]$": {
+          "anyOf": [
+            { "$ref": "#/$defs/ipRange" },
+            {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 50,
+              "items": { "$ref": "#/$defs/ipRange" }
+            }
+          ]
+        }
+      }
+    },
+    "ipRange": {
+      "description": "An IPv4 or IPv6 address, or a CIDR block.",
+      "type": "string",
+      "pattern": "^[0-9A-Fa-f:.]+(/[0-9]{1,3})?$"
+    }
+  }
+}
