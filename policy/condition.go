@@ -55,11 +55,11 @@ func (c *Condition) UnmarshalJSON(data []byte) error {
 	// reset the receiver so decoding into a reused Condition cannot
 	// accumulate values or keep stale compiled state
 	*c = Condition{}
-	var raw map[string]map[string]StringOrSlice
-	if err := json.Unmarshal(data, &raw); err != nil {
+	ops, err := members(data, "condition")
+	if err != nil {
 		return fmt.Errorf("malformed condition: %w", err)
 	}
-	for op, keys := range raw {
+	for op, rawKeys := range ops {
 		var dst *StringOrSlice
 		switch op {
 		case opIPAddress:
@@ -70,9 +70,17 @@ func (c *Condition) UnmarshalJSON(data []byte) error {
 			return fmt.Errorf("unknown condition operator %q (only %s and %s are supported)",
 				op, opIPAddress, opNotIPAddress)
 		}
-		for key, values := range keys {
+		keys, err := members(rawKeys, "condition operator "+op)
+		if err != nil {
+			return fmt.Errorf("malformed condition: %w", err)
+		}
+		for key, raw := range keys {
 			if !strings.EqualFold(key, SourceIPKey) {
 				return fmt.Errorf("unknown condition key %q (only %s is supported)", key, SourceIPKey)
+			}
+			var values StringOrSlice
+			if err := json.Unmarshal(raw, &values); err != nil {
+				return fmt.Errorf("malformed condition: %w", err)
 			}
 			*dst = append(*dst, values...)
 		}

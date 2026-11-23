@@ -142,6 +142,86 @@ func TestParse(t *testing.T) {
 			"must be ASCII",
 		},
 		{
+			"misspelled Condition",
+			`{"Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*", "Conditon": {"IpAddress": {"aws:SourceIp": "10.0.0.0/8"}}}]}`,
+			"unknown statement element \"Conditon\"",
+		},
+		{
+			"NotResource",
+			`{"Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*", "NotResource": "b/secret/*"}]}`,
+			"unknown statement element \"NotResource\"",
+		},
+		{
+			"NotAction",
+			`{"Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*", "NotAction": "s3:DeleteObject"}]}`,
+			"unknown statement element \"NotAction\"",
+		},
+		{
+			"lower-case element",
+			`{"Statement": [{"effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*"}]}`,
+			"unknown statement element \"effect\"",
+		},
+		{
+			"lower-case Statement",
+			`{"statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*"}]}`,
+			"unknown policy element \"statement\"",
+		},
+		{
+			"duplicate Effect",
+			`{"Statement": [{"Effect": "Deny", "Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*"}]}`,
+			"duplicate statement element \"Effect\"",
+		},
+		{
+			"duplicate Statement",
+			`{"Statement": [], "Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*"}]}`,
+			"duplicate policy element \"Statement\"",
+		},
+		{
+			"duplicate principal key",
+			`{"Statement": [{"Effect": "Deny", "NotPrincipal": {"S3RP": "ta/alice", "S3RP": "ta/batch"}, "Action": "s3:GetObject", "Resource": "b/*"}]}`,
+			"duplicate principal element \"S3RP\"",
+		},
+		{
+			"principal of another kind",
+			`{"Statement": [{"Effect": "Allow", "Principal": {"S3RP": "ta/alice", "AWS": "*"}, "Action": "s3:GetObject", "Resource": "b/*"}]}`,
+			"unknown principal element \"AWS\"",
+		},
+		{
+			"duplicate condition operator",
+			`{"Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*", "Condition": {"IpAddress": {"aws:SourceIp": "10.0.0.0/8"}, "IpAddress": {"aws:SourceIp": "0.0.0.0/0"}}}]}`,
+			"duplicate condition element \"IpAddress\"",
+		},
+		{
+			"duplicate condition key",
+			`{"Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*", "Condition": {"IpAddress": {"aws:SourceIp": "10.0.0.0/8", "aws:SourceIp": "0.0.0.0/0"}}}]}`,
+			"duplicate condition operator IpAddress element",
+		},
+		{
+			"null Condition",
+			`{"Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*", "Condition": null}]}`,
+			"statement element \"Condition\" is null",
+		},
+		{
+			"null Principal",
+			`{"Statement": [{"Effect": "Deny", "Principal": null, "NotPrincipal": {"S3RP": "ta/alice"}, "Action": "s3:GetObject", "Resource": "b/*"}]}`,
+			"statement element \"Principal\" is null",
+		},
+		{
+			"unknown policy element",
+			`{"Statment": [], "Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*"}]}`,
+			"unknown policy element \"Statment\"",
+		},
+		{
+			"statement not an object",
+			`{"Statement": ["Allow"]}`,
+			"statement must be an object",
+		},
+		{
+			"data after the document",
+			`{"Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*"}]} {}`,
+			"data after the policy",
+		},
+		{
 			"no resource",
 			`{"Statement": [{"Effect": "Deny", "Principal": "*", "Action": "s3:GetObject", "Resource": []}]}`,
 			"at least one resource",
@@ -163,6 +243,13 @@ func TestParse(t *testing.T) {
 			"invalid principal",
 		},
 	}
+	t.Run("Id", func(t *testing.T) {
+		// a label AWS policies carry, accepted and ignored
+		_, err := policy.Parse("b", `{"Version": "2012-10-17", "Id": "p1", "Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*"}]}`, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
 	for _, tc := range errCases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := policy.Parse("b", tc.text, nil)
