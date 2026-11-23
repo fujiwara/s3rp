@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"errors"
 	"net/http"
@@ -108,7 +109,11 @@ func (i RequestInfo) MarshalJSON() ([]byte, error) {
 		// json has no representation of a time.Duration of its own
 		Duration int64  `json:"duration"`
 		Error    string `json:"error,omitempty"`
-	}{info(i), i.Duration.Nanoseconds(), msg}, json.Deterministic(true))
+	}{info(i), i.Duration.Nanoseconds(), msg},
+		json.Deterministic(true),
+		// what a client sent need not be UTF-8, and the record of a request
+		// must not be lost to that
+		jsontext.AllowInvalidUTF8(true))
 }
 
 // maxUserAgentLen bounds RequestInfo.UserAgent. The SDKs' own are a few

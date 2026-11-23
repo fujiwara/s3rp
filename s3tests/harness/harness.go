@@ -10,6 +10,7 @@ package harness
 
 import (
 	"context"
+	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
 	"io"
@@ -168,7 +169,7 @@ type jsonLogger struct {
 func (l *jsonLogger) log(v any) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if data, err := json.Marshal(v, json.Deterministic(true)); err == nil {
+	if data, err := json.Marshal(v, json.Deterministic(true), jsontext.AllowInvalidUTF8(true)); err == nil {
 		l.w.Write(append(data, '\n'))
 	}
 }

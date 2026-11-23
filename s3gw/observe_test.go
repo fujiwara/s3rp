@@ -419,3 +419,18 @@ func TestObserverNamesTheRefusedOperation(t *testing.T) {
 		}
 	})
 }
+
+// A client's bytes that are not UTF-8 do not cost the record of its request.
+func TestRequestInfoJSONInvalidUTF8(t *testing.T) {
+	b, err := json.Marshal(s3gw.RequestInfo{UserAgent: "agent\xff", Path: "/b/k\xfe"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["user_agent"] != "agent�" || got["path"] != "/b/k�" {
+		t.Errorf("%s", b)
+	}
+}

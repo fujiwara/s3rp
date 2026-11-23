@@ -45,6 +45,14 @@ oldest release it builds with.
   escaped, and a nil slice without `omitempty` is `[]`, not `null`.
   localbackend's `meta.json` is byte for byte what it was, so
   `formatVersion` stays.
+- **Bytes that are not UTF-8** are refused by v2 when written, where
+  `encoding/json` wrote U+FFFD. A client chooses them (a User-Agent, a key,
+  metadata), so the two writers that take a client's strings pass
+  `AllowInvalidUTF8`: `RequestInfo.MarshalJSON`, or the record of the request
+  is lost, and localbackend's `meta.json` — with `AllowDuplicateNames`, for
+  two keys U+FFFD makes one name — or one such object fails every later
+  flush. Both write what they wrote before; that `meta.json` does not keep
+  such a key as it was is not new.
 
 ## Alternatives considered
 

@@ -1,6 +1,7 @@
 package localbackend
 
 import (
+	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
@@ -189,8 +190,17 @@ func (b *Backend) flush() error {
 	return errors.Join(errs...)
 }
 
+// metaOptions keep a key or a value that is not UTF-8 from failing every
+// later flush: its invalid bytes are written as U+FFFD, and two keys that
+// become the same name that way are both written, the last being read.
+var metaOptions = json.JoinOptions(
+	json.Deterministic(true),
+	jsontext.AllowInvalidUTF8(true),
+	jsontext.AllowDuplicateNames(true),
+)
+
 func (b *Backend) writeMeta(snap *snapshot) error {
-	data, err := json.Marshal(snap, json.Deterministic(true))
+	data, err := json.Marshal(snap, metaOptions)
 	if err != nil {
 		return err
 	}
@@ -233,7 +243,7 @@ func (b *Backend) load() error {
 	referenced := map[string]bool{}
 	if data != nil {
 		var snap snapshot
-		if err := json.Unmarshal(data, &snap); err != nil {
+		if err := json.Unmarshal(data, &snap, metaOptions); err != nil {
 			return fmt.Errorf("%s: %w", metaFile, err)
 		}
 		if snap.Version != formatVersion {
@@ -314,7 +324,7 @@ type objectRecord struct {
 	ContentDisposition *string            `json:"contentDisposition,omitzero"`
 	ContentEncoding    *string            `json:"contentEncoding,omitzero"`
 	ContentLanguage    *string            `json:"contentLanguage,omitzero"`
-	Expires            *time.Time         `json:"expires,omitzero"`
+	Expires            *time.Time         `json:"expires,omitempty"`
 	Metadata           map[string]string  `json:"metadata,omitempty"`
 	StorageClass       string             `json:"storageClass,omitempty"`
 	SSE                string             `json:"sse,omitempty"`
@@ -324,7 +334,7 @@ type objectRecord struct {
 	ChecksumType       string             `json:"checksumType,omitempty"`
 	Parts              []objectPartRecord `json:"parts,omitempty"`
 	LockMode           string             `json:"lockMode,omitempty"`
-	RetainUntil        *time.Time         `json:"retainUntil,omitzero"`
+	RetainUntil        *time.Time         `json:"retainUntil,omitempty"`
 	LegalHold          string             `json:"legalHold,omitempty"`
 }
 
