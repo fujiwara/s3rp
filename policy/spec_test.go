@@ -1,7 +1,7 @@
 package policy_test
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"math/rand/v2"
 	"net/netip"
 	"os"
@@ -62,7 +62,7 @@ func specGenerate(t *testing.T, data []byte) *specCase {
 		t.Fatal(err)
 	}
 	c := &specCase{
-		Case: policyspec.Case{Statements: statements, UserPolicy: policyspec.UserStatements(up)},
+		Statements: statements, UserPolicy: policyspec.UserStatements(up),
 		impl: impl,
 		user: up,
 		text: string(text),

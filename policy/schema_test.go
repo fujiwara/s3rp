@@ -2,7 +2,8 @@ package policy_test
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -270,7 +271,7 @@ func TestSchema(t *testing.T) {
 	}
 	var documents []document
 	add := func(v any) {
-		text, err := json.Marshal(v)
+		text, err := json.Marshal(v, json.Deterministic(true))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -332,12 +333,12 @@ func TestSchema(t *testing.T) {
 		t.Fatalf("the validator named %d of %d documents\n%.2000s", len(files), len(documents), stderr.String())
 	}
 	valid := make([]*bool, len(documents))
-	results := json.NewDecoder(bytes.NewReader(out))
+	results := jsontext.NewDecoder(bytes.NewReader(out))
 	for _, i := range files {
 		var result struct {
 			Valid *bool `json:"valid"`
 		}
-		if err := results.Decode(&result); err != nil || result.Valid == nil {
+		if err := json.UnmarshalDecode(results, &result); err != nil || result.Valid == nil {
 			t.Fatalf("no verdict for document %d: %v", i, err)
 		}
 		valid[i] = result.Valid

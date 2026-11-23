@@ -4,7 +4,8 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"math"
 	"net/http"
@@ -169,10 +170,10 @@ func invalidPolicyDocument(format string, args ...any) *s3err.Error {
 // fold into the returned PostPolicy (intersected when repeated).
 func parsePostPolicy(raw []byte) (*PostPolicy, []postCondition, *s3err.Error) {
 	var doc struct {
-		Expiration string            `json:"expiration"`
-		Conditions []json.RawMessage `json:"conditions"`
+		Expiration string           `json:"expiration"`
+		Conditions []jsontext.Value `json:"conditions"`
 	}
-	if err := json.Unmarshal(raw, &doc); err != nil {
+	if err := json.Unmarshal(raw, &doc, json.RejectUnknownMembers(true)); err != nil {
 		return nil, nil, invalidPolicyDocument("malformed JSON: %v", err)
 	}
 	if doc.Expiration == "" {
@@ -222,8 +223,8 @@ func parsePostPolicy(raw []byte) (*PostPolicy, []postCondition, *s3err.Error) {
 
 // parseArrayCondition parses ["eq"|"starts-with", "$field", "value"] or
 // ["content-length-range", min, max] (returned as rng).
-func parseArrayCondition(rc json.RawMessage) (postCondition, *[2]int64, *s3err.Error) {
-	var elems []json.RawMessage
+func parseArrayCondition(rc jsontext.Value) (postCondition, *[2]int64, *s3err.Error) {
+	var elems []jsontext.Value
 	if err := json.Unmarshal(rc, &elems); err != nil || len(elems) != 3 {
 		return postCondition{}, nil, invalidPolicyDocument("malformed condition %s", string(rc))
 	}

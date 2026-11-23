@@ -11,7 +11,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net/netip"
@@ -108,7 +108,7 @@ type Operation struct {
 	Source *string  `json:"source"` // nil: unknown
 	Bucket string   `json:"bucket"`
 	Needs  []Need   `json:"needs"`
-	Copy   *Copy    `json:"copy,omitempty"`
+	Copy   *Copy    `json:"copy,omitzero"`
 	Keys   [][]Need `json:"keys,omitempty"`
 }
 
@@ -224,7 +224,6 @@ func UserStatements(up *policy.UserPolicy) []UserStatement {
 type Process struct {
 	cmd   *exec.Cmd
 	in    io.WriteCloser
-	enc   *json.Encoder
 	lines *bufio.Scanner
 }
 
@@ -245,12 +244,16 @@ func Start(ctx context.Context, path string) (*Process, error) {
 	}
 	lines := bufio.NewScanner(out)
 	lines.Buffer(nil, 4*1024*1024)
-	return &Process{cmd: cmd, in: in, enc: json.NewEncoder(in), lines: lines}, nil
+	return &Process{cmd: cmd, in: in, lines: lines}, nil
 }
 
 // ask sends one line and decodes the line that answers it, a list of n.
 func ask[T any](p *Process, in any, n int) ([]T, error) {
-	if err := p.enc.Encode(in); err != nil {
+	line, err := json.Marshal(in)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.in.Write(append(line, '\n')); err != nil {
 		return nil, err
 	}
 	if !p.lines.Scan() {

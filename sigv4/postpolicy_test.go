@@ -221,6 +221,46 @@ func TestVerifyPostContentLengthRange(t *testing.T) {
 	}
 }
 
+// A signed document that says something the gateway does not read is
+// refused, not read as if it had not said it.
+func TestVerifyPostDocumentReadStrictly(t *testing.T) {
+	const conditions = `{"bucket":"testbucket"},{"key":"a.txt"},` +
+		`{"x-amz-credential":"` + testAccessKeyID + `/20260801/us-east-1/s3/aws4_request"},` +
+		`{"x-amz-algorithm":"AWS4-HMAC-SHA256"},{"x-amz-date":"20260801T120000Z"}`
+	cases := []struct {
+		name, policy string
+		ok           bool
+	}{
+		{"as documented", `{"expiration":"2026-08-02T00:00:00Z","conditions":[` + conditions + `]}`, true},
+		{"unknown member", `{"expiration":"2026-08-02T00:00:00Z","conditions":[` + conditions + `],"condition":[["content-length-range",0,10]]}`, false},
+		{"member in another case", `{"Expiration":"2026-08-02T00:00:00Z","expiration":"2026-08-02T00:00:00Z","conditions":[` + conditions + `]}`, false},
+		{"member twice", `{"expiration":"2026-08-02T00:00:00Z","conditions":[["content-length-range",0,10]],"conditions":[` + conditions + `]}`, false},
+		{"field twice in a condition", `{"expiration":"2026-08-02T00:00:00Z","conditions":[{"key":"b.txt","key":"a.txt"},` + conditions + `]}`, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			b64 := base64.StdEncoding.EncodeToString([]byte(c.policy))
+			fields := map[string]string{
+				"bucket":           "testbucket",
+				"key":              "a.txt",
+				"x-amz-credential": testAccessKeyID + "/20260801/us-east-1/s3/aws4_request",
+				"x-amz-algorithm":  "AWS4-HMAC-SHA256",
+				"x-amz-date":       "20260801T120000Z",
+				"policy":           b64,
+				"x-amz-signature":  signPostPolicy(testSecret, "20260801", "us-east-1", b64),
+			}
+			r := httptest.NewRequest("POST", "http://s3.example.com/testbucket", nil)
+			_, _, s3e := postVerifier(testTime).VerifyPost(r, fields, lookup)
+			switch {
+			case c.ok && s3e != nil:
+				t.Errorf("expect success, got %v", s3e)
+			case !c.ok && (s3e == nil || s3e.Code != "InvalidPolicyDocument"):
+				t.Errorf("expect InvalidPolicyDocument, got %v", s3e)
+			}
+		})
+	}
+}
+
 // A POST policy's expiration is chosen by whoever signs it, so the signing
 // date itself is bounded like a presigned URL's: a policy signed more than
 // seven days ago is refused however far its expiration lies — otherwise a

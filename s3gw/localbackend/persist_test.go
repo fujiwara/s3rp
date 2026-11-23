@@ -363,3 +363,42 @@ func TestOpenNeedsADirectory(t *testing.T) {
 		t.Errorf("Open of an empty path wrote %v", entries)
 	}
 }
+
+// What a write was given that JSON has no plain form for is still there, or
+// at least does not keep the rest from being kept: an Expires that is the
+// zero time, and bytes that are not UTF-8.
+func TestReopenAwkwardValues(t *testing.T) {
+	dir := t.TempDir()
+	ctx := t.Context()
+	be := openDir(t, dir)
+	if _, err := be.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String("b")}); err != nil {
+		t.Fatal(err)
+	}
+	for _, in := range []*s3.PutObjectInput{
+		{Key: aws.String("zero"), Expires: aws.Time(time.Time{})},
+		{Key: aws.String("meta"), Metadata: map[string]string{"m": "a\xffb"}},
+		{Key: aws.String("k\xff")},
+		{Key: aws.String("k\xfe")},
+		{Key: aws.String("plain")},
+	} {
+		in.Bucket, in.Body = aws.String("b"), strings.NewReader("x")
+		if _, err := be.PutObject(ctx, in); err != nil {
+			t.Fatalf("%q: %v", *in.Key, err)
+		}
+	}
+	if err := be.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	be = openDir(t, dir)
+	head, err := be.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String("b"), Key: aws.String("zero")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (time.Time{}).Format(http.TimeFormat); aws.ToString(head.ExpiresString) != want {
+		t.Errorf("Expires = %q, expect %q", aws.ToString(head.ExpiresString), want)
+	}
+	if got := read(t, be, "b", "plain", nil); got != "x" {
+		t.Errorf("plain = %q", got)
+	}
+}

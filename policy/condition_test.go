@@ -1,7 +1,7 @@
 package policy_test
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"net/netip"
 	"strings"
 	"testing"
