@@ -151,6 +151,9 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, t tar
 	if !utf8.ValidString(key) {
 		return s3err.New(http.StatusBadRequest, "InvalidArgument", "The key must be UTF-8.")
 	}
+	if len(key) > maxKeyLen {
+		return keyTooLong(key)
+	}
 	// conditions are evaluated against what will actually happen: the
 	// substituted key, and the bucket the URL targets
 	fields["key"] = key

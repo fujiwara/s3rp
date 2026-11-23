@@ -155,6 +155,7 @@ var canonicalMessage = map[string]string{
 	"InvalidRange":                          "The requested range is not satisfiable",
 	"InvalidRequest":                        "Invalid Request",
 	"InvalidToken":                          "The provided token is malformed or otherwise invalid.",
+	"KeyTooLongError":                       "Your key is too long",
 	"MalformedXML":                          "The XML you provided was not well-formed or did not validate against our published schema",
 	"MethodNotAllowed":                      "The specified method is not allowed against this resource.",
 	"MissingContentLength":                  "You must provide the Content-Length HTTP header.",

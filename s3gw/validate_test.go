@@ -130,6 +130,19 @@ func TestRequestValuesValidated(t *testing.T) {
 			code: "InvalidURI", message: "Couldn't parse the specified URI."},
 		{name: "key that is a surrogate", call: put(func(in *s3.PutObjectInput) { in.Key = aws.String("k\xed\xa0\x80") }),
 			code: "InvalidURI", message: "Couldn't parse the specified URI."},
+		// 1024 bytes of UTF-8, not characters; Amazon S3 itself answered so
+		{name: "key at the limit", call: put(func(in *s3.PutObjectInput) { in.Key = aws.String(strings.Repeat("a", 1024)) })},
+		{name: "key over the limit", call: put(func(in *s3.PutObjectInput) { in.Key = aws.String(strings.Repeat("a", 1025)) }),
+			code: "KeyTooLongError", message: "Your key is too long"},
+		{name: "key at the limit in two-byte characters", call: put(func(in *s3.PutObjectInput) { in.Key = aws.String(strings.Repeat("é", 512)) })},
+		{name: "key over the limit in two-byte characters", call: put(func(in *s3.PutObjectInput) { in.Key = aws.String(strings.Repeat("é", 513)) }),
+			code: "KeyTooLongError", message: "Your key is too long"},
+		{name: "copy source over the limit", call: func(t *testing.T, c *s3.Client) error {
+			_, err := c.CopyObject(t.Context(), &s3.CopyObjectInput{
+				Bucket: aws.String("testbucket"), Key: aws.String("dst"), CopySource: aws.String("testbucket/" + strings.Repeat("a", 1025)),
+			})
+			return err
+		}, code: "KeyTooLongError", message: "Your key is too long"},
 		{name: "copy source that is not UTF-8", call: func(t *testing.T, c *s3.Client) error {
 			_, err := c.CopyObject(t.Context(), &s3.CopyObjectInput{
 				Bucket: aws.String("testbucket"), Key: aws.String("dst"), CopySource: aws.String("testbucket/k%FF"),
@@ -176,27 +189,42 @@ func TestRequestValuesValidated(t *testing.T) {
 	}
 }
 
-// The key of a POST upload is a form field, and no more a key when it is
-// not UTF-8.
-func TestPostKeyMustBeUTF8(t *testing.T) {
-	gw := newTestGateway(t)
-	stub := &stubPost{}
-	if err := gw.SetBackend("testbucket", stub); err != nil {
-		t.Fatal(err)
-	}
-	form := &postForm{
-		conditions: []string{`["starts-with", "$key", ""]`},
-		fields:     [][2]string{{"key", "k\xff"}},
-		filename:   "a.txt",
-		content:    "hello post",
-	}
-	w := httptest.NewRecorder()
-	gw.Handler().ServeHTTP(w, form.request(t))
-	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "<Code>InvalidArgument</Code>") {
-		t.Errorf("status %d: %s", w.Code, w.Body.String())
-	}
-	if stub.putIn != nil {
-		t.Error("the backend was reached")
+// The key of a POST upload is a form field, and held to what a key is.
+func TestPostKeyChecked(t *testing.T) {
+	for _, tc := range []struct{ name, key, code string }{
+		{"not UTF-8", "k\xff", "InvalidArgument"},
+		{"over the limit", strings.Repeat("a", 1025), "KeyTooLongError"},
+		// ${filename} is part of the key by the time it is one
+		{"over the limit once the file name is in it", strings.Repeat("a", 1020) + "${filename}", "KeyTooLongError"},
+		{"at the limit", strings.Repeat("a", 1024), ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gw := newTestGateway(t)
+			stub := &stubPost{}
+			if err := gw.SetBackend("testbucket", stub); err != nil {
+				t.Fatal(err)
+			}
+			form := &postForm{
+				conditions: []string{`["starts-with", "$key", ""]`},
+				fields:     [][2]string{{"key", tc.key}},
+				filename:   "a.txt",
+				content:    "hello post",
+			}
+			w := httptest.NewRecorder()
+			gw.Handler().ServeHTTP(w, form.request(t))
+			if tc.code == "" {
+				if w.Code != http.StatusNoContent || stub.putIn == nil {
+					t.Errorf("status %d: %s", w.Code, w.Body.String())
+				}
+				return
+			}
+			if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "<Code>"+tc.code+"</Code>") {
+				t.Errorf("status %d: %s", w.Code, w.Body.String())
+			}
+			if stub.putIn != nil {
+				t.Error("the backend was reached")
+			}
+		})
 	}
 }
 

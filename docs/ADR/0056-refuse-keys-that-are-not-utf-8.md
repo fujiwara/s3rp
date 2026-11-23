@@ -1,4 +1,4 @@
-# 0056. An object key that is not UTF-8 is refused
+# 0056. An object key is UTF-8 of at most 1,024 bytes
 
 - Status: Accepted
 - Date: 2026-11-23
@@ -17,7 +17,10 @@ What S3 does was asked of Amazon S3 itself, with unauthenticated requests
 to a public bucket: `/bucket/k%FF`, a key cut inside a character (`k%C3`)
 and an encoded surrogate (`k%ED%A0%80`) are each
 `400 InvalidURI` "Couldn't parse the specified URI.", before authorization;
-`k%C3%A9` and `k%25FF` go on to `AccessDenied`.
+`k%C3%A9` and `k%25FF` go on to `AccessDenied`. Asked the same way about
+length: a key of 1,024 bytes goes on to `AccessDenied` and one of 1,025 is
+`400 KeyTooLongError` "Your key is too long" — bytes of UTF-8, not
+characters, 512 two-byte characters passing and 513 not.
 
 The AWS Emulator (1.0.580) answers otherwise — it keeps such a path
 unescaped, so `k%FF` and `k%25FF` are one key there — and was not followed.
@@ -25,7 +28,8 @@ It does refuse the same bytes in `x-amz-copy-source` with `InvalidArgument`.
 
 ## Decision
 
-A key that is not UTF-8 is refused wherever a request names one, under
+A key that is not UTF-8, or longer than 1,024 bytes, is refused wherever a
+request names one, under
 [0037](0037-validate-request-values-in-the-gateway.md):
 
 - the request path, bucket included: `400 InvalidURI` with S3's message, the
@@ -33,6 +37,10 @@ A key that is not UTF-8 is refused wherever a request names one, under
 - `x-amz-copy-source`: `400 InvalidArgument`, as for any malformed source;
 - the `key` field of a POST upload, after `${filename}` is substituted:
   `400 InvalidArgument`. What S3 answers here was not measured;
+- a key over the limit: `400 KeyTooLongError` with S3's message in the path,
+  and the same in the copy source and the POST `key` field, where S3's
+  answer was not measured. S3's `Size` and `MaxSizeAllowed` elements are
+  not sent, the error body having no place for them;
 - a DeleteObjects body was already `400 MalformedXML`, the XML decoder
   refusing it; a test now holds that.
 
@@ -40,6 +48,9 @@ A key that is not UTF-8 is refused wherever a request names one, under
 
 - **Leave it to the backend.** Backends differ, and the bundled one accepted
   what it could not keep.
+- **Check the length of DeleteObjects keys.** A key that long names no
+  object, and deleting what does not exist succeeds; the backend is left to
+  answer.
 - **Check listing parameters too** (`prefix`, `start-after`, a marker). They
   name no object, and what S3 does with them could not be asked without
   credentials. Left as they are.
