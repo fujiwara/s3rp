@@ -232,7 +232,9 @@ func TestSpec(t *testing.T) {
 	rng := rand.New(rand.NewPCG(seed, 0))
 	cases := make([]*specCase, n)
 	for i := range cases {
-		data := make([]byte, 96)
+		// more than the largest case draws: a generator out of input
+		// draws zeros, and its requests would all be the same one
+		data := make([]byte, 512)
 		for j := range data {
 			data[j] = byte(rng.UintN(256))
 		}
