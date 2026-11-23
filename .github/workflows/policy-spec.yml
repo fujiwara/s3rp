@@ -1,0 +1,43 @@
+# The Lean specification of the policy semantics (policy/spec). Building it
+# checks the proofs — a property the semantics do not have fails the build —
+# and the comparison then holds the Go evaluator to the specification.
+name: policy-spec
+on:
+  push:
+    branches: [main]
+    paths: ['policy/**', '.github/workflows/policy-spec.yml']
+  pull_request:
+    paths: ['policy/**', '.github/workflows/policy-spec.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check the specification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: '1.27'
+
+      # Lean, pinned in policy/spec/mise.toml
+      - name: Set up mise
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
+        with:
+          working_directory: policy/spec
+
+      - name: Check the proofs
+        working-directory: policy/spec
+        # --wfail: a warning is a failure, so a proof left as `sorry` fails
+        run: lake build --wfail PolicySpec policyspec
+
+      - name: Compare the evaluator with the specification
+        env:
+          S3RP_POLICY_SPEC: ${{ github.workspace }}/policy/spec/.lake/build/bin/policyspec
+          S3RP_POLICY_SPEC_CASES: '200000'
+        run: go test ./policy -run 'TestSpec$' -v

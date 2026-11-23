@@ -1,0 +1,9 @@
+name = "policyspec"
+defaultTargets = ["PolicySpec"]
+
+[[lean_lib]]
+name = "PolicySpec"
+
+[[lean_exe]]
+name = "policyspec"
+root = "Main"

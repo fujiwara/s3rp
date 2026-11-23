@@ -23,6 +23,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"unicode/utf8"
 )
 
 // Effect is the result of evaluating a policy.
@@ -350,10 +351,15 @@ func validateCondition(c *Condition, name string) error {
 	return nil
 }
 
-// validateAction checks an action element. The s3: prefix is
-// case-insensitive, matching evaluation.
+// validateAction checks an action element. Actions are ASCII, and the s3:
+// prefix is case-insensitive, matching evaluation.
 func validateAction(a string) error {
-	if !strings.HasPrefix(strings.ToLower(a), "s3:") {
+	for i := range len(a) {
+		if a[i] >= utf8.RuneSelf {
+			return fmt.Errorf("action %q must be ASCII", a)
+		}
+	}
+	if len(a) < 3 || !strings.EqualFold(a[:3], "s3:") {
 		return fmt.Errorf("action %q must start with s3:", a)
 	}
 	if len(a) > MaxPatternLen {
@@ -398,7 +404,7 @@ func (up *UserPolicy) Decide(action string) Decision {
 	}
 	up.compileOnce.Do(up.compile)
 	// Convert the action to runes once; every pattern is matched against it.
-	actionRunes := []rune(strings.ToLower(action))
+	actionRunes := foldAction(action)
 	result := Decision{Effect: Deny, Statement: -1}
 	for i := range up.Statements {
 		st := &up.Statements[i]
@@ -521,7 +527,7 @@ func (p *Policy) Decide(principal, action, resource string, rc RequestContext) D
 	// Convert the action and resource to runes once, up front, rather than
 	// on every Match call: with the same value reused across every statement
 	// and pattern, this is the dominant cost for a large policy or a long key.
-	actionRunes := []rune(strings.ToLower(action))
+	actionRunes := foldAction(action)
 	resourceRunes := []rune(resource)
 	result := Decision{Effect: None, Statement: -1}
 	for i := range p.Statement {
@@ -575,7 +581,7 @@ type DenyEvaluator struct {
 func (p *Policy) DenyEvaluatorFor(principal, action string, rc RequestContext) DenyEvaluator {
 	p.compileOnce.Do(p.compile)
 	rc.SourceIP = rc.SourceIP.Unmap()
-	actionRunes := []rune(strings.ToLower(action))
+	actionRunes := foldAction(action)
 	var e DenyEvaluator
 	// matched is scanned twice: once to size the slices exactly (the
 	// evaluator is built per request, so its allocations count), once to
@@ -625,7 +631,7 @@ type AllowEvaluator struct {
 func (p *Policy) AllowEvaluatorFor(principal, action string, rc RequestContext) AllowEvaluator {
 	p.compileOnce.Do(p.compile)
 	rc.SourceIP = rc.SourceIP.Unmap()
-	actionRunes := []rune(strings.ToLower(action))
+	actionRunes := foldAction(action)
 	var e AllowEvaluator
 	for i := range p.Statement {
 		st := &p.Statement[i]
@@ -808,7 +814,20 @@ func patternRunes(patterns []string) [][]rune {
 func lowerPatternRunes(patterns []string) [][]rune {
 	out := make([][]rune, len(patterns))
 	for i, p := range patterns {
-		out[i] = []rune(strings.ToLower(p))
+		out[i] = foldAction(p)
+	}
+	return out
+}
+
+// foldAction is an action or an action pattern in the form actions are
+// compared in: A-Z as a-z and nothing else. Lower-casing by Unicode would
+// make letters outside ASCII spell an action ("K", the Kelvin sign, as "k").
+func foldAction(s string) []rune {
+	out := []rune(s)
+	for i, c := range out {
+		if 'A' <= c && c <= 'Z' {
+			out[i] = c + ('a' - 'A')
+		}
 	}
 	return out
 }

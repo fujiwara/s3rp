@@ -77,9 +77,11 @@ var (
 		"s3:GetObject", "s3:getobject", "S3:PutObject", "s3:*", "s3:Get*", "s3:*Object",
 		"s3:DeleteObject", "s3:DeleteObject*", "s3:DeleteObject?", "s3:???Object", "s3:ListBucket",
 	}
+	// a request names any action, so one with a letter that Unicode would
+	// lower-case to ASCII ("K", the Kelvin sign) is among them
 	fuzzActions = []string{
 		"s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:DeleteObjectVersion",
-		"s3:GetObjectVersion", "s3:ListBucket",
+		"s3:GetObjectVersion", "s3:ListBucket", "s3:ListBuc\u212aet", "s3:Get\u212a",
 	}
 
 	fuzzPatternRunes = []rune("ab/*?é")
@@ -334,7 +336,7 @@ func FuzzUserPolicy(f *testing.F) {
 		}
 		for _, action := range fuzzActions {
 			want := modelUserDecide(up, action)
-			// the vocabulary is ASCII, so upper-casing names the same action
+			// only A-Z fold, so upper-casing names the same action
 			for _, a := range []string{action, strings.ToUpper(action)} {
 				if got := up.Decide(a); got != want {
 					t.Errorf("Decide(%q) = %+v, model says %+v\npolicy: %+v", a, got, want, up.Statements)

@@ -130,6 +130,18 @@ func TestParse(t *testing.T) {
 			"must start with s3:",
 		},
 		{
+			// "K", the Kelvin sign, lower-cases to "k" by Unicode
+			"non-ASCII action",
+			`{"Statement": [{"Effect": "Deny", "Principal": "*", "Action": "s3:ListBuc\u212aet", "Resource": "b"}]}`,
+			"must be ASCII",
+		},
+		{
+			// "ſ", the long s, folds to "s" by Unicode
+			"non-ASCII prefix",
+			`{"Statement": [{"Effect": "Deny", "Principal": "*", "Action": "\u017f3:GetObject", "Resource": "b"}]}`,
+			"must be ASCII",
+		},
+		{
 			"no resource",
 			`{"Statement": [{"Effect": "Deny", "Principal": "*", "Action": "s3:GetObject", "Resource": []}]}`,
 			"at least one resource",
@@ -552,6 +564,7 @@ func TestValidateUserPolicy(t *testing.T) {
 		{"bad effect", &policy.UserPolicy{Statements: []policy.ActionStatement{{Effect: "Maybe", Action: []string{"s3:Get*"}}}}, "effect must be Allow or Deny"},
 		{"empty action", &policy.UserPolicy{Statements: []policy.ActionStatement{{Effect: "Allow"}}}, "at least one action"},
 		{"non-s3 action", &policy.UserPolicy{Statements: []policy.ActionStatement{{Effect: "Allow", Action: []string{"iam:PassRole"}}}}, "must start with s3:"},
+		{"non-ASCII action", &policy.UserPolicy{Statements: []policy.ActionStatement{{Effect: "Allow", Action: []string{"s3:ListBuc\u212aet"}}}}, "must be ASCII"},
 	}
 	for _, tc := range errCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -773,7 +786,6 @@ func TestEvaluateActionCaseInsensitive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// the proxy always passes the canonical action name
 	cases := []struct {
 		action   string
 		resource string
@@ -784,6 +796,10 @@ func TestEvaluateActionCaseInsensitive(t *testing.T) {
 		{"s3:GetObject", "photos/a", policy.Deny},    // wildcard, mixed case
 		{"s3:HeadObject", "photos/a", policy.None},   // not covered
 		{"s3:PutObject", "Photos/a", policy.None},    // resource case-sensitive
+		{"S3:PUTOBJECT", "photos/a", policy.Deny},    // request upper-cased
+		// only A-Z fold: the Kelvin sign is not "k"
+		{"s3:PutObject\u212a", "photos/a", policy.None},
+		{"s3:GetObjectLoc\u212a", "photos/a", policy.Deny}, // s3:Get* still covers it
 	}
 	for _, tc := range cases {
 		if got := p.Evaluate("ta/batch", tc.action, tc.resource, policy.RequestContext{}); got != tc.want {
