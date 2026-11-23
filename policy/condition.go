@@ -15,6 +15,10 @@ import (
 // extension, deliberately not provided now.
 const SourceIPKey = "aws:SourceIp"
 
+// sourceIPKeyFolded is SourceIPKey as foldASCII gives it: the key is
+// matched without case, as on AWS.
+const sourceIPKeyFolded = "aws:sourceip"
+
 // Condition operator names, matched exactly as AWS spells them.
 const (
 	opIPAddress    = "IpAddress"
@@ -74,8 +78,13 @@ func (c *Condition) UnmarshalJSON(data []byte) error {
 		if err != nil {
 			return fmt.Errorf("malformed condition: %w", err)
 		}
+		// the key is the one key in any case, so two spellings of it are
+		// one key twice: their values would be merged into a wider range
+		if len(keys) > 1 {
+			return fmt.Errorf("condition operator %s has more than one key (only %s is supported)", op, SourceIPKey)
+		}
 		for key, raw := range keys {
-			if !strings.EqualFold(key, SourceIPKey) {
+			if string(foldASCII(key)) != sourceIPKeyFolded {
 				return fmt.Errorf("unknown condition key %q (only %s is supported)", key, SourceIPKey)
 			}
 			var values StringOrSlice

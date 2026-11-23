@@ -43,8 +43,11 @@ or key ([0002](0002-refuse-what-cannot-be-honored.md)).
 Names are compared exactly. The objects are the document (`Version`, `Id`,
 `Statement`), a statement (`Sid`, `Effect`, `Principal`, `NotPrincipal`,
 `Action`, `Resource`, `Condition`), a principal (the dialect's key alone),
-a condition (its operators) and an operator (its keys, where
-`aws:SourceIp` is still matched without case, as on AWS).
+a condition (its operators) and an operator (its one key). That key,
+`aws:SourceIp`, is still matched without case, as on AWS — over ASCII
+letters only — so an operator with two keys is the one key in two
+spellings and is refused too: their values would have been merged into a
+wider range.
 
 `Id` is accepted and not read. It is a label that policies written for AWS
 carry and that changes nothing a policy grants.

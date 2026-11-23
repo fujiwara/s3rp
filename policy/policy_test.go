@@ -197,6 +197,18 @@ func TestParse(t *testing.T) {
 			"duplicate condition operator IpAddress element",
 		},
 		{
+			// one key in two spellings: the ranges would be merged
+			"condition key twice in different case",
+			`{"Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*", "Condition": {"IpAddress": {"aws:SourceIp": "10.0.0.0/8", "AWS:sourceip": "0.0.0.0/0"}}}]}`,
+			"more than one key",
+		},
+		{
+			// "ſ", the long s, folds to "s" by Unicode
+			"non-ASCII condition key",
+			`{"Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*", "Condition": {"IpAddress": {"aw\u017f:SourceIp": "10.0.0.0/8"}}}]}`,
+			"unknown condition key",
+		},
+		{
 			"null Condition",
 			`{"Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*", "Condition": null}]}`,
 			"statement element \"Condition\" is null",

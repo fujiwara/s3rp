@@ -199,7 +199,7 @@ A statement may carry a `Condition` restricting it to requests from certain sour
 }
 ```
 
-- The supported operators are `IpAddress` and `NotIpAddress`, and the only key is `aws:SourceIp` (key names are case-insensitive, as on AWS). Anything else is rejected at load time rather than ignored — a restriction the author intended is never silently dropped.
+- The supported operators are `IpAddress` and `NotIpAddress`, and the only key is `aws:SourceIp` (key names are case-insensitive, as on AWS), given once per operator. Anything else is rejected at load time rather than ignored — a restriction the author intended is never silently dropped.
 - Values are CIDR prefixes or plain addresses (a plain address is a `/32` or `/128`). Values within one operator are ORed; the operators of one `Condition` are ANDed. IPv4 and IPv6 are distinct families — an IPv4 prefix never matches an IPv6 source (IPv4-mapped IPv6 counts as IPv4, in a source and in a value alike: `::ffff:10.0.0.0/104` is `10.0.0.0/8`).
 - The source address is the connection's `RemoteAddr`. When the request's source is unknown, conditions fail **closed**: `IpAddress` does not match (an `Allow` gated on it grants nothing) and `NotIpAddress` matches (a `Deny` gated on it applies). Behind a reverse proxy, `RemoteAddr` is the proxy's address — see [Behind a TLS terminator](building-a-service.md#behind-a-tls-terminator).
 - A source address is weak evidence: it can be spoofed or mangled by a misconfigured proxy chain. Use IP conditions to *restrict* (`Deny` + `NotIpAddress`, as above) as defense in depth, not as the sole basis for widening access.
