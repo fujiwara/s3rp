@@ -1,5 +1,23 @@
 # Changelog
 
+## [v0.1.0](https://github.com/fujiwara/s3rp/compare/v0.0.23...v0.1.0) - 2026-11-23
+
+- Add a backend factory and an in-memory backend by @fujiwara in https://github.com/fujiwara/s3rp/pull/268
+- Rename s3gw/membackend to localbackend and let it keep state in a directory by @fujiwara in https://github.com/fujiwara/s3rp/pull/270
+- Run the fidelity tests and s3-tests on localbackend too by @fujiwara in https://github.com/fujiwara/s3rp/pull/271
+- Answer a HEAD of one part as its GET: 206 with Content-Range by @fujiwara in https://github.com/fujiwara/s3rp/pull/272
+- Hold the policy evaluator to a reference model by @fujiwara in https://github.com/fujiwara/s3rp/pull/273
+- Check tenant isolation by enumeration against a specification by @fujiwara in https://github.com/fujiwara/s3rp/pull/274
+- Fix the ADR index after the merge of #274 by @fujiwara in https://github.com/fujiwara/s3rp/pull/275
+- State the policy semantics in Lean and restrict actions to ASCII by @fujiwara in https://github.com/fujiwara/s3rp/pull/276
+- Compare the gateway's authorization with the Lean specification by @fujiwara in https://github.com/fujiwara/s3rp/pull/277
+- Prove what the specification's glob matches by @fujiwara in https://github.com/fujiwara/s3rp/pull/278
+- Read policy documents strictly by @fujiwara in https://github.com/fujiwara/s3rp/pull/279
+- Add a JSON Schema of the policy document, held to Parse by @fujiwara in https://github.com/fujiwara/s3rp/pull/280
+- Specify whole requests in Lean: needs, copy source, DeleteObjects by @fujiwara in https://github.com/fujiwara/s3rp/pull/281
+- Read and write JSON with encoding/json/v2 by @fujiwara in https://github.com/fujiwara/s3rp/pull/282
+- Hold object keys to S3's definition: UTF-8, at most 1,024 bytes by @fujiwara in https://github.com/fujiwara/s3rp/pull/283
+
 ## [v0.0.23](https://github.com/fujiwara/s3rp/compare/v0.0.22...v0.0.23) - 2026-11-22
 
 - Add kopia to the client compatibility run by @fujiwara in https://github.com/fujiwara/s3rp/pull/249
