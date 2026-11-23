@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/fujiwara/s3rp/cors"
 	"github.com/fujiwara/s3rp/policy"
@@ -206,11 +207,19 @@ func splitPath(escapedPath string) (bucket, key string, err error) {
 	if bucket, err = url.PathUnescape(rawBucket); err != nil {
 		return "", "", err
 	}
+	if !utf8.ValidString(bucket) {
+		return "", "", errNotUTF8
+	}
 	if key, err = unescapeKey(rawKey); err != nil {
 		return "", "", err
 	}
 	return bucket, key, nil
 }
+
+// errNotUTF8 refuses a name that is not UTF-8. An object key is a sequence
+// of Unicode characters, and S3 answers such a path InvalidURI; a backend
+// may store it, and nothing that lists it can then show it.
+var errNotUTF8 = errors.New("the path is not UTF-8")
 
 // unescapeKey unescapes each segment of an object key, preserving
 // slashes between segments (so that %2F inside a segment survives).
@@ -223,7 +232,11 @@ func unescapeKey(rawKey string) (string, error) {
 		}
 		segments[i] = u
 	}
-	return strings.Join(segments, "/"), nil
+	key := strings.Join(segments, "/")
+	if !utf8.ValidString(key) {
+		return "", errNotUTF8
+	}
+	return key, nil
 }
 
 func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) error {

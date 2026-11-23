@@ -3,9 +3,12 @@ package s3gw_test
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -119,6 +122,20 @@ func TestRequestValuesValidated(t *testing.T) {
 			})
 			return err
 		}, code: "NotImplemented", message: "x-amz-object-annotation-directive: COPY is not implemented"},
+		// a key is Unicode; Amazon S3 itself answered these so
+		{name: "key in any script", call: put(func(in *s3.PutObjectInput) { in.Key = aws.String("写真/été.jpg") })},
+		{name: "key that is not UTF-8", call: put(func(in *s3.PutObjectInput) { in.Key = aws.String("k\xff") }),
+			code: "InvalidURI", message: "Couldn't parse the specified URI."},
+		{name: "key cut inside a character", call: put(func(in *s3.PutObjectInput) { in.Key = aws.String("dir/k\xc3") }),
+			code: "InvalidURI", message: "Couldn't parse the specified URI."},
+		{name: "key that is a surrogate", call: put(func(in *s3.PutObjectInput) { in.Key = aws.String("k\xed\xa0\x80") }),
+			code: "InvalidURI", message: "Couldn't parse the specified URI."},
+		{name: "copy source that is not UTF-8", call: func(t *testing.T, c *s3.Client) error {
+			_, err := c.CopyObject(t.Context(), &s3.CopyObjectInput{
+				Bucket: aws.String("testbucket"), Key: aws.String("dst"), CopySource: aws.String("testbucket/k%FF"),
+			})
+			return err
+		}, code: "InvalidArgument", message: "Invalid copy source"},
 		{name: "parts out of order", call: func(t *testing.T, c *s3.Client) error {
 			_, err := c.CompleteMultipartUpload(t.Context(), &s3.CompleteMultipartUploadInput{
 				Bucket: aws.String("testbucket"), Key: aws.String("k"), UploadId: aws.String("u"),
@@ -156,5 +173,49 @@ func TestRequestValuesValidated(t *testing.T) {
 				t.Error("a refused request must not reach the backend")
 			}
 		})
+	}
+}
+
+// The key of a POST upload is a form field, and no more a key when it is
+// not UTF-8.
+func TestPostKeyMustBeUTF8(t *testing.T) {
+	gw := newTestGateway(t)
+	stub := &stubPost{}
+	if err := gw.SetBackend("testbucket", stub); err != nil {
+		t.Fatal(err)
+	}
+	form := &postForm{
+		conditions: []string{`["starts-with", "$key", ""]`},
+		fields:     [][2]string{{"key", "k\xff"}},
+		filename:   "a.txt",
+		content:    "hello post",
+	}
+	w := httptest.NewRecorder()
+	gw.Handler().ServeHTTP(w, form.request(t))
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "<Code>InvalidArgument</Code>") {
+		t.Errorf("status %d: %s", w.Code, w.Body.String())
+	}
+	if stub.putIn != nil {
+		t.Error("the backend was reached")
+	}
+}
+
+// Nor does a key in a DeleteObjects body pass: XML that is not UTF-8 is not
+// XML.
+func TestDeleteObjectsKeyMustBeUTF8(t *testing.T) {
+	gw := newTestGateway(t)
+	stub := &stubBackend{}
+	if err := gw.SetBackend("testbucket", stub); err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("<Delete><Object><Key>k\xff</Key></Object></Delete>")
+	w := httptest.NewRecorder()
+	gw.Handler().ServeHTTP(w, signedRequest(t, "POST", "http://s3.example.com/testbucket?delete",
+		body, "UNSIGNED-PAYLOAD", time.Now(), testCreds(), nil))
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "<Code>MalformedXML</Code>") {
+		t.Errorf("status %d: %s", w.Code, w.Body.String())
+	}
+	if stub.delObjsIn != nil {
+		t.Error("the backend was reached")
 	}
 }

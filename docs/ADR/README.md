@@ -66,6 +66,7 @@ retroactively").
 | [0052](0052-state-the-policy-semantics-in-lean.md) | The policy semantics are stated in Lean, with their properties proved | 2026-11-23 | Accepted |
 | [0053](0053-read-policy-documents-strictly.md) | A policy document is read strictly | 2026-11-23 | Accepted |
 | [0054](0054-publish-a-schema-of-the-policy-document.md) | The policy document has a JSON Schema, held to Parse | 2026-11-23 | Accepted |
+| [0056](0056-refuse-keys-that-are-not-utf-8.md) | An object key that is not UTF-8 is refused | 2026-11-23 | Accepted |
 
 ## Writing a record
 

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -146,6 +147,9 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, t tar
 	key := strings.ReplaceAll(keyField, "${filename}", filename)
 	if key == "" {
 		return s3err.New(http.StatusBadRequest, "InvalidArgument", "The key must not be empty.")
+	}
+	if !utf8.ValidString(key) {
+		return s3err.New(http.StatusBadRequest, "InvalidArgument", "The key must be UTF-8.")
 	}
 	// conditions are evaluated against what will actually happen: the
 	// substituted key, and the bucket the URL targets
