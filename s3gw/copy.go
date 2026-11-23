@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/s3xml"
@@ -27,6 +28,9 @@ func (g *Gateway) resolveCopySource(c *opCtx, rt *route) (string, *CopySource, s
 	// unescaped before it is split, as S3 does: the AWS SDK for .NET
 	// escapes the slash between bucket and key as well
 	path, err := url.PathUnescape(raw)
+	if err == nil && !utf8.ValidString(path) {
+		err = errNotUTF8
+	}
 	if err != nil {
 		return "", nil, "", s3err.New(http.StatusBadRequest, "InvalidArgument", "Invalid copy source").WithCause(err)
 	}
@@ -34,6 +38,11 @@ func (g *Gateway) resolveCopySource(c *opCtx, rt *route) (string, *CopySource, s
 	if !ok || srcKey == "" {
 		return "", nil, "", s3err.New(http.StatusBadRequest, "InvalidArgument",
 			"Copy Source must mention the source bucket and key: sourcebucket/sourcekey")
+	}
+	// no object has such a key
+	if len(srcKey) > maxKeyLen {
+		return "", nil, "", s3err.New(http.StatusNotFound, "NoSuchKey", "The specified key does not exist.").
+			WithCause(keyTooLong(srcKey))
 	}
 	query, err := url.ParseQuery(versionID)
 	if err != nil {

@@ -3,9 +3,12 @@ package s3gw_test
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -119,6 +122,33 @@ func TestRequestValuesValidated(t *testing.T) {
 			})
 			return err
 		}, code: "NotImplemented", message: "x-amz-object-annotation-directive: COPY is not implemented"},
+		// a key is Unicode; Amazon S3 itself answered these so
+		{name: "key in any script", call: put(func(in *s3.PutObjectInput) { in.Key = aws.String("写真/été.jpg") })},
+		{name: "key that is not UTF-8", call: put(func(in *s3.PutObjectInput) { in.Key = aws.String("k\xff") }),
+			code: "InvalidURI", message: "Couldn't parse the specified URI."},
+		{name: "key cut inside a character", call: put(func(in *s3.PutObjectInput) { in.Key = aws.String("dir/k\xc3") }),
+			code: "InvalidURI", message: "Couldn't parse the specified URI."},
+		{name: "key that is a surrogate", call: put(func(in *s3.PutObjectInput) { in.Key = aws.String("k\xed\xa0\x80") }),
+			code: "InvalidURI", message: "Couldn't parse the specified URI."},
+		// 1024 bytes of UTF-8, not characters; Amazon S3 itself answered so
+		{name: "key at the limit", call: put(func(in *s3.PutObjectInput) { in.Key = aws.String(strings.Repeat("a", 1024)) })},
+		{name: "key over the limit", call: put(func(in *s3.PutObjectInput) { in.Key = aws.String(strings.Repeat("a", 1025)) }),
+			code: "KeyTooLongError", message: "Your key is too long"},
+		{name: "key at the limit in two-byte characters", call: put(func(in *s3.PutObjectInput) { in.Key = aws.String(strings.Repeat("é", 512)) })},
+		{name: "key over the limit in two-byte characters", call: put(func(in *s3.PutObjectInput) { in.Key = aws.String(strings.Repeat("é", 513)) }),
+			code: "KeyTooLongError", message: "Your key is too long"},
+		{name: "copy source over the limit", call: func(t *testing.T, c *s3.Client) error {
+			_, err := c.CopyObject(t.Context(), &s3.CopyObjectInput{
+				Bucket: aws.String("testbucket"), Key: aws.String("dst"), CopySource: aws.String("testbucket/" + strings.Repeat("a", 1025)),
+			})
+			return err
+		}, code: "NoSuchKey", message: "The specified key does not exist."},
+		{name: "copy source that is not UTF-8", call: func(t *testing.T, c *s3.Client) error {
+			_, err := c.CopyObject(t.Context(), &s3.CopyObjectInput{
+				Bucket: aws.String("testbucket"), Key: aws.String("dst"), CopySource: aws.String("testbucket/k%FF"),
+			})
+			return err
+		}, code: "InvalidArgument", message: "Invalid copy source"},
 		{name: "parts out of order", call: func(t *testing.T, c *s3.Client) error {
 			_, err := c.CompleteMultipartUpload(t.Context(), &s3.CompleteMultipartUploadInput{
 				Bucket: aws.String("testbucket"), Key: aws.String("k"), UploadId: aws.String("u"),
@@ -156,5 +186,91 @@ func TestRequestValuesValidated(t *testing.T) {
 				t.Error("a refused request must not reach the backend")
 			}
 		})
+	}
+}
+
+// The key of a POST upload is a form field, and held to what a key is.
+func TestPostKeyChecked(t *testing.T) {
+	for _, tc := range []struct{ name, key, code string }{
+		{"not UTF-8", "k\xff", "InvalidArgument"},
+		{"over the limit", strings.Repeat("a", 1025), "KeyTooLongError"},
+		// ${filename} is part of the key by the time it is one
+		{"over the limit once the file name is in it", strings.Repeat("a", 1020) + "${filename}", "KeyTooLongError"},
+		{"at the limit", strings.Repeat("a", 1024), ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gw := newTestGateway(t)
+			stub := &stubPost{}
+			if err := gw.SetBackend("testbucket", stub); err != nil {
+				t.Fatal(err)
+			}
+			form := &postForm{
+				conditions: []string{`["starts-with", "$key", ""]`},
+				fields:     [][2]string{{"key", tc.key}},
+				filename:   "a.txt",
+				content:    "hello post",
+			}
+			w := httptest.NewRecorder()
+			gw.Handler().ServeHTTP(w, form.request(t))
+			if tc.code == "" {
+				if w.Code != http.StatusNoContent || stub.putIn == nil {
+					t.Errorf("status %d: %s", w.Code, w.Body.String())
+				}
+				return
+			}
+			if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "<Code>"+tc.code+"</Code>") {
+				t.Errorf("status %d: %s", w.Code, w.Body.String())
+			}
+			if stub.putIn != nil {
+				t.Error("the backend was reached")
+			}
+		})
+	}
+}
+
+// Nor does a key in a DeleteObjects body pass: XML that is not UTF-8 is not
+// XML.
+func TestDeleteObjectsKeyMustBeUTF8(t *testing.T) {
+	gw := newTestGateway(t)
+	stub := &stubBackend{}
+	if err := gw.SetBackend("testbucket", stub); err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("<Delete><Object><Key>k\xff</Key></Object></Delete>")
+	w := httptest.NewRecorder()
+	gw.Handler().ServeHTTP(w, signedRequest(t, "POST", "http://s3.example.com/testbucket?delete",
+		body, "UNSIGNED-PAYLOAD", time.Now(), testCreds(), nil))
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "<Code>MalformedXML</Code>") {
+		t.Errorf("status %d: %s", w.Code, w.Body.String())
+	}
+	if stub.delObjsIn != nil {
+		t.Error("the backend was reached")
+	}
+}
+
+// A DeleteObjects key over the limit is refused by itself: the others are
+// deleted, and the backend never hears of it.
+func TestDeleteObjectsKeyTooLong(t *testing.T) {
+	stub := &stubBackend{delObjsOut: &s3.DeleteObjectsOutput{Deleted: []types.DeletedObject{{Key: aws.String("ok")}}}}
+	client, _ := newTestProxy(t, stub)
+	atLimit, over := strings.Repeat("a", 1024), strings.Repeat("b", 1025)
+	out, err := client.DeleteObjects(t.Context(), &s3.DeleteObjectsInput{
+		Bucket: aws.String("testbucket"),
+		Delete: &types.Delete{Objects: []types.ObjectIdentifier{
+			{Key: aws.String("ok")}, {Key: aws.String(atLimit)}, {Key: aws.String(over)},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Errors) != 1 || aws.ToString(out.Errors[0].Key) != over || aws.ToString(out.Errors[0].Code) != "KeyTooLongError" {
+		t.Errorf("errors: %+v", out.Errors)
+	}
+	var sent []string
+	for _, o := range stub.delObjsIn.Delete.Objects {
+		sent = append(sent, aws.ToString(o.Key))
+	}
+	if len(sent) != 2 || sent[0] != "ok" || sent[1] != atLimit {
+		t.Errorf("the backend was sent %d keys", len(sent))
 	}
 }

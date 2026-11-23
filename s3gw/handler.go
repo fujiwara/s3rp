@@ -3,6 +3,7 @@ package s3gw
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -10,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/fujiwara/s3rp/cors"
 	"github.com/fujiwara/s3rp/policy"
@@ -206,10 +208,45 @@ func splitPath(escapedPath string) (bucket, key string, err error) {
 	if bucket, err = url.PathUnescape(rawBucket); err != nil {
 		return "", "", err
 	}
+	if !utf8.ValidString(bucket) {
+		return "", "", errNotUTF8
+	}
 	if key, err = unescapeKey(rawKey); err != nil {
 		return "", "", err
 	}
 	return bucket, key, nil
+}
+
+// errNotUTF8 refuses a name that is not UTF-8. An object key is a sequence
+// of Unicode characters, and S3 answers such a path InvalidURI; a backend
+// may store it, and nothing that lists it can then show it.
+var errNotUTF8 = errors.New("the path is not UTF-8")
+
+// maxKeyLen is S3's limit on an object key, in bytes of its UTF-8 form.
+const maxKeyLen = 1024
+
+func keyTooLong(key string) *s3err.Error {
+	return s3err.New(http.StatusBadRequest, "KeyTooLongError", "Your key is too long").
+		WithCause(fmt.Errorf("the key is %d bytes, at most %d are allowed", len(key), maxKeyLen))
+}
+
+// checkKey is what S3 requires of an object key whatever the bucket holds.
+func checkKey(key string) error {
+	if !utf8.ValidString(key) {
+		return errNotUTF8
+	}
+	if len(key) > maxKeyLen {
+		return keyTooLong(key)
+	}
+	return nil
+}
+
+// invalidTarget is the refusal of a path requestTarget could not read.
+func invalidTarget(err error) *s3err.Error {
+	if s3e, ok := errors.AsType[*s3err.Error](err); ok {
+		return s3e
+	}
+	return s3err.New(http.StatusBadRequest, "InvalidURI", "Couldn't parse the specified URI.").WithCause(err)
 }
 
 // unescapeKey unescapes each segment of an object key, preserving
@@ -223,7 +260,11 @@ func unescapeKey(rawKey string) (string, error) {
 		}
 		segments[i] = u
 	}
-	return strings.Join(segments, "/"), nil
+	key := strings.Join(segments, "/")
+	if err := checkKey(key); err != nil {
+		return "", err
+	}
+	return key, nil
 }
 
 func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) error {
@@ -236,7 +277,7 @@ func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	if r.Method == http.MethodPost && isMultipartForm(r) {
 		t, err := g.requestTarget(r)
 		if err != nil {
-			return s3err.New(http.StatusBadRequest, "InvalidURI", "Couldn't parse the specified URI.").WithCause(err)
+			return invalidTarget(err)
 		}
 		if t.bucket != "" && t.key == "" {
 			return g.handlePostObject(w, r, t)
@@ -255,7 +296,7 @@ func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	}
 	t, err := g.requestTarget(r)
 	if err != nil {
-		return s3err.New(http.StatusBadRequest, "InvalidURI", "Couldn't parse the specified URI.").WithCause(err)
+		return invalidTarget(err)
 	}
 	hdr := newSignedHeader(r, vr.SignedHeaders)
 	// before any check, so that a refusal below is recorded with the
