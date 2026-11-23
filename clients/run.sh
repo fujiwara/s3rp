@@ -346,7 +346,14 @@ for scenario in clients/scenarios/*.yml; do SCENARIOS+=("$(scenario_name "$scena
         echo
         # the helpers' own curl requests are not the client's
         cat "$dir"/*.requests.jsonl | jq -c 'select(.user_agent | startswith("curl/") | not)' > "$dir/client-requests.jsonl"
-        echo "User-Agent: $(jq -r .user_agent "$dir/client-requests.jsonl" | sort -u | paste -sd, -)"
+        # one a line: a client may put the command or the features in use
+        # in it, and send a dozen different ones
+        echo "User-Agent, with the requests that carried it:"
+        echo
+        jq -r .user_agent "$dir/client-requests.jsonl" | sort | uniq -c \
+            | sed -E 's/^ *([0-9]+) (.*)$/- `\2`: \1/'
+        echo
+        echo "Operations:"
         echo
         jq -r '.operation // "(none)"' "$dir/client-requests.jsonl" \
             | sort | uniq -c | awk '{ printf "- %s: %s\n", $2, $1 }'
