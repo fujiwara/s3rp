@@ -144,42 +144,42 @@ func TestParse(t *testing.T) {
 		{
 			"misspelled Condition",
 			`{"Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*", "Conditon": {"IpAddress": {"aws:SourceIp": "10.0.0.0/8"}}}]}`,
-			"unknown statement element \"Conditon\"",
+			"unknown element /Statement/0/Conditon",
 		},
 		{
 			"NotResource",
 			`{"Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*", "NotResource": "b/secret/*"}]}`,
-			"unknown statement element \"NotResource\"",
+			"unknown element /Statement/0/NotResource",
 		},
 		{
 			"NotAction",
 			`{"Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*", "NotAction": "s3:DeleteObject"}]}`,
-			"unknown statement element \"NotAction\"",
+			"unknown element /Statement/0/NotAction",
 		},
 		{
 			"lower-case element",
 			`{"Statement": [{"effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*"}]}`,
-			"unknown statement element \"effect\"",
+			"unknown element /Statement/0/effect",
 		},
 		{
 			"lower-case Statement",
 			`{"statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*"}]}`,
-			"unknown policy element \"statement\"",
+			"unknown element /statement",
 		},
 		{
 			"duplicate Effect",
 			`{"Statement": [{"Effect": "Deny", "Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*"}]}`,
-			"duplicate statement element \"Effect\"",
+			`duplicate object member name "Effect" within "/Statement/0"`,
 		},
 		{
 			"duplicate Statement",
 			`{"Statement": [], "Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*"}]}`,
-			"duplicate policy element \"Statement\"",
+			`duplicate object member name "Statement"`,
 		},
 		{
 			"duplicate principal key",
 			`{"Statement": [{"Effect": "Deny", "NotPrincipal": {"S3RP": "ta/alice", "S3RP": "ta/batch"}, "Action": "s3:GetObject", "Resource": "b/*"}]}`,
-			"duplicate principal element \"S3RP\"",
+			`duplicate object member name "S3RP" within "/Statement/0/NotPrincipal"`,
 		},
 		{
 			"principal of another kind",
@@ -189,12 +189,12 @@ func TestParse(t *testing.T) {
 		{
 			"duplicate condition operator",
 			`{"Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*", "Condition": {"IpAddress": {"aws:SourceIp": "10.0.0.0/8"}, "IpAddress": {"aws:SourceIp": "0.0.0.0/0"}}}]}`,
-			"duplicate condition element \"IpAddress\"",
+			`duplicate object member name "IpAddress" within "/Statement/0/Condition"`,
 		},
 		{
 			"duplicate condition key",
 			`{"Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*", "Condition": {"IpAddress": {"aws:SourceIp": "10.0.0.0/8", "aws:SourceIp": "0.0.0.0/0"}}}]}`,
-			"duplicate condition operator IpAddress element",
+			`duplicate object member name "aws:SourceIp" within "/Statement/0/Condition/IpAddress"`,
 		},
 		{
 			// one key in two spellings: the ranges would be merged
@@ -216,27 +216,27 @@ func TestParse(t *testing.T) {
 		{
 			"null Condition",
 			`{"Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*", "Condition": null}]}`,
-			"statement element \"Condition\" is null",
+			"null at /Statement/0/Condition",
 		},
 		{
 			"null Principal",
 			`{"Statement": [{"Effect": "Deny", "Principal": null, "NotPrincipal": {"S3RP": "ta/alice"}, "Action": "s3:GetObject", "Resource": "b/*"}]}`,
-			"statement element \"Principal\" is null",
+			"null at /Statement/0/Principal",
 		},
 		{
 			"unknown policy element",
 			`{"Statment": [], "Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*"}]}`,
-			"unknown policy element \"Statment\"",
+			"unknown element /Statment",
 		},
 		{
 			"statement not an object",
 			`{"Statement": ["Allow"]}`,
-			"statement must be an object",
+			"unexpected string at /Statement/0",
 		},
 		{
 			"data after the document",
 			`{"Statement": [{"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "b/*"}]} {}`,
-			"data after the policy",
+			"after top-level value",
 		},
 		{
 			"no resource",

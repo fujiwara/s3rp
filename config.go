@@ -33,7 +33,7 @@ type Config struct {
 	Listen string `yaml:"listen" json:"listen"`
 	// TLS, when set, serves HTTPS on Listen with this certificate; unset,
 	// the server speaks plain HTTP (TLS is then terminated in front).
-	TLS *TLSConfig `yaml:"tls,omitempty" json:"tls,omitempty"`
+	TLS *TLSConfig `yaml:"tls,omitempty" json:"tls,omitzero"`
 	// VirtualHostSuffix enables virtual-hosted-style addressing under this
 	// host name ("s3.example.com": bucket "photos" is photos.s3.example.com)
 	// alongside the path style; empty = path style only.
@@ -42,12 +42,12 @@ type Config struct {
 	// opens after Failures consecutive failed attempts and probes once per
 	// Cooldown after that; requests to an open backend are refused with
 	// ServiceUnavailable instead of waiting on it.
-	CircuitBreaker *CircuitBreakerConfig `yaml:"circuit_breaker,omitempty" json:"circuit_breaker,omitempty"`
+	CircuitBreaker *CircuitBreakerConfig `yaml:"circuit_breaker,omitempty" json:"circuit_breaker,omitzero"`
 	// Metrics, when set, exports the metrics of docs/metrics.md over OTLP.
-	Metrics *MetricsConfig `yaml:"metrics,omitempty" json:"metrics,omitempty"`
+	Metrics *MetricsConfig `yaml:"metrics,omitempty" json:"metrics,omitzero"`
 	// StrictActions refuses a config whose policies name an action the
 	// gateway never authorizes; unset, LoadConfig only warns about them.
-	StrictActions bool            `yaml:"strict_actions,omitempty" json:"strict_actions,omitempty"`
+	StrictActions bool            `yaml:"strict_actions,omitempty" json:"strict_actions,omitzero"`
 	Tenants       []*TenantConfig `yaml:"tenants,omitempty" json:"tenants,omitempty"`
 }
 

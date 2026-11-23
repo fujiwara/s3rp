@@ -1,7 +1,6 @@
 package harness
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
 
@@ -31,7 +30,7 @@ func NewInterceptor(st *MemStore, backend BackendBuckets, next http.Handler) htt
 		store:    st,
 		backend:  backend,
 		next:     next,
-		logger:   &jsonLogger{enc: json.NewEncoder(io.Discard)},
+		logger:   &jsonLogger{w: io.Discard},
 	}
 }
 

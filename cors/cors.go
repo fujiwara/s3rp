@@ -25,7 +25,7 @@ type Rule struct {
 	AllowedMethods []string `yaml:"allowed_methods" json:"allowed_methods"`
 	AllowedHeaders []string `yaml:"allowed_headers,omitempty" json:"allowed_headers,omitempty"`
 	ExposeHeaders  []string `yaml:"expose_headers,omitempty" json:"expose_headers,omitempty"`
-	MaxAgeSeconds  int      `yaml:"max_age_seconds,omitempty" json:"max_age_seconds,omitempty"`
+	MaxAgeSeconds  int      `yaml:"max_age_seconds,omitempty" json:"max_age_seconds,omitzero"`
 }
 
 // Validate checks a rule's structure: at least one origin and one method,

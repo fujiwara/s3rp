@@ -206,7 +206,7 @@ type Backend struct {
 	Bucket          string   `yaml:"bucket,omitempty" json:"bucket,omitempty"`
 	AccessKeyID     string   `yaml:"access_key_id" json:"access_key_id"`
 	SecretAccessKey Password `yaml:"secret_access_key" json:"secret_access_key"`
-	UsePathStyle    *bool    `yaml:"use_path_style,omitempty" json:"use_path_style,omitempty"`
+	UsePathStyle    *bool    `yaml:"use_path_style,omitempty" json:"use_path_style,omitzero"`
 }
 
 // SetDefaults fills in the optional fields of a backend definition, given the

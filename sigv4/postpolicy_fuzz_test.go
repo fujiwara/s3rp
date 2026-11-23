@@ -2,7 +2,7 @@ package sigv4_test
 
 import (
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/v2"
 	"maps"
 	"net/http/httptest"
 	"slices"
@@ -73,7 +73,7 @@ func buildPostPolicy(fields map[string]string, startsWith map[string]bool, expir
 	doc, err := json.Marshal(map[string]any{
 		"expiration": expiration.Format(time.RFC3339),
 		"conditions": conds,
-	})
+	}, json.Deterministic(true)) // the targets flip bytes of it by position
 	if err != nil {
 		panic(err)
 	}
