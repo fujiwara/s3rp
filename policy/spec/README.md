@@ -3,11 +3,15 @@
 The policy semantics in [Lean 4](https://lean-lang.org/), with the properties they are meant to have stated as theorems. Lean checks each proof when it builds the project, so a successful build means every property holds for every policy and every request — not for the ones a test happened to try.
 
 - [`PolicySpec/Semantics.lean`](PolicySpec/Semantics.lean) — the definitions: when a statement applies, what a bucket policy and a user policy decide, and what the gateway makes of the two (`permits`).
+- [`PolicySpec/Glob.lean`](PolicySpec/Glob.lean) — what a pattern matches, as a relation (`Matches`), and the proof that `glob` computes it.
 - [`PolicySpec/Properties.lean`](PolicySpec/Properties.lean) — the theorems. Read the statements; the proofs after `:= by` are Lean's to check.
 - [`Main.lean`](Main.lean) — the definitions as a program, which the Go tests compare the evaluator and the gateway with (through `internal/policyspec`).
 
 | Theorem | Says |
 |---|---|
+| `glob_iff`, `matchResource_iff`, `matchAction_iff` | A pattern matches what `Matches` says: `*` any run of characters, `?` any one, anything else itself |
+| `matches_star`, `matches_literal`, `matches_prefix` | `*` matches everything; a pattern without wildcards only itself; literal characters and `*` the values starting with them |
+| `matchAction_case` | Spellings of an action differing in the case of ASCII letters are one action |
 | `user_entry_covers`, `tenant_entry_covers` | Whom `tenant/user` and `tenant/*` name |
 | `everyone_includes`, `listed_includes`, `allBut_includes` | Whom `"*"`, `Principal` and `NotPrincipal` are about |
 | `condition_unknown_source`, `condition_known_source` | When a condition holds; an unknown source address fails closed |
@@ -49,4 +53,3 @@ $ go test ./s3gw -run 'TestAuthorizationMatchesLeanSpec$' -v
 - **Text is not specified.** The specification starts from a parsed policy: a principal is a tenant and a user, an address its bits. How `Parse` reads the JSON document, a principal name or a CIDR block is outside it, and the comparison converts those with Go's own parsers.
 - **Actions are ASCII.** `matchAction` compares `A`–`Z` as `a`–`z` and nothing else, as the evaluator does; `Parse` refuses an action pattern with a character outside ASCII.
 - **What a request needs is not specified.** `permits` decides one action on one resource. Which actions an operation needs, where a copy's source resolves and how DeleteObjects decides each key are the gateway's, held to a specification of their own in `s3gw` (ADR 0051).
-- **`glob` has no theorems yet**; it is held to the evaluator by the comparison alone.
