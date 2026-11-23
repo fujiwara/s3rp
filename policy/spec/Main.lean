@@ -3,7 +3,7 @@ import PolicySpec.Semantics
 
 /-!
 The specification as a program, for comparing an implementation with it
-(policy/spec_test.go). Each input line is a JSON object — a bucket policy, a
+(internal/policyspec). Each input line is a JSON object — a bucket policy, a
 user policy and requests — and each output line the decisions for those
 requests, in order.
 -/
@@ -48,6 +48,8 @@ structure WireRequest where
   deriving FromJson
 
 structure WireCase where
+  /-- the tenant owning the bucket; absent when only the policies are asked -/
+  owner : Option String
   statements : List WireStatement
   userPolicy : List WireUserStatement
   requests : List WireRequest
@@ -100,7 +102,7 @@ def requestOf (r : WireRequest) : Except String Request := do
 
 def answer (line : String) : Except String Json := do
   let c : WireCase ← fromJson? (← Json.parse line)
-  let policy : Policy := ⟨"", ← c.statements.mapM statementOf⟩
+  let policy : Policy := ⟨c.owner.getD "", ← c.statements.mapM statementOf⟩
   let userPolicy ← c.userPolicy.mapM fun s => do
     pure (⟨← effectOf s.effect, s.actions⟩ : UserStatement)
   let results ← c.requests.mapM fun w => do
@@ -113,7 +115,9 @@ def answer (line : String) : Except String Json := do
       ("effect", effect),
       ("statement", toJson statement),
       ("mentions", policy.mentions r.principal),
-      ("userAllows", userAllows userPolicy r.action)]
+      ("userAllows", userAllows userPolicy r.action),
+      ("visible", policy.visible r.principal),
+      ("permits", permits userPolicy policy r)]
   pure (Json.arr results.toArray)
 
 partial def serve (stdin stdout : IO.FS.Stream) : IO UInt32 := do
@@ -123,6 +127,8 @@ partial def serve (stdin stdout : IO.FS.Stream) : IO UInt32 := do
   match answer line with
   | .ok json =>
     stdout.putStrLn json.compress
+    -- the caller waits for each answer before it sends the next case
+    stdout.flush
     serve stdin stdout
   | .error e =>
     IO.eprintln s!"policyspec: {e}"

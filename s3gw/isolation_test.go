@@ -12,6 +12,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
+	"os"
 	"reflect"
 	"slices"
 	"strings"
@@ -21,6 +23,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fujiwara/s3rp/cors"
+	"github.com/fujiwara/s3rp/internal/policyspec"
 	"github.com/fujiwara/s3rp/policy"
 	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/s3gw"
@@ -84,11 +87,9 @@ func isoStore(t *testing.T, w isoWorld) memStore {
 	return m
 }
 
-// TestAuthorizationMatchesSpec enumerates every policy of up to two
-// statements, in either order, over a small vocabulary and compares each way the gateway
-// decides — bucket resolution, authorize, the per-object authorizer and its
-// skip — with the specification, for every user, action and resource.
-func TestAuthorizationMatchesSpec(t *testing.T) {
+// isoPolicies is every policy of up to two statements, in either order, over
+// a small vocabulary.
+func isoPolicies() [][]isoStatement {
 	var allows, denies []isoStatement
 	for _, action := range []string{"s3:*", "s3:GetObject", "s3:GetObject*", "s3:PutObject", "s3:ListBucket"} {
 		for _, resource := range []string{"b", "b/*", "b/pub/*"} {
@@ -112,14 +113,43 @@ func TestAuthorizationMatchesSpec(t *testing.T) {
 			policies = append(policies, []isoStatement{first, second})
 		}
 	}
+	return policies
+}
 
-	actions := []string{"s3:GetObject", "s3:GetObjectVersion", "s3:PutObject", "s3:ListBucket", "s3:DeleteObject"}
-	resources := []string{"b", "b/pub/k", "b/priv/k"}
+var (
+	isoActions   = []string{"s3:GetObject", "s3:GetObjectVersion", "s3:PutObject", "s3:ListBucket", "s3:DeleteObject"}
+	isoResources = []string{"b", "b/pub/k", "b/priv/k"}
+)
 
-	// the enumeration is cut into independent parts only to run in parallel
-	const parts = 8
-	for i := range parts {
-		chunk := policies[i*len(policies)/parts : (i+1)*len(policies)/parts]
+// isoParts is how many independent parts an enumeration is cut into, only
+// to run them in parallel.
+const isoParts = 8
+
+// setIsoPolicy gives bucket b of the store the policy, parsed as a store
+// would parse it.
+func setIsoPolicy(t *testing.T, m memStore, statements []isoStatement) string {
+	t.Helper()
+	text := isoPolicyText(statements)
+	b := m.buckets["b"]
+	b.PolicyText, b.Policy = text, nil
+	if text != "" {
+		p, err := policy.Parse("b", text, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", text, err)
+		}
+		b.Policy = p
+	}
+	return text
+}
+
+// TestAuthorizationMatchesSpec compares each way the gateway decides —
+// bucket resolution, authorize, the per-object authorizer and its skip —
+// with the specification, for every policy of isoPolicies and every user,
+// action and resource.
+func TestAuthorizationMatchesSpec(t *testing.T) {
+	policies := isoPolicies()
+	for i := range isoParts {
+		chunk := policies[i*len(policies)/isoParts : (i+1)*len(policies)/isoParts]
 		t.Run(fmt.Sprintf("part%d", i), func(t *testing.T) {
 			t.Parallel()
 			world := isoWorld{"b": {owner: "ta"}}
@@ -128,20 +158,11 @@ func TestAuthorizationMatchesSpec(t *testing.T) {
 			ctx := t.Context()
 			for _, statements := range chunk {
 				world["b"] = isoBucket{owner: "ta", policy: statements}
-				text := isoPolicyText(statements)
-				b := m.buckets["b"]
-				b.PolicyText, b.Policy = text, nil
-				if text != "" {
-					p, err := policy.Parse("b", text, nil)
-					if err != nil {
-						t.Fatalf("%s: %v", text, err)
-					}
-					b.Policy = p
-				}
+				text := setIsoPolicy(t, m, statements)
 				for _, u := range isoUsers {
 					key := m.keys[u.keyID()]
-					for _, action := range actions {
-						for _, resource := range resources {
+					for _, action := range isoActions {
+						for _, resource := range isoResources {
 							got := gw.DecideAs(ctx, key, "b", action, resource)
 							visible := world.visible(u, "b")
 							permitted := world.permits(u, "b", action, resource)
@@ -159,6 +180,70 @@ func TestAuthorizationMatchesSpec(t *testing.T) {
 		})
 	}
 	t.Logf("%d policies", len(policies))
+}
+
+// TestAuthorizationMatchesLeanSpec is the same comparison with the Lean
+// specification (policy/spec) in the Go one's place: what the gateway
+// decides is what `permits` and `visible` say there, for the same policies,
+// users, actions and resources.
+func TestAuthorizationMatchesLeanSpec(t *testing.T) {
+	path := os.Getenv(policyspec.Env)
+	if path == "" {
+		t.Skipf("%s is not set", policyspec.Env)
+	}
+	policies := isoPolicies()
+	for i := range isoParts {
+		chunk := policies[i*len(policies)/isoParts : (i+1)*len(policies)/isoParts]
+		t.Run(fmt.Sprintf("part%d", i), func(t *testing.T) {
+			t.Parallel()
+			m := isoStore(t, isoWorld{"b": {owner: "ta"}})
+			gw := s3gw.New(m)
+			ctx := t.Context()
+			spec, err := policyspec.Start(ctx, path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, statements := range chunk {
+				text := setIsoPolicy(t, m, statements)
+				specStatements, err := policyspec.Statements(m.buckets["b"].Policy)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, u := range isoUsers {
+					key := m.keys[u.keyID()]
+					c := &policyspec.Case{
+						Owner:      "ta",
+						Statements: specStatements,
+						UserPolicy: policyspec.UserStatements(key.Policy),
+					}
+					for _, action := range isoActions {
+						for _, resource := range isoResources {
+							c.Requests = append(c.Requests, policyspec.NewRequest(u.principal(), action, resource, netip.Addr{}))
+						}
+					}
+					answers, err := spec.Ask(c)
+					if err != nil {
+						t.Fatal(err)
+					}
+					for j, r := range c.Requests {
+						got := gw.DecideAs(ctx, key, "b", r.Action, r.Resource)
+						want := s3gw.AuthorizationDecision{
+							Visible:    answers[j].Visible,
+							Allowed:    answers[j].Permits,
+							PerObject:  answers[j].Permits,
+							SkipsCheck: got.SkipsCheck,
+						}
+						if got != want || (got.SkipsCheck && !answers[j].Permits) {
+							t.Fatalf("%s %s on %s under %s:\n got %+v\nwant %+v", u.principal(), r.Action, r.Resource, text, got, want)
+						}
+					}
+				}
+			}
+			if err := spec.Close(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
 }
 
 // isoRoutes is how each operation of the catalog is asked for: the method

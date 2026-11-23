@@ -4,7 +4,7 @@ The policy semantics in [Lean 4](https://lean-lang.org/), with the properties th
 
 - [`PolicySpec/Semantics.lean`](PolicySpec/Semantics.lean) — the definitions: when a statement applies, what a bucket policy and a user policy decide, and what the gateway makes of the two (`permits`).
 - [`PolicySpec/Properties.lean`](PolicySpec/Properties.lean) — the theorems. Read the statements; the proofs after `:= by` are Lean's to check.
-- [`Main.lean`](Main.lean) — the definitions as a program, which `policy/spec_test.go` compares the Go evaluator with.
+- [`Main.lean`](Main.lean) — the definitions as a program, which the Go tests compare the evaluator and the gateway with (through `internal/policyspec`).
 
 | Theorem | Says |
 |---|---|
@@ -25,23 +25,28 @@ The policy semantics in [Lean 4](https://lean-lang.org/), with the properties th
 
 A theorem ending in `_iff`, and the others stated with `↔`, give a definition's meaning in full, so the definition cannot change without the theorem failing. The rest are consequences worth naming.
 
-## Comparison with the evaluator
+## Comparison with the Go code
 
-The theorems are about the definitions here, not about the Go code. What ties the two is a comparison: `TestSpec` in the `policy` package generates policies and requests, asks the `policyspec` executable and the evaluator, and fails on any answer that differs — the decision and the statement it names (`Decide`), visibility (`MentionsPrincipal`) and the user policy (`UserPolicy.Decide`).
+The theorems are about the definitions here, not about the Go code. What ties the two is comparison with the `policyspec` executable, and a test fails on any answer that differs:
+
+- `TestSpec` in `policy` generates policies and requests and compares the evaluator: the decision and the statement it names (`Decide`), visibility (`MentionsPrincipal`) and the user policy (`UserPolicy.Decide`).
+- `TestAuthorizationMatchesLeanSpec` in `s3gw` compares the gateway's own decision — bucket resolution, `authorize` and the per-object authorizer — with `visible` and `permits`, for every policy of up to two statements over a small vocabulary, as every user ([ADR 0051](../../docs/ADR/0051-check-tenant-isolation-by-enumeration.md)).
 
 ```console
 $ cd policy/spec
 $ mise install
 $ mise exec -- lake build --wfail PolicySpec policyspec
 $ cd ../..
-$ S3RP_POLICY_SPEC=$PWD/policy/spec/.lake/build/bin/policyspec go test ./policy -run 'TestSpec$' -v
+$ export S3RP_POLICY_SPEC=$PWD/policy/spec/.lake/build/bin/policyspec
+$ go test ./policy -run 'TestSpec$' -v
+$ go test ./s3gw -run 'TestAuthorizationMatchesLeanSpec$' -v
 ```
 
-`--wfail` turns warnings into failures, so a proof left unfinished (`sorry`) fails the build. Without `S3RP_POLICY_SPEC` the test is skipped: Lean is not needed for `go test`. A run logs its seed; `S3RP_POLICY_SPEC_SEED` repeats it and `S3RP_POLICY_SPEC_CASES` sets how many policies are drawn.
+`--wfail` turns warnings into failures, so a proof left unfinished (`sorry`) fails the build. Without `S3RP_POLICY_SPEC` the tests are skipped: Lean is not needed for `go test`. A run of `TestSpec` logs its seed; `S3RP_POLICY_SPEC_SEED` repeats it and `S3RP_POLICY_SPEC_CASES` sets how many policies are drawn.
 
 ## Scope
 
 - **Text is not specified.** The specification starts from a parsed policy: a principal is a tenant and a user, an address its bits. How `Parse` reads the JSON document, a principal name or a CIDR block is outside it, and the comparison converts those with Go's own parsers.
 - **Actions are ASCII.** `matchAction` compares `A`–`Z` as `a`–`z` and nothing else, as the evaluator does; `Parse` refuses an action pattern with a character outside ASCII.
-- **`permits` is not compared.** The gateway's decision over both policies is specified and has theorems, but its Go counterpart is in `s3gw`, which `s3gw`'s own enumeration tests cover ([ADR 0051](../../docs/ADR/0051-check-tenant-isolation-by-enumeration.md)).
+- **What a request needs is not specified.** `permits` decides one action on one resource. Which actions an operation needs, where a copy's source resolves and how DeleteObjects decides each key are the gateway's, held to a specification of their own in `s3gw` (ADR 0051).
 - **`glob` has no theorems yet**; it is held to the evaluator by the comparison alone.
