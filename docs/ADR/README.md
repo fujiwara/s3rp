@@ -63,6 +63,7 @@ retroactively").
 | [0049](0049-localbackend-keeps-state-in-a-directory.md) | localbackend can keep its state in a directory | 2026-11-22 | Accepted |
 | [0050](0050-hold-the-policy-evaluator-to-a-reference-model.md) | The policy evaluator is held to a reference model | 2026-11-22 | Accepted |
 | [0051](0051-check-tenant-isolation-by-enumeration.md) | Tenant isolation is checked by enumeration against a specification | 2026-11-22 | Accepted |
+| [0052](0052-state-the-policy-semantics-in-lean.md) | The policy semantics are stated in Lean, with their properties proved | 2026-11-23 | Accepted |
 
 ## Writing a record
 

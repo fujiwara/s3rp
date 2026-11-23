@@ -43,10 +43,20 @@ func modelGlob(pattern, value string) bool {
 	return m[0][0]
 }
 
+// modelFold: actions compare A-Z as a-z, and no other letters.
+func modelFold(s string) string {
+	return strings.Map(func(c rune) rune {
+		if 'A' <= c && c <= 'Z' {
+			return c - 'A' + 'a'
+		}
+		return c
+	}, s)
+}
+
 func modelAnyGlob(patterns []string, value string, fold bool) bool {
 	for _, p := range patterns {
 		if fold {
-			p, value = strings.ToLower(p), strings.ToLower(value)
+			p, value = modelFold(p), modelFold(value)
 		}
 		if modelGlob(p, value) {
 			return true
@@ -259,7 +269,8 @@ func modelWellFormed(p *policy.Policy, bucket string) error {
 			return fail("%d actions", n)
 		}
 		for _, a := range st.Action {
-			if len(a) > policy.MaxPatternLen || !strings.HasPrefix(strings.ToLower(a), "s3:") {
+			if len(a) > policy.MaxPatternLen || !strings.HasPrefix(modelFold(a), "s3:") ||
+				strings.ContainsFunc(a, func(c rune) bool { return c >= 0x80 }) {
 				return fail("action %q", a)
 			}
 		}
@@ -316,9 +327,7 @@ func checkAgainstModel(t *testing.T, impl, spec *policy.Policy, pr probes) {
 					if got := impl.Decide(principal, action, resource, rc); got != want {
 						t.Fatalf("Decide(%v) = %+v, model says %+v", r, got, want)
 					}
-					// the request's action folds as the patterns do; what the
-					// model says of the upper-cased one is asked separately,
-					// since a letter need not come back from it ("ı")
+					// the request's action folds as the patterns do
 					upper := r
 					upper.action = strings.ToUpper(action)
 					wantUpper := modelDecision(modelFirst(t, spec, "Deny", upper), modelFirst(t, spec, "Allow", upper))
