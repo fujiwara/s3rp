@@ -39,8 +39,10 @@ func (g *Gateway) resolveCopySource(c *opCtx, rt *route) (string, *CopySource, s
 		return "", nil, "", s3err.New(http.StatusBadRequest, "InvalidArgument",
 			"Copy Source must mention the source bucket and key: sourcebucket/sourcekey")
 	}
+	// no object has such a key
 	if len(srcKey) > maxKeyLen {
-		return "", nil, "", keyTooLong(srcKey)
+		return "", nil, "", s3err.New(http.StatusNotFound, "NoSuchKey", "The specified key does not exist.").
+			WithCause(keyTooLong(srcKey))
 	}
 	query, err := url.ParseQuery(versionID)
 	if err != nil {

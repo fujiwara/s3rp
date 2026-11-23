@@ -25,6 +25,9 @@ characters, 512 two-byte characters passing and 513 not.
 The AWS Emulator (1.0.580) answers otherwise — it keeps such a path
 unescaped, so `k%FF` and `k%25FF` are one key there — and was not followed.
 It does refuse the same bytes in `x-amz-copy-source` with `InvalidArgument`.
+On length it agrees with S3 for the path, answers a copy source of 1,025
+bytes `404 NoSuchKey`, and reports such a key in a DeleteObjects body as
+deleted (asked on a bucket without versioning).
 
 ## Decision
 
@@ -38,9 +41,17 @@ request names one, under
 - the `key` field of a POST upload, after `${filename}` is substituted:
   `400 InvalidArgument`. What S3 answers here was not measured;
 - a key over the limit: `400 KeyTooLongError` with S3's message in the path,
-  and the same in the copy source and the POST `key` field, where S3's
-  answer was not measured. S3's `Size` and `MaxSizeAllowed` elements are
-  not sent, the error body having no place for them;
+  and the same in the POST `key` field, where S3's answer was not measured.
+  S3's `Size` and `MaxSizeAllowed` elements are not sent, the error body
+  having no place for them;
+- a copy source over the limit: `404 NoSuchKey`, the emulator's answer — no
+  object has such a key;
+- a DeleteObjects entry over the limit fails by itself with
+  `KeyTooLongError` in the result and is not sent to the backend. Here the
+  emulator's answer is not followed: passed on, the key would be given a
+  delete marker in a versioned bucket, which no request could name again,
+  and reporting it deleted without passing it on would report a marker that
+  is not there;
 - a DeleteObjects body was already `400 MalformedXML`, the XML decoder
   refusing it; a test now holds that.
 
@@ -48,9 +59,6 @@ request names one, under
 
 - **Leave it to the backend.** Backends differ, and the bundled one accepted
   what it could not keep.
-- **Check the length of DeleteObjects keys.** A key that long names no
-  object, and deleting what does not exist succeeds; the backend is left to
-  answer.
 - **Check listing parameters too** (`prefix`, `start-after`, a marker). They
   name no object, and what S3 does with them could not be asked without
   credentials. Left as they are.

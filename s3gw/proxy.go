@@ -570,6 +570,16 @@ func (g *Gateway) deleteObjects(c *opCtx) error {
 	summary := &DeleteSummary{Requested: len(req.Objects), Objects: make([]DeletedObject, len(req.Objects))}
 	for i, o := range req.Objects {
 		summary.Objects[i] = DeletedObject{Key: o.Key, VersionID: o.VersionID}
+		// no object has such a key, but a versioned bucket would be given
+		// a delete marker for it that no request could name again
+		if len(o.Key) > maxKeyLen {
+			s3e := keyTooLong(o.Key)
+			result.Errors = append(result.Errors, s3xml.DeleteError{
+				Key: o.Key, VersionID: o.VersionID, Code: s3e.Code, Message: s3e.Message,
+			})
+			summary.Objects[i].Code = s3e.Code
+			continue
+		}
 		if checkPerObject {
 			resource := rt.cfg.Name + "/" + o.Key
 			auth := delAuth

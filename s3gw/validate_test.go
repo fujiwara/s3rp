@@ -142,7 +142,7 @@ func TestRequestValuesValidated(t *testing.T) {
 				Bucket: aws.String("testbucket"), Key: aws.String("dst"), CopySource: aws.String("testbucket/" + strings.Repeat("a", 1025)),
 			})
 			return err
-		}, code: "KeyTooLongError", message: "Your key is too long"},
+		}, code: "NoSuchKey", message: "The specified key does not exist."},
 		{name: "copy source that is not UTF-8", call: func(t *testing.T, c *s3.Client) error {
 			_, err := c.CopyObject(t.Context(), &s3.CopyObjectInput{
 				Bucket: aws.String("testbucket"), Key: aws.String("dst"), CopySource: aws.String("testbucket/k%FF"),
@@ -245,5 +245,32 @@ func TestDeleteObjectsKeyMustBeUTF8(t *testing.T) {
 	}
 	if stub.delObjsIn != nil {
 		t.Error("the backend was reached")
+	}
+}
+
+// A DeleteObjects key over the limit is refused by itself: the others are
+// deleted, and the backend never hears of it.
+func TestDeleteObjectsKeyTooLong(t *testing.T) {
+	stub := &stubBackend{delObjsOut: &s3.DeleteObjectsOutput{Deleted: []types.DeletedObject{{Key: aws.String("ok")}}}}
+	client, _ := newTestProxy(t, stub)
+	atLimit, over := strings.Repeat("a", 1024), strings.Repeat("b", 1025)
+	out, err := client.DeleteObjects(t.Context(), &s3.DeleteObjectsInput{
+		Bucket: aws.String("testbucket"),
+		Delete: &types.Delete{Objects: []types.ObjectIdentifier{
+			{Key: aws.String("ok")}, {Key: aws.String(atLimit)}, {Key: aws.String(over)},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Errors) != 1 || aws.ToString(out.Errors[0].Key) != over || aws.ToString(out.Errors[0].Code) != "KeyTooLongError" {
+		t.Errorf("errors: %+v", out.Errors)
+	}
+	var sent []string
+	for _, o := range stub.delObjsIn.Delete.Objects {
+		sent = append(sent, aws.ToString(o.Key))
+	}
+	if len(sent) != 2 || sent[0] != "ok" || sent[1] != atLimit {
+		t.Errorf("the backend was sent %d keys", len(sent))
 	}
 }
