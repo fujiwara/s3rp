@@ -235,12 +235,13 @@ func (m *schemaMutator) mutate(root map[string]any) {
 
 // schemaResidue is what Parse refuses that a schema cannot say: the bucket a
 // resource names, a Sid given twice, whether a condition value is an
-// address, and lengths counted in bytes.
+// address, and sizes counted in bytes: of a pattern, and of the document.
 var schemaResidue = regexp.MustCompile(strings.Join([]string{
 	`does not refer to bucket`,
 	`duplicate Sid`,
 	`invalid source IP value`,
 	`resource pattern too long`,
+	`policy is \d+ bytes`,
 }, "|"))
 
 // TestSchema: a document Parse accepts is valid against the schema, and one

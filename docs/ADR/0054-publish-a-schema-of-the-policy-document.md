@@ -26,8 +26,9 @@ It is held to `Parse` by tests, in both directions:
 - a document that is valid and that `Parse` refuses is refused for a reason
   a schema cannot state. Those are listed (`schemaResidue`): a resource that
   does not refer to the policy's bucket, a `Sid` given twice, a condition
-  value that is not an address or a CIDR block, and a pattern over its
-  limit in bytes where the schema counts characters.
+  value that is not an address or a CIDR block, a pattern over its limit
+  in bytes where the schema counts characters, and a document over its
+  limit in bytes.
 
 `TestSchema` checks this over generated policies and mutations of them —
 members dropped, added, renamed, retyped, lists grown past their limits.
