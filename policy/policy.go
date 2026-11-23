@@ -404,7 +404,7 @@ func (up *UserPolicy) Decide(action string) Decision {
 	}
 	up.compileOnce.Do(up.compile)
 	// Convert the action to runes once; every pattern is matched against it.
-	actionRunes := foldAction(action)
+	actionRunes := foldASCII(action)
 	result := Decision{Effect: Deny, Statement: -1}
 	for i := range up.Statements {
 		st := &up.Statements[i]
@@ -527,7 +527,7 @@ func (p *Policy) Decide(principal, action, resource string, rc RequestContext) D
 	// Convert the action and resource to runes once, up front, rather than
 	// on every Match call: with the same value reused across every statement
 	// and pattern, this is the dominant cost for a large policy or a long key.
-	actionRunes := foldAction(action)
+	actionRunes := foldASCII(action)
 	resourceRunes := []rune(resource)
 	result := Decision{Effect: None, Statement: -1}
 	for i := range p.Statement {
@@ -581,7 +581,7 @@ type DenyEvaluator struct {
 func (p *Policy) DenyEvaluatorFor(principal, action string, rc RequestContext) DenyEvaluator {
 	p.compileOnce.Do(p.compile)
 	rc.SourceIP = rc.SourceIP.Unmap()
-	actionRunes := foldAction(action)
+	actionRunes := foldASCII(action)
 	var e DenyEvaluator
 	// matched is scanned twice: once to size the slices exactly (the
 	// evaluator is built per request, so its allocations count), once to
@@ -631,7 +631,7 @@ type AllowEvaluator struct {
 func (p *Policy) AllowEvaluatorFor(principal, action string, rc RequestContext) AllowEvaluator {
 	p.compileOnce.Do(p.compile)
 	rc.SourceIP = rc.SourceIP.Unmap()
-	actionRunes := foldAction(action)
+	actionRunes := foldASCII(action)
 	var e AllowEvaluator
 	for i := range p.Statement {
 		st := &p.Statement[i]
@@ -814,15 +814,16 @@ func patternRunes(patterns []string) [][]rune {
 func lowerPatternRunes(patterns []string) [][]rune {
 	out := make([][]rune, len(patterns))
 	for i, p := range patterns {
-		out[i] = foldAction(p)
+		out[i] = foldASCII(p)
 	}
 	return out
 }
 
-// foldAction is an action or an action pattern in the form actions are
-// compared in: A-Z as a-z and nothing else. Lower-casing by Unicode would
-// make letters outside ASCII spell an action ("K", the Kelvin sign, as "k").
-func foldAction(s string) []rune {
+// foldASCII is a name in the form names without case are compared in —
+// actions, and the condition key: A-Z as a-z and nothing else. Lower-casing
+// by Unicode would make letters outside ASCII spell a name ("K", the Kelvin
+// sign, as "k").
+func foldASCII(s string) []rune {
 	out := []rune(s)
 	for i, c := range out {
 		if 'A' <= c && c <= 'Z' {
