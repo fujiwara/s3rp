@@ -80,6 +80,53 @@ type Answer struct {
 	Permits    bool   `json:"permits"`
 }
 
+// Need is one thing a request needs: an action on a resource.
+type Need struct {
+	Action   string `json:"action"`
+	Resource string `json:"resource"`
+}
+
+// Copy is the object a copy reads and the action reading it needs.
+type Copy struct {
+	Bucket   string `json:"bucket"`
+	Action   string `json:"action"`
+	Resource string `json:"resource"`
+}
+
+type Bucket struct {
+	Name       string      `json:"name"`
+	Owner      string      `json:"owner"`
+	Statements []Statement `json:"statements"`
+}
+
+// Operation is a whole request to a bucket: everything it needs there, a
+// copy's source, and for a DeleteObjects each key with what deleting it
+// needs.
+type Operation struct {
+	Tenant string   `json:"tenant"`
+	User   string   `json:"user"`
+	Source *string  `json:"source"` // nil: unknown
+	Bucket string   `json:"bucket"`
+	Needs  []Need   `json:"needs"`
+	Copy   *Copy    `json:"copy,omitempty"`
+	Keys   [][]Need `json:"keys,omitempty"`
+}
+
+// World is the buckets that exist, a user policy, and the operations to
+// decide for its holder.
+type World struct {
+	Buckets    []Bucket        `json:"buckets"`
+	UserPolicy []UserStatement `json:"userPolicy"`
+	Operations []Operation     `json:"operations"`
+}
+
+// Verdict is what the specification decides for one operation. Deletes is
+// nil when the operation has no keys, or when the whole request is refused.
+type Verdict struct {
+	Admits  bool   `json:"admits"`
+	Deletes []bool `json:"deletes"`
+}
+
 // NewRequest is the request of a "tenant/user" principal.
 func NewRequest(principal, action, resource string, source netip.Addr) Request {
 	tenant, user, _ := strings.Cut(principal, "/")
@@ -201,10 +248,9 @@ func Start(ctx context.Context, path string) (*Process, error) {
 	return &Process{cmd: cmd, in: in, enc: json.NewEncoder(in), lines: lines}, nil
 }
 
-// Ask returns the specification's answer to each request of the case, in
-// order.
-func (p *Process) Ask(c *Case) ([]Answer, error) {
-	if err := p.enc.Encode(c); err != nil {
+// ask sends one line and decodes the line that answers it, a list of n.
+func ask[T any](p *Process, in any, n int) ([]T, error) {
+	if err := p.enc.Encode(in); err != nil {
 		return nil, err
 	}
 	if !p.lines.Scan() {
@@ -213,14 +259,26 @@ func (p *Process) Ask(c *Case) ([]Answer, error) {
 		}
 		return nil, fmt.Errorf("the specification stopped answering: %w", p.cmd.Wait())
 	}
-	var answers []Answer
+	var answers []T
 	if err := json.Unmarshal(p.lines.Bytes(), &answers); err != nil {
 		return nil, err
 	}
-	if len(answers) != len(c.Requests) {
-		return nil, fmt.Errorf("%d answers for %d requests", len(answers), len(c.Requests))
+	if len(answers) != n {
+		return nil, fmt.Errorf("%d answers for %d requests", len(answers), n)
 	}
 	return answers, nil
+}
+
+// Ask returns the specification's answer to each request of the case, in
+// order.
+func (p *Process) Ask(c *Case) ([]Answer, error) {
+	return ask[Answer](p, c, len(c.Requests))
+}
+
+// AskWorld returns the specification's verdict on each operation of the
+// world, in order.
+func (p *Process) AskWorld(w *World) ([]Verdict, error) {
+	return ask[Verdict](p, w, len(w.Operations))
 }
 
 // Close ends the executable and reports how it exited.

@@ -246,6 +246,127 @@ func TestAuthorizationMatchesLeanSpec(t *testing.T) {
 	}
 }
 
+// TestIsolationSpecMatchesLeanSpec: the specification of isolationspec_test.go
+// and the Lean one (policy/spec) say the same of whole requests — every
+// operation of the catalog in every form isoRequests gives it, a copy from
+// each bucket, and DeleteObjects key by key — in every world of isoWorlds,
+// as every user. The gateway is held to the first by
+// TestOperationsEnforceIsolation and TestDeleteObjectsEnforcesIsolationPerKey;
+// which actions an operation needs is that specification's reading of the
+// catalog, and is given to the Lean one.
+func TestIsolationSpecMatchesLeanSpec(t *testing.T) {
+	path := os.Getenv(policyspec.Env)
+	if path == "" {
+		t.Skipf("%s is not set", policyspec.Env)
+	}
+	spec, err := policyspec.Start(t.Context(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var requests []isoRequest
+	for name := range isoRoutes {
+		op, ok := s3op.Lookup(name)
+		if !ok {
+			t.Fatalf("isoRoutes names %s, which is not in the catalog", name)
+		}
+		if op.Scope != s3op.ScopeService {
+			requests = append(requests, isoRequests(op)...)
+		}
+	}
+	deleteKeys := []struct {
+		key     string
+		version bool
+	}{{"pub/k", false}, {"priv/k", false}, {"pub/v", true}, {"priv/v", true}}
+
+	others := isoWorld{
+		"b2": {owner: "ta", policy: []isoStatement{{effect: "Allow", principal: "*", action: "s3:GetObject*", resource: "b2/*"}}},
+		"c":  {owner: "tb", policy: []isoStatement{{effect: "Allow", principal: "*", action: "s3:GetObject*", resource: "c/*"}}},
+	}
+	compared := 0
+	for _, statements := range isoWorlds() {
+		world := isoWorld{"b": {owner: "ta", policy: statements}}
+		maps.Copy(world, others)
+		var buckets []policyspec.Bucket
+		for _, name := range slices.Sorted(maps.Keys(world)) {
+			b := policyspec.Bucket{Name: name, Owner: world[name].owner, Statements: []policyspec.Statement{}}
+			if text := isoPolicyText(world[name].policy); text != "" {
+				p, err := policy.Parse(name, text, nil)
+				if err != nil {
+					t.Fatalf("%s: %v", text, err)
+				}
+				if b.Statements, err = policyspec.Statements(p); err != nil {
+					t.Fatal(err)
+				}
+			}
+			buckets = append(buckets, b)
+		}
+		text := isoPolicyText(statements)
+		for _, u := range isoUsers {
+			w := &policyspec.World{
+				Buckets:    buckets,
+				UserPolicy: policyspec.UserStatements(&policy.UserPolicy{Statements: u.policy}),
+			}
+			var want []policyspec.Verdict
+			var names []string
+			for _, r := range requests {
+				resource := "b"
+				if r.key != "" {
+					resource += "/" + r.key
+				}
+				o := policyspec.Operation{Tenant: u.tenant, User: u.name, Bucket: "b", Needs: []policyspec.Need{}}
+				for _, action := range r.targetActions() {
+					o.Needs = append(o.Needs, policyspec.Need{Action: action, Resource: resource})
+				}
+				if action := r.copyAction(); action != "" {
+					o.Copy = &policyspec.Copy{Bucket: r.copyBucket, Action: action, Resource: r.copyBucket + "/" + isoCopyKey}
+				}
+				w.Operations = append(w.Operations, o)
+				want = append(want, policyspec.Verdict{Admits: world.admitted(u, "b", r)})
+				names = append(names, r.String())
+			}
+			for _, bypass := range []bool{false, true} {
+				o := policyspec.Operation{Tenant: u.tenant, User: u.name, Bucket: "b", Needs: []policyspec.Need{}}
+				v := policyspec.Verdict{Admits: world.visible(u, "b")}
+				for _, k := range deleteKeys {
+					action := s3op.ActionDeleteObject
+					if k.version {
+						action = s3op.ActionDeleteObjectVersion
+					}
+					needs := []policyspec.Need{{Action: action, Resource: "b/" + k.key}}
+					permitted := world.permits(u, "b", action, "b/"+k.key)
+					// the header asks for one more action on every key
+					if bypass {
+						needs = append(needs, policyspec.Need{Action: s3op.ActionBypassGovernanceRetention, Resource: "b/" + k.key})
+						permitted = permitted && world.permits(u, "b", s3op.ActionBypassGovernanceRetention, "b/"+k.key)
+					}
+					o.Keys = append(o.Keys, needs)
+					if v.Admits {
+						v.Deletes = append(v.Deletes, permitted)
+					}
+				}
+				w.Operations = append(w.Operations, o)
+				want = append(want, v)
+				names = append(names, fmt.Sprintf("DeleteObjects (bypass %v)", bypass))
+			}
+			got, err := spec.AskWorld(w)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i := range want {
+				compared++
+				if !reflect.DeepEqual(got[i], want[i]) {
+					t.Fatalf("%s as %s under %q:\n   Lean specification: %+v\nisolation specification: %+v", names[i], u.principal(), text, got[i], want[i])
+				}
+			}
+		}
+	}
+	if err := spec.Close(); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("%d operations agree", compared)
+}
+
 // isoRoutes is how each operation of the catalog is asked for: the method
 // and the query that select it. TestOperationsEnforceIsolation fails for an
 // operation that is routed and missing here, and checks through the
