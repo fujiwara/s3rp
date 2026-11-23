@@ -271,7 +271,7 @@ func TestSchema(t *testing.T) {
 	}
 	var documents []document
 	add := func(v any) {
-		text, err := json.Marshal(v)
+		text, err := json.Marshal(v, json.Deterministic(true))
 		if err != nil {
 			t.Fatal(err)
 		}
