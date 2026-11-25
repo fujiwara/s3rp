@@ -9,6 +9,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 	"github.com/fujiwara/s3rp"
 	"github.com/fujiwara/s3rp/s3gw"
 	"github.com/fujiwara/s3rp/s3gw/localbackend"
@@ -1121,6 +1123,162 @@ func runIntegration(t *testing.T, backend integrationBackend) {
 			UploadId: create.UploadId,
 		}); err == nil {
 			t.Error("expect error listing parts of an aborted upload")
+		}
+	})
+	t.Run("TerraformState", func(t *testing.T) {
+		// The requests of Terraform's S3 backend with use_lockfile: the lock
+		// is an object created with If-None-Match: *, which only one of the
+		// writers contending for it may be granted. A state bucket is
+		// usually versioned, and a backend may hold the condition in one
+		// kind of bucket and not the other.
+		buckets := []struct {
+			name, front, backend string
+			versioned            bool
+		}{
+			{"Unversioned", "tf-bucket", "s3rp-it-tf-backend", false},
+			{"Versioned", "tf-versioned-bucket", "s3rp-it-tf-versioned-backend", true},
+		}
+		tenant := &s3rp.TenantConfig{
+			Name:  "tf-tenant",
+			Users: []*s3rp.UserConfig{{Name: "tfuser", Keys: []*s3rp.KeyConfig{{AccessKeyID: testAccessKeyID, SecretAccessKey: testSecretAccessKey}}}},
+		}
+		for _, b := range buckets {
+			if _, err := backendClient.CreateBucket(t.Context(), &s3.CreateBucketInput{
+				Bucket: aws.String(b.backend),
+			}); err != nil {
+				if _, ok := errors.AsType[*types.BucketAlreadyOwnedByYou](err); !ok {
+					t.Fatalf("failed to create backend bucket: %v", err)
+				}
+			}
+			tenant.Buckets = append(tenant.Buckets, &s3rp.BucketConfig{
+				Name: b.front,
+				Backend: &s3rp.BackendConfig{
+					Endpoint: endpoint, Bucket: b.backend,
+					AccessKeyID: backendKey, SecretAccessKey: s3rp.Password(backendSecret),
+				},
+			})
+		}
+		tfApp := backend.newApp(t, &s3rp.Config{Tenants: []*s3rp.TenantConfig{tenant}})
+		tfTS := httptest.NewServer(tfApp.Handler())
+		t.Cleanup(tfTS.Close)
+		tc := newS3Client(t, tfTS.URL, testAccessKeyID, testSecretAccessKey)
+
+		const stateKey, lockKey = "env/terraform.tfstate", "env/terraform.tfstate.tflock"
+		code := func(err error) string {
+			if ae, ok := errors.AsType[smithy.APIError](err); ok {
+				return ae.ErrorCode()
+			}
+			return ""
+		}
+		for _, b := range buckets {
+			t.Run(b.name, func(t *testing.T) {
+				if b.versioned {
+					if _, err := backendClient.PutBucketVersioning(t.Context(), &s3.PutBucketVersioningInput{
+						Bucket: aws.String(b.backend),
+						VersioningConfiguration: &types.VersioningConfiguration{
+							Status: types.BucketVersioningStatusEnabled,
+						},
+					}); err != nil {
+						t.Skipf("backend does not support versioning: %v", err)
+					}
+				}
+				lock := func(holder string) error {
+					_, err := tc.PutObject(t.Context(), &s3.PutObjectInput{
+						Bucket:      aws.String(b.front),
+						Key:         aws.String(lockKey),
+						Body:        strings.NewReader(holder),
+						IfNoneMatch: aws.String("*"),
+					})
+					return err
+				}
+				unlock := func(ctx context.Context) error {
+					_, err := tc.DeleteObject(ctx, &s3.DeleteObjectInput{
+						Bucket: aws.String(b.front),
+						Key:    aws.String(lockKey),
+					})
+					return err
+				}
+				get := func(key string) (string, error) {
+					out, err := tc.GetObject(t.Context(), &s3.GetObjectInput{
+						Bucket: aws.String(b.front),
+						Key:    aws.String(key),
+					})
+					if err != nil {
+						return "", err
+					}
+					defer out.Body.Close()
+					body, err := io.ReadAll(out.Body)
+					return string(body), err
+				}
+				// a run that failed midway must not leave the next one locked
+				t.Cleanup(func() { unlock(context.Background()) })
+
+				if err := lock("first"); err != nil {
+					t.Fatal(err)
+				}
+				err := lock("second")
+				if err == nil {
+					t.Skip("backend does not enforce If-None-Match on PutObject")
+				}
+				if got := code(err); got != "PreconditionFailed" {
+					t.Fatalf("locking a locked state: got %v, want PreconditionFailed", err)
+				}
+				// the loser reads the lock to say who holds it
+				if holder, err := get(lockKey); err != nil || holder != "first" {
+					t.Errorf("lock holder: got %q, %v", holder, err)
+				}
+
+				state := `{"version":4,"serial":` + time.Now().Format("20060102150405") + `}`
+				if _, err := tc.PutObject(t.Context(), &s3.PutObjectInput{
+					Bucket:      aws.String(b.front),
+					Key:         aws.String(stateKey),
+					Body:        strings.NewReader(state),
+					ContentType: aws.String("application/json"),
+				}); err != nil {
+					t.Fatal(err)
+				}
+				if got, err := get(stateKey); err != nil || got != state {
+					t.Errorf("state: got %q, %v", got, err)
+				}
+
+				// unlocked, the state can be locked again: in a versioned
+				// bucket what is left of the lock is a delete marker
+				if err := unlock(t.Context()); err != nil {
+					t.Fatal(err)
+				}
+				if err := lock("third"); err != nil {
+					t.Fatalf("locking an unlocked state: %v", err)
+				}
+				if err := unlock(t.Context()); err != nil {
+					t.Fatal(err)
+				}
+
+				// writers that ask at once: one is granted, the others are told
+				const writers = 8
+				errs := make([]error, writers)
+				var wg sync.WaitGroup
+				for i := range writers {
+					wg.Go(func() { errs[i] = lock("writer") })
+				}
+				wg.Wait()
+				granted := 0
+				for _, err := range errs {
+					switch {
+					case err == nil:
+						granted++
+					// S3 answers a write that lost to one in progress with
+					// a conflict, not a failed precondition
+					case code(err) != "PreconditionFailed" && code(err) != "ConditionalRequestConflict":
+						t.Errorf("contending for the lock: got %v, want PreconditionFailed or ConditionalRequestConflict", err)
+					}
+				}
+				if granted > 1 {
+					t.Skipf("backend granted the lock to %d of %d writers contending for it", granted, writers)
+				}
+				if granted != 1 {
+					t.Errorf("none of %d contending writers was granted the lock", writers)
+				}
+			})
 		}
 	})
 	t.Run("DeleteObject", func(t *testing.T) {
