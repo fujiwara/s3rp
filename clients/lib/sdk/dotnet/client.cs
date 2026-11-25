@@ -1,4 +1,4 @@
-#:package AWSSDK.S3@4.1.2
+#:package AWSSDK.S3@4.1.2.1
 
 // The verbs of defs/sdk-dotnet.yml, on the AWS SDK for .NET.
 using Amazon.Runtime;

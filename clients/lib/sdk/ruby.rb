@@ -4,7 +4,7 @@ require "erb"
 
 gemfile do
   source "https://rubygems.org"
-  gem "aws-sdk-s3", "1.245.1"
+  gem "aws-sdk-s3", "1.245.2"
   # the SDK needs an XML parser and bundles none
   gem "rexml", "3.4.4"
 end
