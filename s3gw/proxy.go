@@ -982,7 +982,9 @@ func (v *payloadVerifier) Read(p []byte) (int, error) {
 	case v.remaining <= 0 || err == io.EOF:
 		event := payloadMismatched
 		got := hex.EncodeToString(v.h.Sum(nil))
-		if subtle.ConstantTimeCompare([]byte(got), []byte(v.want)) == 1 {
+		// the signed hash is of a body of the signed length: one that ends
+		// short of it is not that body, whatever its own hash is
+		if v.remaining == 0 && subtle.ConstantTimeCompare([]byte(got), []byte(v.want)) == 1 {
 			event = payloadMatched
 		}
 		if verr := v.advance(event); verr != nil {

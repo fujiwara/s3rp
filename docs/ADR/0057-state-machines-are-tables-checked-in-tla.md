@@ -83,7 +83,9 @@ and held to its checksum; Java comes from mise (`tla/mise.toml`).
     chunk nobody verified. A failed `Read` now hands out nothing.
   - The payload verifier's refusal was not final: a `Read` after
     `XAmzContentSHA256Mismatch` reported the end of the body. It now
-    refuses again, and refuses bytes beyond the length it hashed.
+    refuses again, and refuses bytes beyond the length it hashed. It also
+    took a body that ended short of the signed length for verified when the
+    hash was that of the shorter body; a match now needs the whole length.
   - A browser upload under its policy's minimum length was stored and then
     deleted. The object was there in between, stayed if the delete failed
     (its error was not looked at), and on an unversioned bucket the delete
