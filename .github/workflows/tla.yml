@@ -1,0 +1,41 @@
+# The state machines, model-checked.
+#
+# The specifications in tla/ read the transition tables of the Go code,
+# written out as TLA+ modules: the tests hold those modules to the tables,
+# and TLC then checks every property against them.
+name: tla
+on:
+  push:
+    branches: [main]
+    paths: ['tla/**', 's3gw/**', 'sigv4/**', 'internal/tlatable/**', '.github/workflows/tla.yml']
+  pull_request:
+    paths: ['tla/**', 's3gw/**', 'sigv4/**', 'internal/tlatable/**', '.github/workflows/tla.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check the specifications
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: '1.27'
+
+      # Java, pinned in tla/mise.toml
+      - name: Set up mise
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
+        with:
+          working_directory: tla
+
+      - name: Hold the table modules to the Go tables
+        run: go test ./s3gw ./sigv4 ./s3gw/localbackend -run 'Table$' -v
+
+      - name: Model-check
+        working-directory: tla
+        run: ./check.sh

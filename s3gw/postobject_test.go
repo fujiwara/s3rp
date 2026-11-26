@@ -277,7 +277,10 @@ func TestPostObjectContentLengthRange(t *testing.T) {
 		}
 	})
 
-	t.Run("too small deletes the stored object", func(t *testing.T) {
+	// the body fails where it ends, so the backend's write fails with it:
+	// nothing is stored, and so nothing is deleted — a delete here would
+	// take the object another request wrote to the key in the meantime
+	t.Run("too small stores nothing", func(t *testing.T) {
 		gw := newTestGateway(t)
 		stub := &stubPost{}
 		if err := gw.SetBackend("testbucket", stub); err != nil {
@@ -293,13 +296,29 @@ func TestPostObjectContentLengthRange(t *testing.T) {
 		if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "EntityTooSmall") {
 			t.Errorf("expect EntityTooSmall, got %d: %s", w.Code, w.Body.String())
 		}
-		if stub.delIn == nil || aws.ToString(stub.delIn.Key) != "a.txt" {
-			t.Fatal("expect the undersized object to be deleted from the backend")
+		if stub.putBody != nil {
+			t.Errorf("expect the backend's write to fail with the body, it stored %q", stub.putBody)
 		}
-		// on a versioned bucket, the exact version just written must go —
-		// a plain delete would only add a delete marker on top of it
-		if aws.ToString(stub.delIn.VersionId) != "v1" {
-			t.Errorf("expect the delete to target the written version, got %v", stub.delIn.VersionId)
+		if stub.delIn != nil {
+			t.Errorf("expect no delete, got one of %q", aws.ToString(stub.delIn.Key))
+		}
+	})
+
+	t.Run("at the minimum", func(t *testing.T) {
+		gw := newTestGateway(t)
+		stub := &stubPost{}
+		if err := gw.SetBackend("testbucket", stub); err != nil {
+			t.Fatal(err)
+		}
+		form := &postForm{
+			conditions: []string{`{"key": "a.txt"}`, `["content-length-range", 4, 1000]`},
+			fields:     [][2]string{{"key", "a.txt"}},
+			filename:   "x", content: "tiny",
+		}
+		w := httptest.NewRecorder()
+		gw.Handler().ServeHTTP(w, form.request(t))
+		if w.Code != http.StatusNoContent || string(stub.putBody) != "tiny" {
+			t.Errorf("expect the upload stored, got %d and %q", w.Code, stub.putBody)
 		}
 	})
 }

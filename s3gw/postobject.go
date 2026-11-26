@@ -260,28 +260,35 @@ func postFieldMeta(fields map[string]string) map[string]string {
 	return md
 }
 
-// lengthBoundedBody enforces the policy's content-length-range maximum
-// while the file streams to the backend; the minimum can only be checked
-// once the stream ends.
+// lengthBoundedBody enforces the policy's content-length-range while the
+// file streams to the backend: the maximum as soon as it is passed, the
+// minimum where the stream ends. Either way the body fails instead of
+// ending, so the backend's write fails with it and stores nothing — there
+// is no object to take back, and no moment at which one the policy did not
+// permit is there.
 type lengthBoundedBody struct {
-	r   io.Reader
-	n   int64
-	max int64
+	r        io.Reader
+	n        int64
+	min, max int64
 }
 
 func (b *lengthBoundedBody) Read(p []byte) (int, error) {
 	n, err := b.r.Read(p)
 	b.n += int64(n)
 	if b.n > b.max {
-		return n, s3err.New(http.StatusBadRequest, "EntityTooLarge",
+		return 0, s3err.New(http.StatusBadRequest, "EntityTooLarge",
 			"Your proposed upload exceeds the maximum allowed size")
+	}
+	if err == io.EOF && b.n < b.min {
+		return 0, s3err.New(http.StatusBadRequest, "EntityTooSmall",
+			"Your proposed upload is smaller than the minimum allowed size")
 	}
 	return n, err
 }
 
 func (g *Gateway) postPutObject(c *opCtx, fields map[string]string, file *multipart.Part, pp *sigv4.PostPolicy) error {
 	w, r, rt, key := c.w, c.r, c.rt, c.key
-	body := &lengthBoundedBody{r: file, max: pp.MaxLength}
+	body := &lengthBoundedBody{r: file, min: pp.MinLength, max: pp.MaxLength}
 	in := &s3.PutObjectInput{
 		Bucket: aws.String(rt.cfg.Backend.Bucket),
 		Key:    aws.String(key),
@@ -328,20 +335,6 @@ func (g *Gateway) postPutObject(c *opCtx, fields map[string]string, file *multip
 	if err != nil {
 		return s3err.FromSDKError(err, r.URL.Path)
 	}
-	if body.n < pp.MinLength {
-		// the size is only known now; undo the write rather than keep an
-		// object the policy did not permit. On a versioned bucket the
-		// version id targets the exact version just written — a plain
-		// delete would only add a delete marker on top of it.
-		rt.client.DeleteObject(r.Context(), &s3.DeleteObjectInput{
-			Bucket:    aws.String(rt.cfg.Backend.Bucket),
-			Key:       aws.String(key),
-			VersionId: out.VersionId,
-		})
-		return s3err.New(http.StatusBadRequest, "EntityTooSmall",
-			"Your proposed upload is smaller than the minimum allowed size")
-	}
-
 	c.setResponse(OpResponse{
 		SSE:         string(out.ServerSideEncryption),
 		SSEKMSKeyID: aws.ToString(out.SSEKMSKeyId),

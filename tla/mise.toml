@@ -1,0 +1,3 @@
+# TLC, the model checker check.sh runs, is a jar: this is the Java it runs on.
+[tools]
+java = "temurin-21"

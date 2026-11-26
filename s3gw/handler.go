@@ -117,87 +117,171 @@ func (g *Gateway) wrapHandler(h handlerFunc) http.HandlerFunc {
 			r.Body = body
 		}
 
-		// report answers the client and hands the record to the observer,
-		// exactly once per request whether the handler returned or panicked.
-		reported := false
-		report := func(err error) {
-			if reported {
-				return
+		// finish answers the client and hands the record to the observer as
+		// reportTransitions says for how the handler ended, once per request:
+		// a second call is finish itself having panicked, of which only the
+		// cut connection is left to do.
+		finished := false
+		finish := func(o handlerOutcome, err error) {
+			step := reportTransitions[o][responsePhaseOf(sw)]
+			if !finished {
+				finished = true
+				g.report(r, sw, body, info, start, requestID, o, step, err)
 			}
-			reported = true
-			var code, message string
-			var cause error
-			if err != nil {
-				var s3e *s3err.Error
-				if !errors.As(err, &s3e) {
-					// an error that is not an S3 error at all: the operation
-					// layer should not produce these, so the error itself is the
-					// only description we have
-					s3e = s3err.Internal(err, "We encountered an internal error. Please try again.")
-				}
-				if _, panicked := errors.AsType[*PanicError](err); !panicked {
-					s3e = clientClosed(r, s3e, body.failed)
-				}
-				// the cause never reaches the client, so handing it to the
-				// observer is the only way it can be seen
-				cause = errors.Unwrap(s3e)
-				// a response already under way cannot be replaced by an error
-				// document: appending one would leave the client a body that
-				// parses as neither. Code stays empty then because it records
-				// what the client was told, and it was told nothing.
-				if !sw.started {
-					code, message = s3e.Code, s3e.Message
-					s3err.Write(sw, r, s3e, requestID)
-				}
+			if step.abort {
+				panic(http.ErrAbortHandler)
 			}
-			if info == nil {
-				return
-			}
-			info.RawQuery = redactQuery(r.URL.Query())
-			info.Status = sw.status
-			info.Code, info.Message = code, message
-			info.Err = cause
-			info.Duration = time.Since(start)
-			info.BytesIn, info.BytesOut = body.n, sw.written
-			// the observer is the channel failures are reported through, so
-			// when it is the thing that failed there is nowhere left to
-			// report it but here — and its panic must not cost the client
-			// the response that is already written
-			defer func() {
-				if p := recover(); p != nil {
-					slog.WarnContext(r.Context(), "observer panicked",
-						"request_id", requestID, "panic", p)
-				}
-			}()
-			g.observer(r.Context(), info)
 		}
 
 		defer func() {
-			p := recover()
-			if p == nil {
-				return
-			}
-			if p == http.ErrAbortHandler {
-				// net/http's own signal for a deliberate silent abort: pass
-				// it on untouched, including the silence
-				panic(p)
-			}
-			// net/http would recover this too, but by dropping the
-			// connection: the client gets no response at all (not even one
-			// already written, which is still buffered), the panic goes to
-			// its ErrorLog instead of the observer, and the client's retry
-			// runs the whole operation again. Answer and record it here
-			// instead.
-			started := sw.started
-			report(&PanicError{Value: p, Stack: debug.Stack()})
-			if started {
-				// there is a half-sent response the client must not read as
-				// a complete one, and no way to take it back
-				panic(http.ErrAbortHandler)
+			switch p := recover(); p {
+			case nil:
+			case http.ErrAbortHandler:
+				finish(handlerAborted, nil)
+			default:
+				finish(handlerPanicked, &PanicError{Value: p, Stack: debug.Stack()})
 			}
 		}()
-		report(h(sw, r))
+		if err := h(sw, r); err != nil {
+			finish(handlerFailed, err)
+		} else {
+			finish(handlerReturned, nil)
+		}
 	}
+}
+
+// handlerOutcome is how the handler of a request ended.
+type handlerOutcome int
+
+const (
+	// handlerReturned: without an error
+	handlerReturned handlerOutcome = iota
+	// handlerFailed: with one
+	handlerFailed
+	// handlerPanicked: by a panic that is a bug
+	handlerPanicked
+	// handlerAborted: by http.ErrAbortHandler, net/http's own signal for a
+	// deliberate silent abort, which a hook may raise
+	handlerAborted
+	numHandlerOutcomes
+)
+
+func (o handlerOutcome) String() string {
+	return [...]string{"returned", "failed", "panicked", "aborted"}[o]
+}
+
+// responsePhase is whether the response has begun.
+type responsePhase int
+
+const (
+	responsePending responsePhase = iota
+	responseStarted
+	numResponsePhases
+)
+
+func (p responsePhase) String() string {
+	return [...]string{"pending", "started"}[p]
+}
+
+func responsePhaseOf(sw *statusWriter) responsePhase {
+	if sw.started {
+		return responseStarted
+	}
+	return responsePending
+}
+
+// reportStep is what is done about a request once its handler has ended.
+type reportStep struct {
+	// document: the failure is written to the client as an error document
+	document bool
+	// observe: the record is handed to the observer
+	observe bool
+	// abort: the connection is cut with http.ErrAbortHandler
+	abort bool
+}
+
+// reportTransitions is the end of every request: how the handler ended, and
+// whether the response had begun by then. It is held to
+// tla/RequestLifecycle.tla, which is checked for what the gateway promises
+// about it (TestReportTable).
+//
+// A response already under way cannot be replaced by an error document:
+// appending one would leave the client a body that parses as neither. A
+// panic then leaves a half-sent response the client must not read as a
+// complete one, and no way to take it back, so the connection is cut.
+//
+// A panic before that is answered and recorded here because net/http would
+// recover it by dropping the connection: the client gets no response at all
+// (not even one already written, which is still buffered), the panic goes
+// to its ErrorLog instead of the observer, and the client's retry runs the
+// whole operation again. A hook's own abort is passed on untouched,
+// including the silence.
+var reportTransitions = [numHandlerOutcomes][numResponsePhases]reportStep{
+	handlerReturned: {
+		responsePending: {observe: true},
+		responseStarted: {observe: true},
+	},
+	handlerFailed: {
+		responsePending: {document: true, observe: true},
+		responseStarted: {observe: true},
+	},
+	handlerPanicked: {
+		responsePending: {document: true, observe: true},
+		responseStarted: {observe: true, abort: true},
+	},
+	handlerAborted: {
+		responsePending: {abort: true},
+		responseStarted: {abort: true},
+	},
+}
+
+// report carries out a reportStep but for its abort: the error document,
+// and the record for the observer.
+func (g *Gateway) report(r *http.Request, sw *statusWriter, body *countingBody, info *RequestInfo,
+	start time.Time, requestID string, o handlerOutcome, step reportStep, err error) {
+	var code, message string
+	var cause error
+	if err != nil {
+		var s3e *s3err.Error
+		if !errors.As(err, &s3e) {
+			// an error that is not an S3 error at all: the operation
+			// layer should not produce these, so the error itself is the
+			// only description we have
+			s3e = s3err.Internal(err, "We encountered an internal error. Please try again.")
+		}
+		if o != handlerPanicked {
+			s3e = clientClosed(r, s3e, body.failed)
+		}
+		// the cause never reaches the client, so handing it to the
+		// observer is the only way it can be seen
+		cause = errors.Unwrap(s3e)
+		// Code stays empty without a document because it records what the
+		// client was told, and it was told nothing.
+		if step.document {
+			code, message = s3e.Code, s3e.Message
+			s3err.Write(sw, r, s3e, requestID)
+		}
+	}
+	if info == nil || !step.observe {
+		return
+	}
+	info.RawQuery = redactQuery(r.URL.Query())
+	info.Status = sw.status
+	info.Code, info.Message = code, message
+	info.Err = cause
+	info.Duration = time.Since(start)
+	info.BytesIn, info.BytesOut = body.n, sw.written
+	// the observer is the channel failures are reported through, so
+	// when it is the thing that failed there is nowhere left to
+	// report it but here — and its panic must not cost the client
+	// the response that is already written
+	defer func() {
+		if p := recover(); p != nil {
+			slog.WarnContext(r.Context(), "observer panicked",
+				"request_id", requestID, "panic", p)
+		}
+	}()
+	g.observer(r.Context(), info)
 }
 
 // splitPath splits an escaped URL path into the bucket name and the

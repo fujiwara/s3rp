@@ -133,16 +133,20 @@ func classifyAttempt(raw any, err error) (ok, report bool) {
 // never reported (the client abandoned it) is simply followed by the next
 // probe a cooldown later, so the breaker cannot wedge half-open. State
 // advances on Allow; there are no timers or goroutines.
+//
+// What it does in each state is breakerTransitions, and nothing else: Allow
+// and Report only name the event and carry out the step the table gives.
 type ConsecutiveFailures struct {
 	n        int
 	cooldown time.Duration
 	now      func() time.Time
 
-	mu        sync.Mutex
-	state     breakerState
-	failures  int       // consecutive failures while closed
-	since     time.Time // when it opened
-	lastProbe time.Time // the half-open probe most recently admitted
+	mu       sync.Mutex
+	state    breakerState
+	failures int // consecutive failures while closed
+	// mark is what the cooldown is measured from: when it opened, or the
+	// half-open probe most recently admitted
+	mark time.Time
 }
 
 type breakerState int
@@ -151,6 +155,7 @@ const (
 	breakerClosed breakerState = iota
 	breakerOpen
 	breakerHalfOpen
+	numBreakerStates
 )
 
 func (s breakerState) String() string {
@@ -161,6 +166,70 @@ func (s breakerState) String() string {
 		return "half-open"
 	}
 	return "closed"
+}
+
+// breakerEvent is what can happen to a breaker: one of the two calls, with
+// the fact the call's outcome depends on.
+type breakerEvent int
+
+const (
+	// Allow, inside the cooldown since mark and after it
+	breakerAllowEarly breakerEvent = iota
+	breakerAllowDue
+	// Report(true)
+	breakerSuccess
+	// Report(false), and the one that makes it n in a row
+	breakerFailure
+	breakerFailureTripping
+	numBreakerEvents
+)
+
+func (e breakerEvent) String() string {
+	return [...]string{"allow-early", "allow-due", "success", "failure", "failure-tripping"}[e]
+}
+
+// breakerStep is what an event does in a state.
+type breakerStep struct {
+	to breakerState
+	// admit is Allow's answer; false for a Report
+	admit bool
+	// count adds to the consecutive failures; any other step that changes
+	// the state, and every success, resets them
+	count bool
+	// stamp sets mark to now: the breaker opened, or a probe went out
+	stamp bool
+}
+
+// breakerTransitions is the breaker: every state, every event. It is held
+// to tla/Breaker.tla, which is checked for what the breaker promises —
+// nothing admitted inside a cooldown but the one probe, and no state it
+// cannot leave (TestBreakerTable).
+var breakerTransitions = [numBreakerStates][numBreakerEvents]breakerStep{
+	breakerClosed: {
+		breakerAllowEarly:      {to: breakerClosed, admit: true},
+		breakerAllowDue:        {to: breakerClosed, admit: true},
+		breakerSuccess:         {to: breakerClosed},
+		breakerFailure:         {to: breakerClosed, count: true},
+		breakerFailureTripping: {to: breakerOpen, stamp: true},
+	},
+	breakerOpen: {
+		breakerAllowEarly: {to: breakerOpen},
+		// the probe
+		breakerAllowDue: {to: breakerHalfOpen, admit: true, stamp: true},
+		// an attempt admitted before it opened: the backend answered
+		breakerSuccess: {to: breakerClosed},
+		// and one that failed like those that opened it, which is not news
+		breakerFailure:         {to: breakerOpen},
+		breakerFailureTripping: {to: breakerOpen},
+	},
+	breakerHalfOpen: {
+		breakerAllowEarly: {to: breakerHalfOpen},
+		// the probe was not reported: the next one
+		breakerAllowDue:        {to: breakerHalfOpen, admit: true, stamp: true},
+		breakerSuccess:         {to: breakerClosed},
+		breakerFailure:         {to: breakerOpen, stamp: true},
+		breakerFailureTripping: {to: breakerOpen, stamp: true},
+	},
 }
 
 // NewConsecutiveFailures returns a breaker that opens after n consecutive
@@ -179,46 +248,46 @@ func NewConsecutiveFailures(n int, cooldown time.Duration) *ConsecutiveFailures 
 func (b *ConsecutiveFailures) Allow() bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	switch b.state {
-	case breakerClosed:
-		return true
-	case breakerOpen:
-		if b.now().Sub(b.since) < b.cooldown {
-			return false
-		}
-		b.state = breakerHalfOpen
-		b.lastProbe = b.now()
-		return true
-	default: // half-open: one probe per cooldown
-		if b.now().Sub(b.lastProbe) < b.cooldown {
-			return false
-		}
-		b.lastProbe = b.now()
-		return true
+	if b.state == breakerClosed {
+		// the cooldown means nothing here, so the clock is not read
+		return b.step(breakerAllowEarly, time.Time{})
 	}
+	now := b.now()
+	if now.Sub(b.mark) < b.cooldown {
+		return b.step(breakerAllowEarly, now)
+	}
+	return b.step(breakerAllowDue, now)
 }
 
 // Report records an admitted attempt's outcome.
 func (b *ConsecutiveFailures) Report(ok bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if ok {
-		b.state, b.failures = breakerClosed, 0
-		return
-	}
-	switch b.state {
-	case breakerClosed:
-		b.failures++
-		if b.failures >= b.n {
-			b.open()
-		}
-	case breakerHalfOpen:
-		b.open()
+	switch {
+	case ok:
+		b.step(breakerSuccess, time.Time{})
+	case b.failures+1 >= b.n:
+		b.step(breakerFailureTripping, b.now())
+	default:
+		b.step(breakerFailure, b.now())
 	}
 }
 
-func (b *ConsecutiveFailures) open() {
-	b.state, b.failures, b.since = breakerOpen, 0, b.now()
+// step carries out what the table gives for e in the current state. now may
+// be the zero time for an event that stamps in no state.
+func (b *ConsecutiveFailures) step(e breakerEvent, now time.Time) bool {
+	s := breakerTransitions[b.state][e]
+	switch {
+	case s.count:
+		b.failures++
+	case s.to != b.state || e == breakerSuccess:
+		b.failures = 0
+	}
+	if s.stamp {
+		b.mark = now
+	}
+	b.state = s.to
+	return s.admit
 }
 
 // State reports "closed", "open" or "half-open", for a metric.
