@@ -64,15 +64,12 @@ type Backend struct {
 	wake, stop, stopped chan struct{}
 	closeOnce           sync.Once
 	closeErr            error
-	// flushMu serializes flushes and guards garbage: blob files nothing
-	// refers to any more, kept until the last response reading them is done
+	// flushMu serializes flushes
 	flushMu sync.Mutex
-	garbage map[string]*blob
-	// blobMu guards the blob files' books. known is every blob file;
-	// pending are those of writes in progress, which nothing refers to yet
-	blobMu  sync.Mutex
-	pending map[string]*blob
-	known   map[string]*blob
+	// blobMu guards the blob files' books: known is every blob file, and
+	// each blob's state says where it is in its life (blobTransitions)
+	blobMu sync.Mutex
+	known  map[string]*blob
 }
 
 // New returns an empty Backend that holds everything in memory.
@@ -116,6 +113,82 @@ type bucket struct {
 // nullVersion is the version id of an object written while versioning is
 // off or suspended.
 const nullVersion = "null"
+
+// versioningState is a bucket's versioning with its Object Lock, which
+// depend on each other: what the versioning and lock fields say together.
+type versioningState int
+
+const (
+	// versioningOff: never set; every key holds one version, "null"
+	versioningOff versioningState = iota + 1
+	// versioningEnabled: every write is a new version
+	versioningEnabled
+	// versioningSuspended: writes replace the "null" version, and the
+	// versions written while enabled stay
+	versioningSuspended
+	// versioningLocked: enabled, with Object Lock, and so for good
+	versioningLocked
+	numVersioningStates
+)
+
+func (s versioningState) String() string {
+	return [...]string{"", "off", "enabled", "suspended", "locked"}[s]
+}
+
+// versioningEvent is a request that changes the versioning or the lock.
+type versioningEvent int
+
+const (
+	// versioningEnable, versioningSuspend: PutBucketVersioning
+	versioningEnable versioningEvent = iota
+	versioningSuspend
+	// versioningLock: PutObjectLockConfiguration
+	versioningLock
+	numVersioningEvents
+)
+
+func (e versioningEvent) String() string {
+	return [...]string{"enable", "suspend", "lock"}[e]
+}
+
+// versioningTransitions is what a bucket's versioning can become; a zero
+// entry is a request refused with InvalidBucketState. Nothing leads back to
+// versioningOff, and nothing out of versioningLocked: a version under
+// Object Lock is kept by every write being a new version. It is held to
+// tla/VersionStore.tla, which is checked for that (TestVersioningTable).
+var versioningTransitions = [numVersioningStates][numVersioningEvents]versioningState{
+	versioningOff:       {versioningEnable: versioningEnabled, versioningSuspend: versioningSuspended},
+	versioningEnabled:   {versioningEnable: versioningEnabled, versioningSuspend: versioningSuspended, versioningLock: versioningLocked},
+	versioningSuspended: {versioningEnable: versioningEnabled, versioningSuspend: versioningSuspended},
+	versioningLocked:    {versioningEnable: versioningLocked, versioningLock: versioningLocked},
+}
+
+func (bkt *bucket) versioningState() versioningState {
+	switch {
+	case bkt.lock != nil:
+		return versioningLocked
+	case bkt.versioning == types.BucketVersioningStatusEnabled:
+		return versioningEnabled
+	case bkt.versioning == types.BucketVersioningStatusSuspended:
+		return versioningSuspended
+	}
+	return versioningOff
+}
+
+// setVersioning takes the step of e: it sets the versioning the state it
+// leads to has and reports whether there is such a step. The lock itself is
+// the caller's to store.
+func (bkt *bucket) setVersioning(e versioningEvent) bool {
+	switch versioningTransitions[bkt.versioningState()][e] {
+	case versioningEnabled, versioningLocked:
+		bkt.versioning = types.BucketVersioningStatusEnabled
+	case versioningSuspended:
+		bkt.versioning = types.BucketVersioningStatusSuspended
+	default:
+		return false
+	}
+	return true
+}
 
 // object is one version of a key. Everything but the tags and the lock
 // state is immutable once stored, and so are the blobs its body is made of.
@@ -239,18 +312,20 @@ func (b *Backend) PutBucketVersioning(ctx context.Context, in *s3.PutBucketVersi
 	if in.VersioningConfiguration != nil {
 		status = in.VersioningConfiguration.Status
 	}
+	var event versioningEvent
 	switch status {
 	case types.BucketVersioningStatusEnabled:
+		event = versioningEnable
 	case types.BucketVersioningStatusSuspended:
-		if bkt.lock != nil {
-			return nil, fail(http.StatusConflict, "InvalidBucketState",
-				"An Object Lock configuration is present on this bucket, so the versioning state cannot be changed.").err()
-		}
+		event = versioningSuspend
 	default:
 		return nil, fail(http.StatusBadRequest, "MalformedXML",
 			"The XML you provided was not well-formed or did not validate against our published schema").err()
 	}
-	bkt.versioning = status
+	if !bkt.setVersioning(event) {
+		return nil, fail(http.StatusConflict, "InvalidBucketState",
+			"An Object Lock configuration is present on this bucket, so the versioning state cannot be changed.").err()
+	}
 	return &s3.PutBucketVersioningOutput{}, nil
 }
 
@@ -265,7 +340,7 @@ func (b *Backend) PutObjectLockConfiguration(ctx context.Context, in *s3.PutObje
 	if f != nil {
 		return nil, f.err()
 	}
-	if bkt.versioning != types.BucketVersioningStatusEnabled {
+	if versioningTransitions[bkt.versioningState()][versioningLock] == 0 {
 		return nil, fail(http.StatusConflict, "InvalidBucketState",
 			"Versioning must be 'Enabled' on the bucket to apply a Object Lock configuration").err()
 	}

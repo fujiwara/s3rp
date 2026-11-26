@@ -56,9 +56,7 @@ func Open(dir string) (*Backend, error) {
 	}
 	b := New()
 	b.dir = dir
-	b.pending = map[string]*blob{}
 	b.known = map[string]*blob{}
-	b.garbage = map[string]*blob{}
 	if err := os.MkdirAll(b.blobDir(), 0o700); err != nil {
 		return nil, err
 	}
@@ -153,8 +151,8 @@ func (b *Backend) flush() error {
 		// referenced nor pending now can never be referenced again
 		b.blobMu.Lock()
 		for id, bl := range b.known {
-			if !referenced[id] && b.pending[id] == nil {
-				b.garbage[id] = bl
+			if !referenced[id] {
+				bl.advance(blobDropped)
 			}
 		}
 		b.blobMu.Unlock()
@@ -173,19 +171,19 @@ func (b *Backend) flush() error {
 	// without readers here stays without
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.blobMu.Lock()
+	defer b.blobMu.Unlock()
 	var errs []error
-	for id, bl := range b.garbage {
-		if bl.readers.Load() > 0 {
+	for id, bl := range b.known {
+		if bl.state != blobGarbage || bl.readers.Load() > 0 {
 			continue // a later flush, or the next Open, takes it
 		}
 		if err := os.Remove(bl.path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			errs = append(errs, err)
 			continue
 		}
-		delete(b.garbage, id)
-		b.blobMu.Lock()
+		bl.advance(blobCollected)
 		delete(b.known, id)
-		b.blobMu.Unlock()
 	}
 	return errors.Join(errs...)
 }
@@ -254,12 +252,14 @@ func (b *Backend) load() error {
 		}
 	}
 	for id, bl := range b.known {
-		if !referenced[id] {
-			if err := os.Remove(bl.path); err != nil {
-				return err
-			}
-			delete(b.known, id)
+		if referenced[id] {
+			bl.advance(blobRestored)
+			continue
 		}
+		if err := os.Remove(bl.path); err != nil {
+			return err
+		}
+		delete(b.known, id)
 	}
 	return nil
 }

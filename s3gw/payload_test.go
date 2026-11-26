@@ -70,6 +70,40 @@ func TestPayloadVerifier(t *testing.T) {
 		}
 		assertS3Code(t, readErr, "XAmzContentSHA256Mismatch")
 	})
+
+	// a consumer that reads on after the refusal must not be told the body
+	// ended: the end of a body is what makes it a complete one
+	t.Run("a refusal stays one", func(t *testing.T) {
+		tampered := append([]byte(nil), body...)
+		tampered[0] = 'H'
+		r := s3gw.NewPayloadVerifier(bytes.NewReader(tampered), want, int64(len(tampered)))
+		_, err := io.ReadAll(r)
+		assertS3Code(t, err, "XAmzContentSHA256Mismatch")
+		n, err := r.Read(make([]byte, 1))
+		if n != 0 {
+			t.Errorf("expect no bytes after the refusal, got %d", n)
+		}
+		assertS3Code(t, err, "XAmzContentSHA256Mismatch")
+	})
+
+	// the hash of a shorter body is not the hash of the declared one, even
+	// when it is the hash that was signed
+	t.Run("a body short of the declared length is refused", func(t *testing.T) {
+		r := s3gw.NewPayloadVerifier(bytes.NewReader(body), want, int64(len(body))+1)
+		_, err := io.ReadAll(r)
+		assertS3Code(t, err, "XAmzContentSHA256Mismatch")
+	})
+
+	// bytes past the declared length are not covered by the hash that matched
+	t.Run("bytes beyond the declared length are refused", func(t *testing.T) {
+		longer := append(append([]byte(nil), body...), "more"...)
+		r := s3gw.NewPayloadVerifier(bytes.NewReader(longer), want, int64(len(body)))
+		got, err := io.ReadAll(r)
+		assertS3Code(t, err, "XAmzContentSHA256Mismatch")
+		if len(got) > len(body) {
+			t.Errorf("expect at most the %d declared bytes, got %d", len(body), len(got))
+		}
+	})
 }
 
 // TestXMLBodyHashMismatch: an XML-bodied operation whose body does not match

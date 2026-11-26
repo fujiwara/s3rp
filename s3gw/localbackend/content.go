@@ -30,6 +30,79 @@ type blob struct {
 	// readers counts the response bodies still reading the file, which
 	// keeps it from being removed under them
 	readers atomic.Int32
+	// state is where a blob kept in a file is in its life; guarded by the
+	// Backend's blobMu, and unused in memory
+	state blobState
+}
+
+// blobState is the life of a blob file.
+type blobState int
+
+const (
+	// blobNew: not in the books yet
+	blobNew blobState = iota
+	// blobPending: written by a write still in progress, which nothing
+	// refers to yet and which is not to be collected for that
+	blobPending
+	// blobStored: its write is over, and the state may refer to it
+	blobStored
+	// blobGarbage: the state stopped referring to it, for good; the file is
+	// removed once meta.json no longer names it and no response reads it
+	blobGarbage
+	// blobRemoved: the file is gone
+	blobRemoved
+	numBlobStates
+)
+
+func (s blobState) String() string {
+	return [...]string{"new", "pending", "stored", "garbage", "removed"}[s]
+}
+
+// blobEvent is what happens to a blob file.
+type blobEvent int
+
+const (
+	// blobIngested: a write stored its body (ingest)
+	blobIngested blobEvent = iota
+	// blobRestored: Open found the file, and meta.json names it
+	blobRestored
+	// blobCommitted, blobAbandoned: the write ended, having made the state
+	// refer to the blob or not (release)
+	blobCommitted
+	blobAbandoned
+	// blobDropped: a flush found the state no longer referring to it
+	blobDropped
+	// blobCollected: a flush removed the file
+	blobCollected
+	numBlobEvents
+)
+
+func (e blobEvent) String() string {
+	return [...]string{"ingested", "restored", "committed", "abandoned", "dropped", "collected"}[e]
+}
+
+// blobTransitions is a blob file's life; a zero entry is an event that does
+// not happen in that state, and no event leads back to blobNew. It is held
+// to tla/BlobStore.tla, which is checked for what the directory promises
+// whenever the process stops: every blob meta.json names is there
+// (TestBlobTable).
+var blobTransitions = [numBlobStates][numBlobEvents]blobState{
+	blobNew:     {blobIngested: blobPending, blobRestored: blobStored},
+	blobPending: {blobCommitted: blobStored, blobAbandoned: blobRemoved},
+	blobStored:  {blobDropped: blobGarbage},
+	blobGarbage: {blobCollected: blobRemoved},
+}
+
+// advance moves the blob as the table says, and reports whether the event
+// is one that happens in its state; the blob stays as it is otherwise. The
+// caller holds blobMu.
+func (bl *blob) advance(e blobEvent) bool {
+	next := blobTransitions[bl.state][e]
+	if next == blobNew {
+		return false
+	}
+	bl.state = next
+	return true
 }
 
 // segment is a range of a blob.
@@ -179,10 +252,10 @@ func (b *Backend) ingest(r io.Reader, w io.Writer) (*blob, error) {
 	}
 	bl := &blob{id: newID(), size: n}
 	bl.path = filepath.Join(b.blobDir(), bl.id)
-	// registered before the file has its name, so that a collection in
-	// between cannot take it for garbage
+	// in the books, as pending, before the file has its name, so that a
+	// collection in between cannot take it for garbage
 	b.blobMu.Lock()
-	b.pending[bl.id] = bl
+	bl.advance(blobIngested)
 	b.known[bl.id] = bl
 	b.blobMu.Unlock()
 	if err := os.Rename(f.Name(), bl.path); err != nil {
@@ -200,8 +273,9 @@ func (b *Backend) release(bl *blob, committed bool) {
 		return
 	}
 	b.blobMu.Lock()
-	delete(b.pending, bl.id)
-	if !committed {
+	if committed {
+		bl.advance(blobCommitted)
+	} else if bl.advance(blobAbandoned) {
 		delete(b.known, bl.id)
 	}
 	b.blobMu.Unlock()

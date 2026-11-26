@@ -62,9 +62,87 @@ type chunkedReader struct {
 	// Content-Length) would take bytes from a chunk whose signature is
 	// never reached, and therefore never checked.
 	undecoded int64
-	started   bool
-	eof       bool
-	err       error
+	phase     chunkPhase
+	err       error // why the phase is chunkFailed
+}
+
+// chunkPhase is where the reader is in the stream.
+type chunkPhase int
+
+const (
+	// chunkStart: nothing is read yet, the first chunk header is next
+	chunkStart chunkPhase = iota + 1
+	// chunkData: inside a chunk's data, remaining bytes of it to come
+	chunkData
+	// chunkBetween: a chunk's data is complete and its signature verified;
+	// the CRLF that closes it and the next chunk header follow
+	chunkBetween
+	// chunkDone: the terminal chunk and the trailers are verified
+	chunkDone
+	// chunkFailed: the stream was refused, and stays refused
+	chunkFailed
+	numChunkPhases
+)
+
+func (p chunkPhase) String() string {
+	return [...]string{"", "start", "data", "between", "done", "failed"}[p]
+}
+
+// chunkEvent is what reading the stream can come to.
+type chunkEvent int
+
+const (
+	// chunkOpened: a chunk header of a size the declared length still allows
+	chunkOpened chunkEvent = iota
+	// chunkRead: bytes of the chunk, with more of it to come
+	chunkRead
+	// chunkVerified: the chunk's last byte, and its signature verified
+	chunkVerified
+	// chunkTerminated: the zero-size chunk where the declared length is
+	// used up, its signature and the trailers verified
+	chunkTerminated
+	// chunkRefused: anything else — framing, a signature, a length, a
+	// checksum, the read itself
+	chunkRefused
+	numChunkEvents
+)
+
+func (e chunkEvent) String() string {
+	return [...]string{"opened", "read", "verified", "terminated", "refused"}[e]
+}
+
+// chunkTransitions is the decoder's phases and what moves it between them;
+// a zero entry is an event that cannot happen in that phase. It is held to
+// tla/ChunkedReader.tla, which is checked for what the decoder promises: a
+// consumer holding the declared length holds only verified chunks, the
+// terminal one included (TestChunkTable).
+var chunkTransitions = [numChunkPhases][numChunkEvents]chunkPhase{
+	chunkStart: {
+		chunkOpened:     chunkData,
+		chunkTerminated: chunkDone,
+		chunkRefused:    chunkFailed,
+	},
+	chunkData: {
+		chunkRead:     chunkData,
+		chunkVerified: chunkBetween,
+		chunkRefused:  chunkFailed,
+	},
+	chunkBetween: {
+		chunkOpened:     chunkData,
+		chunkTerminated: chunkDone,
+		chunkRefused:    chunkFailed,
+	},
+}
+
+// advance moves the reader as the table says. An event the table does not
+// have in this phase is a bug in this file, and refuses the stream.
+func (cr *chunkedReader) advance(e chunkEvent) {
+	next := chunkTransitions[cr.phase][e]
+	if next == 0 {
+		cr.err = fmt.Errorf("aws-chunked decoder: %s while %s", e, cr.phase)
+		next = chunkFailed
+	}
+	cr.phase = next
 }
 
 // incompleteBody is the error for an aws-chunked stream that ends before
@@ -101,6 +179,7 @@ func NewChunkedReader(body io.Reader, vr *Verified, trailerAlg string, decodedLe
 		signed:    signed,
 		trailer:   strings.HasSuffix(vr.PayloadHash, "-TRAILER"),
 		undecoded: decodedLength,
+		phase:     chunkStart,
 	}
 	if signed {
 		cr.signingKey = vr.SigningKey
@@ -117,51 +196,18 @@ func NewChunkedReader(body io.Reader, vr *Verified, trailerAlg string, decodedLe
 }
 
 func (cr *chunkedReader) Read(p []byte) (int, error) {
-	if cr.err != nil {
+	switch cr.phase {
+	case chunkFailed:
 		return 0, cr.err
-	}
-	if cr.eof {
+	case chunkDone:
 		return 0, io.EOF
-	}
-	for cr.remaining == 0 {
-		if cr.started {
-			// the previous chunk was verified as soon as its data completed
-			// (below); here we only consume the CRLF that frames it
-			if err := cr.readCRLF(); err != nil {
-				return 0, cr.fail(err)
-			}
+	case chunkStart, chunkBetween:
+		if err := cr.nextChunk(); err != nil {
+			return 0, err
 		}
-		size, err := cr.readChunkHeader()
-		if err != nil {
-			return 0, cr.fail(err)
-		}
-		cr.started = true
-		// refuse a chunk that claims more than the signed decoded length
-		// still allows: its trailing bytes would never be read, so its
-		// signature would never be checked, yet its leading bytes would
-		// already have been delivered
-		if size > cr.undecoded {
-			return 0, cr.fail(fmt.Errorf(
-				"chunk size %d exceeds the remaining x-amz-decoded-content-length %d", size, cr.undecoded))
-		}
-		cr.undecoded -= size
-		if size == 0 {
-			if err := cr.verifyChunk(); err != nil {
-				return 0, cr.fail(err)
-			}
-			// the terminal chunk closes the stream, so anything short of the
-			// declared decoded length is a truncated body, not a shorter one
-			if cr.undecoded != 0 {
-				return 0, cr.fail(incompleteBody(fmt.Errorf(
-					"stream complete with %d bytes of x-amz-decoded-content-length undelivered", cr.undecoded)))
-			}
-			if err := cr.discardTrailers(); err != nil {
-				return 0, cr.fail(err)
-			}
-			cr.eof = true
+		if cr.phase == chunkDone {
 			return 0, io.EOF
 		}
-		cr.remaining = size
 	}
 	if int64(len(p)) > cr.remaining {
 		p = p[:cr.remaining]
@@ -180,51 +226,78 @@ func (cr *chunkedReader) Read(p []byte) (int, error) {
 		err = incompleteBody(io.ErrUnexpectedEOF)
 	}
 	if err != nil && err != io.EOF {
-		return n, cr.fail(err)
+		// A failed Read hands out nothing, the bytes that came with the
+		// error included: they may be the chunk's last, and a consumer
+		// that has the declared length by them (io.ReadFull) never looks
+		// at the error — it would hold a chunk nobody verified.
+		return 0, cr.fail(err)
+	}
+	if cr.remaining > 0 {
+		cr.advance(chunkRead)
+		return n, cr.err
 	}
 	// Verify the chunk signature the moment its data is complete, before
 	// handing the final bytes to the caller — so integrity does not depend on
 	// the consumer reading past the last byte to reach EOF. On failure the
 	// just-read bytes are dropped (the stream is aborted).
-	if cr.remaining == 0 {
-		if verr := cr.verifyChunk(); verr != nil {
-			return 0, cr.fail(verr)
-		}
-		// The declared decoded length is exhausted, so the terminal chunk
-		// and the trailers must be consumed and verified now, in the same
-		// Read: the consumer is entitled to stop at the decoded length (the
-		// SDK bounds the body by ContentLength), so a following Read that
-		// would otherwise do this may never come.
-		if cr.undecoded == 0 {
-			if terr := cr.readTerminal(); terr != nil {
-				return 0, cr.fail(terr)
-			}
+	if verr := cr.verifyChunk(); verr != nil {
+		return 0, cr.fail(verr)
+	}
+	cr.advance(chunkVerified)
+	// The declared decoded length is exhausted, so the terminal chunk
+	// and the trailers must be consumed and verified now, in the same
+	// Read: the consumer is entitled to stop at the decoded length (the
+	// SDK bounds the body by ContentLength), so a following Read that
+	// would otherwise do this may never come.
+	if cr.undecoded == 0 {
+		if terr := cr.nextChunk(); terr != nil {
+			return 0, terr
 		}
 	}
-	return n, nil
+	return n, cr.err
 }
 
-// readTerminal consumes the zero-size terminal chunk and the trailers after
-// the last data chunk, verifying both, and marks the stream complete.
-func (cr *chunkedReader) readTerminal() error {
-	if err := cr.readCRLF(); err != nil {
-		return err
+// nextChunk reads the framing between two chunks' data: the CRLF closing
+// the chunk before, if there was one, and the next chunk header — and, when
+// that is the terminal chunk, the trailers after it, which ends the stream.
+func (cr *chunkedReader) nextChunk() error {
+	if cr.phase == chunkBetween {
+		if err := cr.readCRLF(); err != nil {
+			return cr.fail(err)
+		}
 	}
 	size, err := cr.readChunkHeader()
 	if err != nil {
-		return err
+		return cr.fail(err)
 	}
-	if size != 0 {
-		return fmt.Errorf("chunk size %d exceeds the remaining x-amz-decoded-content-length 0", size)
+	// refuse a chunk that claims more than the signed decoded length
+	// still allows: its trailing bytes would never be read, so its
+	// signature would never be checked, yet its leading bytes would
+	// already have been delivered
+	if size > cr.undecoded {
+		return cr.fail(fmt.Errorf(
+			"chunk size %d exceeds the remaining x-amz-decoded-content-length %d", size, cr.undecoded))
+	}
+	cr.undecoded -= size
+	if size > 0 {
+		cr.remaining = size
+		cr.advance(chunkOpened)
+		return cr.err
 	}
 	if err := cr.verifyChunk(); err != nil {
-		return err
+		return cr.fail(err)
+	}
+	// the terminal chunk closes the stream, so anything short of the
+	// declared decoded length is a truncated body, not a shorter one
+	if cr.undecoded != 0 {
+		return cr.fail(incompleteBody(fmt.Errorf(
+			"stream complete with %d bytes of x-amz-decoded-content-length undelivered", cr.undecoded)))
 	}
 	if err := cr.discardTrailers(); err != nil {
-		return err
+		return cr.fail(err)
 	}
-	cr.eof = true
-	return nil
+	cr.advance(chunkTerminated)
+	return cr.err
 }
 
 // truncateForError bounds a client-controlled value quoted in an error, so
@@ -238,6 +311,7 @@ func truncateForError(s string) string {
 }
 
 func (cr *chunkedReader) fail(err error) error {
+	cr.advance(chunkRefused)
 	cr.err = err
 	return err
 }

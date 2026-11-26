@@ -51,12 +51,78 @@ func noSuchUpload() *failure {
 		"The specified upload does not exist. The upload ID may be invalid, or the upload may have been aborted or completed.")
 }
 
-func (bkt *bucket) findUpload(key, id *string) (*upload, *failure) {
-	u, ok := bkt.uploads[aws.ToString(id)]
-	if !ok || u.key != aws.ToString(key) {
+// uploadState is the life of a multipart upload, as the bucket's books have
+// it: an upload in progress is in uploads, one that ended in finished.
+type uploadState int
+
+const (
+	// uploadUnknown: no upload of this id and key was ever started
+	uploadUnknown uploadState = iota
+	// uploadOpen: started, and neither completed nor aborted
+	uploadOpen
+	// uploadFinished: completed or aborted, which nothing tells apart later
+	uploadFinished
+	numUploadStates
+)
+
+func (s uploadState) String() string {
+	return [...]string{"unknown", "open", "finished"}[s]
+}
+
+// uploadEvent is a request that names an upload.
+type uploadEvent int
+
+const (
+	// uploadCreated: CreateMultipartUpload, which makes the id
+	uploadCreated uploadEvent = iota
+	// uploadUsed: UploadPart, UploadPartCopy, ListParts
+	uploadUsed
+	// uploadCompleted: CompleteMultipartUpload, once everything it checks holds
+	uploadCompleted
+	// uploadAborted: AbortMultipartUpload
+	uploadAborted
+	numUploadEvents
+)
+
+func (e uploadEvent) String() string {
+	return [...]string{"created", "used", "completed", "aborted"}[e]
+}
+
+// uploadTransitions is a multipart upload's life; a zero entry is a request
+// answered NoSuchUpload. Aborting an upload that has ended succeeds, as on
+// S3, where aborting an id that never existed does not. It is held to
+// tla/MultipartUpload.tla, which is checked for what an upload promises: one
+// that ended takes no part and makes no second object (TestUploadTable).
+var uploadTransitions = [numUploadStates][numUploadEvents]uploadState{
+	uploadUnknown:  {uploadCreated: uploadOpen},
+	uploadOpen:     {uploadUsed: uploadOpen, uploadCompleted: uploadFinished, uploadAborted: uploadFinished},
+	uploadFinished: {uploadAborted: uploadFinished},
+}
+
+// uploadState is the state of the upload a request names.
+func (bkt *bucket) uploadState(key, id string) uploadState {
+	if u, ok := bkt.uploads[id]; ok && u.key == key {
+		return uploadOpen
+	}
+	if k, ok := bkt.finished[id]; ok && k == key {
+		return uploadFinished
+	}
+	return uploadUnknown
+}
+
+// findUpload resolves the upload a request names for e, which it refuses
+// when the table has no such step. The upload is nil when it has ended.
+func (bkt *bucket) findUpload(key, id *string, e uploadEvent) (*upload, *failure) {
+	if uploadTransitions[bkt.uploadState(aws.ToString(key), aws.ToString(id))][e] == uploadUnknown {
 		return nil, noSuchUpload()
 	}
-	return u, nil
+	return bkt.uploads[aws.ToString(id)], nil
+}
+
+// endUpload moves an open upload to uploadFinished.
+func (bkt *bucket) endUpload(u *upload) {
+	delete(bkt.uploads, u.id)
+	bkt.finished[u.id] = u.key
 }
 
 func (b *Backend) CreateMultipartUpload(ctx context.Context, in *s3.CreateMultipartUploadInput, _ ...func(*s3.Options)) (*s3.CreateMultipartUploadOutput, error) {
@@ -172,7 +238,7 @@ func (b *Backend) UploadPart(ctx context.Context, in *s3.UploadPartInput, _ ...f
 	bkt, f := b.getBucket(in.Bucket)
 	if f == nil {
 		var u *upload
-		if u, f = bkt.findUpload(in.Key, in.UploadId); f == nil && algorithm == "" {
+		if u, f = bkt.findUpload(in.Key, in.UploadId, uploadUsed); f == nil && algorithm == "" {
 			algorithm = u.algorithm
 		}
 	}
@@ -203,7 +269,7 @@ func (b *Backend) UploadPart(ctx context.Context, in *s3.UploadPartInput, _ ...f
 	if bkt, f = b.getBucket(in.Bucket); f != nil {
 		return nil, f.err()
 	}
-	u, f := bkt.findUpload(in.Key, in.UploadId)
+	u, f := bkt.findUpload(in.Key, in.UploadId, uploadUsed)
 	if f != nil {
 		return nil, f.err()
 	}
@@ -249,7 +315,7 @@ func (b *Backend) CompleteMultipartUpload(ctx context.Context, in *s3.CompleteMu
 	if f != nil {
 		return nil, f.err()
 	}
-	u, f := bkt.findUpload(in.Key, in.UploadId)
+	u, f := bkt.findUpload(in.Key, in.UploadId, uploadCompleted)
 	if f != nil {
 		return nil, f.err()
 	}
@@ -348,8 +414,7 @@ func (b *Backend) CompleteMultipartUpload(ctx context.Context, in *s3.CompleteMu
 	if f := b.commit(bkt, u.key, &o); f != nil {
 		return nil, f.err()
 	}
-	delete(bkt.uploads, u.id)
-	bkt.finished[u.id] = u.key
+	bkt.endUpload(u)
 	out := &s3.CompleteMultipartUploadOutput{
 		Bucket:               in.Bucket,
 		Key:                  in.Key,
@@ -372,15 +437,13 @@ func (b *Backend) AbortMultipartUpload(ctx context.Context, in *s3.AbortMultipar
 	if f != nil {
 		return nil, f.err()
 	}
-	u, f := bkt.findUpload(in.Key, in.UploadId)
+	u, f := bkt.findUpload(in.Key, in.UploadId, uploadAborted)
 	if f != nil {
-		if key, ok := bkt.finished[aws.ToString(in.UploadId)]; ok && key == aws.ToString(in.Key) {
-			return &s3.AbortMultipartUploadOutput{}, nil
-		}
 		return nil, f.err()
 	}
-	delete(bkt.uploads, u.id)
-	bkt.finished[u.id] = u.key
+	if u != nil {
+		bkt.endUpload(u)
+	}
 	return &s3.AbortMultipartUploadOutput{}, nil
 }
 
@@ -406,7 +469,7 @@ func (b *Backend) ListParts(ctx context.Context, in *s3.ListPartsInput, _ ...fun
 	if f != nil {
 		return nil, f.err()
 	}
-	u, f := bkt.findUpload(in.Key, in.UploadId)
+	u, f := bkt.findUpload(in.Key, in.UploadId, uploadUsed)
 	if f != nil {
 		return nil, f.err()
 	}

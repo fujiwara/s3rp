@@ -219,7 +219,7 @@ func (b *Backend) UploadPartCopy(ctx context.Context, in *s3.UploadPartCopyInput
 	if f != nil {
 		return nil, f.err()
 	}
-	u, f := bkt.findUpload(in.Key, in.UploadId)
+	u, f := bkt.findUpload(in.Key, in.UploadId, uploadUsed)
 	if f != nil {
 		return nil, f.err()
 	}

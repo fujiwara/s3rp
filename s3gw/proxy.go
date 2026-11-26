@@ -891,28 +891,121 @@ type payloadVerifier struct {
 	h         hash.Hash
 	want      string
 	remaining int64
-	done      bool
+	phase     payloadPhase
+}
+
+// payloadPhase is how far the check of a body has come.
+type payloadPhase int
+
+const (
+	// payloadReading: the declared length is not read yet
+	payloadReading payloadPhase = iota + 1
+	// payloadVerified: all of it is read and is what was signed
+	payloadVerified
+	// payloadRefused: it is not, and no later Read says otherwise
+	payloadRefused
+	numPayloadPhases
+)
+
+func (p payloadPhase) String() string {
+	return [...]string{"", "reading", "verified", "refused"}[p]
+}
+
+// payloadEvent is what a Read of the body comes to.
+type payloadEvent int
+
+const (
+	// payloadMore: bytes, with more of the declared length to come
+	payloadMore payloadEvent = iota
+	// payloadMatched, payloadMismatched: the declared length or the end of
+	// the body is reached, and the hash is or is not the signed one
+	payloadMatched
+	payloadMismatched
+	// payloadExtra: bytes beyond what was hashed
+	payloadExtra
+	// payloadEnd: a Read that yields no bytes
+	payloadEnd
+	numPayloadEvents
+)
+
+func (e payloadEvent) String() string {
+	return [...]string{"more", "matched", "mismatched", "extra", "end"}[e]
+}
+
+// payloadTransitions is the verifier; a zero entry is an event that cannot
+// happen in that phase. It is held to tla/PayloadVerifier.tla, which is
+// checked for what the verifier promises: the bytes that complete a body
+// are handed out only when the whole of it is what was signed, and a
+// refusal stays one (TestPayloadTable).
+var payloadTransitions = [numPayloadPhases][numPayloadEvents]payloadPhase{
+	payloadReading: {
+		payloadMore:       payloadReading,
+		payloadEnd:        payloadReading,
+		payloadMatched:    payloadVerified,
+		payloadMismatched: payloadRefused,
+	},
+	payloadVerified: {
+		payloadEnd: payloadVerified,
+		// the hash that matched does not cover them
+		payloadExtra: payloadRefused,
+	},
+	payloadRefused: {
+		payloadMore:       payloadRefused,
+		payloadEnd:        payloadRefused,
+		payloadMatched:    payloadRefused,
+		payloadMismatched: payloadRefused,
+		payloadExtra:      payloadRefused,
+	},
 }
 
 func newPayloadVerifier(r io.Reader, want string, length int64) *payloadVerifier {
 	// hex.EncodeToString produces lower case, so normalize the expected value
-	return &payloadVerifier{r: r, h: sha256.New(), want: strings.ToLower(want), remaining: length}
+	return &payloadVerifier{r: r, h: sha256.New(), want: strings.ToLower(want), remaining: length, phase: payloadReading}
 }
 
 func (v *payloadVerifier) Read(p []byte) (int, error) {
+	if v.phase == payloadRefused {
+		return 0, s3err.ContentSHA256Mismatch()
+	}
 	n, err := v.r.Read(p)
+	if v.phase == payloadVerified {
+		if n > 0 {
+			return 0, v.advance(payloadExtra)
+		}
+		return 0, err
+	}
 	if n > 0 {
 		v.h.Write(p[:n])
 		v.remaining -= int64(n)
 	}
-	if !v.done && (v.remaining <= 0 || err == io.EOF) {
-		v.done = true
+	switch {
+	case v.remaining <= 0 || err == io.EOF:
+		event := payloadMismatched
 		got := hex.EncodeToString(v.h.Sum(nil))
-		if subtle.ConstantTimeCompare([]byte(got), []byte(v.want)) != 1 {
-			return 0, s3err.ContentSHA256Mismatch()
+		// the signed hash is of a body of the signed length: one that ends
+		// short of it is not that body, whatever its own hash is
+		if v.remaining == 0 && subtle.ConstantTimeCompare([]byte(got), []byte(v.want)) == 1 {
+			event = payloadMatched
 		}
+		if verr := v.advance(event); verr != nil {
+			return 0, verr
+		}
+	case n > 0:
+		v.advance(payloadMore)
 	}
 	return n, err
+}
+
+// advance moves the verifier as the table says and returns the refusal when
+// that is where it ends up. An event the table does not have in this phase
+// is a bug in this file, and refuses the body.
+func (v *payloadVerifier) advance(e payloadEvent) error {
+	v.phase = payloadTransitions[v.phase][e]
+	if v.phase == payloadVerified || v.phase == payloadReading {
+		return nil
+	}
+	v.phase = payloadRefused
+	return s3err.ContentSHA256Mismatch()
 }
 
 // contentMD5Header returns the request's Content-MD5 value after checking
