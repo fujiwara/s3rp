@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-27
-- Pull request: TBD
+- Pull request: [#289](https://github.com/fujiwara/s3rp/pull/289)
 
 ## Context
 
