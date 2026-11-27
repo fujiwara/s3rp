@@ -1,5 +1,13 @@
 # Changelog
 
+## [v0.1.1](https://github.com/fujiwara/s3rp/compare/v0.1.0...v0.1.1) - 2026-11-27
+
+- List each User-Agent on its own line in the clients report by @fujiwara in https://github.com/fujiwara/s3rp/pull/284
+- Run Terraform's state locking in the integration suite by @fujiwara in https://github.com/fujiwara/s3rp/pull/286
+- Write state machines as transition tables, model-checked in TLA+ by @fujiwara in https://github.com/fujiwara/s3rp/pull/288
+- Report the tags a request writes on Op.Request by @fujiwara in https://github.com/fujiwara/s3rp/pull/289
+- Bump the client run's pins by @github-actions[bot] in https://github.com/fujiwara/s3rp/pull/287
+
 ## [v0.1.0](https://github.com/fujiwara/s3rp/compare/v0.0.23...v0.1.0) - 2026-11-23
 
 - Add a backend factory and an in-memory backend by @fujiwara in https://github.com/fujiwara/s3rp/pull/268
