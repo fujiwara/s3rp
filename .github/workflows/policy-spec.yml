@@ -33,7 +33,7 @@ jobs:
 
       # Lean, pinned in policy/spec/mise.toml
       - name: Set up mise
-        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
+        uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
         with:
           working_directory: policy/spec
 
@@ -69,7 +69,7 @@ jobs:
 
       # jsonschema, pinned in mise.toml
       - name: Set up mise
-        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
+        uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
 
       - name: Check the schema is a schema
         run: jsonschema metaschema docs/policy.schema.json
