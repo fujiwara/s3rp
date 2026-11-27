@@ -37,47 +37,56 @@ func checkTag(key, value string) *s3err.Error {
 	return nil
 }
 
-// checkTagSet validates the body of a PutObjectTagging.
-func checkTagSet(tags []s3xml.Tag) *s3err.Error {
+// checkTagSet validates the body of a PutObjectTagging and returns its
+// tags, nil for an empty set. A key appears once, so the map loses nothing.
+func checkTagSet(tags []s3xml.Tag) (map[string]string, *s3err.Error) {
 	if len(tags) > maxObjectTags {
-		return errTooManyTags()
+		return nil, errTooManyTags()
 	}
-	seen := make(map[string]bool, len(tags))
+	var set map[string]string
 	for _, tag := range tags {
 		if s3e := checkTag(tag.Key, tag.Value); s3e != nil {
-			return s3e
+			return nil, s3e
 		}
-		if seen[tag.Key] {
-			return s3err.New(http.StatusBadRequest, "InvalidTag", "Cannot provide multiple Tags with the same key")
+		if _, dup := set[tag.Key]; dup {
+			return nil, s3err.New(http.StatusBadRequest, "InvalidTag", "Cannot provide multiple Tags with the same key")
 		}
-		seen[tag.Key] = true
+		if set == nil {
+			set = make(map[string]string, len(tags))
+		}
+		set[tag.Key] = tag.Value
 	}
-	return nil
+	return set, nil
 }
 
 // checkTaggingValue validates tags given inline with a write, as the
 // x-amz-tagging header or the POST form field of that name: URL query
-// syntax, each key once.
-func checkTaggingValue(v string) *s3err.Error {
+// syntax, each key once. It returns the tags, nil when there are none.
+func checkTaggingValue(v string) (map[string]string, *s3err.Error) {
 	if v == "" {
-		return nil
+		return nil, nil
 	}
 	tags, err := url.ParseQuery(v)
 	if err != nil {
-		return errTaggingHeader().WithCause(err)
+		return nil, errTaggingHeader().WithCause(err)
 	}
 	if len(tags) > maxObjectTags {
-		return errTooManyTags()
+		return nil, errTooManyTags()
 	}
+	var set map[string]string
 	for key, values := range tags {
 		if len(values) != 1 {
-			return errTaggingHeader()
+			return nil, errTaggingHeader()
 		}
 		if s3e := checkTag(key, values[0]); s3e != nil {
-			return s3e
+			return nil, s3e
 		}
+		if set == nil {
+			set = make(map[string]string, len(tags))
+		}
+		set[key] = values[0]
 	}
-	return nil
+	return set, nil
 }
 
 func errTaggingHeader() *s3err.Error {

@@ -452,18 +452,22 @@ The topics, in the order you are likely to need them:
   | `SSE`, `SSEKMSKeyID` | the mode and key id asked for | the encryption applied; absent after a request that asked for it = a backend that ignored it |
   | `StorageClass` | the class asked for | the class the object is in now, lifecycle transitions included, in the backend's own name. Reads only |
   | `Metadata` | the `x-amz-meta-*` sent with the write | the object's stored metadata. Reads only |
+  | `Tags` | the tag set the request writes | — |
   | `ETag`, `VersionID` | — | the version this operation read or created |
 
   | operation | `Request` | `Response` |
   |---|---|---|
   | `GET`, `HEAD` | — | class, metadata, ETag, version id, SSE |
   | `GetObjectAttributes` | — | class, ETag, version id |
-  | `PutObject`, POST upload, `CopyObject` | SSE, class, metadata | SSE, ETag, version id |
-  | `CreateMultipartUpload` | SSE, class, metadata | SSE |
+  | `PutObject`, POST upload, `CopyObject` | SSE, class, metadata, tags | SSE, ETag, version id |
+  | `CreateMultipartUpload` | SSE, class, metadata, tags | SSE |
+  | `PutObjectTagging` | tags | — |
   | `CompleteMultipartUpload` | — | SSE, ETag, version id |
   | `UploadPart`, `DeleteObject`, listings | — | — |
 
-  A non-nil `Request` or `Response` means at least one field is set, not all: `Metadata` is nil whenever there is none. Guard the pointer, never the map — dereferencing a nil `*OpRequest` panics, indexing a nil map returns the zero value:
+  `Tags` is the same set whichever way it was sent — the `x-amz-tagging` header, the POST field of that name, or the body of a PutObjectTagging, which the gateway reads before the hooks for this — and has passed S3's own limits by then. A PutObjectTagging with an empty set removes every tag and reports none. A copy reports the tags it sends whatever its `x-amz-tagging-directive`; without `REPLACE` the destination takes the source's tags, which the backend copies and no hook sees.
+
+  A non-nil `Request` or `Response` means at least one field is set, not all: `Metadata` and `Tags` are nil whenever there are none. Guard the pointer, never the map — dereferencing a nil `*OpRequest` panics, indexing a nil map returns the zero value:
 
   ```go
   if op.Request != nil {
@@ -473,7 +477,7 @@ The topics, in the order you are likely to need them:
 
 ### Refusing in the Authorizer
 
-`Authorize` is a one-shot admission check with `Op` in hand: an exhausted quota or a suspended tenant from `BucketMetadata` / `KeyMetadata`, a class or key on `Op.Request` the plan does not allow, or an action a header added. What S3 models as a permission stays a permission — tags or a retention period on an upload are refused by their action, and their values never appear on `Op.Request`:
+`Authorize` is a one-shot admission check with `Op` in hand: an exhausted quota or a suspended tenant from `BucketMetadata` / `KeyMetadata`, a class or key on `Op.Request` the plan does not allow, or an action a header added. What S3 models as a permission stays a permission — tags or a retention period on an upload are refused as such by their action:
 
 ```go
 func (p plan) Authorize(_ context.Context, op *s3gw.Op) error {
@@ -483,6 +487,24 @@ func (p plan) Authorize(_ context.Context, op *s3gw.Op) error {
 	return nil
 }
 ```
+
+Which tags are written is not something an action says, so that is decided on `Op.Request.Tags`: a key prefix the service keeps for itself, or a limit of this bucket's backend (from `BucketMetadata`) tighter than S3's.
+
+```go
+func (reservedTags) Authorize(_ context.Context, op *s3gw.Op) error {
+	if op.Request == nil {
+		return nil
+	}
+	for key := range op.Request.Tags {
+		if strings.HasPrefix(key, "sys:") {
+			return s3err.New(http.StatusBadRequest, "InvalidTag", "System tags cannot be added/updated by requester")
+		}
+	}
+	return nil
+}
+```
+
+This keeps a client from writing such a tag; it does not hide one the service wrote on the backend itself, which GetObjectTagging returns as stored.
 
 An `*s3err.Error` decides what the client is told; any other error becomes a generic `InternalError`. The Authorizer has no completion signal, so it cannot count what is in flight — that is an interceptor's job.
 

@@ -200,6 +200,10 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, t tar
 	if s3e := checkSSE(postFieldHeader(fields)); s3e != nil {
 		return s3e
 	}
+	tags, s3e := checkTaggingValue(fields[hdrTagging])
+	if s3e != nil {
+		return s3e
+	}
 
 	c := &opCtx{g: g, w: w, r: r, rt: rt, vr: vr, query: r.URL.Query(), key: key}
 	// a form field adds its action as the header of that name does
@@ -216,7 +220,7 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, t tar
 		Bucket:         b.Name,
 		BucketOwner:    b.Tenant,
 		Key:            key,
-		Request:        postObjectRequest(fields),
+		Request:        postObjectRequest(fields, tags),
 		BucketMetadata: b.Metadata,
 		KeyMetadata:    vr.KeyMetadata,
 	}
@@ -232,12 +236,13 @@ func (g *Gateway) handlePostObject(w http.ResponseWriter, r *http.Request, t tar
 // postObjectRequest is opCtx.objectRequest for a POST upload, whose values
 // arrive as form fields rather than headers. Hooks see the same Op either
 // way, which is the point of normalizing here rather than in each hook.
-func postObjectRequest(fields map[string]string) *OpRequest {
+func postObjectRequest(fields, tags map[string]string) *OpRequest {
 	req := OpRequest{
 		SSE:          fields[hdrSSE],
 		SSEKMSKeyID:  fields[hdrSSEKMSKeyID],
 		StorageClass: fields[hdrStorageClass],
 		Metadata:     postFieldMeta(fields),
+		Tags:         tags,
 	}
 	if req.empty() {
 		return nil
@@ -316,9 +321,6 @@ func (g *Gateway) postPutObject(c *opCtx, fields map[string]string, file *multip
 		if t, err := http.ParseTime(v); err == nil {
 			in.Expires = aws.Time(t)
 		}
-	}
-	if s3e := checkTaggingValue(fields[hdrTagging]); s3e != nil {
-		return s3e
 	}
 	in.StorageClass = c.backendStorageClass(fields[hdrStorageClass], SizeUnknown)
 	if v := fields[hdrTagging]; v != "" {

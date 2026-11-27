@@ -37,17 +37,25 @@ func (g *Gateway) getObjectTagging(c *opCtx) error {
 	return s3xml.Write(w, result)
 }
 
-func (g *Gateway) putObjectTagging(c *opCtx) error {
-	w, r, rt, key := c.w, c.r, c.rt, c.key
+// readTagSet reads and validates the body of a PutObjectTagging, keeps it
+// for the handler and returns it as Op.Request reports it.
+func (c *opCtx) readTagSet() (map[string]string, *s3err.Error) {
 	var req s3xml.Tagging
 	if s3e := readXMLBody(c, &req); s3e != nil {
-		return s3e
+		return nil, s3e
 	}
-	if s3e := checkTagSet(req.TagSet.Tags); s3e != nil {
-		return s3e
+	set, s3e := checkTagSet(req.TagSet.Tags)
+	if s3e != nil {
+		return nil, s3e
 	}
-	tags := make([]types.Tag, 0, len(req.TagSet.Tags))
-	for _, tag := range req.TagSet.Tags {
+	c.tagSet = req.TagSet.Tags
+	return set, nil
+}
+
+func (g *Gateway) putObjectTagging(c *opCtx) error {
+	w, r, rt, key := c.w, c.r, c.rt, c.key
+	tags := make([]types.Tag, 0, len(c.tagSet))
+	for _, tag := range c.tagSet {
 		tags = append(tags, types.Tag{
 			Key:   aws.String(tag.Key),
 			Value: aws.String(tag.Value),
