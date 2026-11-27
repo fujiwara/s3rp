@@ -147,10 +147,14 @@ Resolve == /\ pc = "routed"
                  /\ pc' = "authorized"
                  /\ UNCHANGED <<kind, sigOK, visible, admitted, done, client, recKey, recIdentity, recRoute, outcome, end>>
 
-\* dispatch: the route's checks, the policies, the copy source; then the Op
-\* exists and goes on the record.
+\* dispatch: the route's checks, the policies, the copy source, the body
+\* that holds a tag set; then the Op exists and goes on the record.
 Authorize == /\ pc = "resolved"
              /\ \/ Refuse
+                \/ \* the body read fails, the client's doing only if it left
+                   /\ stems' \in {FALSE, gone}
+                   /\ End("failed")
+                   /\ UNCHANGED <<kind, flags, done, gone, rec, end>>
                 \/ /\ allowed' = TRUE
                    /\ recOp' = TRUE
                    /\ pc' = "authorized"

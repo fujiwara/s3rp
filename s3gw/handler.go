@@ -17,6 +17,7 @@ import (
 	"github.com/fujiwara/s3rp/policy"
 	"github.com/fujiwara/s3rp/s3err"
 	"github.com/fujiwara/s3rp/s3op"
+	"github.com/fujiwara/s3rp/s3xml"
 	"github.com/fujiwara/s3rp/store"
 )
 
@@ -494,6 +495,9 @@ type opCtx struct {
 	// op is the operation the hooks were given, set by dispatch. Handlers
 	// record the backend's answer on it through setResponse.
 	op *Op
+	// tagSet is the body of a PutObjectTagging, read and validated by
+	// dispatch (readTagSet).
+	tagSet []s3xml.Tag
 }
 
 // signed and attr forward to the request's signedHeader (headers.go), so
@@ -512,7 +516,9 @@ func (c *opCtx) attr(name string) string   { return c.hdr.Attribute(name) }
 // too — an operation that would ignore the header does not report it as a
 // request the client made. The gateway still validates the SSE fields on
 // every route (dispatch), it just does not hand an inert header to a hook.
-func (c *opCtx) objectRequest(withAttrs bool) *OpRequest {
+//
+// tags are those of the x-amz-tagging header, already validated.
+func (c *opCtx) objectRequest(withAttrs bool, tags map[string]string) *OpRequest {
 	if !withAttrs {
 		return nil
 	}
@@ -521,6 +527,7 @@ func (c *opCtx) objectRequest(withAttrs bool) *OpRequest {
 		SSEKMSKeyID:  c.signed(hdrSSEKMSKeyID),
 		StorageClass: c.signed(hdrStorageClass),
 		Metadata:     c.hdr.AmzMeta(),
+		Tags:         tags,
 	}
 	if req.empty() {
 		return nil
@@ -587,13 +594,14 @@ var headerPresence = map[string]func(signedHeader) bool{
 // checks to run before its handler. handle is a method value of *Gateway, so
 // the route table reads as a plain "discriminator -> handler" mapping.
 type route struct {
-	match  func(url.Values) bool // selects this route (nil = always, the fallback)
-	params paramSet              // allowed query parameters (nil = skip the check)
-	aclHdr bool                  // reject unsupported canned ACL headers first
-	attrs  bool                  // the operation carries the object's own attributes (SSE, storage class, user metadata)
-	name   string                // S3 operation name recorded on Op, its s3op catalog entry
-	copy   string                // operation name when x-amz-copy-source is present (PutObject → CopyObject)
-	handle func(*Gateway, *opCtx) error
+	match   func(url.Values) bool // selects this route (nil = always, the fallback)
+	params  paramSet              // allowed query parameters (nil = skip the check)
+	aclHdr  bool                  // reject unsupported canned ACL headers first
+	attrs   bool                  // the operation carries the object's own attributes (SSE, storage class, user metadata, tags)
+	tagBody bool                  // the request body is a tag set (PutObjectTagging), read in dispatch
+	name    string                // S3 operation name recorded on Op, its s3op catalog entry
+	copy    string                // operation name when x-amz-copy-source is present (PutObject → CopyObject)
+	handle  func(*Gateway, *opCtx) error
 
 	// bound from the s3op catalog entry of name by bind
 	action        string         // s3:* action to authorize ("" = handler authorizes itself)
@@ -716,7 +724,7 @@ func (c *opCtx) authorizeRoute(rt *route, hdr signedHeader, version bool) ([]str
 
 // dispatch runs the first matching route's checks and handler, in the
 // order: parameter check, canned-ACL header, action authorization, header
-// actions, copy source, handler.
+// actions, copy source, tag-set body, handler.
 func (c *opCtx) dispatch(routes []route) error {
 	rt, ok := matchRoute(routes, c.query)
 	if !ok {
@@ -733,7 +741,8 @@ func (c *opCtx) dispatch(routes []route) error {
 	if err := checkSSE(c.hdr); err != nil {
 		return err
 	}
-	if err := checkTaggingValue(c.signed(hdrTagging)); err != nil {
+	tags, err := checkTaggingValue(c.signed(hdrTagging))
+	if err != nil {
 		return err
 	}
 	if rt.params != nil {
@@ -759,6 +768,19 @@ func (c *opCtx) dispatch(routes []route) error {
 		c.copySource, copySource = src, front
 		actions = append(actions, action)
 	}
+	request := c.objectRequest(rt.attrs, tags)
+	if rt.tagBody {
+		// read before the hooks, so an Authorizer decides with the tags in
+		// hand, and after the policies, so a request they refuse costs no
+		// body read
+		set, s3e := c.readTagSet()
+		if s3e != nil {
+			return s3e
+		}
+		if len(set) > 0 {
+			request = &OpRequest{Tags: set}
+		}
+	}
 	op := &Op{
 		Method:         c.r.Method,
 		Operation:      name,
@@ -769,7 +791,7 @@ func (c *opCtx) dispatch(routes []route) error {
 		BucketOwner:    c.rt.cfg.Tenant,
 		Key:            c.key,
 		CopySource:     copySource,
-		Request:        c.objectRequest(rt.attrs),
+		Request:        request,
 		BucketMetadata: c.rt.cfg.Metadata,
 		KeyMetadata:    c.vr.KeyMetadata,
 	}
@@ -964,7 +986,7 @@ var objectRoutes = bindRoutes(map[string][]route{
 		{params: headObjectParams, name: s3op.OpHeadObject, handle: (*Gateway).headObject},
 	},
 	http.MethodPut: {
-		{match: has(subTagging), params: taggingParams, name: s3op.OpPutObjectTagging, handle: (*Gateway).putObjectTagging},
+		{match: has(subTagging), params: taggingParams, tagBody: true, name: s3op.OpPutObjectTagging, handle: (*Gateway).putObjectTagging},
 		{match: has(subACL), name: s3op.OpPutObjectAcl, handle: rejectACL},
 		{match: has(subRetention), params: retentionParams, name: s3op.OpPutObjectRetention, handle: (*Gateway).putObjectRetention},
 		{match: has(subLegalHold), params: legalHoldParams, name: s3op.OpPutObjectLegalHold, handle: (*Gateway).putObjectLegalHold},

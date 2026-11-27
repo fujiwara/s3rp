@@ -69,6 +69,7 @@ retroactively").
 | [0055](0055-read-json-with-encoding-json-v2.md) | JSON is read and written with encoding/json/v2 | 2026-11-23 | Accepted |
 | [0056](0056-refuse-keys-that-are-not-utf-8.md) | An object key is UTF-8 of at most 1,024 bytes | 2026-11-23 | Accepted |
 | [0057](0057-state-machines-are-tables-checked-in-tla.md) | State machines are transition tables, model-checked in TLA+ | 2026-11-26 | Accepted |
+| [0058](0058-report-the-tags-a-request-writes.md) | The tags a request writes are reported to the hooks | 2026-11-27 | Accepted |
 
 ## Writing a record
 

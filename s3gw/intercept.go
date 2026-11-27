@@ -50,9 +50,10 @@ type Op struct {
 	// x-amz-bypass-governance-retention s3:BypassGovernanceRetention; a copy
 	// reads its source under s3:GetObject (s3:GetObjectVersion for a source
 	// version). This is how a service refuses tags or a lock on an
-	// upload — a policy Deny on the action, or an Authorizer matching it
-	// here — without the values being reported on Request: what S3 models
-	// as a permission stays a permission. Empty for the few operations that
+	// upload as such — a policy Deny on the action, or an Authorizer
+	// matching it here: what S3 models as a permission stays a permission.
+	// Which tags a request writes is on Request.Tags, since no action says
+	// that. Empty for the few operations that
 	// authorize themselves per object, such as DeleteObjects.
 	Actions []string `json:"actions,omitempty"`
 	Tenant  string   `json:"tenant"`
@@ -121,10 +122,11 @@ type Op struct {
 // OpRequest is what a request asked for about the object it writes or reads.
 // Every value here is the client's, and beyond what the gateway validates
 // itself (dispatch checks the SSE fields) none of it is a statement about
-// what the backend did — that is Response. It carries only attributes S3
-// has no action for; tags and Object Lock on an upload are permissions
-// there and are authorized as such (Op.Actions), which keeps this from
-// growing a field per header.
+// what the backend did — that is Response. It carries only what S3 has no
+// action for: whether an upload may set tags or an Object Lock is a
+// permission there and is authorized as one (Op.Actions), which keeps this
+// from growing a field per header. Tags is here because an action says
+// that tags are written, never which.
 type OpRequest struct {
 	// SSE is the server-side encryption the request asks for ("AES256" or
 	// "aws:kms", empty when none), and SSEKMSKeyID the KMS key id it
@@ -161,12 +163,28 @@ type OpRequest struct {
 	// it is client-supplied, and whether it belongs in a log is the
 	// service's decision.
 	Metadata map[string]string `json:"-"`
+	// Tags is the tag set the request writes: the x-amz-tagging header of
+	// an upload (PutObject, CopyObject, CreateMultipartUpload), the tagging
+	// field of a POST upload, or the body of a PutObjectTagging. The
+	// gateway has validated it against S3's own limits; an Authorizer
+	// refuses what the service or this bucket's backend does not take — a
+	// reserved key prefix, a set larger than the backend stores.
+	//
+	// Nil when the request carries no tags, under the same rules as
+	// Metadata, and excluded from JSON for the same reason. Two things it
+	// does not say: a PutObjectTagging with an empty set removes every tag
+	// and reports none, and a copy reports the tags it sends whatever its
+	// x-amz-tagging-directive — without REPLACE they are not applied and
+	// the destination takes the source's tags, which never pass through
+	// the gateway.
+	Tags map[string]string `json:"-"`
 }
 
 // empty reports whether the request asked for nothing about the object, in
 // which case Op.Request stays nil rather than pointing at a blank struct.
 func (r *OpRequest) empty() bool {
-	return r.SSE == "" && r.SSEKMSKeyID == "" && r.StorageClass == "" && len(r.Metadata) == 0
+	return r.SSE == "" && r.SSEKMSKeyID == "" && r.StorageClass == "" &&
+		len(r.Metadata) == 0 && len(r.Tags) == 0
 }
 
 // OpResponse is what the backend reported about the object, which is the

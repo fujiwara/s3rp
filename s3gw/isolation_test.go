@@ -534,8 +534,9 @@ func signIsoRequest(t *testing.T, u isoUser, r isoRequest, now time.Time) *isoSi
 	if query != "" {
 		target += "?" + query
 	}
-	emptyHash := sha256.Sum256(nil)
-	req := signedRequest(t, route[0], target, nil, hex.EncodeToString(emptyHash[:]), now,
+	body := isoBodies[r.op.Name]
+	hash := sha256.Sum256(body)
+	req := signedRequest(t, route[0], target, body, hex.EncodeToString(hash[:]), now,
 		aws.Credentials{AccessKeyID: u.keyID(), SecretAccessKey: u.secret()},
 		func(req *http.Request) {
 			req.Header.Set("Origin", isoOrigin)
@@ -550,7 +551,13 @@ func signIsoRequest(t *testing.T, u isoUser, r isoRequest, now time.Time) *isoSi
 				req.Header.Set("x-amz-copy-source", src)
 			}
 		})
-	return &isoSigned{user: u, req: r, method: route[0], target: target, header: req.Header}
+	return &isoSigned{user: u, req: r, method: route[0], target: target, header: req.Header, body: body}
+}
+
+// isoBodies holds the body of an operation whose body the gateway reads
+// before the hooks, where the outcome is observed.
+var isoBodies = map[string][]byte{
+	s3op.OpPutObjectTagging: []byte(`<Tagging><TagSet><Tag><Key>k</Key><Value>v</Value></Tag></TagSet></Tagging>`),
 }
 
 // signIsoPost builds the browser upload form of the request: the signed
